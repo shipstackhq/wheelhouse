@@ -1,16 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0b0e14;
-  --panel: #121722;
-  --panel-2: #171d2a;
-  --border: #232b3a;
-  --fg: #e6e9ef;
-  --muted: #8a93a6;
+  /* dark (default): neutral greys */
+  --bg: #0f0f10;
+  --panel: #161617;
+  --panel-2: #1f1f21;
+  --border: #2c2c2f;
+  --fg: #ececee;
+  --muted: #8e8e93;
   --accent: #f5a524; /* brass */
+  --accent-fg: #111111;
   --agent: #a78bfa; /* everything an AI did */
   --danger: #f87171;
   --ok: #4ade80;
+  --flow-edge: #8e8e93;
+  --flow-dots: #2c2c2f;
+  --flow-mask: rgba(15, 15, 16, 0.7);
+  /* Data viz (validated vs --panel): 2 categorical slots + 5-step ordinal stage ramp, backlog → done */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --stage-1: #184f95;
+  --stage-2: #256abf;
+  --stage-3: #3987e5;
+  --stage-4: #6da7ec;
+  --stage-5: #9ec5f4;
+  --viz-grid: #2c2c2f;
+  --viz-axis: #3a3a3e;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f6f7;
+  --panel: #ffffff;
+  --panel-2: #f0f0f2;
+  --border: #dedee2;
+  --fg: #19191b;
+  --muted: #66666d;
+  --accent: #c47a00;
+  --accent-fg: #ffffff;
+  --agent: #7c3aed;
+  --danger: #dc2626;
+  --ok: #16a34a;
+  --flow-edge: #8a8a92;
+  --flow-dots: #d4d4d9;
+  --flow-mask: rgba(246, 246, 247, 0.7);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --stage-1: #86b6ef;
+  --stage-2: #5598e7;
+  --stage-3: #2a78d6;
+  --stage-4: #1c5cab;
+  --stage-5: #104281;
+  --viz-grid: #ececef;
+  --viz-axis: #c9c9cf;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -21,15 +64,12 @@
   --color-fg: var(--fg);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
   --color-agent: var(--agent);
   --color-danger: var(--danger);
   --color-ok: var(--ok);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-html {
-  color-scheme: dark;
 }
 
 body {
@@ -43,7 +83,7 @@ body {
     @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-panel-2 px-3 py-1.5 text-sm font-medium text-fg transition hover:border-muted/60 disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-accent bg-accent text-black hover:brightness-110 hover:border-accent;
+    @apply border-accent bg-accent text-accent-fg hover:brightness-110 hover:border-accent;
   }
   .btn-ghost {
     @apply border-transparent bg-transparent text-muted hover:bg-panel-2 hover:text-fg;
@@ -85,3 +125,18 @@ body {
 .react-flow__attribution { display: none; }
 .react-flow__controls button { background: var(--panel-2); border-color: var(--border); color: var(--fg); fill: var(--fg); }
 .react-flow__minimap { background: var(--panel); }
+
+/* ERD column handles: invisible until hovering a table, so cards stay clean */
+.react-flow__node-table .erd-handle {
+  width: 7px;
+  height: 7px;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  background: var(--accent);
+  opacity: 0;
+}
+.react-flow__node-table:hover .erd-handle,
+.react-flow.connecting .react-flow__node-table .erd-handle {
+  opacity: 0.85;
+}

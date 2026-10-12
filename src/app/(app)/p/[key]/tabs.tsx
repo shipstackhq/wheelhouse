@@ -10,6 +10,8 @@ export function ProjectTabs({ projectKey }: { projectKey: string }) {
   const tabs = [
     { href: base, label: "Board" },
     { href: `${base}/map`, label: "Map" },
+    { href: `${base}/decisions`, label: "Decisions" },
+    { href: `${base}/glossary`, label: "Glossary" },
     { href: `${base}/activity`, label: "Activity" },
   ];
   return (

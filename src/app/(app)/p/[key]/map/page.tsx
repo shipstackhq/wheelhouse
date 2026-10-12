@@ -1,10 +1,27 @@
 import { requireHuman } from "@/lib/auth";
 import { getGraph } from "@/lib/service";
-import { ArchitectureMap } from "./architecture-map";
+import { askEnabled } from "@/lib/ask";
+import { KnowledgeMap } from "./knowledge-map";
 
-export default async function MapPage({ params }: { params: Promise<{ key: string }> }) {
+export default async function MapPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ key: string }>;
+  searchParams: Promise<{ node?: string; flow?: string; lens?: string }>;
+}) {
   const { key } = await params;
+  const sp = await searchParams;
   const { actor } = await requireHuman();
   const g = await getGraph(actor, key);
-  return <ArchitectureMap projectKey={g.project.key} initial={JSON.parse(JSON.stringify(g))} />;
+  return (
+    <KnowledgeMap
+      projectKey={g.project.key}
+      initial={JSON.parse(JSON.stringify(g))}
+      askEnabled={askEnabled()}
+      initialNode={sp.node}
+      initialFlow={sp.flow}
+      initialLens={sp.lens}
+    />
+  );
 }

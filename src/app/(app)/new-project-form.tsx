@@ -6,7 +6,7 @@ import { createProjectAction, type FormState } from "../actions";
 export function NewProjectForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(createProjectAction, undefined);
   return (
-    <form action={action} className="mt-4 grid gap-3 sm:grid-cols-[1fr_120px]">
+    <form action={action} className="grid gap-3 sm:grid-cols-[1fr_120px]">
       <div>
         <label className="label" htmlFor="name">Name</label>
         <input className="input" id="name" name="name" required placeholder="Wheelhouse" />

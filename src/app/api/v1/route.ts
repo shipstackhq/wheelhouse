@@ -6,6 +6,6 @@ export const dynamic = "force-dynamic";
 export function GET() {
   return NextResponse.json({
     usage: "POST /api/v1/<name> with JSON body; Authorization: Bearer <api key>",
-    tools: listToolDefs(),
+    tools: listToolDefs({ includeHidden: true }),
   });
 }

@@ -8,6 +8,27 @@
       "when": 1791834532714,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791836986315,
+      "tag": "0001_knowledge_map",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791842980345,
+      "tag": "0002_data_layer",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791845184042,
+      "tag": "0003_sync_sessions",
+      "breakpoints": true
     }
   ]
 }

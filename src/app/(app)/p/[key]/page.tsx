@@ -19,7 +19,7 @@ export default async function BoardPage({ params }: { params: Promise<{ key: str
       projectKey={board.project.key}
       columns={board.columns.map(({ id, name }) => ({ id, name }))}
       tickets={board.tickets}
-      nodes={graph.nodes.map(({ id, name, kind, parentId }) => ({ id, name, kind, parentId }))}
+      nodes={graph.nodes.map(({ id, name, kind, parentId, layer }) => ({ id, name, kind, parentId, layer }))}
       members={members}
     />
   );

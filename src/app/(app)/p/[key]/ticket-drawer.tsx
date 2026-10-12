@@ -16,6 +16,7 @@ import {
 import type { Col, Member, NodeLite } from "./board";
 import { PRIORITY_STYLE } from "./board";
 import { timeAgo } from "@/lib/time";
+import { Select, useDialogs } from "@/components/ui";
 
 type Data = Extract<Awaited<ReturnType<typeof getTicketAction>>, { ok: true }>["data"];
 
@@ -36,6 +37,7 @@ export function TicketDrawer(props: {
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [pending, start] = useTransition();
+  const { confirm, dialogs } = useDialogs();
 
   const load = useCallback(async () => {
     const res = await getTicketAction(ticketRef);
@@ -78,7 +80,7 @@ export function TicketDrawer(props: {
   const linkedIds = new Set(data.nodes.map((n) => n.id));
   const nodeLabel = (n: NodeLite) => {
     const parent = n.parentId ? nodes.find((p) => p.id === n.parentId) : null;
-    return parent ? `${parent.name} › ${n.name}` : n.name;
+    return `${n.layer}: ${parent ? `${parent.name} › ` : ""}${n.name}`;
   };
 
   return (
@@ -106,34 +108,26 @@ export function TicketDrawer(props: {
 
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Field label="Status">
-            <select className="input py-1.5" value={t.columnId} onChange={(e) => mutate(() => moveTicketAction(t.ref, e.target.value, -1))}>
-              {columns.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <Select
+              value={t.columnId}
+              options={columns.map((c) => ({ value: c.id, label: c.name }))}
+              onValueChange={(v) => mutate(() => moveTicketAction(t.ref, v, -1))}
+            />
           </Field>
           <Field label="Priority">
-            <select
-              className={clsx("input py-1.5", PRIORITY_STYLE[t.priority])}
+            <Select
+              triggerClassName={PRIORITY_STYLE[t.priority]}
               value={t.priority}
-              onChange={(e) => mutate(() => updateTicketAction(t.ref, { priority: e.target.value as typeof t.priority }, t.version))}
-            >
-              {["low", "medium", "high", "urgent"].map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+              options={["low", "medium", "high", "urgent"].map((p) => ({ value: p, label: p }))}
+              onValueChange={(v) => mutate(() => updateTicketAction(t.ref, { priority: v as typeof t.priority }, t.version))}
+            />
           </Field>
           <Field label="Assignee">
-            <select
-              className="input py-1.5"
+            <Select
               value={t.assigneeId ?? ""}
-              onChange={(e) => mutate(() => updateTicketAction(t.ref, { assigneeId: e.target.value || null }, t.version))}
-            >
-              <option value="">Unassigned</option>
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+              options={[{ value: "", label: "Unassigned" }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
+              onValueChange={(v) => mutate(() => updateTicketAction(t.ref, { assigneeId: v || null }, t.version))}
+            />
           </Field>
           <Field label="AI">
             <label className="flex h-[34px] items-center gap-2 text-sm">
@@ -197,21 +191,19 @@ export function TicketDrawer(props: {
           <div className="flex flex-wrap gap-1.5">
             {data.nodes.map((n) => (
               <span key={n.id} className="chip gap-1 bg-accent/10 py-1 text-accent">
-                ◇ {nodeLabel(n as NodeLite)}
+                <a className="hover:underline" href={`/p/${props.projectKey}/map?node=${n.id}`}>
+                ◇ {nodeLabel(nodes.find((x) => x.id === n.id) ?? (n as NodeLite))}</a>
                 <button className="text-accent/60 hover:text-accent" onClick={() => mutate(() => linkNodeAction(t.ref, n.id, true))}>✕</button>
               </span>
             ))}
             {nodes.length > 0 ? (
-              <select
-                className="rounded border border-dashed border-line bg-transparent px-1.5 py-0.5 text-xs text-muted"
+              <Select
+                className="!w-auto !border-dashed !bg-transparent !py-0.5 !text-xs !text-muted"
                 value=""
-                onChange={(e) => e.target.value && mutate(() => linkNodeAction(t.ref, e.target.value))}
-              >
-                <option value="">+ link node</option>
-                {nodes.filter((n) => !linkedIds.has(n.id)).map((n) => (
-                  <option key={n.id} value={n.id}>{nodeLabel(n)}</option>
-                ))}
-              </select>
+                placeholder="+ link node"
+                options={nodes.filter((n) => !linkedIds.has(n.id)).map((n) => ({ value: n.id, label: nodeLabel(n) }))}
+                onValueChange={(v) => v && mutate(() => linkNodeAction(t.ref, v))}
+              />
             ) : (
               <span className="text-xs text-muted">No nodes on the map yet.</span>
             )}
@@ -278,8 +270,8 @@ export function TicketDrawer(props: {
         <div className="pt-2">
           <button
             className="btn btn-danger"
-            onClick={() => {
-              if (!confirm(`Delete ${t.ref}?`)) return;
+            onClick={async () => {
+              if (!(await confirm({ title: `Delete ${t.ref}?`, description: "This removes the ticket and its comments.", confirmLabel: "Delete", danger: true }))) return;
               start(async () => {
                 await deleteTicketAction(t.ref);
                 onClose();
@@ -291,6 +283,7 @@ export function TicketDrawer(props: {
           </button>
         </div>
       </div>
+      {dialogs}
     </aside>
   );
 }

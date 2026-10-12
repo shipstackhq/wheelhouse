@@ -22,7 +22,7 @@ import { createTicketAction, moveTicketAction } from "@/app/actions";
 import { TicketDrawer } from "./ticket-drawer";
 
 export type Col = { id: string; name: string };
-export type NodeLite = { id: string; name: string; kind: string; parentId: string | null };
+export type NodeLite = { id: string; name: string; kind: string; parentId: string | null; layer: string };
 export type Member = { id: string; name: string };
 type Ticket = TicketWithLinks;
 
@@ -185,14 +185,25 @@ function Column(props: {
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  const submitting = useRef(false);
+  const cancelled = useRef(false);
 
-  const submit = () => {
-    if (!title.trim()) return setAdding(false);
+  const submit = (keepOpen: boolean) => {
+    if (cancelled.current) return;
+    const value = title.trim();
+    if (!value) return keepOpen ? undefined : setAdding(false);
+    if (submitting.current) return;
+    submitting.current = true;
+    setTitle("");
+    if (!keepOpen) setAdding(false);
     start(async () => {
-      await createTicketAction(props.projectKey, { title, column: col.id });
-      setTitle("");
-      props.onCreated();
+      try {
+        await createTicketAction(props.projectKey, { title: value, column: col.id });
+        props.onCreated();
+      } finally {
+        submitting.current = false;
+      }
     });
   };
 
@@ -215,19 +226,25 @@ function Column(props: {
             rows={2}
             placeholder="Ticket title, Enter to add"
             value={title}
-            disabled={pending}
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={submit}
+            onBlur={() => submit(false)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                submit();
+                submit(true);
               }
-              if (e.key === "Escape") setAdding(false);
+              if (e.key === "Escape") {
+                cancelled.current = true;
+                setTitle("");
+                setAdding(false);
+              }
             }}
           />
         ) : (
-          <button className="rounded-md px-2 py-1.5 text-left text-sm text-muted hover:bg-panel-2 hover:text-fg" onClick={() => setAdding(true)}>
+          <button className="rounded-md px-2 py-1.5 text-left text-sm text-muted hover:bg-panel-2 hover:text-fg" onClick={() => {
+              cancelled.current = false;
+              setAdding(true);
+            }}>
             + Add ticket
           </button>
         )}

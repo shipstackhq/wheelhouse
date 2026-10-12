@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { addMember, changePassword, type FormState } from "../../actions";
+import { Select } from "@/components/ui";
 import { SecretBox } from "@/components/secret-box";
 
 export function AddMemberForm() {
@@ -10,10 +11,7 @@ export function AddMemberForm() {
     <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
       <input className="input" name="name" placeholder="Name" required />
       <input className="input" name="email" type="email" placeholder="Email" required />
-      <select name="role" className="input" defaultValue="member">
-        <option value="member">member</option>
-        <option value="owner">owner</option>
-      </select>
+      <Select name="role" defaultValue="member" options={[{ value: "member", label: "member" }, { value: "owner", label: "owner" }]} />
       <input className="input" name="tags" placeholder="tags: backend, design" />
       {state?.error && <p className="text-sm text-danger sm:col-span-2">{state.error}</p>}
       {state?.ok && (

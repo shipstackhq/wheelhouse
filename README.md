@@ -3,7 +3,17 @@
 Kanban boards and architecture maps that a small team **and its AI agents** share.
 
 - **Board**: drag-and-drop tickets, markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
-- **Map**: React Flow architecture graph. Services contain nested modules/components (drill in), edges show dependencies, each node carries markdown details and the tickets touching it.
+- **Knowledge map**: React Flow canvas with four linked zoom levels:
+  - **Concepts**: what the product does
+  - **Systems**: what runs where
+  - **Data**: the schema as an ER diagram (tables, columns, foreign keys with crow's-foot cardinality)
+  - **Code**: where it lives
+
+  Levels are connected by `implements` links. Select a node and switch level to see what realizes it.
+
+  Each node has a structured explainer (purpose, responsibilities, interfaces, gotchas) plus code anchors. **Flows** play step by step across the map. **Decisions** (ADRs) and a **Glossary**, with hover definitions, hang off nodes.
+- **Freshness**: `report_changes` (from agents or a post-commit hook) flags the most specifically anchored node per layer as stale. Stale nodes show on the map and in agents' queues until they're re-described.
+- **Ask**: Claude answers questions about the system from the map (`ANTHROPIC_API_KEY` required; uses `claude-opus-5-5`).
 - **AI loop**: every human or agent change is written to an append-only event log. Each agent API key has its own cursor into it, so `get_changes` returns exactly what the team did since the agent last looked. Agents write back through the same tools, and their work shows up on the board live with a 🤖 badge.
 - **Claude integration**: a remote MCP server at `/mcp`, plus the same operations over REST at `POST /api/v1/<tool>`.
 
@@ -27,12 +37,22 @@ claude mcp add --transport http wheelhouse http://localhost:3000/mcp --header "A
 
 The Agents page also gives you a CLAUDE.md snippet that tells the agent how to work the board.
 
+## Mapping a codebase
+
+The MCP server ships prompts that appear as slash commands in Claude Code:
+
+- `/mcp__wheelhouse__map_codebase KEY` builds the map top-down: concepts, systems, code, flows, ADRs and glossary
+- `/mcp__wheelhouse__map_schema KEY` maps the database schema (tables, columns, FKs, indexes, enums) from your schema/migration files
+- `/mcp__wheelhouse__refresh_map KEY` re-describes stale nodes
+- `/mcp__wheelhouse__explain KEY <topic>` explains a topic and fills gaps in the map
+
 ## Deploy (Vercel + Neon/Supabase)
 
 1. Create a Postgres database and copy its connection string.
 2. Import the repo in Vercel and set these env vars:
    - `DATABASE_URL`: the Postgres URL (use the pooled URL on Neon)
    - `APP_URL`: e.g. `https://wheelhouse.shipstack.run` (used in the setup snippets)
+   - `ANTHROPIC_API_KEY`: optional, enables Ask on the map
 3. Deploy. Migrations in `drizzle/` run automatically on the first request.
 
 PGlite is for local development only. Serverless deployments must set `DATABASE_URL`.

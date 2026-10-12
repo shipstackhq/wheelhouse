@@ -14,6 +14,7 @@ import {
   sha256,
 } from "@/lib/auth";
 import * as svc from "@/lib/service";
+import { askMap } from "@/lib/ask";
 
 export type FormState = { error?: string; ok?: string; secret?: string } | undefined;
 
@@ -271,12 +272,69 @@ export async function saveLayoutAction(projectKey: string, positions: { id: stri
   return wrap(() => svc.saveLayout(actor, projectKey, positions));
 }
 
-export async function connectNodesAction(projectKey: string, from: string, to: string, label?: string) {
+export async function connectNodesAction(projectKey: string, from: string, to: string, label?: string, kind: "depends" | "implements" = "depends") {
   const { actor } = await requireHuman();
-  return wrap(() => svc.upsertEdge(actor, projectKey, { from, to, label }));
+  return wrap(() => svc.upsertEdge(actor, projectKey, { from, to, label, kind }));
 }
 
 export async function deleteEdgeAction(projectKey: string, edgeId: string) {
   const { actor } = await requireHuman();
   return wrap(() => svc.deleteEdge(actor, projectKey, edgeId));
+}
+
+export async function markFreshAction(projectKey: string, nodeId: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.markFresh(actor, projectKey, nodeId));
+}
+
+// ───────── flows / decisions / glossary ─────────
+
+export async function upsertFlowAction(projectKey: string, input: svc.FlowInput) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.upsertFlow(actor, projectKey, input));
+}
+
+export async function deleteFlowAction(projectKey: string, flowId: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.deleteFlow(actor, projectKey, flowId));
+}
+
+export async function upsertDecisionAction(projectKey: string, input: svc.DecisionInput) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.upsertDecision(actor, projectKey, input));
+  revalidatePath(`/p/${projectKey}/decisions`);
+  return res;
+}
+
+export async function upsertTermAction(projectKey: string, input: { term: string; definition: string; node?: string | null }) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.upsertTerm(actor, projectKey, input));
+  revalidatePath(`/p/${projectKey}/glossary`);
+  return res;
+}
+
+export async function deleteTermAction(projectKey: string, term: string) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.deleteTerm(actor, projectKey, term));
+  revalidatePath(`/p/${projectKey}/glossary`);
+  return res;
+}
+
+export async function askAction(projectKey: string, question: string, focusNodeId?: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => askMap(actor, projectKey, question, focusNodeId));
+}
+
+export async function markAllSeenAction(fd: FormData) {
+  const { actor } = await requireHuman();
+  const keyId = String(fd.get("keyId") ?? "") || undefined;
+  const projectRef = String(fd.get("project") ?? "") || undefined;
+  await svc.markAllSeen(actor, { keyId, projectRef });
+  revalidatePath("/", "layout");
+}
+
+export async function resolveDraftAction(projectKey: string, draftId: string, action: "publish" | "discard") {
+  const { actor } = await requireHuman();
+  const { resolveDraft } = await import("@/lib/sync");
+  return wrap(() => resolveDraft(actor, projectKey, draftId, action));
 }

@@ -1,33 +1,35 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireHuman } from "@/lib/auth";
-import { listProjects } from "@/lib/service";
-import { NewProjectForm } from "./new-project-form";
+import { WidgetSkeleton } from "@/components/dashboard/widget";
+import { WIDGETS, SPAN_CLASS } from "./dashboard/registry";
+import { DashboardRefresh } from "./dashboard/refresh";
 
-export default async function Home() {
-  const { actor } = await requireHuman();
-  const projects = await listProjects(actor);
+export default async function Dashboard() {
+  const { actor, user, team } = await requireHuman();
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-xl font-semibold">Projects</h1>
-        <p className="mt-1 text-sm text-muted">Each project has a kanban board, an architecture map, and an AI change queue.</p>
-        {projects.length > 0 && (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {projects.map((p) => (
-              <Link key={p.id} href={`/p/${p.key}`} className="card p-4 hover:border-muted/60">
-                <div className="flex items-center gap-2">
-                  <span className="chip bg-accent/15 font-mono text-accent">{p.key}</span>
-                  <span className="font-medium">{p.name}</span>
-                </div>
-                {p.description && <p className="mt-2 line-clamp-2 text-sm text-muted">{p.description}</p>}
-                <p className="mt-2 text-xs text-muted">{p.ticketCounter} tickets</p>
-              </Link>
-            ))}
+      <DashboardRefresh />
+      <div className="mx-auto max-w-[1400px] px-6 py-6">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">
+              {greeting}, {user.name.split(" ")[0]}
+            </h1>
+            <p className="mt-1 text-sm text-muted">How {team.name}&apos;s projects are moving, and what the agents are up to.</p>
           </div>
-        )}
-        <div className="card mt-8 p-5">
-          <h2 className="font-medium">New project</h2>
-          <NewProjectForm />
+          <Link href="/projects/new" className="btn">+ New project</Link>
+        </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+          {WIDGETS.map(({ id, title, span, skeletonHeight, Component }) => (
+            <div key={id} className={SPAN_CLASS[span]}>
+              <Suspense fallback={<WidgetSkeleton title={title} height={skeletonHeight} />}>
+                <Component actor={actor} />
+              </Suspense>
+            </div>
+          ))}
         </div>
       </div>
     </div>

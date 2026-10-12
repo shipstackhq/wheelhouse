@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { requireHuman } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { removeMember, updateMember } from "../../actions";
+import { Select } from "@/components/ui";
 import { AddMemberForm, ChangePasswordForm } from "./forms";
 
 export default async function TeamPage() {
@@ -32,10 +33,7 @@ export default async function TeamPage() {
               </div>
               {isOwner ? (
                 <>
-                  <select name="role" defaultValue={m.role} className="input w-28 py-1.5">
-                    <option value="owner">owner</option>
-                    <option value="member">member</option>
-                  </select>
+                  <Select name="role" defaultValue={m.role} className="w-28" options={[{ value: "owner", label: "owner" }, { value: "member", label: "member" }]} />
                   <input name="tags" defaultValue={m.tags.join(", ")} placeholder="tags" className="input w-48 py-1.5" />
                   <button className="btn">Save</button>
                   {u.id !== user.id && (

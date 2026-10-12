@@ -41,8 +41,14 @@ export default async function ActivityPage({ params, searchParams }: { params: P
                 <span className="min-w-0 flex-1 text-muted">
                   {ref ? (
                     <Link href={`/p/${project.key}?t=${ref}`} className="hover:text-fg">{e.summary}</Link>
-                  ) : e.entity === "node" || e.entity === "edge" ? (
-                    <Link href={`/p/${project.key}/map`} className="hover:text-fg">{e.summary}</Link>
+                  ) : e.entity === "node" ? (
+                    <Link href={`/p/${project.key}/map?node=${e.entityId}`} className="hover:text-fg">{e.summary}</Link>
+                  ) : e.entity === "edge" || e.entity === "flow" || e.type === "code.changed" ? (
+                    <Link href={`/p/${project.key}/map${e.entity === "flow" ? `?flow=${e.entityId}` : ""}`} className="hover:text-fg">{e.summary}</Link>
+                  ) : e.entity === "decision" ? (
+                    <Link href={`/p/${project.key}/decisions#adr-${e.data?.number ?? ""}`} className="hover:text-fg">{e.summary}</Link>
+                  ) : e.entity === "term" ? (
+                    <Link href={`/p/${project.key}/glossary`} className="hover:text-fg">{e.summary}</Link>
                   ) : (
                     e.summary
                   )}
