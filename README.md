@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Shipstack Wheelhouse
 
-## Getting Started
+Kanban boards and architecture maps that a small team **and its AI agents** share.
 
-First, run the development server:
+- **Board**: drag-and-drop tickets, markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
+- **Map**: React Flow architecture graph. Services contain nested modules/components (drill in), edges show dependencies, each node carries markdown details and the tickets touching it.
+- **AI loop**: every human or agent change is written to an append-only event log. Each agent API key has its own cursor into it, so `get_changes` returns exactly what the team did since the agent last looked. Agents write back through the same tools, and their work shows up on the board live with a 🤖 badge.
+- **Claude integration**: a remote MCP server at `/mcp`, plus the same operations over REST at `POST /api/v1/<tool>`.
+
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+pnpm seed      # optional: demo@wheelhouse.local / wheelhouse-demo + prints an API key
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+No database setup is needed locally. Without `DATABASE_URL`, the app uses embedded Postgres (PGlite) stored in `.data/`. Stop the app before running `pnpm seed`, because PGlite is single-process.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Connect Claude Code
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a key under **Agents & API keys**, then run:
 
-## Learn More
+```bash
+claude mcp add --transport http wheelhouse http://localhost:3000/mcp --header "Authorization: Bearer wh_..."
+```
 
-To learn more about Next.js, take a look at the following resources:
+The Agents page also gives you a CLAUDE.md snippet that tells the agent how to work the board.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploy (Vercel + Neon/Supabase)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Create a Postgres database and copy its connection string.
+2. Import the repo in Vercel and set these env vars:
+   - `DATABASE_URL`: the Postgres URL (use the pooled URL on Neon)
+   - `APP_URL`: e.g. `https://wheelhouse.shipstack.run` (used in the setup snippets)
+3. Deploy. Migrations in `drizzle/` run automatically on the first request.
 
-## Deploy on Vercel
+PGlite is for local development only. Serverless deployments must set `DATABASE_URL`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Layout
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/db/schema.ts        Drizzle schema (users, teams, tickets, nodes, edges, events, agent_cursors…)
+src/lib/service.ts      single write path: team scoping, optimistic locking, event emission
+src/lib/tools.ts        tool registry → exposed via /mcp and /api/v1/<tool>
+src/app/mcp/route.ts    stateless MCP (Streamable HTTP, JSON responses)
+src/app/actions.ts      server actions for the UI
+src/app/(app)/p/[key]   board, ticket drawer, map, activity
+```
+
+Schema change: edit `schema.ts`, run `pnpm db:generate`, then commit the new file in `drizzle/`.
+
+## MVP limits
+
+There are no invite emails or password reset: owners add members, who get a temporary password. Live updates use 3s polling. Each user belongs to one team.
