@@ -17,6 +17,10 @@ Kanban boards and architecture maps that a small team **and its AI agents** shar
 - **AI loop**: every human or agent change is written to an append-only event log. Each agent API key has its own cursor into it, so `get_changes` returns exactly what the team did since the agent last looked. Agents write back through the same tools, and their work shows up on the board live with a 🤖 badge.
 - **Claude integration**: a remote MCP server at `/mcp`, plus the same operations over REST at `POST /api/v1/<tool>`.
 
+## CLI and Claude Code plugin
+
+The `wheelhouse` CLI (`@shipstack/wheelhouse-cli`), the Claude Code plugin, and the guide for AI agents live in their own repo: [shipstackhq/wheelhouse-cli](https://github.com/shipstackhq/wheelhouse-cli).
+
 ## Run locally
 
 ```bash

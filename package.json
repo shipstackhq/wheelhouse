@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
-    "db:generate": "drizzle-kit generate",
-    "sync-plugin": "cp cli/bin/wheelhouse.mjs plugin/scripts/wheelhouse.mjs"
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
