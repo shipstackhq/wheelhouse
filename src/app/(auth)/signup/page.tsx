@@ -9,7 +9,7 @@ export default async function SignupPage() {
     return (
       <div className="space-y-3 text-center text-sm">
         <p>Signups are closed on this server.</p>
-        <p className="text-muted">Ask a team owner to add you, then sign in.</p>
+        <p className="text-muted">Invite only. Ask for an invite link, then sign in.</p>
         <Link className="text-accent" href="/login">Back to sign in</Link>
       </div>
     );

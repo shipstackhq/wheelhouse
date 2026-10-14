@@ -78,7 +78,9 @@ The token only lives for the workflow run and is removed on exit, so no registry
 | `POSTGRES_NETWORK` | the network from step 1 |
 | `WHEELHOUSE_PORT` | `3000` (or any free port; Caddy points here) |
 | `PG_CONTAINER`, `PG_DB`, `PG_DUMP_USER` | container name, `wheelhouse`, the Postgres admin user (used by the dump and restore) |
-| `ALLOW_SIGNUP` | `false` |
+| `ALLOW_SIGNUP` | `false` (keep it: people join through invite links) |
+| `ADMIN_EMAILS` | your email; only these accounts can invite someone into a brand new team |
+| `MAX_TEAM_MEMBERS`, `INVITE_TTL_HOURS` | optional: seats per team including the owner (default 5), link lifetime in hours (default 168) |
 | `RCLONE_REMOTE` | optional, off-box backup target, see Backups |
 
 `chmod 600 .env`. `WHEELHOUSE_IMAGE` is written by the deploy script.
@@ -115,6 +117,20 @@ There is no path variable: the wrapper decides where the app lives.
 Push to `main` (or run **Deploy** manually). Then open `APP_URL` and **create the first account straight
 away**: with `ALLOW_SIGNUP=false` only the very first signup is accepted, and after that owners add members
 under *Team*. Do this before sharing the URL.
+
+## Inviting people
+
+Signup stays closed; everyone gets in through a one-time invite link.
+
+- **Someone outside your team** (their own separate team): sign in with an account listed in `ADMIN_EMAILS`, open
+  **Invite a new team** in the sidebar, enter their email (and a team name if you like), and send them the link.
+  They choose a password and become the owner of their own team.
+- **Someone for your own team:** the team owner uses **Team → Invite someone**. A team has at most
+  `MAX_TEAM_MEMBERS` seats including the owner, and pending invites count.
+
+A link is shown once, works for one person, and expires after `INVITE_TTL_HOURS` (or sooner if you revoke it under
+*Pending invites*). It is tied to the email you entered. The secret sits in the part of the URL after `#`, which browsers
+do not send to the server, so it stays out of Caddy's access logs. New passwords must be at least 12 characters.
 
 ## Updating the compose file or scripts
 

@@ -3,7 +3,10 @@ import { requireHuman } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { removeMember, updateMember } from "../../actions";
 import { Select } from "@/components/ui";
-import { AddMemberForm, ChangePasswordForm } from "./forms";
+import { ChangePasswordForm } from "./forms";
+import { InviteForm } from "@/components/invite-form";
+import { PendingInvites } from "@/components/pending-invites";
+import { listInvites, seatInfo } from "@/lib/invites";
 
 export default async function TeamPage() {
   const { team, membership, user } = await requireHuman();
@@ -14,6 +17,10 @@ export default async function TeamPage() {
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
     .where(eq(schema.memberships.teamId, team.id));
   const isOwner = membership.role === "owner";
+  const seats = await seatInfo(team.id);
+  const pendingInvites = isOwner
+    ? (await listInvites({ userId: user.id, email: user.email, teamId: team.id, role: membership.role })).filter((i) => i.kind === "join_team")
+    : [];
 
   return (
     <div className="h-full overflow-y-auto">
@@ -52,9 +59,21 @@ export default async function TeamPage() {
 
         {isOwner && (
           <div className="card p-5">
-            <h2 className="font-medium">Add member</h2>
-            <p className="mt-1 text-sm text-muted">No invite emails yet — you&apos;ll get a temporary password to share with them.</p>
-            <AddMemberForm />
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="font-medium">Invite someone</h2>
+              <span className="text-xs text-muted">
+                {seats.used} of {seats.max} seats used ({seats.members} members, {seats.pending} pending)
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Creates a one-time link for one person. It works until it is used, revoked or expires, and is shown only once.
+            </p>
+            {seats.full && (
+              <p className="mt-2 text-sm text-warn">Your team is full. Revoke a pending invite or remove a member to free a seat.</p>
+            )}
+            <InviteForm kind="join_team" disabled={seats.full} />
+            <h3 className="mt-6 text-sm font-medium">Pending invites</h3>
+            <PendingInvites invites={pendingInvites} />
           </div>
         )}
 

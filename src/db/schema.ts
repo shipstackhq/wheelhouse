@@ -50,6 +50,29 @@ export const memberships = pgTable(
   (t) => [primaryKey({ columns: [t.userId, t.teamId] })],
 );
 
+// Invite-only signup (WH-49). Only the SHA-256 of the token is stored; the plain token is shown once.
+// kind new_team: the invitee gets a fresh team and owns it. kind join_team: the invitee joins team_id.
+export const invites = pgTable(
+  "invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind", { enum: ["new_team", "join_team"] }).notNull(),
+    email: text("email").notNull(), // lower-cased; the account is created with exactly this address
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }), // join_team only
+    teamName: text("team_name"), // new_team only (optional)
+    role: text("role", { enum: ["owner", "member"] }).notNull().default("member"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    usedBy: uuid("used_by").references(() => users.id, { onDelete: "set null" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("invites_team_idx").on(t.teamId, t.usedAt)],
+);
+
 export const apiKeys = pgTable("api_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),

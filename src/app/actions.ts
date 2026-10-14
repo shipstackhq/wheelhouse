@@ -16,6 +16,17 @@ import {
   signupAllowed,
 } from "@/lib/auth";
 import { clientIp, minutes, rateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { passwordProblem } from "@/lib/auth-policy";
+import {
+  acceptInvite,
+  createInvite,
+  InviteError,
+  InviteFailure,
+  INVITE_INVALID,
+  peekInvite,
+  revokeInvite,
+  type Issuer,
+} from "@/lib/invites";
 import * as svc from "@/lib/service";
 import { askMap } from "@/lib/ask";
 
@@ -43,7 +54,8 @@ export async function signup(_: FormState, fd: FormData): Promise<FormState> {
   const password = String(fd.get("password") ?? "");
   const teamName = String(fd.get("team") ?? "").trim() || `${name}'s team`;
   if (!name || !emailOk(email)) return { error: "Enter your name and a valid email" };
-  if (password.length < 8) return { error: "Password must be at least 8 characters" };
+  const weak = passwordProblem(password);
+  if (weak) return { error: weak };
 
   const db = await getDb();
   const [exists] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email));
@@ -95,34 +107,79 @@ const parseTags = (s: string) =>
     .map((t) => t.trim().toLowerCase())
     .filter(Boolean);
 
-export async function addMember(_: FormState, fd: FormData): Promise<FormState> {
+// ───────── invites (WH-49) ─────────
+
+async function issuer(): Promise<Issuer> {
+  const { user, team, membership } = await requireHuman();
+  return { userId: user.id, email: user.email, teamId: team.id, role: membership.role };
+}
+
+async function inviteOrigin() {
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, "");
+  const h = await headers();
+  return `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
+}
+
+/** The token goes in the URL fragment so it never reaches server logs, proxies or Referer headers. */
+export async function createInviteAction(_: FormState, fd: FormData): Promise<FormState> {
+  const iss = await issuer();
+  const hit = rateLimit(`invite-create:${iss.userId}`, 20, 60 * 60_000);
+  if (!hit.ok) return tooMany(hit.retryAfter);
+  const kind = fd.get("kind") === "new_team" ? "new_team" : "join_team";
   try {
-    const { team } = await requireOwner();
-    const name = String(fd.get("name") ?? "").trim();
-    const email = String(fd.get("email") ?? "").trim().toLowerCase();
-    const role = fd.get("role") === "owner" ? "owner" : "member";
-    const tags = parseTags(String(fd.get("tags") ?? ""));
-    if (!name || !emailOk(email)) return { error: "Name and valid email required" };
-    const db = await getDb();
-    const [existing] = await db.select().from(schema.users).where(eq(schema.users.email, email));
-    if (existing) {
-      const [m] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, existing.id));
-      if (m) return { error: "That user already belongs to a team" };
-      await db.insert(schema.memberships).values({ userId: existing.id, teamId: team.id, role, tags });
-      revalidatePath("/team");
-      return { ok: `Added ${email}` };
-    }
-    // No invite emails in MVP: generate a temporary password to share out-of-band.
-    const temp = randomToken(9);
-    await db.transaction(async (tx) => {
-      const [u] = await tx.insert(schema.users).values({ email, name, passwordHash: await hashPassword(temp) }).returning();
-      await tx.insert(schema.memberships).values({ userId: u.id, teamId: team.id, role, tags });
+    const inv = await createInvite(iss, {
+      kind,
+      email: String(fd.get("email") ?? ""),
+      role: fd.get("role") === "owner" ? "owner" : "member",
+      tags: parseTags(String(fd.get("tags") ?? "")),
+      teamName: String(fd.get("team") ?? ""),
     });
-    revalidatePath("/team");
-    return { ok: `Added ${email}. Share this temporary password:`, secret: temp };
+    revalidatePath(kind === "new_team" ? "/admin/invites" : "/team");
+    return {
+      ok: `Invite created for ${inv.email}. Send them this link. It is shown only once, works for one person and expires on ${inv.expiresAt.toISOString().slice(0, 10)}:`,
+      secret: `${await inviteOrigin()}/invite#${inv.token}`,
+    };
   } catch (e) {
-    return fail(e);
+    if (e instanceof InviteError) return { error: e.message };
+    throw e;
   }
+}
+
+export async function revokeInviteAction(fd: FormData) {
+  const iss = await issuer();
+  try {
+    await revokeInvite(iss, String(fd.get("id") ?? ""));
+  } catch (e) {
+    if (!(e instanceof InviteError)) throw e;
+  }
+  revalidatePath("/team");
+  revalidatePath("/admin/invites");
+}
+
+export type InvitePeek = { invite?: { email: string; kind: "new_team" | "join_team"; teamName: string | null }; error?: string };
+
+/** Lets the invite page show the invitee's email before they choose a password. Same answer for every bad link. */
+export async function lookupInviteAction(token: string): Promise<InvitePeek> {
+  const hit = rateLimit(`invite-ip:${clientIp(await headers())}`, 30, 15 * 60_000);
+  if (!hit.ok) return tooMany(hit.retryAfter) as { error: string };
+  const invite = await peekInvite(String(token ?? ""));
+  return invite ? { invite } : { error: INVITE_INVALID };
+}
+
+export async function acceptInviteAction(_: FormState, fd: FormData): Promise<FormState> {
+  const hit = rateLimit(`invite-ip:${clientIp(await headers())}`, 30, 15 * 60_000);
+  if (!hit.ok) return tooMany(hit.retryAfter);
+  const password = String(fd.get("password") ?? "");
+  if (password !== String(fd.get("confirm") ?? "")) return { error: "The two passwords do not match" };
+  try {
+    const r = await acceptInvite({ token: String(fd.get("token") ?? ""), name: String(fd.get("name") ?? ""), password });
+    await createSession(r.userId);
+  } catch (e) {
+    if (e instanceof InviteError) return { error: e.message };
+    if (e instanceof InviteFailure) return { error: INVITE_INVALID };
+    throw e;
+  }
+  redirect("/");
 }
 
 export async function updateMember(fd: FormData) {
@@ -158,7 +215,8 @@ export async function changePassword(_: FormState, fd: FormData): Promise<FormSt
   const { user } = await requireHuman();
   const current = String(fd.get("current") ?? "");
   const next = String(fd.get("next") ?? "");
-  if (next.length < 8) return { error: "New password must be at least 8 characters" };
+  const weak = passwordProblem(next);
+  if (weak) return { error: weak };
   if (!(await verifyPassword(current, user.passwordHash))) return { error: "Current password is wrong" };
   const db = await getDb();
   await db.update(schema.users).set({ passwordHash: await hashPassword(next) }).where(eq(schema.users.id, user.id));

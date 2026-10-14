@@ -32,7 +32,7 @@ export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"
           name="password"
           type="password"
           required
-          minLength={mode === "signup" ? 8 : undefined}
+          minLength={mode === "signup" ? 12 : undefined}
           autoComplete={mode === "login" ? "current-password" : "new-password"}
         />
       </div>
@@ -42,7 +42,7 @@ export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"
       </button>
       <p className="text-center text-sm text-muted">
         {mode === "login" ? (
-          signupOpen ? <>No account? <Link className="text-accent" href="/signup">Sign up</Link></> : "Ask a team owner to add you."
+          signupOpen ? <>No account? <Link className="text-accent" href="/signup">Sign up</Link></> : "Invite only. Ask for an invite link."
         ) : (
           <>Have an account? <Link className="text-accent" href="/login">Sign in</Link></>
         )}

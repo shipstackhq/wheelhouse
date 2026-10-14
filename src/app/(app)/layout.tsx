@@ -4,6 +4,7 @@ import { listProjects } from "@/lib/service";
 import { Logo } from "@/components/logo";
 import { NavLink } from "@/components/nav-link";
 import { ProfileMenu } from "@/components/profile-menu";
+import { isInstanceAdmin } from "@/lib/auth-policy";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, team, membership, actor } = await requireHuman();
@@ -30,6 +31,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="label mt-5 px-2 normal-case tracking-normal">Team</div>
           <NavLink href="/team">Members</NavLink>
           <NavLink href="/agents">Agents &amp; API keys</NavLink>
+          {isInstanceAdmin(user.email) && (
+            <>
+              <div className="label mt-5 px-2 normal-case tracking-normal">Admin</div>
+              <NavLink href="/admin/invites">Invite a new team</NavLink>
+            </>
+          )}
         </nav>
         <div className="border-t border-line p-2">
           <ProfileMenu name={user.name} email={user.email} role={membership.role} tags={membership.tags} team={team.name} />
