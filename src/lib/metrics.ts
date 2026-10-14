@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Actor } from "./auth";
 import { queueStatus } from "./service";
+import type { SessionView } from "@/components/session-row";
 
 /**
  * Read-only aggregates for the dashboard. One function per widget so new
@@ -155,12 +156,13 @@ export async function agentQueues(actor: Actor) {
     .from(apiKeys)
     .where(and(eq(apiKeys.teamId, actor.teamId), isNull(apiKeys.revokedAt)))
     .orderBy(desc(apiKeys.lastUsedAt));
-  const pending = new Map<string, { total: number; byProject: { key: string; pending: number }[] }>();
+  const pending = new Map<string, { total: number; byProject: { key: string; pending: number }[]; sessions: SessionView[] }>();
   for (const p of s.projects) {
     for (const q of await queueStatus(actor, p.id)) {
-      const cur = pending.get(q.id) ?? { total: 0, byProject: [] };
+      const cur = pending.get(q.id) ?? { total: 0, byProject: [], sessions: [] };
       cur.total += q.pending;
       if (q.pending) cur.byProject.push({ key: p.key, pending: q.pending });
+      for (const x of q.sessions) cur.sessions.push({ ...x, lastSeenAt: x.lastSeenAt.toISOString(), projectKey: p.key });
       pending.set(q.id, cur);
     }
   }
@@ -169,6 +171,7 @@ export async function agentQueues(actor: Actor) {
     ...k,
     pending: pending.get(k.id)?.total ?? 0,
     byProject: pending.get(k.id)?.byProject ?? [],
+    sessions: (pending.get(k.id)?.sessions ?? []).sort((x, y) => y.lastSeenAt.localeCompare(x.lastSeenAt)),
     actions7d: week.filter((e) => e.actorId === k.id).length,
   }));
 }

@@ -30,6 +30,8 @@ export type Actor = {
   id: string; // user id or api key id
   name: string;
   teamId: string;
+  /** Agents only: the client session making the call (Claude Code session_id), when the call names one. */
+  sessionId?: string;
 };
 
 export async function createSession(userId: string) {

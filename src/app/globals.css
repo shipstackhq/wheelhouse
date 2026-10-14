@@ -103,6 +103,36 @@ body {
   .chip {
     @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium leading-none;
   }
+  /*
+   * The shared list (components/list.tsx): rows alternate light/dark and take their padding from --list-py/--list-px,
+   * which data-density and data-inset set. "card" runs the stripes edge to edge of a 1rem-padded card (like the macOS
+   * Finder list view); "flush" is for lists that already touch their container (popovers, menus).
+   */
+  .list {
+    --list-py: 0.5rem;
+    --list-px: 0.75rem;
+  }
+  .list[data-density="compact"] {
+    --list-py: 0.25rem;
+    --list-px: 0.5rem;
+  }
+  .list[data-density="roomy"] {
+    --list-py: 0.75rem;
+    --list-px: 1rem;
+  }
+  .list[data-inset="flush"] {
+    --list-px: 1rem;
+  }
+  .list[data-inset="card"] {
+    --list-px: 1rem;
+    margin-inline: -1rem;
+  }
+  .list > li {
+    padding: var(--list-py) var(--list-px);
+  }
+  .list > li:nth-child(even):not([data-plain]) {
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
+  }
 }
 
 /* Markdown rendered in drawers/panels */
@@ -112,6 +142,30 @@ body {
 .md h1, .md h2, .md h3 { @apply mt-3 mb-1 font-semibold; }
 .md h1 { @apply text-base; }
 .md p { @apply my-2; }
+/* Side sheets: long words, paths, URLs, code and tables wrap instead of forcing a horizontal scrollbar. */
+.wrap-panel {
+  overflow-wrap: anywhere;
+}
+.wrap-panel pre {
+  white-space: pre-wrap;
+  overflow-x: visible;
+}
+.wrap-panel table {
+  table-layout: fixed;
+  width: 100%;
+}
+.wrap-panel img {
+  max-width: 100%;
+  height: auto;
+}
+.md-compact {
+  @apply text-xs leading-snug;
+}
+.md-compact p { margin-block: 0.25rem; }
+.md-compact ul, .md-compact ol { margin-block: 0.25rem; }
+/* The first/last block of a compact message sits flush: these must be unlayered like .md p, or utilities lose to it. */
+.md-compact > :first-child { margin-top: 0; }
+.md-compact > :last-child { margin-bottom: 0; }
 .md ul { @apply my-2 list-disc pl-5; }
 .md ol { @apply my-2 list-decimal pl-5; }
 .md code { @apply rounded bg-bg px-1 py-0.5 font-mono text-[12px]; }

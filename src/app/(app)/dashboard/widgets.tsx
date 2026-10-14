@@ -3,6 +3,13 @@ import clsx from "clsx";
 import type { Actor } from "@/lib/auth";
 import * as m from "@/lib/metrics";
 import { timeAgo } from "@/lib/time";
+import { SessionGroups } from "@/components/session-row";
+import { Tip } from "@/components/tip";
+import { LimitedSection, SECTION_LIMIT, TwoLineRow } from "@/components/dashboard/limited-list";
+import { ActivityRow } from "@/components/dashboard/activity-row";
+import { CollapsibleList } from "@/components/collapsible-list";
+import { List } from "@/components/list";
+import { SessionRemoveButton } from "@/components/session-remove-button";
 import { Empty, StatTile, Widget } from "@/components/dashboard/widget";
 import { StageBar, StageLegend } from "@/components/dashboard/stage-bar";
 import { ColumnChart } from "@/components/dashboard/column-chart";
@@ -48,9 +55,9 @@ export async function ProjectProgress({ actor }: WidgetProps) {
           No projects yet. <Link className="text-accent" href="/projects/new">Create one</Link>.
         </Empty>
       ) : (
-        <ul className="divide-y divide-line">
+        <List inset="card" density="roomy">
           {ps.map((p) => (
-            <li key={p.id} className="py-3 first:pt-0 last:pb-0">
+            <li key={p.id}>
               <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <Link href={`/p/${p.key}`} className="flex items-center gap-2 hover:text-accent">
                   <span className="chip bg-accent/15 font-mono text-accent">{p.key}</span>
@@ -63,7 +70,7 @@ export async function ProjectProgress({ actor }: WidgetProps) {
                   {p.urgent > 0 && <span className="text-danger">▲ {p.urgent} high/urgent</span>}
                   {p.agentReady > 0 && <span className="text-agent">🤖 {p.agentReady} AI-ready</span>}
                   {p.staleNodes > 0 && (
-                    <Link href={`/p/${p.key}/map`} className="text-accent hover:underline">⚠ {p.staleNodes} stale</Link>
+                    <Link href={`/p/${p.key}/map`} className="text-warn hover:underline">⚠ {p.staleNodes} stale</Link>
                   )}
                   <span>{p.lastActivity ? `active ${timeAgo(p.lastActivity)}` : "no activity in 4 weeks"}</span>
                 </span>
@@ -71,7 +78,7 @@ export async function ProjectProgress({ actor }: WidgetProps) {
               <StageBar stages={p.stages} />
             </li>
           ))}
-        </ul>
+        </List>
       )}
     </Widget>
   );
@@ -119,21 +126,50 @@ export async function AgentQueues({ actor }: WidgetProps) {
           No agents connected. <Link className="text-accent" href="/agents">Create an API key</Link>.
         </Empty>
       ) : (
-        <ul className="space-y-2.5 text-sm">
+        <List inset="card" className="text-sm">
           {agents.map((a) => (
             <li key={a.id} className="flex items-start gap-3">
-              <span className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", a.pending ? "bg-accent" : "bg-ok")} aria-hidden />
+              <span className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", a.pending ? "bg-agent" : "bg-ok")} aria-hidden />
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">🤖 {a.name}</div>
-                <div className="text-xs text-muted">
-                  {a.lastUsedAt ? `seen ${timeAgo(a.lastUsedAt)}` : "never connected"} · {a.actions7d} changes in 7d
-                </div>
+                <Tip
+                  content={
+                    <div className="space-y-0.5">
+                      <div>{a.lastUsedAt ? `Last used ${timeAgo(a.lastUsedAt)}` : "Never connected"}</div>
+                      <div>
+                        {a.actions7d} change{a.actions7d === 1 ? "" : "s"} in the last 7 days
+                      </div>
+                    </div>
+                  }
+                >
+                  <div tabIndex={0} className="w-fit rounded text-xs text-muted outline-none focus-visible:ring-1 focus-visible:ring-accent/60">
+                    {a.lastUsedAt ? `seen ${timeAgo(a.lastUsedAt)}` : "never connected"}
+                    {a.sessions.length > 0 && ` · ${a.sessions.length} session${a.sessions.length === 1 ? "" : "s"}`}
+                  </div>
+                </Tip>
+                <SessionGroups sessions={a.sessions} action={(x) => <SessionRemoveButton projectKey={x.projectKey ?? ""} sessionId={x.id} />} />
               </div>
               <div className="text-right text-xs">
                 {a.pending ? (
                   <>
-                    <div className="font-medium">{a.pending} queued</div>
-                    <div className="text-muted">{a.byProject.map((p) => `${p.key} ${p.pending}`).join(" · ")}</div>
+                    <Tip
+                      side="left"
+                      align="center"
+                      content={
+                        <div className="space-y-0.5">
+                          {a.byProject.map((p) => (
+                            <div key={p.key} className="flex justify-between gap-4">
+                              <span>{p.key}</span>
+                              <span className="tabular-nums">{p.pending} queued</span>
+                            </div>
+                          ))}
+                        </div>
+                      }
+                    >
+                      <div tabIndex={0} className="rounded font-medium outline-none focus-visible:ring-1 focus-visible:ring-accent/60">
+                        {a.pending} queued
+                      </div>
+                    </Tip>
                     <form action={markAllSeenAction}>
                       <input type="hidden" name="keyId" value={a.id} />
                       <button className="mt-0.5 text-muted underline-offset-2 hover:text-fg hover:underline" title="Reset this agent's queue">
@@ -147,7 +183,7 @@ export async function AgentQueues({ actor }: WidgetProps) {
               </div>
             </li>
           ))}
-        </ul>
+        </List>
       )}
     </Widget>
   );
@@ -160,7 +196,7 @@ function AttentionSection({ title, count, children }: { title: string; count: nu
       <div className="label">
         {title} <span className="normal-case text-muted/70">({count})</span>
       </div>
-      <ul className="space-y-1 text-sm">{children}</ul>
+      <List inset="card" className="text-sm">{children}</List>
     </div>
   );
 }
@@ -200,7 +236,7 @@ export async function NeedsAttention({ actor }: WidgetProps) {
             {a.stale.map((n) => (
               <li key={n.id}>
                 <Link href={`/p/${n.projectKey}/map?node=${n.id}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={n.reason ?? undefined}>
-                  <span className="shrink-0 text-xs text-accent">⚠</span>
+                  <span className="shrink-0 text-xs text-warn">⚠</span>
                   <span className="truncate">{n.name}</span>
                   <span className="ml-auto shrink-0 text-xs uppercase text-muted">
                     {n.projectKey} · {n.layer}
@@ -216,27 +252,17 @@ export async function NeedsAttention({ actor }: WidgetProps) {
 }
 
 export async function RecentActivity({ actor }: WidgetProps) {
-  const es = await m.recentActivity(actor, 12);
+  const es = await m.recentActivity(actor, 25);
   return (
     <Widget title="Recent activity" subtitle="Across all projects">
       {es.length === 0 ? (
         <Empty>Nothing in the last 4 weeks.</Empty>
       ) : (
-        <ul className="space-y-2 text-sm">
+        <CollapsibleList limit={SECTION_LIMIT} title="Recent activity">
           {es.map((e) => (
-            <li key={e.seq} className="flex items-baseline gap-2">
-              <span className="chip shrink-0 bg-panel-2 font-mono text-muted">{e.projectKey}</span>
-              <span className={clsx("shrink-0 font-medium", e.actorKind === "agent" && "text-agent")}>
-                {e.actorKind === "agent" ? "🤖 " : ""}
-                {e.actorName}
-              </span>
-              <Link href={`/p/${e.projectKey}/activity`} className="min-w-0 flex-1 truncate text-muted hover:text-fg">
-                {e.summary}
-              </Link>
-              <span className="shrink-0 text-xs text-muted/70">{timeAgo(e.createdAt)}</span>
-            </li>
+            <ActivityRow key={e.seq} e={e} />
           ))}
-        </ul>
+        </CollapsibleList>
       )}
     </Widget>
   );
@@ -250,43 +276,75 @@ export async function SyncHealth({ actor }: WidgetProps) {
       {empty ? (
         <Empty>Board and map match the work in flight.</Empty>
       ) : (
-        <div className="space-y-4">
-          <AttentionSection title="Work not linked to a ticket" count={h.untracked.length}>
-            {h.untracked.map((u) => (
-              <li key={u.id} className="flex gap-2 px-1 py-0.5">
-                <span className="chip shrink-0 bg-panel-2 font-mono text-muted">{u.projectKey}</span>
-                <span className="truncate">
-                  {u.by} changed {u.files.slice(0, 2).join(", ")}
-                  {u.files.length > 2 ? ` +${u.files.length - 2}` : ""}
-                </span>
-                <span className="ml-auto shrink-0 text-xs text-muted">{timeAgo(u.since)}</span>
-              </li>
-            ))}
-          </AttentionSection>
-          <AttentionSection title="Agent went quiet" count={h.quiet.length}>
-            {h.quiet.map((q) => (
-              <li key={q.ref}>
-                <Link href={`/p/${q.projectKey}?t=${q.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
-                  <span className="shrink-0 font-mono text-xs text-muted">{q.ref}</span>
-                  <span className="truncate">{q.title}</span>
-                  <span className="ml-auto shrink-0 text-xs text-muted">🤖 {q.agent} · {timeAgo(q.lastAt)}</span>
-                </Link>
-              </li>
-            ))}
-          </AttentionSection>
-          <AttentionSection title="Map drafts waiting to land" count={h.drafts.length}>
-            {h.drafts.map((d) => (
-              <li key={d.id}>
-                <Link href={`/p/${d.projectKey}/map?node=${d.nodeId}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
-                  <span className="shrink-0 text-xs text-agent">✎</span>
-                  <span className="truncate">{d.node}</span>
-                  <span className="ml-auto shrink-0 text-xs text-muted">
-                    {d.confirm ? "confirmation" : "update"} by {d.authorName} · {timeAgo(d.createdAt)}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </AttentionSection>
+        <div className="space-y-6">
+          <LimitedSection
+            title="Work not linked to a ticket"
+            items={h.untracked}
+            row={(u) => (
+              <TwoLineRow
+                key={u.id}
+                lead={u.projectKey}
+                title={`${u.files.slice(0, 2).join(", ")}${u.files.length > 2 ? ` +${u.files.length - 2}` : ""}`}
+                meta={`${u.by} · ${timeAgo(u.since)}`}
+                tip={
+                  <div className="space-y-0.5">
+                    <div>
+                      {u.by} changed {u.files.length} file{u.files.length === 1 ? "" : "s"} {timeAgo(u.since)}, with no ticket on the session
+                    </div>
+                    <div className="font-mono text-[11px] text-muted">
+                      {u.files.slice(0, 8).map((f) => (
+                        <div key={f}>{f}</div>
+                      ))}
+                      {u.files.length > 8 && <div>+{u.files.length - 8} more</div>}
+                    </div>
+                  </div>
+                }
+              />
+            )}
+          />
+          <LimitedSection
+            title="Agent went quiet"
+            items={h.quiet}
+            row={(q) => (
+              <TwoLineRow
+                key={q.ref}
+                href={`/p/${q.projectKey}?t=${q.ref}`}
+                lead={q.ref}
+                title={q.title}
+                meta={`🤖 ${q.agent} · ${timeAgo(q.lastAt)}`}
+                tip={
+                  <div className="space-y-0.5">
+                    <div className="font-medium">
+                      {q.ref} {q.title}
+                    </div>
+                    <div className="text-muted">
+                      Claimed by {q.agent}; its last activity on it was {timeAgo(q.lastAt)}
+                    </div>
+                  </div>
+                }
+              />
+            )}
+          />
+          <LimitedSection
+            title="Map drafts waiting to land"
+            items={h.drafts}
+            row={(d) => (
+              <TwoLineRow
+                key={d.id}
+                href={`/p/${d.projectKey}/map?node=${d.nodeId}`}
+                title={d.node}
+                meta={`${d.confirm ? "confirmation" : "update"} · ${d.authorName} · ${timeAgo(d.createdAt)}`}
+                tip={
+                  <div className="space-y-0.5">
+                    <div className="font-medium">{d.node}</div>
+                    <div className="text-muted">
+                      {d.confirm ? "A confirmation that it is still accurate" : "An updated description"} by {d.authorName}, {timeAgo(d.createdAt)}. It publishes when the code lands.
+                    </div>
+                  </div>
+                }
+              />
+            )}
+          />
         </div>
       )}
     </Widget>

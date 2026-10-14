@@ -351,6 +351,13 @@ export async function markAllSeenAction(fd: FormData) {
   revalidatePath("/", "layout");
 }
 
+export async function removeSessionAction(projectKey: string, sessionId: string) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.removeSession(actor, projectKey, sessionId));
+  revalidatePath("/", "layout");
+  return res;
+}
+
 export async function resolveDraftAction(projectKey: string, draftId: string, action: "publish" | "discard") {
   const { actor } = await requireHuman();
   const { resolveDraft } = await import("@/lib/sync");

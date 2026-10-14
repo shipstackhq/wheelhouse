@@ -87,7 +87,8 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
     .filter(Boolean)
     .join("\n");
 
-  // Since you last looked (agents only; never acks)
+  // Since you last looked (agents only; never acks). With a session this is that session's own queue.
+  // The agent is never asked to handle the session id: the plugin hooks attach it to every call (ADR-5).
   let since: string | null = null;
   if (actor.kind === "agent") {
     const q = await getChanges(actor, projectRef, 10);

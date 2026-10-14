@@ -134,7 +134,7 @@ export const tools = {
 
   get_changes: tool({
     description:
-      "YOUR QUEUE. Changes the team (and other agents) made since you last acknowledged: tickets created/edited/moved/reprioritized, comments addressed to you, map edits; plus staleNodes (map nodes whose code changed). Check at the start of every task and act on them, then call ack_changes with the highest seq you handled. Returns at most `limit` (default 50) oldest changes; when there are more you also get a summary and latestSeq so you can catch up without replaying everything.",
+      "YOUR QUEUE. Changes the team (and other agents) made since you last acknowledged: tickets created/edited/moved/reprioritized, comments addressed to you, map edits; plus staleNodes (map nodes whose code changed). Check at the start of every task and act on them, then call ack_changes with the highest seq you handled. Returns at most `limit` (default 50) oldest changes; when there are more you also get a summary and latestSeq so you can catch up without replaying everything. Your queue is per Claude Code session: other sessions on the same key keep theirs, and you see their changes.",
     input: z.object({ project, limit: z.number().int().optional() }),
     readOnly: true,
     run: (a, i) => svc.getChanges(a, i.project, i.limit),
@@ -144,6 +144,13 @@ export const tools = {
     description: "Mark queue changes up to and including `seq` as handled.",
     input: z.object({ project, seq: z.number().int() }),
     run: (a, i) => svc.ackChanges(a, i.project, i.seq),
+  }),
+
+  resume_session: tool({
+    description:
+      "Only after a response contains `session_removed`: a teammate had removed your session from Wheelhouse and it reconnected at the top of the queue. Ask the user whether to `replay` the changes you missed or `skip` them, then call this with their answer.",
+    input: z.object({ project, mode: z.enum(["replay", "skip"]) }),
+    run: (a, i) => svc.resumeSession(a, i.project, i.mode),
   }),
 
   get_activity: tool({
@@ -309,6 +316,23 @@ For enums, list each value as a column (name only). Set \`anchors\` to the schem
     run: async (a, i) => (await import("./briefing")).ticketContext(a, i.ticket, { maxChars: i.max_chars }),
   }),
 
+  delete_ticket: tool({
+    description: "Teammates only (agents get 'forbidden'): permanently delete a ticket.",
+    hidden: true,
+    input: z.object({ ticket }),
+    run: (a, i) => {
+      if (a.kind !== "human") throw new svc.ServiceError("forbidden", "Only teammates can delete tickets");
+      return svc.deleteTicket(a, i.ticket);
+    },
+  }),
+
+  delete_project: tool({
+    description: "Teammates only: permanently delete a project and everything in it.",
+    hidden: true,
+    input: z.object({ project }),
+    run: (a, i) => svc.deleteProject(a, i.project),
+  }),
+
   // ───────── sync plumbing (used by the wheelhouse CLI / hooks) ─────────
 
   session_sync: tool({
@@ -469,12 +493,23 @@ For enums, list each value as a column (name only). Set \`anchors\` to the schem
 
 export type ToolName = keyof typeof tools;
 
+/**
+ * Every tool takes an optional `session`: the caller's client session (Claude
+ * Code session_id). It attributes writes to that session and scopes the queue
+ * to it. Tools that already declare `session` (CLI plumbing) keep their own.
+ */
+const SESSION_ARG = {
+  type: "string",
+  description: "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it.",
+} as const;
+
 export function listToolDefs(opts: { includeHidden?: boolean } = {}) {
   return Object.entries(tools as Record<string, Tool<z.ZodType>>)
     .filter(([, t]) => opts.includeHidden || !t.hidden)
     .map(([name, t]) => {
-    const { $schema: _s, ...inputSchema } = z.toJSONSchema(t.input) as Record<string, unknown>;
+    const { $schema: _s, ...inputSchema } = z.toJSONSchema(t.input) as Record<string, unknown> & { properties?: Record<string, unknown> };
     void _s;
+    inputSchema.properties = { ...inputSchema.properties, session: inputSchema.properties?.session ?? SESSION_ARG };
     return {
       name,
       description: t.description,
@@ -487,7 +522,17 @@ export function listToolDefs(opts: { includeHidden?: boolean } = {}) {
 export async function runTool(actor: Actor, name: string, rawArgs: unknown) {
   const t = (tools as Record<string, Tool<z.ZodType>>)[name];
   if (!t) throw new svc.ServiceError("not_found", `Unknown tool ${name}`);
-  const parsed = t.input.safeParse(rawArgs ?? {});
+  const args = (rawArgs ?? {}) as Record<string, unknown>;
+  const session = typeof args.session === "string" && args.session.trim() ? args.session.trim() : undefined;
+  const parsed = t.input.safeParse(args);
   if (!parsed.success) throw new svc.ServiceError("invalid", z.prettifyError(parsed.error));
-  return t.run(actor, parsed.data);
+  const caller = actor.kind === "agent" && session ? { ...actor, sessionId: session } : actor;
+  await svc.checkSession(caller);
+  await svc.touchSession(caller); // every call that names a session counts as activity; a removed session is restored here
+  const result = await t.run(caller, parsed.data);
+  if ((name === "get_changes" || name === "get_briefing") && result && typeof result === "object" && !Array.isArray(result)) {
+    const notice = await svc.sessionNotice(caller);
+    if (notice) return { ...result, session_removed: notice };
+  }
+  return result;
 }

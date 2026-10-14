@@ -7,6 +7,7 @@ import {
   emit,
   getProject,
   normPath,
+  pruneSessions,
   ServiceError,
   upsertNode,
   type NodeInput,
@@ -142,6 +143,7 @@ export async function sessionEnd(actor: Actor, projectRef: string, sessionId: st
     .update(workSessions)
     .set({ endedAt: new Date() })
     .where(and(eq(workSessions.id, sessionId), eq(workSessions.projectId, project.id)));
+  await pruneSessions(db, project.id);
   return { ok: true };
 }
 

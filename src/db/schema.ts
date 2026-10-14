@@ -277,6 +277,9 @@ export const events = pgTable(
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    // Client session that made the change (Claude Code session_id), when known. Lets sessions
+    // sharing one API key see each other's writes. No FK: sessions are pruned, events never are.
+    sessionId: text("session_id"),
     createdAt: createdAt(),
   },
   (t) => [index("events_project_seq_idx").on(t.projectId, t.seq)],
@@ -324,6 +327,13 @@ export const workSessions = pgTable(
     branch: text("branch"),
     ticketId: uuid("ticket_id").references(() => tickets.id, { onDelete: "set null" }),
     files: jsonb("files").$type<Record<string, SessionFile>>().notNull().default({}),
+    // This session's own read pointer into `events` (its AI queue). Null until the session first reads it.
+    lastSeq: bigint("last_seq", { mode: "number" }),
+    // Soft delete: a teammate removed this session. Kept (30 days) so a reconnect can be detected.
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    // Set on reconnect after removal until the agent chooses replay/skip: where its cursor was, and when it was removed.
+    resumeFromSeq: bigint("resume_from_seq", { mode: "number" }),
+    resumeRemovedAt: timestamp("resume_removed_at", { withTimezone: true }),
     firstChangeAt: timestamp("first_change_at", { withTimezone: true }),
     startedAt: createdAt(),
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),

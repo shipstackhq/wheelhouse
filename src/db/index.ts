@@ -36,8 +36,9 @@ function init(): Holder {
   const { PGlite } = require("@electric-sql/pglite") as typeof import("@electric-sql/pglite");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { drizzle: drizzleLite } = require("drizzle-orm/pglite") as typeof import("drizzle-orm/pglite");
-  const dir = path.join(process.cwd(), ".data", "pglite");
-  fs.mkdirSync(dir, { recursive: true });
+  // PGLITE_DIR overrides the location; tests use "memory://" for a throwaway database.
+  const dir = process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite");
+  if (!dir.startsWith("memory://")) fs.mkdirSync(dir, { recursive: true });
   const client = new PGlite(dir);
   const db = drizzleLite(client, { schema }) as unknown as DB;
   const ready = (async () => {

@@ -3,6 +3,7 @@ import { requireHuman } from "@/lib/auth";
 import { getProject, queueStatus, ServiceError } from "@/lib/service";
 import { ProjectTabs } from "./tabs";
 import { LiveRefresh } from "@/components/live-refresh";
+import { BotsMenu } from "@/components/bots-menu";
 
 export default async function ProjectLayout({ children, params }: { children: React.ReactNode; params: Promise<{ key: string }> }) {
   const { key } = await params;
@@ -25,22 +26,11 @@ export default async function ProjectLayout({ children, params }: { children: Re
           </div>
         </div>
         <ProjectTabs projectKey={project.key} />
-        <div className="ml-auto flex items-center gap-3 text-xs">
-          {queue.length === 0 ? (
-            <a href="/agents" className="text-muted hover:text-fg">No agents connected →</a>
-          ) : (
-            queue.map((q) => (
-              <span
-                key={q.id}
-                className="flex items-center gap-1.5 text-muted"
-                title={`${q.pending} change(s) ${q.name} hasn't picked up yet`}
-              >
-                <span className={`h-2 w-2 rounded-full ${q.pending ? "bg-agent" : "bg-ok"}`} />
-                🤖 {q.name}
-                <span className={q.pending ? "text-agent" : ""}>{q.pending ? `${q.pending} queued` : "in sync"}</span>
-              </span>
-            ))
-          )}
+        <div className="ml-auto">
+          <BotsMenu
+            projectKey={project.key}
+            bots={queue.map((q) => ({ id: q.id, name: q.name, pending: q.pending, sessions: q.sessions.map((x) => ({ ...x, lastSeenAt: x.lastSeenAt.toISOString() })), lastUsedAt: q.lastUsedAt ? new Date(q.lastUsedAt).toISOString() : null }))}
+          />
         </div>
       </header>
       <LiveRefresh projectKey={project.key} />

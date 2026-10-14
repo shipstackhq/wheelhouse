@@ -1,7 +1,8 @@
 import "server-only";
-import { and, asc, desc, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "@/db";
 import type { Actor } from "./auth";
+import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buckets";
 
 /**
  * The single write path for Wheelhouse. UI server actions, the REST API and the
@@ -9,7 +10,7 @@ import type { Actor } from "./auth";
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms } = schema;
+const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions } = schema;
 
 export class ServiceError extends Error {
   constructor(
@@ -49,6 +50,7 @@ export async function emit(
     entityId: e.entityId,
     summary: e.summary,
     data: e.data ?? {},
+    sessionId: actor.kind === "agent" ? (actor.sessionId ?? null) : null,
   });
 }
 
@@ -84,6 +86,19 @@ export async function getProject(actor: Actor, ref: string) {
     );
   if (!p) throw new ServiceError("not_found", `Project ${ref} not found`);
   return p;
+}
+
+/** Delete a project and everything in it (tickets, map, flows, drafts, sessions, activity). Teammates only. */
+export async function deleteProject(actor: Actor, ref: string) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a project");
+  const db = await getDb();
+  const p = await getProject(actor, ref);
+  await db.transaction(async (tx) => {
+    // events has no foreign key to projects, so clear it explicitly; everything else cascades.
+    await tx.delete(events).where(eq(events.projectId, p.id));
+    await tx.delete(projects).where(eq(projects.id, p.id));
+  });
+  return { ok: true, deleted: p.key };
 }
 
 export async function createProject(actor: Actor, input: { name: string; key?: string; description?: string }) {
@@ -1377,7 +1392,145 @@ async function keyRow(q: Q, keyId: string) {
   return k;
 }
 
-const notMine = (keyId: string) => or(ne(events.actorKind, "agent"), ne(events.actorId, keyId));
+/**
+ * Changes the caller didn't make itself. A caller that names its session excludes
+ * only that session's writes, so sessions sharing one API key see each other's
+ * work; without a session, everything written with the key is excluded.
+ */
+const notMine = (who: { id: string; sessionId?: string }) =>
+  who.sessionId
+    ? sql`${events.sessionId} is distinct from ${who.sessionId}`
+    : or(ne(events.actorKind, "agent"), ne(events.actorId, who.id));
+
+/**
+ * Agents may name their client session (Claude Code session_id) on any call.
+ * A session already registered by another key is refused; an unknown one is
+ * fine (it's registered when the session first reads its queue).
+ */
+export async function checkSession(actor: Actor) {
+  if (actor.kind !== "agent" || !actor.sessionId) return;
+  const db = await getDb();
+  const [s] = await db.select({ apiKeyId: workSessions.apiKeyId }).from(workSessions).where(eq(workSessions.id, actor.sessionId));
+  if (s && s.apiKeyId !== actor.id) throw new ServiceError("forbidden", "That session belongs to another API key");
+}
+
+/**
+ * Marks the calling session active (every call that names one, reads included) so
+ * "last seen" is real. A session a teammate had removed is restored on its first
+ * call: it jumps to the top of the queue (nothing replayed, nothing blocked) and
+ * remembers where it was, so the agent can opt into the missed changes with
+ * resume_session.
+ */
+export async function touchSession(actor: Actor) {
+  if (actor.kind !== "agent" || !actor.sessionId) return;
+  const db = await getDb();
+  const [s] = await db.select().from(workSessions).where(eq(workSessions.id, actor.sessionId));
+  if (!s || s.apiKeyId !== actor.id) return;
+  if (s.removedAt) {
+    const [{ head }] = await db
+      .select({ head: sql<number>`coalesce(max(${events.seq}), 0)` })
+      .from(events)
+      .where(eq(events.projectId, s.projectId));
+    await db
+      .update(workSessions)
+      .set({
+        removedAt: null,
+        resumeFromSeq: s.lastSeq ?? Number(head),
+        resumeRemovedAt: s.removedAt,
+        lastSeq: Number(head),
+        lastSeenAt: new Date(),
+        endedAt: null,
+      })
+      .where(eq(workSessions.id, s.id));
+    return;
+  }
+  await db.update(workSessions).set({ lastSeenAt: new Date(), endedAt: null }).where(eq(workSessions.id, s.id));
+}
+
+/** Set on get_briefing / get_changes responses while a restored session hasn't chosen replay or skip. */
+export async function sessionNotice(actor: Actor) {
+  if (actor.kind !== "agent" || !actor.sessionId) return null;
+  const db = await getDb();
+  const [s] = await db.select().from(workSessions).where(eq(workSessions.id, actor.sessionId));
+  if (!s || s.apiKeyId !== actor.id || s.resumeFromSeq == null) return null;
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(events)
+    .where(and(eq(events.projectId, s.projectId), gt(events.seq, s.resumeFromSeq), notMine({ id: actor.id, sessionId: s.id })));
+  return {
+    removedAt: s.resumeRemovedAt,
+    missedChanges: Number(n),
+    next: "A teammate removed this session from Wheelhouse and it has reconnected at the top of the queue. Ask the user whether to replay the missed changes or skip them, then call resume_session with mode replay or skip.",
+  };
+}
+
+/** The agent's answer to session_removed: replay the changes missed while removed, or stay at the top of the queue. */
+export async function resumeSession(actor: Actor, projectRef: string, mode: "replay" | "skip") {
+  if (actor.kind !== "agent" || !actor.sessionId) throw new ServiceError("invalid", "resume_session is for an agent session");
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const [s] = await db.select().from(workSessions).where(eq(workSessions.id, actor.sessionId));
+  if (!s || s.apiKeyId !== actor.id || s.projectId !== project.id) throw new ServiceError("not_found", "Session not found");
+  if (s.resumeFromSeq == null) throw new ServiceError("invalid", "Nothing to resume: this session was not removed");
+  const [{ head }] = await db.select({ head: sql<number>`coalesce(max(${events.seq}), 0)` }).from(events).where(eq(events.projectId, project.id));
+  const cursor = mode === "replay" ? s.resumeFromSeq : Number(head);
+  await db.update(workSessions).set({ lastSeq: cursor, resumeFromSeq: null, resumeRemovedAt: null }).where(eq(workSessions.id, s.id));
+  return { ok: true, mode, cursor };
+}
+
+/** A teammate removes a session from the lists (soft delete: kept 30 days so a reconnect is recognised). */
+export async function removeSession(actor: Actor, projectRef: string, sessionId: string) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can remove a session");
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const removed = await db
+    .update(workSessions)
+    .set({ removedAt: new Date() })
+    .where(and(eq(workSessions.id, sessionId), eq(workSessions.projectId, project.id), isNull(workSessions.removedAt)))
+    .returning({ id: workSessions.id });
+  if (!removed.length) throw new ServiceError("not_found", "Session not found");
+  return { ok: true };
+}
+
+/**
+ * Housekeeping, run whenever sessions are read or end: sessions idle for over a
+ * week are deleted, and removed ones are purged after 30 days. A session a
+ * pending map draft still points at is kept.
+ */
+export async function pruneSessions(q: Q, projectId: string) {
+  const now = Date.now();
+  await q.delete(workSessions).where(
+    and(
+      eq(workSessions.projectId, projectId),
+      or(
+        and(isNull(workSessions.removedAt), lt(workSessions.lastSeenAt, new Date(now - SESSION_IDLE_LIMIT_MS))),
+        lt(workSessions.removedAt, new Date(now - REMOVED_KEEP_MS)),
+      ),
+      sql`not exists (select 1 from ${schema.nodeDrafts} where ${schema.nodeDrafts.sessionId} = ${workSessions.id} and ${schema.nodeDrafts.status} = 'pending')`,
+    ),
+  );
+}
+
+/**
+ * The calling session's own cursor, registering the session on first use. A new
+ * session starts where its key's cursor is: its briefing covers current state,
+ * so it needs changes from now on, not a replay of what other sessions handled.
+ */
+async function sessionCursor(q: Q, actor: Actor, projectId: string) {
+  const id = actor.sessionId!;
+  const [s] = await q.select().from(workSessions).where(eq(workSessions.id, id));
+  if (s && s.apiKeyId !== actor.id) throw new ServiceError("forbidden", "That session belongs to another API key");
+  if (s && s.projectId !== projectId) throw new ServiceError("invalid", "That session belongs to another project");
+  if (s?.lastSeq != null) return s.lastSeq;
+  const start = await cursorFor(q, await keyRow(q, actor.id), projectId);
+  if (s) await q.update(workSessions).set({ lastSeq: start }).where(eq(workSessions.id, id));
+  else
+    await q
+      .insert(workSessions)
+      .values({ id, projectId, apiKeyId: actor.id, actorName: actor.name, lastSeq: start })
+      .onConflictDoNothing();
+  return start;
+}
 
 /**
  * The AI queue: changes since this agent's cursor, excluding the agent's own
@@ -1392,8 +1545,8 @@ export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
   if (actor.kind !== "agent") throw new ServiceError("forbidden", "The change queue is per agent API key");
   const db = await getDb();
   const project = await getProject(actor, projectRef);
-  const after = await cursorFor(db, await keyRow(db, actor.id), project.id);
-  const pending = and(eq(events.projectId, project.id), gt(events.seq, after), notMine(actor.id));
+  const after = actor.sessionId ? await sessionCursor(db, actor, project.id) : await cursorFor(db, await keyRow(db, actor.id), project.id);
+  const pending = and(eq(events.projectId, project.id), gt(events.seq, after), notMine(actor));
   const cap = Math.min(Math.max(limit, 1), 200);
   const rows = await db.select().from(events).where(pending).orderBy(asc(events.seq)).limit(cap);
   const [{ total, latest }] = await db
@@ -1432,6 +1585,7 @@ export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
     .where(and(eq(nodes.projectId, project.id), eq(nodes.stale, true)))
     .limit(50);
   return {
+    session: actor.sessionId ?? null,
     cursor: after,
     total: Number(total),
     latestSeq: Number(latest) || after,
@@ -1446,6 +1600,14 @@ export async function ackChanges(actor: Actor, projectRef: string, seq: number) 
   if (actor.kind !== "agent") throw new ServiceError("forbidden", "The change queue is per agent API key");
   const db = await getDb();
   const project = await getProject(actor, projectRef);
+  if (actor.sessionId) {
+    await sessionCursor(db, actor, project.id);
+    await db
+      .update(workSessions)
+      .set({ lastSeq: sql`greatest(coalesce(${workSessions.lastSeq}, 0), ${seq})`, lastSeenAt: new Date() })
+      .where(eq(workSessions.id, actor.sessionId));
+  }
+  // The key-level cursor follows the furthest any session has read: new sessions start there.
   await db
     .insert(agentCursors)
     .values({ apiKeyId: actor.id, projectId: project.id, lastSeq: seq })
@@ -1453,7 +1615,7 @@ export async function ackChanges(actor: Actor, projectRef: string, seq: number) 
       target: [agentCursors.apiKeyId, agentCursors.projectId],
       set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${seq})` },
     });
-  return { ok: true, cursor: seq };
+  return { ok: true, cursor: seq, session: actor.sessionId ?? null };
 }
 
 /**
@@ -1482,6 +1644,10 @@ export async function markAllSeen(actor: Actor, opts: { keyId?: string; projectR
           .insert(agentCursors)
           .values({ apiKeyId: k.id, projectId: p.id, lastSeq: Number(head) })
           .onConflictDoUpdate({ target: [agentCursors.apiKeyId, agentCursors.projectId], set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${Number(head)})` } });
+        await tx
+          .update(workSessions)
+          .set({ lastSeq: Number(head) })
+          .where(and(eq(workSessions.apiKeyId, k.id), eq(workSessions.projectId, p.id), isNull(workSessions.removedAt)));
         reset++;
       }
     }
@@ -1489,10 +1655,16 @@ export async function markAllSeen(actor: Actor, opts: { keyId?: string; projectR
   return { ok: true, reset };
 }
 
-/** Pending queue depth per agent key, shown in the UI so humans know what the AI hasn't seen yet. */
+/**
+ * Pending queue depth per agent key, shown in the UI so humans know what the AI
+ * hasn't seen yet. Each session (not ended, not removed, active within a week)
+ * reports its own depth and the recency bucket it falls into. The key's `pending`
+ * counts only sessions active in the last 6 hours, so dead ones don't inflate it.
+ */
 export async function queueStatus(actor: Actor, projectRef: string) {
   const db = await getDb();
   const project = await getProject(actor, projectRef);
+  await pruneSessions(db, project.id);
   const keys = await db
     .select({ id: schema.apiKeys.id, name: schema.apiKeys.name, lastUsedAt: schema.apiKeys.lastUsedAt, createdAt: schema.apiKeys.createdAt })
     .from(schema.apiKeys)
@@ -1500,11 +1672,49 @@ export async function queueStatus(actor: Actor, projectRef: string) {
   const out = [];
   for (const { createdAt, ...k } of keys) {
     const after = await cursorFor(db, { id: k.id, createdAt }, project.id);
-    const [{ n }] = await db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(events)
-      .where(and(eq(events.projectId, project.id), gt(events.seq, after), notMine(k.id)));
-    out.push({ ...k, pending: Number(n) });
+    const depth = async (from: number, who: { id: string; sessionId?: string }) => {
+      const [{ n }] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(events)
+        .where(and(eq(events.projectId, project.id), gt(events.seq, from), notMine(who)));
+      return Number(n);
+    };
+    const active = await db
+      .select({
+        id: workSessions.id,
+        lastSeq: workSessions.lastSeq,
+        lastSeenAt: workSessions.lastSeenAt,
+        branch: workSessions.branch,
+        ticketNumber: tickets.number,
+      })
+      .from(workSessions)
+      .leftJoin(tickets, eq(tickets.id, workSessions.ticketId))
+      .where(
+        and(
+          eq(workSessions.apiKeyId, k.id),
+          eq(workSessions.projectId, project.id),
+          isNull(workSessions.endedAt),
+          isNull(workSessions.removedAt),
+          gt(workSessions.lastSeenAt, new Date(Date.now() - SESSION_IDLE_LIMIT_MS)),
+        ),
+      );
+    const now = Date.now();
+    const sessions = [];
+    for (const s of active)
+      sessions.push({
+        id: s.id,
+        lastSeenAt: s.lastSeenAt,
+        bucket: bucketOf(s.lastSeenAt, now)!,
+        // A session that never read its queue has no cursor of its own; don't pass it off as caught up.
+        reading: s.lastSeq != null,
+        branch: s.branch,
+        ticket: s.ticketNumber == null ? null : `${project.key}-${s.ticketNumber}`,
+        pending: s.lastSeq == null ? 0 : await depth(s.lastSeq, { id: k.id, sessionId: s.id }),
+      });
+    sessions.sort((x, y) => y.lastSeenAt.getTime() - x.lastSeenAt.getTime());
+    const recent = sessions.filter((s) => s.bucket === "h6");
+    const pending = recent.length ? Math.max(...recent.map((s) => s.pending)) : await depth(after, { id: k.id });
+    out.push({ ...k, pending, sessions });
   }
   return out;
 }
