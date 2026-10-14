@@ -1,0 +1,22 @@
+# Wheelhouse app only. Postgres and the reverse proxy (Caddy) already run on the host:
+#  - the app joins the existing Postgres container's Docker network (POSTGRES_NETWORK)
+#  - the app listens on 127.0.0.1:${WHEELHOUSE_PORT} for the host's Caddy to proxy to
+# Migrations run on app boot, so never run more than one replica.
+services:
+  app:
+    image: ${WHEELHOUSE_IMAGE:-ghcr.io/shipstackhq/wheelhouse:latest}
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:${WHEELHOUSE_PORT:-3000}:3000"
+    networks: [db]
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+networks:
+  db:
+    external: true
+    name: ${POSTGRES_NETWORK:?set POSTGRES_NETWORK in .env to the Postgres container's Docker network}
