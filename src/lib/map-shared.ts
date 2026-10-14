@@ -22,7 +22,7 @@ export const KIND_STYLE: Record<string, { icon: string; color: string }> = {
   capability: { icon: "◎", color: "#ec4899" },
   actor: { icon: "☺", color: "#eab308" },
   service: { icon: "▣", color: "var(--accent)" },
-  module: { icon: "◆", color: "#3b82f6" },
+  module: { icon: "◆", color: "#f59e0b" },
   component: { icon: "●", color: "#10b981" },
   database: { icon: "⛁", color: "#ec4899" },
   queue: { icon: "≋", color: "#f97316" },
@@ -38,7 +38,7 @@ export const KIND_STYLE: Record<string, { icon: string; color: string }> = {
 
 export const STATUS_STYLE: Record<string, string> = {
   planned: "text-muted",
-  building: "text-accent",
+  building: "text-warn",
   live: "text-ok",
   deprecated: "text-danger line-through",
 };

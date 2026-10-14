@@ -24,7 +24,7 @@ export default async function Dashboard() {
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           {WIDGETS.map(({ id, title, span, skeletonHeight, Component }) => (
-            <div key={id} className={SPAN_CLASS[span]}>
+            <div key={id} className={`${SPAN_CLASS[span]} flex flex-col`}>
               <Suspense fallback={<WidgetSkeleton title={title} height={skeletonHeight} />}>
                 <Component actor={actor} />
               </Suspense>

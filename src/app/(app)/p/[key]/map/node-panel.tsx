@@ -111,14 +111,14 @@ export function NodePanel(props: {
         <span style={{ color: k.color }}>{k.icon}</span>
         <span className="truncate">{x.name}</span>
         <span className="text-[10px] uppercase text-muted">{x.layer}</span>
-        {x.stale && <span className="text-[10px] text-accent">stale</span>}
+        {x.stale && <span className="text-[10px] text-warn">stale</span>}
         {extra}
       </button>
     );
   };
 
   return (
-    <aside className="flex w-[440px] shrink-0 flex-col border-l border-line bg-panel">
+    <aside className="flex w-[440px] min-w-0 shrink-0 flex-col overflow-hidden border-l border-line bg-panel">
       <div className="flex items-center gap-2 border-b border-line px-5 py-3 text-xs">
         <span className="chip bg-panel-2 uppercase text-muted">{LAYER_META[layer].label}</span>
         <span className="text-muted">v{n.version}{n.describedAt ? ` · described ${timeAgo(n.describedAt)}` : ""}{n.describedSha ? ` @ ${n.describedSha.slice(0, 7)}` : ""}</span>
@@ -128,7 +128,7 @@ export function NodePanel(props: {
         </div>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4 text-sm">
+      <div className="wrap-panel min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-5 py-4 text-sm">
         {g.flux[n.id] && (
           <div className="rounded-md border border-agent/40 bg-agent/5 p-3">
             <div className="font-medium text-agent">✎ In flux</div>
@@ -164,8 +164,8 @@ export function NodePanel(props: {
         )}
 
         {n.stale && (
-          <div className="rounded-md border border-accent/40 bg-accent/10 p-3">
-            <div className="font-medium text-accent">⚠ Possibly out of date</div>
+          <div className="rounded-md border border-warn/40 bg-warn/10 p-3">
+            <div className="font-medium text-warn">⚠ Possibly out of date</div>
             {n.staleReason && <div className="mt-1 text-xs text-muted">{n.staleReason}</div>}
             <div className="mt-2 flex gap-2">
               <button className="btn py-1 text-xs" onClick={props.onMarkFresh}>Still accurate — mark fresh</button>
@@ -232,7 +232,7 @@ export function NodePanel(props: {
               <section>
                 <span className="label">Code anchors</span>
                 <div className="flex flex-wrap gap-1">
-                  {n.anchors.map((a) => <code key={a} className="chip bg-bg font-mono text-[11px] text-muted">{a}</code>)}
+                  {n.anchors.map((a) => <code key={a} className="chip max-w-full whitespace-normal bg-bg font-mono text-[11px] text-muted">{a}</code>)}
                 </div>
               </section>
             )}

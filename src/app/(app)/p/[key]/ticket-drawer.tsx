@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import clsx from "clsx";
 import {
   commentAction,
   deleteTicketAction,
@@ -15,8 +14,8 @@ import {
 } from "@/app/actions";
 import type { Col, Member, NodeLite } from "./board";
 import { PRIORITY_STYLE } from "./board";
-import { timeAgo } from "@/lib/time";
 import { Select, useDialogs } from "@/components/ui";
+import { DiscussionThread, HistoryList } from "./thread";
 
 type Data = Extract<Awaited<ReturnType<typeof getTicketAction>>, { ok: true }>["data"];
 
@@ -211,19 +210,9 @@ export function TicketDrawer(props: {
         </section>
 
         <section>
-          <span className="label">Discussion</span>
-          <div className="space-y-3">
-            {data.comments.map((c) => (
-              <div key={c.id} className={clsx("rounded-md border p-3", c.authorKind === "agent" ? "border-agent/30 bg-agent/5" : "border-line bg-bg/40")}>
-                <div className="mb-1 flex items-center gap-2 text-xs">
-                  <span className={c.authorKind === "agent" ? "font-medium text-agent" : "font-medium"}>
-                    {c.authorKind === "agent" ? "🤖 " : ""}{c.authorName}
-                  </span>
-                  <span className="text-muted">{timeAgo(c.createdAt)}</span>
-                </div>
-                <div className="md"><ReactMarkdown remarkPlugins={[remarkGfm]}>{c.body}</ReactMarkdown></div>
-              </div>
-            ))}
+          <span className="label">Discussion{data.comments.length > 0 && <span className="normal-case text-muted/70"> ({data.comments.length})</span>}</span>
+          <div className="space-y-4">
+            <DiscussionThread comments={data.comments} />
             <div className="space-y-2">
               <textarea
                 className="input"
@@ -256,15 +245,7 @@ export function TicketDrawer(props: {
 
         <section>
           <span className="label">History</span>
-          <ul className="space-y-1.5 text-xs">
-            {data.history.map((h) => (
-              <li key={h.seq} className="flex gap-2">
-                <span className={h.actorKind === "agent" ? "text-agent" : "text-fg"}>{h.actorKind === "agent" ? "🤖 " : ""}{h.actorName}</span>
-                <span className="text-muted">{h.summary}</span>
-                <span className="ml-auto shrink-0 text-muted/70">{timeAgo(h.createdAt)}</span>
-              </li>
-            ))}
-          </ul>
+          <HistoryList items={data.history} />
         </section>
 
         <div className="pt-2">

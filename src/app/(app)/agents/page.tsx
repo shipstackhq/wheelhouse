@@ -104,7 +104,7 @@ curl -s -X POST ${origin}/api/v1/report_changes \\
         <div className="card space-y-3 p-5">
           <h2 className="font-medium">5. Keep it fresh (optional)</h2>
           <p className="text-sm text-muted">
-            A post-commit hook reports changed files so map nodes anchored to them are flagged <span className="text-accent">stale</span> on the
+            A post-commit hook reports changed files so map nodes anchored to them are flagged <span className="text-warn">stale</span> on the
             map and show up in agents&apos; queues for re-describing:
           </p>
           <CopyBlock value={hook} multiline />

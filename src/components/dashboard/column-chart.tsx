@@ -69,7 +69,7 @@ export function ColumnChart({ data, series, stacked = false, label }: { data: Ro
             </thead>
             <tbody>
               {data.map((r) => (
-                <tr key={r.day} className="border-t border-line">
+                <tr key={r.day} className="even:bg-fg/5">
                   <td className="py-1">{fmtDay(r.day)}</td>
                   {series.map((s) => <td key={s.key} className="py-1 text-right">{val(r, s.key)}</td>)}
                 </tr>

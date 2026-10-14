@@ -94,7 +94,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
         : "";
   const stale = (
     <>
-      {n.stale && <span className="chip bg-accent/15 text-[9px] text-accent" title={n.staleReason ?? "Code changed"}>⚠ stale</span>}
+      {n.stale && <span className="chip bg-warn/15 text-[9px] text-warn" title={n.staleReason ?? "Code changed"}>⚠ stale</span>}
       {data.flux && <FluxBadge flux={data.flux} />}
     </>
   );
@@ -164,7 +164,12 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
   );
 });
 
-/** ERD card for the data layer: one row per column, with per-column handles for FK edges. */
+/**
+ * ERD card for the data layer: one row per column, with per-column handles for FK edges.
+ * Reads like the sentence "one project has many tickets": parents sit left, children right.
+ * A relationship line leaves the child's FK column on its LEFT edge and enters the
+ * parent's referenced column on its RIGHT edge (so drag from a child's left dot to a parent's right dot).
+ */
 const TableNode = memo(function TableNode({ data, selected }: NodeProps<Node<NodeData>>) {
   const { n, dim } = data;
   const cols = n.columns as Column[];
@@ -175,13 +180,13 @@ const TableNode = memo(function TableNode({ data, selected }: NodeProps<Node<Nod
       className={clsx("rounded-lg border bg-panel-2 shadow-sm transition-opacity", selected ? "border-accent" : "border-line", dim && "opacity-35", ringClass(data))}
       style={{ width: TABLE_W, borderTop: `3px solid ${k.color}` }}
     >
-      <Handle type="target" position={Position.Left} id="node-in" className="erd-handle" style={{ top: TABLE_HEADER_H / 2 }} />
-      <Handle type="source" position={Position.Right} id="node-out" className="erd-handle" style={{ top: TABLE_HEADER_H / 2 }} />
+      <Handle type="target" position={Position.Right} id="node-in" className="erd-handle" style={{ top: TABLE_HEADER_H / 2 }} />
+      <Handle type="source" position={Position.Left} id="node-out" className="erd-handle" style={{ top: TABLE_HEADER_H / 2 }} />
       <div className="flex items-center gap-2 border-b border-line px-3" style={{ height: TABLE_HEADER_H - 3 }}>
         <span className="text-xs" style={{ color: k.color }}>{k.icon}</span>
         <span className="truncate font-mono text-[13px] font-semibold">{n.name}</span>
         {n.kind !== "table" && <span className="chip bg-bg text-[9px] uppercase text-muted">{n.kind}</span>}
-        {n.stale && <span className="chip bg-accent/15 text-[9px] text-accent" title={n.staleReason ?? "Schema changed"}>⚠ stale</span>}
+        {n.stale && <span className="chip bg-warn/15 text-[9px] text-warn" title={n.staleReason ?? "Schema changed"}>⚠ stale</span>}
         {data.flux && <FluxBadge flux={data.flux} />}
       </div>
       <div className="py-1">
@@ -204,7 +209,7 @@ const TableNode = memo(function TableNode({ data, selected }: NodeProps<Node<Nod
                 data.onColumnClick?.(n.id, c.name);
               }}
             >
-              <Handle type="target" position={Position.Left} id={`in-${c.name}`} className="erd-handle" />
+              <Handle type="target" position={Position.Right} id={`in-${c.name}`} className="erd-handle" />
               <span className={clsx("w-5 shrink-0 text-[9px] font-semibold", c.pk ? "text-accent" : "text-muted")}>{flag}</span>
               <span className={clsx("truncate", c.pk && "font-semibold")}>{c.name}</span>
               {!isEnum && (
@@ -213,7 +218,7 @@ const TableNode = memo(function TableNode({ data, selected }: NodeProps<Node<Nod
                   {c.nullable ? "?" : ""}
                 </span>
               )}
-              <Handle type="source" position={Position.Right} id={`out-${c.name}`} className="erd-handle" />
+              <Handle type="source" position={Position.Left} id={`out-${c.name}`} className="erd-handle" />
             </div>
           );
         })}
@@ -373,7 +378,7 @@ function toFlow(
           target: e.toNodeId,
           sourceHandle: hasCol(e.fromNodeId, m.fromColumn) ? `out-${m.fromColumn}` : "node-out",
           targetHandle: hasCol(e.toNodeId, m.toColumn) ? `in-${m.toColumn}` : "node-in",
-          type: "smoothstep",
+          type: "default",
           zIndex: lit ? 4 : 2,
           markerStart: (card === "n-1" || card === "n-m" ? "wh-many" : "wh-one") + sfx,
           markerEnd: (card === "1-n" || card === "n-m" ? "wh-many" : "wh-one") + sfx,
@@ -388,7 +393,7 @@ function toFlow(
         target: e.toNodeId,
         ...(erd ? { sourceHandle: "node-out", targetHandle: "node-in" } : {}),
         label: e.label || undefined,
-        type: "smoothstep",
+        type: "default",
         zIndex: 2,
         animated: active,
         markerEnd: { type: MarkerType.ArrowClosed, color: active ? "var(--accent)" : "var(--flow-edge)" },
@@ -404,7 +409,7 @@ function toFlow(
       source: hl.stepEdge[0],
       target: hl.stepEdge[1],
       ...(erd ? { sourceHandle: "node-out", targetHandle: "node-in" } : {}),
-      type: "smoothstep",
+      type: "default",
       animated: true,
       zIndex: 3,
       markerEnd: { type: MarkerType.ArrowClosed, color: "var(--accent)" },
@@ -607,7 +612,7 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
   const onConnect = (c: Connection) => {
     if (!c.source || !c.target || c.source === c.target) return;
     if (lens === "data") {
-      // ERD: drag from a column on one table to a column on another = add a foreign key.
+      // ERD: drag from a child column (left dot) to a parent column (right dot) = add a foreign key.
       const fromCol = c.sourceHandle?.startsWith("out-") ? c.sourceHandle.slice(4) : null;
       const toCol = c.targetHandle?.startsWith("in-") ? c.targetHandle.slice(3) : null;
       const from = byId.get(c.source);
@@ -805,7 +810,7 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
               >
                 {LAYER_META[l].label}
                 <span className="text-[11px] text-muted">{counts[l]}</span>
-                {staleCounts[l] > 0 && <span className="h-1.5 w-1.5 rounded-full bg-accent" title={`${staleCounts[l]} stale`} />}
+                {staleCounts[l] > 0 && <span className="h-1.5 w-1.5 rounded-full bg-warn" title={`${staleCounts[l]} stale`} />}
               </button>
             ))}
           </div>
@@ -830,7 +835,7 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
             </button>
           )}
           {staleCounts[lens] > 0 && (
-            <button className={clsx("btn py-1", staleOnly && "border-accent text-accent")} onClick={() => (setStaleOnly((s) => !s), setPlay(null))}>
+            <button className={clsx("btn py-1", staleOnly && "border-warn text-warn")} onClick={() => (setStaleOnly((s) => !s), setPlay(null))}>
               ⚠ {staleCounts[lens]} stale
             </button>
           )}
