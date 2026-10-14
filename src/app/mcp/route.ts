@@ -85,8 +85,8 @@ export async function POST(req: Request) {
   } catch (e) {
     if (e instanceof AuthError) {
       return NextResponse.json(err(null, -32001, e.message), {
-        status: 401,
-        headers: { "WWW-Authenticate": 'Bearer realm="wheelhouse"' },
+        status: e.status,
+        headers: e.retryAfter ? { "Retry-After": String(e.retryAfter) } : { "WWW-Authenticate": 'Bearer realm="wheelhouse"' },
       });
     }
     throw e;

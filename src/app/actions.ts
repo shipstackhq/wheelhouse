@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -12,7 +13,9 @@ import {
   requireHuman,
   randomToken,
   sha256,
+  signupAllowed,
 } from "@/lib/auth";
+import { clientIp, minutes, rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import * as svc from "@/lib/service";
 import { askMap } from "@/lib/ask";
 
@@ -27,7 +30,14 @@ function fail(e: unknown): FormState {
 
 // ───────── auth ─────────
 
+const tooMany = (retryAfter: number): FormState => ({
+  error: `Too many attempts. Try again in ${minutes(retryAfter)} minute${minutes(retryAfter) === 1 ? "" : "s"}.`,
+});
+
 export async function signup(_: FormState, fd: FormData): Promise<FormState> {
+  if (!(await signupAllowed())) return { error: "Signups are closed. Ask a team owner to add you." };
+  const ipHit = rateLimit(`signup:${clientIp(await headers())}`, 10, 60 * 60_000);
+  if (!ipHit.ok) return tooMany(ipHit.retryAfter);
   const name = String(fd.get("name") ?? "").trim();
   const email = String(fd.get("email") ?? "").trim().toLowerCase();
   const password = String(fd.get("password") ?? "");
@@ -53,9 +63,15 @@ export async function signup(_: FormState, fd: FormData): Promise<FormState> {
 export async function login(_: FormState, fd: FormData): Promise<FormState> {
   const email = String(fd.get("email") ?? "").trim().toLowerCase();
   const password = String(fd.get("password") ?? "");
+  // Per address (spraying many accounts) and per account (guessing one password from many addresses).
+  const ipHit = rateLimit(`login-ip:${clientIp(await headers())}`, 30, 15 * 60_000);
+  if (!ipHit.ok) return tooMany(ipHit.retryAfter);
+  const emailHit = rateLimit(`login-email:${email}`, 8, 15 * 60_000);
+  if (!emailHit.ok) return tooMany(emailHit.retryAfter);
   const db = await getDb();
   const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (!u || !(await verifyPassword(password, u.passwordHash))) return { error: "Invalid email or password" };
+  resetRateLimit(`login-email:${email}`);
   await createSession(u.id);
   redirect("/");
 }
@@ -153,6 +169,8 @@ export async function changePassword(_: FormState, fd: FormData): Promise<FormSt
 
 export async function createApiKey(_: FormState, fd: FormData): Promise<FormState> {
   const { team, user } = await requireHuman();
+  const hit = rateLimit(`create-key:${user.id}`, 10, 60 * 60_000);
+  if (!hit.ok) return tooMany(hit.retryAfter);
   const name = String(fd.get("name") ?? "").trim() || "Claude agent";
   const key = `wh_${randomToken(24)}`;
   const db = await getDb();
@@ -331,6 +349,13 @@ export async function markAllSeenAction(fd: FormData) {
   const projectRef = String(fd.get("project") ?? "") || undefined;
   await svc.markAllSeen(actor, { keyId, projectRef });
   revalidatePath("/", "layout");
+}
+
+export async function removeSessionAction(projectKey: string, sessionId: string) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.removeSession(actor, projectKey, sessionId));
+  revalidatePath("/", "layout");
+  return res;
 }
 
 export async function resolveDraftAction(projectKey: string, draftId: string, action: "publish" | "discard") {

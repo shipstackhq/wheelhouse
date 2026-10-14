@@ -17,6 +17,9 @@ const MIGRATIONS = path.join(process.cwd(), "drizzle");
 
 function init(): Holder {
   const url = process.env.DATABASE_URL;
+  if (!url && process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL is required in production (the embedded PGlite fallback is for local development only)");
+  }
   if (url) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const postgres = require("postgres") as typeof import("postgres");

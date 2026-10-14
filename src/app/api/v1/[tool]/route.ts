@@ -14,7 +14,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ tool: string }
     const args = await req.json().catch(() => ({}));
     return NextResponse.json({ data: await runTool(actor, tool, args) });
   } catch (e) {
-    if (e instanceof AuthError) return NextResponse.json({ error: { code: "unauthorized", message: e.message } }, { status: 401 });
+    if (e instanceof AuthError)
+      return NextResponse.json(
+        { error: { code: e.status === 429 ? "rate_limited" : "unauthorized", message: e.message } },
+        { status: e.status, headers: e.retryAfter ? { "Retry-After": String(e.retryAfter) } : undefined },
+      );
     if (e instanceof ServiceError)
       return NextResponse.json({ error: { code: e.code, message: e.message, details: e.details } }, { status: e.status });
     console.error("[api]", e);

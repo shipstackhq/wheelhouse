@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { login, signup, type FormState } from "../actions";
 
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"; signupOpen?: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "login" ? login : signup, undefined);
   return (
     <form action={action} className="space-y-4">
@@ -42,7 +42,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       </button>
       <p className="text-center text-sm text-muted">
         {mode === "login" ? (
-          <>No account? <Link className="text-accent" href="/signup">Sign up</Link></>
+          signupOpen ? <>No account? <Link className="text-accent" href="/signup">Sign up</Link></> : "Ask a team owner to add you."
         ) : (
           <>Have an account? <Link className="text-accent" href="/login">Sign in</Link></>
         )}
