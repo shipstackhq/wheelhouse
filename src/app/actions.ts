@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   createSession,
@@ -31,6 +31,7 @@ import {
   type Issuer,
 } from "@/lib/invites";
 import * as svc from "@/lib/service";
+import * as members from "@/lib/members";
 import { askMap } from "@/lib/ask";
 
 export type FormState = { error?: string; ok?: string; secret?: string } | undefined;
@@ -222,30 +223,17 @@ export async function restoreTeamAction(fd: FormData) {
 
 export async function updateMember(fd: FormData) {
   const { team, user } = await requireOwner();
-  const userId = String(fd.get("userId"));
-  const role = fd.get("role") === "owner" ? "owner" : "member";
-  const tags = parseTags(String(fd.get("tags") ?? ""));
-  const db = await getDb();
-  if (userId === user.id && role !== "owner") {
-    const owners = await db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(schema.memberships)
-      .where(and(eq(schema.memberships.teamId, team.id), eq(schema.memberships.role, "owner")));
-    if (Number(owners[0].n) <= 1) return; // keep at least one owner
-  }
-  await db
-    .update(schema.memberships)
-    .set({ role, tags })
-    .where(and(eq(schema.memberships.teamId, team.id), eq(schema.memberships.userId, userId)));
+  await members.updateMember(team.id, user.id, {
+    userId: String(fd.get("userId")),
+    role: fd.get("role") === "owner" ? "owner" : "member",
+    tags: parseTags(String(fd.get("tags") ?? "")),
+  });
   revalidatePath("/team");
 }
 
 export async function removeMember(fd: FormData) {
   const { team, user } = await requireOwner();
-  const userId = String(fd.get("userId"));
-  if (userId === user.id) return;
-  const db = await getDb();
-  await db.delete(schema.memberships).where(and(eq(schema.memberships.teamId, team.id), eq(schema.memberships.userId, userId)));
+  await members.removeMember(team.id, user.id, String(fd.get("userId")));
   revalidatePath("/team");
 }
 
@@ -277,11 +265,7 @@ export async function createApiKey(_: FormState, fd: FormData): Promise<FormStat
 
 export async function revokeApiKey(fd: FormData) {
   const { team } = await requireHuman();
-  const db = await getDb();
-  await db
-    .update(schema.apiKeys)
-    .set({ revokedAt: new Date() })
-    .where(and(eq(schema.apiKeys.id, String(fd.get("id"))), eq(schema.apiKeys.teamId, team.id)));
+  await members.revokeApiKey(team.id, String(fd.get("id")));
   revalidatePath("/team");
 }
 

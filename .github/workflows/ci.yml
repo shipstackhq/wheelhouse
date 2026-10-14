@@ -17,6 +17,20 @@ jobs:
     name: Lint, types, tests, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      # A real Postgres for the database suites: the in-memory test database is more forgiving than the
+      # production driver (it once hid a query that failed for every new API key).
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: wheelhouse_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       # pnpm version comes from "packageManager" in package.json.
@@ -29,6 +43,12 @@ jobs:
       - run: pnpm lint
       - run: pnpm exec tsc --noEmit
       - run: pnpm test
+      - name: Database suites on a real Postgres (queue, invites, admin, isolation)
+        env:
+          TEST_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/wheelhouse_test
+        run: >-
+          pnpm exec tsx --conditions=react-server --test --test-force-exit --test-concurrency=1
+          src/lib/queue.test.ts src/lib/invites.test.ts src/lib/teams-admin.test.ts src/lib/isolation.test.ts
       - name: Migrations are in sync with the schema
         run: |
           pnpm exec drizzle-kit generate

@@ -1,9 +1,13 @@
 /**
- * Per-session queue cursors (WH-42). Runs against a throwaway in-memory PGlite:
- *   pnpm test
+ * Per-session queue cursors (WH-42). Runs against a throwaway in-memory PGlite (`pnpm test`), or against a real
+ * Postgres with TEST_DATABASE_URL=postgres://... and `--test-force-exit`.
  */
-process.env.PGLITE_DIR = "memory://";
-delete process.env.DATABASE_URL;
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL; // a real Postgres, as in CI
+} else {
+  process.env.PGLITE_DIR = "memory://";
+  delete process.env.DATABASE_URL;
+}
 
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -30,7 +34,7 @@ const seqs = (c: Changes) => c.changes.map((e) => e.seq);
 before(async () => {
   const db = await getDb();
   const [team] = await db.insert(schema.teams).values({ name: "Test team" }).returning();
-  const [user] = await db.insert(schema.users).values({ email: "t@example.com", name: "Tess", passwordHash: "x" }).returning();
+  const [user] = await db.insert(schema.users).values({ email: `t-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Tess", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
   const mkKey = async (name: string) => {
     const [k] = await db.insert(schema.apiKeys).values({ teamId: team.id, name, prefix: "wh_", keyHash: name }).returning();

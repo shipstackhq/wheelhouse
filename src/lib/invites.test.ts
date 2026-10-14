@@ -3,10 +3,10 @@
  *   pnpm test
  * The concurrency tests only prove row locking on a real Postgres (PGlite has one connection), so
  * they can also run against one:
- *   INVITE_TEST_DATABASE_URL=postgres://... npx tsx --conditions=react-server --test --test-force-exit src/lib/invites.test.ts
+ *   TEST_DATABASE_URL=postgres://... npx tsx --conditions=react-server --test --test-force-exit src/lib/invites.test.ts
  */
-if (process.env.INVITE_TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.INVITE_TEST_DATABASE_URL;
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 } else {
   process.env.PGLITE_DIR = "memory://";
   delete process.env.DATABASE_URL;
@@ -231,10 +231,13 @@ describe("who may invite", () => {
     assert.equal(m.role, "owner");
   });
 
-  test("an existing account cannot be invited", async () => {
+  test("a team owner cannot find out whether an email already has an account; only an admin can", async () => {
     const e = email("exists");
     await user(e);
-    await issueError(createInvite(ownerA, { kind: "join_team", email: e }), "conflict");
+    // Same answer as for an address nobody has used: the invite is created, and the link just never works.
+    const inv = await createInvite(ownerA, { kind: "join_team", email: e });
+    assert.equal(await peekInvite(inv.token), null, "the link shows nothing");
+    await failure(accept(inv.token), "account_exists");
     await issueError(createInvite(admin, { kind: "new_team", email: e }), "conflict");
   });
 

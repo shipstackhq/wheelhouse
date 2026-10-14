@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "@/db";
 import type { Actor } from "./auth";
 import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buckets";
@@ -192,6 +192,18 @@ export async function getBoard(actor: Actor, projectRef: string) {
   return { project, columns: cols, tickets: withLinks };
 }
 
+/** An assignee must belong to the caller's team: a user id from another team (or a made-up one) is refused. */
+async function assertAssignee(q: Q, teamId: string, userId: string | null | undefined) {
+  if (!userId) return;
+  const [m] = isUuid(userId)
+    ? await q
+        .select({ userId: schema.memberships.userId })
+        .from(schema.memberships)
+        .where(and(eq(schema.memberships.teamId, teamId), eq(schema.memberships.userId, userId)))
+    : [];
+  if (!m) throw new ServiceError("invalid", "Assignee must be a member of your team");
+}
+
 async function resolveColumn(q: Q, projectId: string, ref: string) {
   const cols = await q.select().from(columns).where(eq(columns.projectId, projectId)).orderBy(asc(columns.position));
   const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase());
@@ -272,6 +284,7 @@ export async function createTicket(actor: Actor, projectRef: string, input: Tick
   const project = await getProject(actor, projectRef);
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
+    await assertAssignee(tx, project.teamId, input.assigneeId);
     const col = await resolveColumn(tx, project.id, input.column ?? DEFAULT_COLUMNS[0]);
     const [{ ticketCounter }] = await tx
       .update(projects)
@@ -328,6 +341,7 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     }
     const clean: TicketInput = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
+    await assertAssignee(tx, project.teamId, clean.assigneeId);
     const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...ticket, ref: r };
     const [t] = await tx
@@ -1382,7 +1396,7 @@ async function cursorFor(q: Q, key: { id: string; createdAt: Date }, projectId: 
   const [row] = await q
     .select({ seq: sql<number>`coalesce(max(${events.seq}), 0)` })
     .from(events)
-    .where(and(eq(events.projectId, projectId), sql`${events.createdAt} <= ${key.createdAt}`));
+    .where(and(eq(events.projectId, projectId), lte(events.createdAt, key.createdAt)));
   return Number(row?.seq ?? 0);
 }
 

@@ -91,8 +91,13 @@ export async function createInvite(
   const tags = (input.tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean).slice(0, 20);
 
   const db = await getDb();
-  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
-  if (existing) throw new InviteError("conflict", "An account with that email already exists");
+  // Only an instance admin may learn that an address already has an account. A team owner must not be able to
+  // probe which emails are registered on the server (possibly in other teams), so for them the invite is created
+  // either way; if the address already has an account, accepting the link simply fails like any invalid link.
+  if (input.kind === "new_team") {
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    if (existing) throw new InviteError("conflict", "An account with that email already exists");
+  }
 
   const token = newToken();
   const expiresAt = new Date(now.getTime() + inviteTtlHours() * 3_600_000);
