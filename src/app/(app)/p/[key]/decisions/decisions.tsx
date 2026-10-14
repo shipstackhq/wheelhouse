@@ -39,7 +39,10 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [hash, setHash] = useState("");
+  const [query, setQuery] = useState("");
   const byId = new Map(props.nodes.map((n) => [n.id, n]));
+  const q = query.trim().toLowerCase();
+  const shown = [...props.decisions].reverse().filter((d) => !q || d.title.toLowerCase().includes(q));
 
   useEffect(() => {
     const read = () => setHash(window.location.hash.slice(1));
@@ -101,8 +104,26 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
             </p>
           )}
 
-          <div className="mt-6 space-y-4">
-            {[...props.decisions].reverse().map((d) => (
+          {props.decisions.length > 0 && (
+            <input
+              type="search"
+              className="input mt-6"
+              placeholder="Search decisions by title"
+              aria-label="Search decisions by title"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            />
+          )}
+
+          {props.decisions.length > 0 && shown.length === 0 && (
+            <p className="mt-6 rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">
+              No decisions match &ldquo;{query.trim()}&rdquo;.
+            </p>
+          )}
+
+          <div className="mt-4 space-y-4">
+            {shown.map((d) => (
               <article
                 key={d.id}
                 id={`adr-${d.number}`}
@@ -122,8 +143,10 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
                 {(["context", "decision", "consequences"] as const).map((k) =>
                   d[k] ? (
                     <section key={k} className="mt-3">
-                      <span className="label">{k}</span>
-                      <Markdown>{d[k]}</Markdown>
+                      <span className="label normal-case tracking-normal">{k}</span>
+                      <div className={clsx(k !== "decision" && "text-muted")}>
+                        <Markdown>{d[k]}</Markdown>
+                      </div>
                     </section>
                   ) : null,
                 )}
@@ -132,7 +155,7 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
                     const n = byId.get(id);
                     return n ? (
                       <Link key={id} href={`/p/${props.projectKey}/map?node=${id}`} className="chip bg-accent/10 py-1 text-accent hover:bg-accent/20">
-                        ◇ {n.name} <span className="ml-1 uppercase opacity-60">{n.layer}</span>
+                        ◇ {n.name} <span className="ml-1 opacity-60">{n.layer}</span>
                       </Link>
                     ) : null;
                   })}
@@ -174,12 +197,12 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
                     ] as const
                   ).map(([k, hint]) => (
                     <div key={k}>
-                      <span className="label">{k} <span className="normal-case text-muted/70">— {hint}</span></span>
+                      <span className="label normal-case tracking-normal">{k} <span className="text-muted/70">— {hint}</span></span>
                       <textarea className="input" rows={3} value={draft[k]} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
                     </div>
                   ))}
                   <div>
-                    <span className="label">Applies to</span>
+                    <span className="label normal-case tracking-normal">Applies to</span>
                     <div className="flex flex-wrap gap-1.5">
                       {draft.nodeIds.map((id) => (
                         <span key={id} className="chip gap-1 bg-accent/10 py-1 text-accent">
