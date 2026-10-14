@@ -132,6 +132,18 @@ A link is shown once, works for one person, and expires after `INVITE_TTL_HOURS`
 *Pending invites*). It is tied to the email you entered. The secret sits in the part of the URL after `#`, which browsers
 do not send to the server, so it stays out of Caddy's access logs. New passwords must be at least 12 characters.
 
+## Seeing and suspending teams
+
+Admins (`ADMIN_EMAILS`) get **Teams** in the sidebar: every team on the server with its owners, seats, project count
+and last activity, and a detail page with members, invites and API keys (the prefix only, never the key). You see
+names, emails and counts, **never what a team wrote** (tickets, comments, the map).
+
+**Suspend** cuts a whole team off and is reversible. You type the team's exact name to confirm, and optionally a reason
+that only admins see. At once: every member is signed out, their sign-in is refused ("This team has been suspended"),
+the team's API keys get a 403 on `/mcp` and `/api/v1`, and the team's invites stop working. Nothing is deleted.
+**Restore** brings the team back as it was; people sign in again. You cannot suspend your own team. Suspensions are
+logged on the server (`[admin] team suspended <id> by <user>`).
+
 ## Updating the compose file or scripts
 
 Deploys change only the image. When `docker-compose.yml` or a `deploy/*.sh` script changes in the repo, copy it to

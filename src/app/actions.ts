@@ -14,7 +14,10 @@ import {
   randomToken,
   sha256,
   signupAllowed,
+  TEAM_SUSPENDED_MESSAGE,
+  userTeamSuspended,
 } from "@/lib/auth";
+import { AdminError, restoreTeam, suspendTeam, type Admin } from "@/lib/teams-admin";
 import { clientIp, minutes, rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { passwordProblem } from "@/lib/auth-policy";
 import {
@@ -84,6 +87,8 @@ export async function login(_: FormState, fd: FormData): Promise<FormState> {
   const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (!u || !(await verifyPassword(password, u.passwordHash))) return { error: "Invalid email or password" };
   resetRateLimit(`login-email:${email}`);
+  // Only someone who knows the password learns the team is suspended.
+  if (await userTeamSuspended(u.id)) return { error: TEAM_SUSPENDED_MESSAGE };
   await createSession(u.id);
   redirect("/");
 }
@@ -180,6 +185,39 @@ export async function acceptInviteAction(_: FormState, fd: FormData): Promise<Fo
     throw e;
   }
   redirect("/");
+}
+
+// ───────── instance admin: teams (WH-52) ─────────
+
+async function adminCtx(): Promise<Admin> {
+  const { user, team } = await requireHuman();
+  return { userId: user.id, email: user.email, teamId: team.id };
+}
+
+export async function suspendTeamAction(_: FormState, fd: FormData): Promise<FormState> {
+  const admin = await adminCtx();
+  const teamId = String(fd.get("teamId") ?? "");
+  try {
+    const r = await suspendTeam(admin, teamId, { confirmName: String(fd.get("confirm") ?? ""), reason: String(fd.get("reason") ?? "") });
+    revalidatePath("/admin/teams");
+    revalidatePath(`/admin/teams/${teamId}`);
+    return { ok: `Suspended ${r.name}. ${r.sessionsEnded} sign-in${r.sessionsEnded === 1 ? "" : "s"} ended.` };
+  } catch (e) {
+    if (e instanceof AdminError) return { error: e.message };
+    throw e;
+  }
+}
+
+export async function restoreTeamAction(fd: FormData) {
+  const admin = await adminCtx();
+  const teamId = String(fd.get("teamId") ?? "");
+  try {
+    await restoreTeam(admin, teamId);
+  } catch (e) {
+    if (!(e instanceof AdminError)) throw e;
+  }
+  revalidatePath("/admin/teams");
+  revalidatePath(`/admin/teams/${teamId}`);
 }
 
 export async function updateMember(fd: FormData) {

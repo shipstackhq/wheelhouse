@@ -99,7 +99,8 @@ export async function createInvite(
   const row = await db.transaction(async (tx) => {
     if (input.kind === "join_team") {
       // Lock the team so two owners (or two tabs) cannot both take the last seat.
-      await tx.select({ id: teams.id }).from(teams).where(eq(teams.id, issuer.teamId)).for("update");
+      const [t] = await tx.select({ suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, issuer.teamId)).for("update");
+      if (t?.suspendedAt) throw new InviteError("forbidden", "This team has been suspended. Contact the administrator.");
       const used = (await memberCount(tx, issuer.teamId)) + (await pendingJoinCount(tx, issuer.teamId, now));
       const max = maxTeamMembers();
       if (used >= max) {
@@ -196,8 +197,9 @@ export async function peekInvite(token: string, now = new Date()) {
   if (taken) return null;
   let teamName = row.teamName;
   if (row.kind === "join_team" && row.teamId) {
-    const [t] = await db.select({ name: teams.name }).from(teams).where(eq(teams.id, row.teamId));
-    teamName = t?.name ?? null;
+    const [t] = await db.select({ name: teams.name, suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, row.teamId));
+    if (!t || t.suspendedAt) return null;
+    teamName = t.name;
   }
   return { email: row.email, kind: row.kind, teamName };
 }
@@ -229,7 +231,8 @@ export async function acceptInvite(input: { token: string; name: string; passwor
 
       if (inv.kind === "join_team") {
         if (!inv.teamId) throw new InviteFailure("invalid");
-        await tx.select({ id: teams.id }).from(teams).where(eq(teams.id, inv.teamId)).for("update");
+        const [t] = await tx.select({ suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, inv.teamId)).for("update");
+        if (!t || t.suspendedAt) throw new InviteFailure("invalid"); // a suspended team's invites are inert
         if ((await memberCount(tx, inv.teamId)) >= maxTeamMembers()) throw new InviteFailure("team_full");
       }
 

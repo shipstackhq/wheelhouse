@@ -16,7 +16,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ tool: string }
   } catch (e) {
     if (e instanceof AuthError)
       return NextResponse.json(
-        { error: { code: e.status === 429 ? "rate_limited" : "unauthorized", message: e.message } },
+        { error: { code: e.status === 429 ? "rate_limited" : e.status === 403 ? "team_suspended" : "unauthorized", message: e.message } },
         { status: e.status, headers: e.retryAfter ? { "Retry-After": String(e.retryAfter) } : undefined },
       );
     if (e instanceof ServiceError)

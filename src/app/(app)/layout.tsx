@@ -34,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {isInstanceAdmin(user.email) && (
             <>
               <div className="label mt-5 px-2 normal-case tracking-normal">Admin</div>
+              <NavLink href="/admin/teams">Teams</NavLink>
               <NavLink href="/admin/invites">Invite a new team</NavLink>
             </>
           )}

@@ -36,6 +36,11 @@ export const teams = pgTable("teams", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   createdAt: createdAt(),
+  // Instance-admin suspension (WH-52): a suspended team's members cannot sign in and its API keys are refused.
+  // Reversible: nothing is deleted, restoring clears these three columns.
+  suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+  suspendedBy: uuid("suspended_by").references(() => users.id, { onDelete: "set null" }),
+  suspendedReason: text("suspended_reason"),
 });
 
 export const memberships = pgTable(
