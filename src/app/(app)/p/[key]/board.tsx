@@ -7,9 +7,11 @@ import {
   DragOverlay,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -20,6 +22,7 @@ import clsx from "clsx";
 import type { TicketWithLinks } from "@/lib/service";
 import { createTicketAction, moveTicketAction } from "@/app/actions";
 import { TicketDrawer } from "./ticket-drawer";
+import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 
 export type Col = { id: string; name: string };
 export type NodeLite = { id: string; name: string; kind: string; parentId: string | null; layer: string };
@@ -28,7 +31,7 @@ type Ticket = TicketWithLinks;
 
 export const PRIORITY_STYLE: Record<string, string> = {
   urgent: "bg-danger/20 text-danger",
-  high: "bg-accent/20 text-accent",
+  high: "bg-warn/20 text-warn",
   medium: "bg-panel-2 text-muted",
   low: "bg-panel-2 text-muted/70",
 };
@@ -50,12 +53,38 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
   const [, startTransition] = useTransition();
   const dragging = useRef(false);
   const dragFrom = useRef<string | null>(null);
+  const [views, setViews] = useState<Record<string, View>>({});
+  const [notice, setNotice] = useState<string | null>(null);
+  const viewKey = (colId: string) => `wh:view:${projectKey}:${colId}`;
+  const viewOf = (colId: string) => views[colId] ?? EMPTY_VIEW;
   const openRef = search.get("t");
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {
     if (!dragging.current) setItems(group(columns, props.tickets));
   }, [columns, props.tickets]);
+
+  // Restore each column's filter/sort after mount (localStorage isn't available during SSR).
+  // Keyed on the column ids, not the array: `columns` is a new array on every server refresh, and reloading
+  // here would hand each Column a fresh view object and un-pin tickets it just added.
+  const columnIds = columns.map((c) => c.id).join(",");
+  useEffect(() => {
+    setViews(Object.fromEntries(columns.map((c) => [c.id, loadView(viewKey(c.id))])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectKey, columnIds]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  const changeView = (colId: string, v: View) => {
+    setViews((prev) => ({ ...prev, [colId]: v }));
+    saveView(viewKey(colId), v);
+  };
+
+  const labels = useMemo(() => [...new Set(props.tickets.flatMap((t) => t.labels))].sort(), [props.tickets]);
 
   const byId = useMemo(() => {
     const m = new Map<string, Ticket>();
@@ -64,6 +93,13 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
   }, [items]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  // Pointer position decides first, so an empty column is hit when the cursor is over it; closestCorners
+  // alone favours cards in neighbouring columns and never selects an empty one.
+  const collision: CollisionDetection = (args) => {
+    const hits = pointerWithin(args);
+    return hits.length ? hits : closestCorners(args);
+  };
 
   const findCol = (id: string) => (items[id] ? id : Object.keys(items).find((c) => items[c].some((t) => t.id === id)));
 
@@ -102,6 +138,12 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
     let list = items[col];
     const oldIdx = list.findIndex((t) => t.id === active.id);
     const overIdx = list.findIndex((t) => t.id === over.id);
+    // A sorted column has no manual order: reordering inside it is a no-op.
+    const reorderable = !(viewOf(col).sort && dragFrom.current === col);
+    if (!reorderable) {
+      dragging.current = false;
+      return;
+    }
     if (overIdx >= 0 && oldIdx !== overIdx) {
       list = arrayMove(list, oldIdx, overIdx);
       setItems((prev) => ({ ...prev, [col]: list }));
@@ -112,6 +154,10 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
     if (unchanged) {
       dragging.current = false;
       return;
+    }
+    const target = viewOf(col);
+    if (dragFrom.current !== col && isFiltered(target) && !matches(t, target)) {
+      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === col)?.name}, but the column filter hides it.`);
     }
     startTransition(async () => {
       const res = await moveTicketAction(t.ref, col, finalIdx);
@@ -139,13 +185,23 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
             <button onClick={() => setError(null)}>✕</button>
           </div>
         )}
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+        {notice && (
+          <div role="status" className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-line bg-panel px-3 py-2 text-sm shadow-xl">
+            {notice}
+          </div>
+        )}
+        {/* Fixed id: dnd-kit otherwise numbers its a11y ids from a counter that differs between server and client (hydration mismatch). */}
+        <DndContext id="board-dnd" sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
           <div className="flex h-full gap-3 p-4">
             {columns.map((c) => (
               <Column
                 key={c.id}
                 col={c}
                 tickets={items[c.id] ?? []}
+                view={viewOf(c.id)}
+                onViewChange={(v) => changeView(c.id, v)}
+                members={members}
+                labels={labels}
                 nodes={nodes}
                 onOpen={openTicket}
                 selected={openRef}
@@ -175,14 +231,25 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
 function Column(props: {
   col: Col;
   tickets: Ticket[];
+  view: View;
+  onViewChange: (v: View) => void;
+  members: Member[];
+  labels: string[];
   nodes: NodeLite[];
   selected: string | null;
   projectKey: string;
   onOpen: (ref: string) => void;
   onCreated: () => void;
 }) {
-  const { col, tickets } = props;
+  const { col, view } = props;
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
+  // Tickets that arrive after "+ Add ticket" stay visible despite the filter, so the add doesn't look like it failed.
+  const [pinFrom, setPinFrom] = useState<Set<string> | null>(null);
+  const tickets = useMemo(
+    () => applyView(props.tickets, view, pinFrom ? (t) => !pinFrom.has(t.id) : undefined),
+    [props.tickets, view, pinFrom],
+  );
+  useEffect(() => setPinFrom(null), [view]);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [, start] = useTransition();
@@ -195,6 +262,7 @@ function Column(props: {
     if (!value) return keepOpen ? undefined : setAdding(false);
     if (submitting.current) return;
     submitting.current = true;
+    if (isFiltered(view)) setPinFrom((prev) => prev ?? new Set(props.tickets.map((t) => t.id)));
     setTitle("");
     if (!keepOpen) setAdding(false);
     start(async () => {
@@ -209,10 +277,16 @@ function Column(props: {
 
   return (
     <div className={clsx("flex w-72 shrink-0 flex-col rounded-lg bg-panel/60", isOver && "ring-1 ring-accent/40")}>
-      <div className="flex items-center justify-between px-3 py-2.5">
+      <div className="group/head flex items-center justify-between gap-2 px-3 py-2.5">
         <span className="text-sm font-medium">{col.name}</span>
-        <span className="text-xs text-muted">{tickets.length}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <ColumnControls view={view} onChange={props.onViewChange} members={props.members} labels={props.labels} />
+          <span className="shrink-0 text-xs text-muted">
+            {tickets.length === props.tickets.length ? tickets.length : `${tickets.length} of ${props.tickets.length}`}
+          </span>
+        </div>
       </div>
+      {view.sort && <div className="px-3 pb-1 text-[11px] text-muted">sorted by {describeSort(view)}; drag order is off</div>}
       <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tickets.map((t) => (
