@@ -5,6 +5,7 @@ import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { logout } from "@/app/actions";
 import { ThemeSwitch } from "./theme-toggle";
+import { InstallButton, clearOfflineData } from "./pwa";
 
 function initials(name: string, email: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -92,11 +93,14 @@ export function ProfileMenu(props: { name: string; email: string; role: "owner" 
           <div className="border-t border-line px-3 py-3">
             <ThemeSwitch />
           </div>
-          <form action={logout} className="border-t border-line p-1">
+          <div className="border-t border-line p-1">
+            <InstallButton />
+            <form action={logout} onSubmit={() => void clearOfflineData()}>
             <button className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:bg-panel-2">
               Sign out
             </button>
-          </form>
+            </form>
+          </div>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

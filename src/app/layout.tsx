@@ -1,11 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { PwaRegister } from "@/components/pwa";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+export const viewport: Viewport = { themeColor: "#2563eb" };
+
 export const metadata: Metadata = {
+  applicationName: "Wheelhouse",
+  appleWebApp: { capable: true, title: "Wheelhouse" },
   title: "Shipstack Wheelhouse",
   description: "Kanban boards and architecture maps your team and your AI agents share.",
 };
@@ -19,7 +24,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}
+        <PwaRegister />
+      </body>
     </html>
   );
 }
