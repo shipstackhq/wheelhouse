@@ -50,16 +50,11 @@ The MCP server ships prompts that appear as slash commands in Claude Code:
 - `/mcp__wheelhouse__refresh_map KEY` re-describes stale nodes
 - `/mcp__wheelhouse__explain KEY <topic>` explains a topic and fills gaps in the map
 
-## Deploy (Vercel + Neon/Supabase)
+## Deploy
 
-1. Create a Postgres database and copy its connection string.
-2. Import the repo in Vercel and set these env vars:
-   - `DATABASE_URL`: the Postgres URL (use the pooled URL on Neon)
-   - `APP_URL`: e.g. `https://wheelhouse.shipstack.run` (used in the setup snippets)
-   - `ANTHROPIC_API_KEY`: optional, enables Ask on the map
-3. Deploy. Migrations in `drizzle/` run automatically on the first request.
+Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Postgres you already have. Pushes to `main` build and deploy it automatically. See [docs/deploy.md](docs/deploy.md) for the one-time server setup, the GitHub secrets, rollback and backups.
 
-PGlite is for local development only. Serverless deployments must set `DATABASE_URL`.
+`DATABASE_URL` is required in production; the embedded PGlite database is for local development only.
 
 ## Layout
 

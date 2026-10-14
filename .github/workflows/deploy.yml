@@ -1,0 +1,89 @@
+name: Deploy
+
+# Runs after CI passes on main. Builds the image once, pushes it to GHCR tagged with the commit SHA,
+# then deploys that exact tag to the VPS over SSH (deploy/deploy.sh: dump, swap, health gate, rollback).
+# Manual run with `sha` redeploys an already-published image (use it to roll back).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA of an already-published image to deploy (leave empty to build and deploy main)"
+        required: false
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  publish:
+    name: Build and push image
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha == '' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.SHA }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to the VPS
+    needs: publish
+    # Run when the image was just built, or when publish was skipped on purpose (manual redeploy of a SHA).
+    if: ${{ always() && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && github.event_name == 'workflow_dispatch')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production   # add required reviewers here for a manual approval gate
+    steps:
+      - name: Check the SHA is a full commit hash
+        run: |
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::'$SHA' is not a 40-character commit SHA"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - name: SSH setup
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: the connection fails if the server is not the one in the secret.
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Copy compose file and the deploy, backup and restore scripts
+        run: |
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            docker-compose.yml deploy/*.sh \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ vars.DEPLOY_PATH }}/"
+      - name: Deploy
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
+          # The job token only lives for this run; the server logs in with it, pulls, then logs out.
+          echo "${{ secrets.GITHUB_TOKEN }}" | $SSH "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+          $SSH "cd ${{ vars.DEPLOY_PATH }} && IMAGE=$IMAGE:$SHA ./deploy.sh" || status=$?
+          $SSH "docker logout ghcr.io" || true
+          exit ${status:-0}
