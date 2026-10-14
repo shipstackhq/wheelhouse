@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, types, tests, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm test
+      - name: Migrations are in sync with the schema
+        run: |
+          pnpm exec drizzle-kit generate
+          git status --porcelain drizzle
+          test -z "$(git status --porcelain drizzle)" || { echo "::error::src/db/schema.ts changed without a migration. Run pnpm db:generate and commit drizzle/."; exit 1; }
+      - run: pnpm build
+
+  image:
+    name: Image builds, migrates a fresh Postgres, serves health
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: wheelhouse
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: wheelhouse:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Start the image against an empty database
+        run: |
+          docker run -d --name app --network host \
+            -e DATABASE_URL=postgres://postgres:ci@127.0.0.1:5432/wheelhouse \
+            -e APP_URL=http://127.0.0.1:3000 \
+            wheelhouse:ci
+      - name: Health is 200 once migrations have applied
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then echo; exit 0; fi
+            sleep 2
+          done
+          docker logs app
+          exit 1
+      - name: Every migration was applied
+        run: |
+          expected=$(node -p "require('./drizzle/meta/_journal.json').entries.length")
+          applied=$(docker exec -e PGPASSWORD=ci $(docker ps -qf ancestor=postgres:18) psql -U postgres -d wheelhouse -tAc 'select count(*) from drizzle.__drizzle_migrations')
+          echo "expected=$expected applied=$applied"
+          test "$expected" = "$applied"

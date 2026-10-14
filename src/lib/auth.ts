@@ -92,11 +92,9 @@ export async function requireHuman() {
 
 export class AuthError extends Error {
   status = 401;
+  retryAfter?: number;
 }
 
-  retryAfter?: number;
-/**
- * For /api/v1 and /mcp. Accepts `Authorization: Bearer wh_…` (agents)
 export class RateLimitError extends AuthError {
   status = 429;
   constructor(retryAfter: number) {
@@ -111,6 +109,8 @@ const BAD_KEY_WINDOW_MS = 60_000;
 const KEY_CALL_LIMIT = 600;
 const KEY_CALL_WINDOW_MS = 60_000;
 
+/**
+ * For /api/v1 and /mcp. Accepts `Authorization: Bearer wh_…` (agents)
  * or a session cookie (humans hitting the API from the browser).
  */
 export async function actorFromRequest(): Promise<Actor> {
