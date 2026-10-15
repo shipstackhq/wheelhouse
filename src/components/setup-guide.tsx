@@ -10,12 +10,21 @@ const code = (s: string) => <code className="font-mono">{s}</code>;
  * `wheelhouse-cli` is built in, so it is not installed separately), Claude Code without the plugin, and no Claude
  * Code at all (the one case that needs the CLI). Commands come from onboarding() so they stay tested.
  */
-export function SetupGuide({ cmd }: { cmd: Cmd }) {
+/** Narrows the opening line to steer toward one setup when the caller already knows which one fits (e.g. the
+ * onboarding wizard, after step 2's code-location answer). The full 3-way table and all three cards still render —
+ * this doesn't fork the markup, just adds a pointer above it. */
+export function SetupGuide({ cmd, emphasize }: { cmd: Cmd; emphasize?: "plugin" | "mcp" | "cli" }) {
+  const hint = emphasize && {
+    plugin: "Since your code lives in a connected repo, setup A (the plugin) gets you the most — hooks included.",
+    mcp: "Plain MCP tools work either way; pick setup A instead if you also want hooks and the /wheelhouse: commands.",
+    cli: "Without Claude Code, setup C (the CLI) is the one you need.",
+  }[emphasize];
   return (
     <>
       <div className="card space-y-3 p-5">
         <h2 className="font-medium">2. Pick your setup</h2>
         <p className="text-sm text-muted">Find the row that matches how you work, then follow its section below.</p>
+        {hint && <p className="text-sm text-accent">{hint}</p>}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[40rem] border-collapse text-left text-sm">
             <thead>

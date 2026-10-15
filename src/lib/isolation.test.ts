@@ -30,6 +30,7 @@ import { askMap } from "./ask";
 import { briefing, ticketContext } from "./briefing";
 import * as metrics from "./metrics";
 import { resolveDraft } from "./sync";
+import * as sync from "./sync";
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything team A owns carries this
@@ -46,7 +47,21 @@ type Side = {
   ticketRef: string;
   ticketId: string;
 };
-let A: Side & { nodeName: string; nodeId: string; dataName: string; flowName: string; termName: string; sessionId: string; draftId: string; spareKeyId: string; ownerId: string };
+let A: Side & {
+  nodeName: string;
+  nodeId: string;
+  dataName: string;
+  flowName: string;
+  termName: string;
+  sessionId: string;
+  draftId: string;
+  spareKeyId: string;
+  ownerId: string;
+  repoId: string;
+  repoSlug: string;
+  docId: string;
+  docSlug: string;
+};
 let B: Side & { memberId: string };
 
 async function seedSide(label: "A" | "B") {
@@ -88,7 +103,9 @@ async function seedMap(s: Awaited<ReturnType<typeof seedSide>>) {
   await svc.upsertFlow(s.owner, k, { name: `${s.tag} flow`, steps: [{ node: sys.name, title: `${s.tag} step` }] });
   await svc.upsertDecision(s.owner, k, { title: `${s.tag} decision`, nodes: [sys.name] });
   await svc.upsertTerm(s.owner, k, { term: `${s.tag} term`, definition: `${s.tag} definition`, node: sys.name });
-  return { sys, concept, data };
+  const doc = await svc.createDoc(s.owner, k, { title: `${s.tag} doc`, body: `${s.tag} body with a secret word` });
+  await svc.linkDocNode(s.owner, k, doc.id, sys.name);
+  return { sys, concept, data, doc };
 }
 
 const fingerprint = async (s: { teamId: string; projectId: string; keyId: string }) => {
@@ -111,10 +128,13 @@ const fingerprint = async (s: { teamId: string; projectId: string; keyId: string
     flows: await byProject(schema.flows as never),
     decisions: await byProject(schema.decisions as never),
     terms: await byProject(schema.terms as never),
+    docs: await byProject(schema.docs as never),
     ticketNodes: tix.length ? await db.select().from(schema.ticketNodes).where(inArray(schema.ticketNodes.ticketId, tix)) : [],
     sessions: await byProject(schema.workSessions as never),
     drafts: await byProject(schema.nodeDrafts as never),
+    docDrafts: await byProject(schema.docDrafts as never),
     files: await byProject(schema.projectFiles as never),
+    repositories: await byProject(schema.repositories as never),
     cursors: keys.length ? await db.select().from(schema.agentCursors).where(inArray(schema.agentCursors.apiKeyId, keys)) : [],
     events: await db.select().from(schema.events).where(eq(schema.events.teamId, s.teamId)),
     nodeIds: ns,
@@ -137,12 +157,27 @@ before(async () => {
     .values({ projectId: a.projectId, nodeId: map.sys.id, sessionId, authorName: a.agent.name, authorKind: "agent", patch: { summary: "A-SECRET draft" } })
     .returning();
   await db.insert(schema.projectFiles).values({ projectId: a.projectId, path: "src/a/secret.ts", hash: "a".repeat(40) });
+  const repo = await svc.createRepository(a.owner, a.projectKey, { displayName: "A-SECRET backend", role: "backend", slug: `a-secret-repo-${RUN}` });
   const [spare] = await db
     .insert(schema.apiKeys)
     .values({ teamId: a.teamId, name: "A-SECRET spare key", prefix: "wh_spare", keyHash: sha256(`spare-${RUN}`), createdBy: a.ownerId })
     .returning();
   await svc.createTicket(a.agent, a.projectKey, { title: "A-SECRET agent ticket" }); // an event written by A's agent
-  A = { ...a, nodeName: map.sys.name, nodeId: map.sys.id, dataName: map.data.name, flowName: `A-SECRET flow`, termName: `A-SECRET term`, sessionId, draftId: draft.id, spareKeyId: spare.id };
+  A = {
+    ...a,
+    nodeName: map.sys.name,
+    nodeId: map.sys.id,
+    dataName: map.data.name,
+    flowName: `A-SECRET flow`,
+    termName: `A-SECRET term`,
+    sessionId,
+    draftId: draft.id,
+    spareKeyId: spare.id,
+    repoId: repo.id,
+    repoSlug: repo.slug,
+    docId: map.doc.id,
+    docSlug: map.doc.slug,
+  };
 
   const b = await seedSide("B");
   await seedMap(b);
@@ -202,6 +237,22 @@ const attacks = {
   list_terms: () => [{ project: A.projectKey }],
   upsert_term: () => [{ project: A.projectKey, term: A.termName, definition: "hijacked" }],
   delete_term: () => [{ project: A.projectKey, term: A.termName }],
+  list_repositories: () => [{ project: A.projectKey }, { project: A.projectId }],
+  list_docs: () => [{ project: A.projectKey }, { project: A.projectId }, { project: A.projectKey, parent: A.docSlug }],
+  get_doc: () => [{ project: A.projectKey, doc: A.docSlug }, { project: A.projectKey, doc: A.docId }],
+  search_docs: () => [{ project: A.projectKey, query: "secret" }, { project: A.projectId, query: "secret" }],
+  upsert_doc: () => [
+    { project: A.projectKey, title: "B doc in A" },
+    { project: A.projectKey, doc: A.docSlug, title: "hijacked" },
+    { project: A.projectKey, doc: A.docId, body: "hijacked" },
+  ],
+  delete_doc: () => [{ project: A.projectKey, doc: A.docSlug }, { project: A.projectKey, doc: A.docId }],
+  link_doc_node: () => [{ project: A.projectKey, doc: A.docSlug, node: A.nodeName }, { project: A.projectKey, doc: A.docId, node: A.nodeName, unlink: true }],
+  suggest_doc_anchors: () => [{ project: A.projectKey, doc: A.docSlug }, { project: A.projectKey, doc: A.docId }],
+  get_stale_docs: () => [{ project: A.projectKey }],
+  mark_doc_fresh: () => [{ project: A.projectKey, doc: A.docSlug }, { project: A.projectKey, doc: A.docId }],
+  list_doc_drafts: () => [{ project: A.projectKey }],
+  list_doc_templates: () => [], // static global metadata, no team data to attack (WH-65)
 } satisfies Record<ToolName, () => Attack[]>;
 
 /** Tools whose call is legitimate for any team and never touches the target: their result must still hold no A data. */
@@ -398,6 +449,90 @@ describe("members, keys and assignees", () => {
   });
 });
 
+describe("repositories (WH-68)", () => {
+  test("B cannot read, edit or retire A's repositories through the service layer", async () => {
+    const before = await fingerprint(A);
+    await assert.rejects(svc.listRepositories(B.owner, A.projectKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(svc.updateRepository(B.owner, A.projectKey, A.repoId, { displayName: "hijacked" }), svc.ServiceError);
+    await assert.rejects(svc.updateRepository(B.owner, B.projectKey, A.repoId, { displayName: "hijacked" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(svc.retireRepository(B.owner, B.projectKey, A.repoId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(svc.createRepository(B.agent, B.projectKey, { displayName: "x", role: "backend" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden");
+    const list = await svc.listRepositories(B.owner, B.projectKey);
+    assert.ok(!JSON.stringify(list).includes(A.repoId));
+    assert.equal(await fingerprint(A), before);
+  });
+
+  test("B cannot browse A's connected repo's tree by guessing A's repositoryId (WH-82)", async () => {
+    // browseRepoTreeAction (src/app/actions.ts) resolves the repository the same way: svc.listRepositories(actor, projectKey)
+    // then matches repositoryId against that list. A's repo never appears in B's list, so B's lookup fails
+    // closed (not_found) before any GitHub API call would be made — mirrored here at the service layer.
+    const bList = await svc.listRepositories(B.owner, B.projectKey);
+    assert.ok(!bList.some((r) => r.id === A.repoId), "A's repository must not be visible when listing B's project");
+    // Even if B passes A's project key, B isn't a member of A's team so getProject itself rejects first.
+    await assert.rejects(svc.listRepositories(B.owner, A.projectKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+  });
+
+  test("B's own repository CRUD works end to end and is scoped to B's project", async () => {
+    const r = await svc.createRepository(B.owner, B.projectKey, { displayName: "B frontend", role: "frontend", pathLimit: "apps/web/" });
+    assert.equal(r.lifecycle, "live");
+    const updated = await svc.updateRepository(B.owner, B.projectKey, r.id, { lifecycle: "being_replaced" });
+    assert.equal(updated.lifecycle, "being_replaced");
+    const retired = await svc.retireRepository(B.owner, B.projectKey, r.id);
+    assert.equal(retired.lifecycle, "retired");
+    const list = await svc.listRepositories(B.owner, B.projectKey);
+    assert.ok(list.some((x) => x.id === r.id));
+  });
+
+  test("find-or-create is per project: the same slug in two projects is two rows, each with its own path limit", async () => {
+    const mono = `mono-${RUN}`;
+    const r1 = await svc.findOrCreateRepository(A.owner, A.projectId, mono);
+    const r2 = await svc.findOrCreateRepository(B.owner, B.projectId, mono);
+    assert.notEqual(r1.id, r2.id);
+    assert.equal(r1.slug, r2.slug);
+    await svc.updateRepository(A.owner, A.projectKey, r1.id, { pathLimit: "packages/billing/" });
+    await svc.updateRepository(B.owner, B.projectKey, r2.id, { pathLimit: "packages/auth/" });
+
+    // A landed change under packages/auth/ should only register for the project whose path limit matches it.
+    const before1 = (await svc.listRepositories(A.owner, A.projectKey)).find((x) => x.id === r1.id)!.lastEventAt;
+    const landed = await sync.land(A.owner, A.projectKey, { files: { "packages/auth/index.ts": "f".repeat(40) }, repository: mono });
+    assert.equal(landed.files, 0, "outside A's path limit: nothing lands for A's project");
+    const after1 = (await svc.listRepositories(A.owner, A.projectKey)).find((x) => x.id === r1.id)!.lastEventAt;
+    assert.equal(before1?.getTime(), after1?.getTime());
+
+    const landedForB = await sync.land(B.owner, B.projectKey, { files: { "packages/auth/index.ts": "f".repeat(40) }, repository: mono });
+    assert.equal(landedForB.files, 1, "inside B's path limit: it lands for B's project");
+  });
+});
+
+describe("doc staleness (WH-64) never crosses teams", () => {
+  test("report_changes / land for A's anchored path never flags or touches B's doc", async () => {
+    const aDoc = await svc.createDoc(A.owner, A.projectKey, { title: "A anchored doc", body: "watches src/shared/x.ts", anchors: ["src/shared/x.ts"] });
+    const bDoc = await svc.createDoc(B.owner, B.projectKey, { title: "B anchored doc", body: "watches src/shared/x.ts", anchors: ["src/shared/x.ts"] });
+    await svc.reportChanges(A.owner, A.projectKey, { files: ["src/shared/x.ts"], sha: "a".repeat(40) });
+    const { doc: aAfter } = await svc.getDoc(A.owner, A.projectKey, aDoc.id);
+    const { doc: bAfter } = await svc.getDoc(B.owner, B.projectKey, bDoc.id);
+    assert.equal(aAfter.stale, true, "A's own doc is flagged");
+    assert.equal(bAfter.stale, false, "B's doc with the identical anchor is untouched by A's report");
+
+    await sync.land(B.owner, B.projectKey, { files: { "src/shared/x.ts": "f".repeat(40) } });
+    const { doc: aAfter2 } = await svc.getDoc(A.owner, A.projectKey, aDoc.id);
+    assert.equal(aAfter2.stale, true, "B landing the same path never clears or otherwise changes A's doc");
+  });
+
+  test("B cannot mark A's doc fresh, resolve A's doc draft, or read A's stale docs", async () => {
+    const aDoc = await svc.createDoc(A.owner, A.projectKey, { title: "A fresh-check doc", anchors: ["src/shared/y.ts"] });
+    await svc.reportChanges(A.owner, A.projectKey, { files: ["src/shared/y.ts"] });
+    const before = await fingerprint(A);
+    await assert.rejects(svc.markDocFresh(B.owner, A.projectKey, aDoc.id), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(sync.resolveDocDraft(B.owner, A.projectKey, crypto.randomUUID(), "publish"), svc.ServiceError);
+    const bStale = await svc.listStaleDocs(B.owner, B.projectKey);
+    assert.ok(!JSON.stringify(bStale).includes(aDoc.id));
+    const { doc: stillStale } = await svc.getDoc(A.owner, A.projectKey, aDoc.id);
+    assert.equal(stillStale.stale, true, "B's failed attempt did not clear A's flag");
+    assert.equal(await fingerprint(A), before);
+  });
+});
+
 describe("sign-in and keys do not cross teams", () => {
   test("a session or key from one team never resolves to the other", async () => {
     const db = await getDb();
@@ -442,9 +577,12 @@ const ACTION_AUDIT: Record<string, string> = {
   createApiKey: "inserts with the caller's team id",
   revokeApiKey: "members.ts: scoped by the caller's team id (tested)",
   createProjectAction: "service.createProject with the caller's team",
+  createConceptFromDescriptionAction: "service.getProject + service.upsertNode (getProject)",
   latestSeq: "service.getProject (team scoped) then events of that project",
   moveTicketAction: "service.moveTicket (resolveTicket joins the team)",
   createTicketAction: "service.createTicket (getProject)",
+  createTicketFromActionItemAction: "service.createTicket (getProject)",
+  listDocTemplatesAction: "static global metadata, no DB access, nothing team-scoped (WH-65)",
   updateTicketAction: "service.updateTicket (resolveTicket; assignee checked)",
   deleteTicketAction: "service.deleteTicket (resolveTicket)",
   getTicketAction: "service.getTicket (resolveTicket)",
@@ -467,12 +605,30 @@ const ACTION_AUDIT: Record<string, string> = {
   markAllSeenAction: "service.markAllSeen (keys filtered by the caller's team)",
   removeSessionAction: "service.removeSession (project and session filtered by team)",
   resolveDraftAction: "sync.resolveDraft (draft filtered by the team's project)",
+  listRepositoriesAction: "service.listRepositories (getProject)",
+  createRepositoryAction: "service.createRepository (getProject; owner-only)",
+  updateRepositoryAction: "service.updateRepository (getProject + resolveRepository scoped to it; owner-only)",
+  connectGithubRepositoryAction: "github/service.ts: owner-only; the installation must be registered to the caller's team; name and branch read from GitHub (tested in github.test.ts)",
+  retireRepositoryAction: "service.retireRepository (getProject + resolveRepository scoped to it; owner-only)",
+  browseRepoTreeAction: "service.listRepositories (getProject); repositoryId matched only against that project's own rows, so another team's id returns not_found before any GitHub call is made (WH-82)",
+  setKeyDocsWriteAction: "actions.ts: key looked up and updated filtered by the caller's team id",
+  listDocsAction: "service.listDocs (getProject)",
+  getDocAction: "service.getDoc (getProject + resolveDoc scoped to it)",
+  createDocAction: "service.createDoc (getProject)",
+  updateDocAction: "service.updateDoc (getProject + resolveDoc scoped to it)",
+  moveDocAction: "service.moveDoc (getProject + resolveDoc scoped to it)",
+  deleteDocAction: "service.deleteDoc (getProject + resolveDoc scoped to it)",
+  linkDocNodeAction: "service.linkDocNode (getProject + resolveDoc/resolveNode scoped to it)",
+  markDocFreshAction: "service.markDocFresh -> updateDoc (getProject + resolveDoc scoped to it)",
+  suggestDocAnchorsAction: "service.suggestDocAnchors (getProject + resolveDoc scoped to it)",
+  resolveDocDraftAction: "sync.resolveDocDraft (draft filtered by the team's project)",
 };
 
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
 const DB_FILE_AUDIT: Record<string, string> = {
   "src/app/(app)/agents/page.tsx": "api keys and projects filtered by the caller's team id",
   "src/app/(app)/p/[key]/page.tsx": "members filtered by the caller's team id; the project via service",
+  "src/app/(app)/p/[key]/docs/page.tsx": "members filtered by the caller's team id, for the doc byline; the project/docs via service",
   "src/app/(app)/team/page.tsx": "members filtered by the caller's team id; invites via invites.ts",
   "src/app/actions.ts": "see ACTION_AUDIT",
   "src/app/api/health/route.ts": "select 1, no data",
@@ -482,7 +638,9 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "src/lib/invites.ts": "tokens; scoped by issuer team, or by the invite's own team at acceptance",
   "src/lib/members.ts": "every statement scoped by the caller's team id (tested)",
   "src/lib/metrics.ts": "everything derived from the caller's team's project ids",
+  "src/lib/github/service.ts": "webhooks reach a repository only through its team's own registered installation (targetsFor joins installation team = project team; tested with two teams sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's team",
   "src/lib/service.ts": "every function resolves through getProject / resolveTicket (tested)",
+  "src/lib/stream-route.ts": "live streams: human sessions only, scope from stream-scope.ts (getProject / the caller's own team id, tested in live-events.test.ts), capped per user",
   "src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
   "src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
 };

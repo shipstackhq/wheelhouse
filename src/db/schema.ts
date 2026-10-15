@@ -13,6 +13,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
@@ -87,8 +88,15 @@ export const apiKeys = pgTable("api_keys", {
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  // Capability flags for this key (WH-51). Keys default to none set, i.e. read-only: a key must be
+  // explicitly marked "docs:write" by a teammate before upsert_doc/delete_doc will work for it.
+  capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
   createdAt: createdAt(),
 });
+
+/** Capability flags a key can be granted. Currently just docs write access (WH-51). */
+export const KEY_CAPABILITIES = ["docs:write"] as const;
+export type KeyCapability = (typeof KEY_CAPABILITIES)[number];
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -301,7 +309,7 @@ export const events = pgTable(
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
     type: text("type").notNull(), // e.g. ticket.created, ticket.moved, comment.created
-    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "project", "flow", "decision", "term"] }).notNull(),
+    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "project", "flow", "decision", "term", "doc"] }).notNull(),
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
@@ -325,6 +333,46 @@ export const agentCursors = pgTable(
 );
 
 /** Server's view of the default branch: content hash per file, updated when code lands. */
+export const REPO_PROVIDERS = ["github", "local"] as const;
+export const REPO_LIFECYCLES = ["live", "being_replaced", "planned", "retired"] as const;
+
+/**
+ * Multiple repositories per project (ADR-7, WH-68): a project can be served by
+ * several repos (frontend/backend/admin…) or share a monorepo with other
+ * projects. Each project<->repo link is its own row (so the same physical repo
+ * connected to two projects is two rows, each with its own `pathLimit`), which
+ * avoids a many-to-many join table and matches "each project's link to it
+ * carries its own path limit" in the ticket. `slug` is the natural
+ * identifying key the CLI/wheelhouse.json reports for `provider: "local"`
+ * (or the GitHub repo id once connected), used to find-or-create the right
+ * row per project on each report.
+ */
+export const repositories = pgTable(
+  "repositories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    displayName: text("display_name").notNull(),
+    role: text("role").notNull(), // free text: teams name their own roles (frontend/backend/admin/…)
+    provider: text("provider", { enum: REPO_PROVIDERS }).notNull().default("local"),
+    // Natural identifying key for "same physical repo": the slug/name the CLI reports (provider=local),
+    // or the stringified GitHub repo id once connected (provider=github). Unique per project so
+    // find-or-create resolves to exactly one row.
+    slug: text("slug").notNull(),
+    githubRepoId: text("github_repo_id"),
+    githubInstallationId: text("github_installation_id"),
+    githubFullName: text("github_full_name"), // "owner/name", for display; the id is what identifies the repository
+    defaultBranch: text("default_branch").notNull().default("main"),
+    // A monorepo directory this project's link is limited to, e.g. "packages/billing/". Null = whole repo.
+    pathLimit: text("path_limit"),
+    lifecycle: text("lifecycle", { enum: REPO_LIFECYCLES }).notNull().default("live"),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("repositories_project_idx").on(t.projectId), uniqueIndex("repositories_project_slug_idx").on(t.projectId, t.slug)],
+);
+
 export const projectFiles = pgTable(
   "project_files",
   {
@@ -332,12 +380,15 @@ export const projectFiles = pgTable(
     path: text("path").notNull(),
     hash: text("hash").notNull(),
     sha: text("sha"),
+    // Which repository this file belongs to (WH-68). Null for existing single-repo rows written before this
+    // change, or when the client doesn't report a repository — treated as "unqualified / matches everything".
+    repositoryId: uuid("repository_id").references(() => repositories.id, { onDelete: "cascade" }),
     updatedAt: updatedAt(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.path] })],
 );
 
-export type SessionFile = { hash: string | null; at: string; external?: boolean }; // external: changed outside the agent (e.g. a human in the IDE)
+export type SessionFile = { hash: string | null; at: string; external?: boolean; repositoryId?: string | null }; // external: changed outside the agent (e.g. a human in the IDE)
 
 /**
  * A client session (e.g. one Claude Code session) working in a project: which
@@ -391,4 +442,141 @@ export const nodeDrafts = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [index("node_drafts_node_idx").on(t.nodeId)],
+);
+
+// ───────── GitHub App (WH-20) ─────────
+
+// Which team an installation of the App belongs to. A row exists only after the installing person proved, through
+// GitHub's own sign-in, that they administer that installation: an installation id alone is a public number.
+export const githubInstallations = pgTable("github_installations", {
+  installationId: text("installation_id").primaryKey(),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  accountLogin: text("account_login").notNull().default(""),
+  accountType: text("account_type").notNull().default(""),
+  connectedBy: uuid("connected_by"), // the user who connected it; no FK, people can leave
+  createdAt: createdAt(),
+});
+
+// Deliveries we have already handled (GitHub retries), so a redelivery changes nothing.
+export const githubDeliveries = pgTable("github_deliveries", {
+  id: text("id").primaryKey(), // X-GitHub-Delivery
+  event: text("event").notNull(),
+  receivedAt: createdAt(),
+});
+
+// A pull request seen on a connected repository, with the state of its checks.
+export const pullRequests = pgTable(
+  "pull_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    repositoryId: uuid("repository_id").notNull().references(() => repositories.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    title: text("title").notNull(),
+    url: text("url").notNull(),
+    author: text("author").notNull().default(""),
+    headBranch: text("head_branch").notNull().default(""),
+    headSha: text("head_sha").notNull().default(""),
+    state: text("state", { enum: ["open", "closed", "merged"] }).notNull().default("open"),
+    draft: boolean("draft").notNull().default(false),
+    // The latest result per check name for headSha; cleared when a new commit arrives.
+    checks: jsonb("checks").$type<Record<string, { status: string; conclusion: string | null; url?: string | null }>>().notNull().default({}),
+    ciState: text("ci_state", { enum: ["success", "failure", "pending"] }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("pull_requests_repo_number_idx").on(t.repositoryId, t.number)],
+);
+
+export const pullRequestTickets = pgTable(
+  "pull_request_tickets",
+  {
+    pullRequestId: uuid("pull_request_id").notNull().references(() => pullRequests.id, { onDelete: "cascade" }),
+    ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.pullRequestId, t.ticketId] }), index("pull_request_tickets_ticket_idx").on(t.ticketId)],
+);
+
+// ───────── team documentation (WH-51) ─────────
+//
+// Markdown docs that live in Wheelhouse next to the board and map: runbooks,
+// product notes, conventions, decisions in prose. A tree (parentId), optimistic
+// locking like tickets, soft delete with a 30-day purge. Agents read them over
+// MCP/REST; writing requires a key with the "docs:write" capability or a human.
+
+export const docs = pgTable(
+  "docs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    parentId: uuid("parent_id"),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""), // markdown, <= 200KB (enforced in service.ts)
+    version: integer("version").notNull().default(1),
+    position: doublePrecision("position").notNull().default(0),
+    createdByKind: text("created_by_kind", { enum: ["human", "agent"] }).notNull(),
+    createdById: uuid("created_by_id"),
+    updatedByKind: text("updated_by_kind", { enum: ["human", "agent"] }).notNull(),
+    updatedById: uuid("updated_by_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    // Soft delete: kept 30 days so a purge job (or a human) can still recover it; history also lives in `events`.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // ───── freshness (WH-64): mirrors the same columns on `nodes` exactly ─────
+    // File paths/globs this doc is anchored to (author-confirmed; suggested anchors are never auto-applied).
+    anchors: jsonb("anchors").$type<string[]>().notNull().default([]),
+    describedSha: text("described_sha"),
+    describedAt: timestamp("described_at", { withTimezone: true }),
+    stale: boolean("stale").notNull().default(false),
+    staleReason: text("stale_reason"),
+    // "report": flagged by a file-list report (cleared by editing the body / mark_doc_fresh).
+    // "drift": landed content hashes differ from describedHashes (also clears itself on revert).
+    staleSource: text("stale_source", { enum: ["report", "drift"] }),
+    // Content hashes of anchored files when the doc was last confirmed accurate, and landed paths that now differ.
+    describedHashes: jsonb("described_hashes").$type<Record<string, string>>().notNull().default({}),
+    driftPaths: jsonb("drift_paths").$type<string[]>().notNull().default([]),
+  },
+  (t) => [
+    index("docs_project_idx").on(t.projectId),
+    // Unique per (project, parent, slug) among live docs. Partial index: deleted docs don't block reusing a slug.
+    uniqueIndex("docs_project_parent_slug_idx").on(t.projectId, t.parentId, t.slug).where(sql`deleted_at is null`),
+  ],
+);
+
+/**
+ * A doc edit written against code that hasn't landed yet (WH-64). Mirrors `nodeDrafts`
+ * exactly (same patch/confirm/status shape): published when the anchored code lands,
+ * discarded if the work is abandoned. Kept as its own table (not a generalized
+ * drafts table) because `nodeDrafts` isn't generic today — it's keyed on `nodeId`
+ * with node-specific publish logic in sync.ts, and doc publish logic (patch fields
+ * are title/body, not explainer/column fields) differs enough that sharing one
+ * table would need a polymorphic entityId/kind column for no real gain at this scale.
+ */
+export const docDrafts = pgTable(
+  "doc_drafts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    docId: uuid("doc_id").notNull().references(() => docs.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => workSessions.id, { onDelete: "set null" }),
+    authorName: text("author_name").notNull(),
+    authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
+    // title/body to apply on publish; {} with confirm=true means "still accurate".
+    patch: jsonb("patch").$type<Record<string, unknown>>().notNull().default({}),
+    confirm: boolean("confirm").notNull().default(false),
+    status: text("status", { enum: ["pending", "published", "discarded"] }).notNull().default("pending"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("doc_drafts_doc_idx").on(t.docId)],
+);
+
+/** Links a doc to a map node, mirroring ticket_nodes, so a node's page can list "read these docs". */
+export const docNodes = pgTable(
+  "doc_nodes",
+  {
+    docId: uuid("doc_id").notNull().references(() => docs.id, { onDelete: "cascade" }),
+    nodeId: uuid("node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.docId, t.nodeId] })],
 );

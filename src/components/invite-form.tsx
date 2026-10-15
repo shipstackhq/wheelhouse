@@ -4,10 +4,11 @@ import { useActionState } from "react";
 import { createInviteAction, type FormState } from "@/app/actions";
 import { Select } from "@/components/ui";
 import { SecretBox } from "@/components/secret-box";
+import { SubmitButton } from "./submit-button";
 
 /** Create an invite link. `kind` decides what the link does; the server decides who may create it. */
 export function InviteForm({ kind, disabled = false }: { kind: "join_team" | "new_team"; disabled?: boolean }) {
-  const [state, action, pending] = useActionState<FormState, FormData>(createInviteAction, undefined);
+  const [state, action] = useActionState<FormState, FormData>(createInviteAction, undefined);
   return (
     <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
       <input type="hidden" name="kind" value={kind} />
@@ -28,7 +29,7 @@ export function InviteForm({ kind, disabled = false }: { kind: "join_team" | "ne
         </div>
       )}
       <div className="sm:col-span-2">
-        <button className="btn btn-primary" disabled={pending || disabled}>Create invite link</button>
+        <SubmitButton className="btn btn-primary" disabled={disabled}>Create invite link</SubmitButton>
       </div>
     </form>
   );

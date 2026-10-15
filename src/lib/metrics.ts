@@ -12,7 +12,7 @@ import type { SessionView } from "@/components/session-row";
  * Day buckets are UTC calendar days.
  */
 
-const { projects, columns, tickets, events, nodes, apiKeys } = schema;
+const { projects, columns, tickets, events, nodes, docs, apiKeys } = schema;
 
 const DAY = 864e5;
 export const dayKey = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
@@ -26,8 +26,8 @@ const snapshot = cache(async (teamId: string) => {
   const db = await getDb();
   const ps = await db.select().from(projects).where(eq(projects.teamId, teamId)).orderBy(asc(projects.createdAt));
   const pids = ps.map((p) => p.id);
-  if (!pids.length) return { projects: ps, columns: [], tickets: [], events: [], nodes: [] };
-  const [cs, ts, es, ns] = await Promise.all([
+  if (!pids.length) return { projects: ps, columns: [], tickets: [], events: [], nodes: [], docs: [] };
+  const [cs, ts, es, ns, ds] = await Promise.all([
     db.select().from(columns).where(inArray(columns.projectId, pids)).orderBy(asc(columns.position)),
     db.select().from(tickets).where(inArray(tickets.projectId, pids)),
     db
@@ -39,8 +39,12 @@ const snapshot = cache(async (teamId: string) => {
       .select({ id: nodes.id, projectId: nodes.projectId, name: nodes.name, layer: nodes.layer, stale: nodes.stale, staleReason: nodes.staleReason })
       .from(nodes)
       .where(inArray(nodes.projectId, pids)),
+    db
+      .select({ id: docs.id, projectId: docs.projectId, slug: docs.slug, title: docs.title, stale: docs.stale, staleReason: docs.staleReason })
+      .from(docs)
+      .where(and(inArray(docs.projectId, pids), isNull(docs.deletedAt))),
   ]);
-  return { projects: ps, columns: cs, tickets: ts, events: es, nodes: ns };
+  return { projects: ps, columns: cs, tickets: ts, events: es, nodes: ns, docs: ds };
 });
 
 type Snap = Awaited<ReturnType<typeof snapshot>>;
@@ -93,6 +97,7 @@ export async function summary(actor: Actor) {
     events7d: week.length,
     staleNodes: s.nodes.filter((n) => n.stale).length,
     mapNodes: s.nodes.length,
+    staleDocs: s.docs.filter((d) => d.stale).length,
     agents: keys.length,
   };
 }
@@ -120,6 +125,7 @@ export async function projectProgress(actor: Actor) {
       agentReady: open.filter((t) => t.agentClaimable && !t.claimedByKeyId).length,
       staleNodes: s.nodes.filter((n) => n.projectId === p.id && n.stale).length,
       mapNodes: s.nodes.filter((n) => n.projectId === p.id).length,
+      staleDocs: s.docs.filter((d) => d.projectId === p.id && d.stale).length,
       lastActivity: lastEvent?.createdAt ?? null,
     };
   });
@@ -198,7 +204,11 @@ export async function needsAttention(actor: Actor) {
     .filter((n) => n.stale)
     .slice(0, 6)
     .map((n) => ({ id: n.id, name: n.name, layer: n.layer, reason: n.staleReason, projectKey: pkey.get(n.projectId)! }));
-  return { review, urgent, stale };
+  const staleDocs = s.docs
+    .filter((d) => d.stale)
+    .slice(0, 6)
+    .map((d) => ({ id: d.id, slug: d.slug, title: d.title, reason: d.staleReason, projectKey: pkey.get(d.projectId)! }));
+  return { review, urgent, stale, staleDocs };
 }
 
 export async function recentActivity(actor: Actor, limit = 12) {

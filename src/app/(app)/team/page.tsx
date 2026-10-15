@@ -7,6 +7,7 @@ import { ChangePasswordForm } from "./forms";
 import { InviteForm } from "@/components/invite-form";
 import { PendingInvites } from "@/components/pending-invites";
 import { listInvites, seatInfo } from "@/lib/invites";
+import { SubmitButton } from "@/components/submit-button";
 
 export default async function TeamPage() {
   const { team, membership, user } = await requireHuman();
@@ -42,9 +43,9 @@ export default async function TeamPage() {
                 <>
                   <Select name="role" defaultValue={m.role} className="w-28" options={[{ value: "owner", label: "owner" }, { value: "member", label: "member" }]} />
                   <input name="tags" defaultValue={m.tags.join(", ")} placeholder="tags" className="input w-48 py-1.5" />
-                  <button className="btn">Save</button>
+                  <SubmitButton className="btn">Save</SubmitButton>
                   {u.id !== user.id && (
-                    <button formAction={removeMember} className="btn btn-danger">Remove</button>
+                    <SubmitButton formAction={removeMember} className="btn btn-danger">Remove</SubmitButton>
                   )}
                 </>
               ) : (

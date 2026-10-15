@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import {
   createSession,
@@ -31,6 +31,8 @@ import {
   type Issuer,
 } from "@/lib/invites";
 import * as svc from "@/lib/service";
+import * as gh from "@/lib/github/service";
+import { github } from "@/lib/github/runtime";
 import * as members from "@/lib/members";
 import { askMap } from "@/lib/ask";
 
@@ -269,6 +271,18 @@ export async function revokeApiKey(fd: FormData) {
   revalidatePath("/team");
 }
 
+/** Grant or revoke the "docs:write" capability on one of the team's own keys (WH-51). Off by default for every key. */
+export async function setKeyDocsWriteAction(keyId: string, canWrite: boolean) {
+  const { team } = await requireHuman();
+  const db = await getDb();
+  const [key] = await db.select({ capabilities: schema.apiKeys.capabilities }).from(schema.apiKeys).where(and(eq(schema.apiKeys.id, keyId), eq(schema.apiKeys.teamId, team.id)));
+  if (!key) return { ok: false, error: "Key not found" };
+  const next = canWrite ? [...new Set([...key.capabilities, "docs:write"])] : key.capabilities.filter((c) => c !== "docs:write");
+  await db.update(schema.apiKeys).set({ capabilities: next }).where(and(eq(schema.apiKeys.id, keyId), eq(schema.apiKeys.teamId, team.id)));
+  revalidatePath("/agents");
+  return { ok: true };
+}
+
 // ───────── projects ─────────
 
 export async function createProjectAction(_: FormState, fd: FormData): Promise<FormState> {
@@ -284,7 +298,33 @@ export async function createProjectAction(_: FormState, fd: FormData): Promise<F
   } catch (e) {
     return fail(e);
   }
-  redirect(`/p/${key}`);
+  redirect(`/p/${key}/onboarding`);
+}
+
+/**
+ * WH-69 no-code placeholder: the minimal "what are you building" textarea becomes a first concept node, so a
+ * project with no repository yet still has something on the map before any code exists. Kept intentionally small
+ * — a full spec/template system is WH-51/65, not this ticket.
+ */
+export async function createConceptFromDescriptionAction(_: FormState, fd: FormData): Promise<FormState> {
+  const projectKey = String(fd.get("projectKey") ?? "");
+  const description = String(fd.get("description") ?? "").trim();
+  if (!description) return { error: "Write a few sentences about what you're building." };
+  try {
+    const { actor } = await requireHuman();
+    const project = await svc.getProject(actor, projectKey);
+    await svc.upsertNode(actor, projectKey, {
+      name: project.name,
+      layer: "concept",
+      kind: "concept",
+      summary: description.slice(0, 200),
+      purpose: description,
+    });
+  } catch (e) {
+    return fail(e);
+  }
+  revalidatePath(`/p/${projectKey}`);
+  return { ok: "Added to the map." };
 }
 
 // ───────── board (called from client components) ─────────
@@ -385,6 +425,73 @@ export async function markFreshAction(projectKey: string, nodeId: string) {
   return wrap(() => svc.markFresh(actor, projectKey, nodeId));
 }
 
+// ───────── team documentation (WH-51) ─────────
+
+export async function listDocsAction(projectKey: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.listDocs(actor, projectKey));
+}
+
+export async function getDocAction(projectKey: string, ref: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.getDoc(actor, projectKey, ref));
+}
+
+export async function createDocAction(projectKey: string, input: { title: string; body?: string; parent?: string | null; template?: string }) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.createDoc(actor, projectKey, input));
+}
+
+export async function listDocTemplatesAction() {
+  return svc.listDocTemplates();
+}
+
+/**
+ * WH-65: one-click "Create ticket" for an unchecked action item in a doc's "Action items"
+ * section. One-shot only — no bidirectional sync back to the doc; the caller (docs-explorer)
+ * is responsible for marking the checkbox done in the doc body after this succeeds, same as
+ * any other edit through updateDocAction.
+ */
+export async function createTicketFromActionItemAction(projectKey: string, title: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.createTicket(actor, projectKey, { title }));
+}
+
+export async function updateDocAction(
+  projectKey: string,
+  ref: string,
+  patch: { title?: string; body?: string; anchors?: string[] },
+  expectedVersion?: number,
+) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.updateDoc(actor, projectKey, ref, patch, expectedVersion));
+}
+
+export async function markDocFreshAction(projectKey: string, ref: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.markDocFresh(actor, projectKey, ref));
+}
+
+export async function suggestDocAnchorsAction(projectKey: string, ref: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.suggestDocAnchors(actor, projectKey, ref));
+}
+
+export async function moveDocAction(projectKey: string, ref: string, opts: { parent?: string | null; index?: number }, expectedVersion?: number) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.moveDoc(actor, projectKey, ref, opts, expectedVersion));
+}
+
+export async function deleteDocAction(projectKey: string, ref: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.deleteDoc(actor, projectKey, ref));
+}
+
+export async function linkDocNodeAction(projectKey: string, ref: string, nodeId: string, unlink = false) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.linkDocNode(actor, projectKey, ref, nodeId, unlink));
+}
+
 // ───────── flows / decisions / glossary ─────────
 
 export async function upsertFlowAction(projectKey: string, input: svc.FlowInput) {
@@ -423,6 +530,72 @@ export async function askAction(projectKey: string, question: string, focusNodeI
   return wrap(() => askMap(actor, projectKey, question, focusNodeId));
 }
 
+// ───────── repositories (WH-68) ─────────
+
+export async function listRepositoriesAction(projectKey: string) {
+  const { actor } = await requireHuman();
+  return wrap(() => svc.listRepositories(actor, projectKey));
+}
+
+export async function createRepositoryAction(projectKey: string, input: svc.RepositoryInput) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.createRepository(actor, projectKey, input));
+  revalidatePath(`/p/${projectKey}/repos`);
+  return res;
+}
+
+/** The "Connect" button next to a repository GitHub lists for the team's installation (owners only; checked in the service). */
+export async function connectGithubRepositoryAction(fd: FormData): Promise<void> {
+  const { actor } = await requireHuman();
+  const projectKey = String(fd.get("project") ?? "");
+  const res = await wrap(() =>
+    gh.connectGithubRepository(
+      actor,
+      projectKey,
+      { installationId: String(fd.get("installationId") ?? ""), githubRepoId: String(fd.get("repoId") ?? ""), role: String(fd.get("role") ?? "").trim() || "code", pathLimit: String(fd.get("pathLimit") ?? "").trim() || null },
+      github()?.api ?? null,
+    ),
+  );
+  revalidatePath(`/p/${projectKey}/repos`);
+  redirect(`/p/${encodeURIComponent(projectKey)}/repos?${res.ok ? "github=repo_connected" : `github_error=connect_failed&github_msg=${encodeURIComponent(res.error)}`}`);
+}
+
+export async function updateRepositoryAction(projectKey: string, id: string, patch: Partial<svc.RepositoryInput>) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.updateRepository(actor, projectKey, id, patch));
+  revalidatePath(`/p/${projectKey}/repos`);
+  return res;
+}
+
+export async function retireRepositoryAction(projectKey: string, id: string) {
+  const { actor } = await requireHuman();
+  const res = await wrap(() => svc.retireRepository(actor, projectKey, id));
+  revalidatePath(`/p/${projectKey}/repos`);
+  return res;
+}
+
+/**
+ * Browse a connected GitHub repository's file tree for the doc anchor picker (WH-82). Read-only;
+ * team isolation comes from `svc.listRepositories`, which resolves the project through `getProject`
+ * (team-scoped) and only returns rows belonging to it — so a `repositoryId` from another team's
+ * project never matches and this returns "not_found" rather than another team's tree.
+ */
+export async function browseRepoTreeAction(projectKey: string, repositoryId: string) {
+  const { actor } = await requireHuman();
+  return wrap(async () => {
+    const repos = await svc.listRepositories(actor, projectKey);
+    const repo = repos.find((r) => r.id === repositoryId);
+    if (!repo) throw new svc.ServiceError("not_found", `Repository "${repositoryId}" not found`);
+    if (repo.provider !== "github" || !repo.githubInstallationId || !repo.githubRepoId) {
+      throw new svc.ServiceError("invalid", "This repository is not connected to GitHub");
+    }
+    const gh2 = github();
+    if (!gh2) throw new svc.ServiceError("invalid", "GitHub is not set up on this server");
+    const { files, truncated } = await gh2.api.treeAt(repo.githubInstallationId, repo.githubRepoId, repo.defaultBranch || "main");
+    return { files: files.map((f) => ({ path: f.path })), truncated };
+  });
+}
+
 export async function markAllSeenAction(fd: FormData) {
   const { actor } = await requireHuman();
   const keyId = String(fd.get("keyId") ?? "") || undefined;
@@ -442,4 +615,10 @@ export async function resolveDraftAction(projectKey: string, draftId: string, ac
   const { actor } = await requireHuman();
   const { resolveDraft } = await import("@/lib/sync");
   return wrap(() => resolveDraft(actor, projectKey, draftId, action));
+}
+
+export async function resolveDocDraftAction(projectKey: string, draftId: string, action: "publish" | "discard") {
+  const { actor } = await requireHuman();
+  const { resolveDocDraft } = await import("@/lib/sync");
+  return wrap(() => resolveDocDraft(actor, projectKey, draftId, action));
 }

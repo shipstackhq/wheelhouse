@@ -9,7 +9,10 @@ import {
   normPath,
   pruneSessions,
   ServiceError,
+  updateDoc,
   upsertNode,
+  type DocRow,
+  type DocUpdateInput,
   type NodeInput,
   type NodeRow,
 } from "./service";
@@ -27,18 +30,19 @@ import {
  * Board state is never deferred; only map explanations wait for landed code.
  */
 
-const { nodes, projectFiles, workSessions, nodeDrafts, events, tickets, projects } = schema;
+const { nodes, projectFiles, workSessions, nodeDrafts, docs, docDrafts, events, tickets, projects } = schema;
 
 const ACTIVE_MS = 12 * 3600e3;
 const EXPLAINER_KEYS = ["summary", "purpose", "responsibilities", "interfaces", "gotchas", "details", "columns", "indexes", "anchors", "status"] as const;
+const DOC_PATCH_KEYS = ["title", "body", "anchors"] as const;
 
 type Session = typeof workSessions.$inferSelect;
 
-/** Most specifically anchored nodes per layer for a file (same rule as report_changes). */
-export function bestMatches(ns: NodeRow[], file: string) {
+/** Most specifically anchored nodes per layer for a file (same rule as report_changes). `fileRepo`: the repo slug this file was reported under, for repo-qualified anchors ("backend:src/**"). */
+export function bestMatches(ns: NodeRow[], file: string, fileRepo?: string | null) {
   const best = new Map<string, { score: number; nodes: NodeRow[] }>();
   for (const n of ns) {
-    const s = Math.max(0, ...n.anchors.map((a) => anchorScore(a, file)));
+    const s = Math.max(0, ...n.anchors.map((a) => anchorScore(a, file, fileRepo)));
     if (!s) continue;
     const b = best.get(n.layer);
     if (!b || s > b.score) best.set(n.layer, { score: s, nodes: [n] });
@@ -47,7 +51,7 @@ export function bestMatches(ns: NodeRow[], file: string) {
   return [...best.values()].flatMap((b) => b.nodes);
 }
 
-const anchoredBy = (n: NodeRow, files: string[]) => files.filter((f) => n.anchors.some((a) => anchorScore(a, f) > 0));
+const anchoredBy = (n: { anchors: string[] }, files: string[], fileRepo?: string | null) => files.filter((f) => n.anchors.some((a) => anchorScore(a, f, fileRepo) > 0));
 
 async function projectNodes(projectId: string) {
   const db = await getDb();
@@ -80,6 +84,8 @@ export type SessionReport = {
   files?: string[] | Record<string, string | null>;
   /** Changes noticed in the working copy that the agent didn't make (shown as in flux, not owed by the agent). */
   external?: boolean;
+  /** wheelhouse.json's repository name/slug (WH-68). Omitted = old client: files are tracked unqualified, as before. */
+  repository?: string;
 };
 
 /** Record what a session touched. Cheap; called by async PostToolUse hooks and at Stop. */
@@ -89,6 +95,7 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   const project = await getProject(actor, projectRef);
   const [existing] = await db.select().from(workSessions).where(eq(workSessions.id, r.session));
   if (existing && existing.projectId !== project.id) throw new ServiceError("invalid", "session belongs to another project");
+  const repo = r.repository ? await (await import("./service")).findOrCreateRepository(actor, project.id, r.repository) : null;
 
   const reported: Record<string, string | null> = Array.isArray(r.files)
     ? Object.fromEntries(r.files.map((f) => [normPath(f), null]))
@@ -105,7 +112,13 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   for (const p of paths) {
     const h = reported[p];
     if (h && landedHash.get(p) === h) delete files[p];
-    else files[p] = { hash: h ?? files[p]?.hash ?? null, at: now, ...(r.external && !files[p] ? { external: true } : files[p]?.external && r.external ? { external: true } : {}) };
+    else
+      files[p] = {
+        hash: h ?? files[p]?.hash ?? null,
+        at: now,
+        ...(r.external && !files[p] ? { external: true } : files[p]?.external && r.external ? { external: true } : {}),
+        ...(repo ? { repositoryId: repo.id } : files[p]?.repositoryId ? { repositoryId: files[p].repositoryId } : {}),
+      };
   }
   const hasChanges = Object.keys(files).length > 0;
   const values = {
@@ -129,8 +142,19 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
     const touched = Object.keys(files);
     for (const d of drafts) {
       const n = ns.find((x) => x.id === d.nodeId);
-      if (!n || !anchoredBy(n, touched).length)
+      if (!n || !anchoredBy(n, touched, repo?.slug).length)
         await db.update(nodeDrafts).set({ status: "discarded", updatedAt: new Date() }).where(eq(nodeDrafts.id, d.id));
+    }
+  }
+  // Same for doc drafts (WH-64).
+  const docDraftRows = await db.select().from(docDrafts).where(and(eq(docDrafts.sessionId, r.session), eq(docDrafts.status, "pending")));
+  if (docDraftRows.length) {
+    const ds = await projectDocs(project.id);
+    const touched = Object.keys(files);
+    for (const d of docDraftRows) {
+      const doc = ds.find((x) => x.id === d.docId);
+      if (!doc || !anchoredBy(doc, touched, repo?.slug).length)
+        await db.update(docDrafts).set({ status: "discarded", updatedAt: new Date() }).where(eq(docDrafts.id, d.id));
     }
   }
   return { ok: true, inFlux: Object.keys(files).length };
@@ -243,6 +267,100 @@ async function applyDraft(actor: Actor, projectId: string, d: typeof nodeDrafts.
   await upsertNode(actor, projectId, { id: d.nodeId, ...(d.patch as NodeInput), markFresh: true, forcePublish: true, describedHashes: hashes });
 }
 
+// ───────── doc drafts (WH-64) ─────────
+// Mirrors the node draft flow exactly: an agent session editing a doc whose anchored
+// files are in flux (changed in that session, not yet landed) gets the edit stored as
+// a draft, published when land() processes those files.
+
+async function projectDocs(projectId: string) {
+  const db = await getDb();
+  return db.select().from(docs).where(and(eq(docs.projectId, projectId), isNull(docs.deletedAt)));
+}
+
+/** If this agent has an active session changing the doc's anchored files, return it. */
+async function fluxSessionForDoc(actor: Actor, doc: DocRow) {
+  if (actor.kind !== "agent" || !doc.anchors.length) return null;
+  const sessions = await activeSessions(doc.projectId, actor.id);
+  return sessions.find((s) => anchoredBy(doc, Object.keys(s.files)).length) ?? null;
+}
+
+/**
+ * Called by updateDoc for agent edits to existing docs. When the agent's own session
+ * has the doc's anchored code in flux, the update is stored as a draft and published
+ * when that code lands, so the shared doc never describes code that hasn't merged.
+ */
+export async function maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateInput) {
+  const patch: Record<string, unknown> = {};
+  for (const k of DOC_PATCH_KEYS) if (input[k] !== undefined) patch[k] = input[k];
+  const confirm = !!input.markFresh && !Object.keys(patch).length;
+  if (!Object.keys(patch).length && !confirm) return null;
+  const session = await fluxSessionForDoc(actor, doc);
+  if (!session) return null;
+  const db = await getDb();
+  const [d] = await db
+    .select()
+    .from(docDrafts)
+    .where(and(eq(docDrafts.docId, doc.id), eq(docDrafts.sessionId, session.id), eq(docDrafts.status, "pending")));
+  if (d) {
+    await db
+      .update(docDrafts)
+      .set({ patch: { ...d.patch, ...patch }, confirm: d.confirm && confirm, updatedAt: new Date() })
+      .where(eq(docDrafts.id, d.id));
+  } else {
+    await db.insert(docDrafts).values({
+      projectId: doc.projectId,
+      docId: doc.id,
+      sessionId: session.id,
+      authorName: actor.name,
+      authorKind: actor.kind,
+      patch,
+      confirm,
+    });
+  }
+  await emit(db, actor, doc.projectId, {
+    type: "doc.drafted",
+    entity: "doc",
+    entityId: doc.id,
+    summary: `drafted ${confirm ? "a confirmation of" : "an update to"} doc "${doc.title}" (publishes when the code lands)`,
+    data: { title: doc.title, slug: doc.slug, fields: Object.keys(patch) },
+  });
+  return {
+    draft: true,
+    note: "Saved as a draft: this session's changes to the doc's anchored files haven't landed on the default branch yet. It publishes automatically when they do.",
+  };
+}
+
+export async function listDocDrafts(actor: Actor, projectRef: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  return db
+    .select()
+    .from(docDrafts)
+    .where(and(eq(docDrafts.projectId, project.id), eq(docDrafts.status, "pending")))
+    .orderBy(asc(docDrafts.createdAt));
+}
+
+/** Human action: publish or discard a pending doc draft now. */
+export async function resolveDocDraft(actor: Actor, projectRef: string, draftId: string, action: "publish" | "discard") {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const [d] = await db
+    .select()
+    .from(docDrafts)
+    .where(and(eq(docDrafts.id, draftId), eq(docDrafts.projectId, project.id), eq(docDrafts.status, "pending")));
+  if (!d) throw new ServiceError("not_found", "Draft not found or already resolved");
+  if (action === "publish") await applyDocDraft(actor, project.id, d);
+  await db
+    .update(docDrafts)
+    .set({ status: action === "publish" ? "published" : "discarded", updatedAt: new Date() })
+    .where(eq(docDrafts.id, d.id));
+  return { ok: true };
+}
+
+async function applyDocDraft(actor: Actor, projectId: string, d: typeof docDrafts.$inferSelect, hashes?: Record<string, string>) {
+  await updateDoc(actor, projectId, d.docId, { ...(d.patch as DocUpdateInput), markFresh: true, forcePublish: true, describedHashes: hashes });
+}
+
 // ───────── landing ─────────
 
 export type LandReport = {
@@ -252,25 +370,40 @@ export type LandReport = {
   files: Record<string, string | null>;
   /** Initial import: record hashes as the described baseline without flagging anything. */
   baseline?: boolean;
+  /** wheelhouse.json's repository name/slug (WH-68). Omitted = old client / no repo info: falls back to the project's unqualified default repo, so single-repo projects keep working unchanged. */
+  repository?: string;
 };
 
 /**
  * Code landed on the default branch (git hook / CI). Updates the server's view
  * of the branch, publishes drafts for the affected nodes, and flags drift where
  * no draft exists. Reverting a file to its described content clears its drift.
+ *
+ * Repository qualification (WH-68): a monorepo connected to several projects reports changes to
+ * all of them, but each project's `repositories` row carries its own `pathLimit` (a directory such
+ * as "packages/billing/"); files outside this project's path limit are ignored here so each project
+ * only sees the slice of the monorepo it owns.
  */
 export async function land(actor: Actor, projectRef: string, r: LandReport) {
   const db = await getDb();
   const project = await getProject(actor, projectRef);
-  const changed = Object.entries(r.files ?? {}).map(([p, h]) => [normPath(p), h] as const).filter(([p]) => p);
-  if (!changed.length) return { files: 0, published: [], stale: [], fresh: [] };
+  const { findOrCreateRepository } = await import("./service");
+  const repo = await findOrCreateRepository(actor, project.id, r.repository);
+  const limit = repo?.pathLimit?.trim().replace(/^\/+/, "").replace(/\/*$/, "/") || null;
+  const changed = Object.entries(r.files ?? {})
+    .map(([p, h]) => [normPath(p), h] as const)
+    .filter(([p]) => p && (!limit || p.startsWith(limit)));
+  if (!changed.length) return { files: 0, published: [], stale: [], fresh: [], publishedDocs: [], staleDocs: [], freshDocs: [] };
 
   for (const [path, hash] of changed) {
     if (hash) {
       await db
         .insert(projectFiles)
-        .values({ projectId: project.id, path, hash, sha: r.sha ?? null })
-        .onConflictDoUpdate({ target: [projectFiles.projectId, projectFiles.path], set: { hash, sha: r.sha ?? null, updatedAt: new Date() } });
+        .values({ projectId: project.id, path, hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null })
+        .onConflictDoUpdate({
+          target: [projectFiles.projectId, projectFiles.path],
+          set: { hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null, updatedAt: new Date() },
+        });
     } else {
       await db.delete(projectFiles).where(and(eq(projectFiles.projectId, project.id), eq(projectFiles.path, path)));
     }
@@ -279,10 +412,21 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
   const ns = await projectNodes(project.id);
   const affected = new Map<string, { node: NodeRow; files: [string, string | null][] }>();
   for (const [path, hash] of changed) {
-    for (const n of r.baseline ? ns.filter((x) => anchoredBy(x, [path]).length) : bestMatches(ns, path)) {
+    for (const n of r.baseline ? ns.filter((x) => anchoredBy(x, [path], repo?.slug).length) : bestMatches(ns, path, repo?.slug)) {
       const a = affected.get(n.id) ?? { node: n, files: [] };
       a.files.push([path, hash]);
       affected.set(n.id, a);
+    }
+  }
+
+  // Same for docs (WH-64): no per-layer grouping, so any doc anchored to a changed path is affected.
+  const ds = await projectDocs(project.id);
+  const affectedDocs = new Map<string, { doc: DocRow; files: [string, string | null][] }>();
+  for (const [path, hash] of changed) {
+    for (const d of ds.filter((x) => anchoredBy(x, [path], repo?.slug).length)) {
+      const a = affectedDocs.get(d.id) ?? { doc: d, files: [] };
+      a.files.push([path, hash]);
+      affectedDocs.set(d.id, a);
     }
   }
 
@@ -293,10 +437,20 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
         .where(and(inArray(nodeDrafts.nodeId, [...affected.keys()]), eq(nodeDrafts.status, "pending")))
         .orderBy(asc(nodeDrafts.createdAt))
     : [];
+  const pendingDocs = affectedDocs.size
+    ? await db
+        .select()
+        .from(docDrafts)
+        .where(and(inArray(docDrafts.docId, [...affectedDocs.keys()]), eq(docDrafts.status, "pending")))
+        .orderBy(asc(docDrafts.createdAt))
+    : [];
 
   const published: string[] = [];
   const stale: string[] = [];
   const fresh: string[] = [];
+  const publishedDocs: string[] = [];
+  const staleDocs: string[] = [];
+  const freshDocs: string[] = [];
   const short = r.sha?.slice(0, 8);
 
   for (const { node, files } of affected.values()) {
@@ -349,6 +503,56 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
     await db.update(nodes).set(set).where(eq(nodes.id, node.id));
   }
 
+  for (const { doc, files } of affectedDocs.values()) {
+    const landedHashes: Record<string, string> = { ...doc.describedHashes };
+    for (const [p, h] of files) {
+      if (h) landedHashes[p] = h;
+      else delete landedHashes[p];
+    }
+    const drafts = pendingDocs.filter((d) => d.docId === doc.id);
+    if (drafts.length && !r.baseline) {
+      // The work that was in flux has landed: publish what the agent wrote against it.
+      for (const d of drafts) {
+        await applyDocDraft(actor, project.id, d, landedHashes);
+        await db.update(docDrafts).set({ status: "published", updatedAt: new Date() }).where(eq(docDrafts.id, d.id));
+      }
+      publishedDocs.push(doc.slug);
+      continue;
+    }
+
+    const neverBaselined = !Object.keys(doc.describedHashes).length;
+    const drift = new Set(doc.driftPaths);
+    const described = { ...doc.describedHashes };
+    for (const [p, h] of files) {
+      if (r.baseline || neverBaselined) {
+        if (h) described[p] = h;
+        continue;
+      }
+      if (!h) {
+        if (p in described) drift.add(p); // a described file was deleted
+        continue;
+      }
+      if (described[p] === h) drift.delete(p);
+      else drift.add(p);
+    }
+    const driftPaths = [...drift];
+    const wasDrift = doc.stale && doc.staleSource === "drift";
+    const nowStale = driftPaths.length > 0;
+    const set: Partial<typeof docs.$inferInsert> = { describedHashes: described, driftPaths };
+    if (nowStale && !(doc.stale && doc.staleSource === "report")) {
+      Object.assign(set, {
+        stale: true,
+        staleSource: "drift",
+        staleReason: `${driftPaths.slice(0, 3).join(", ")}${driftPaths.length > 3 ? ` +${driftPaths.length - 3} more` : ""} changed${short ? ` in ${short}` : ""} since it was described`,
+      });
+      if (!doc.stale) staleDocs.push(doc.slug);
+    } else if (!nowStale && wasDrift) {
+      Object.assign(set, { stale: false, staleSource: null, staleReason: null });
+      freshDocs.push(doc.slug);
+    }
+    await db.update(docs).set(set).where(eq(docs.id, doc.id));
+  }
+
   // Sessions whose in-flux files just landed (same content, or unknown) are no longer in flux for them.
   const landedMap = new Map(changed);
   for (const s of await activeSessions(project.id)) {
@@ -374,11 +578,11 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
       type: "code.landed",
       entity: "project",
       entityId: project.id,
-      summary: `landed ${changed.length} file(s)${short ? ` (${short})` : ""}${published.length ? `; published ${published.length} map draft(s)` : ""}${stale.length ? `; ${stale.length} node(s) drifted` : ""}${fresh.length ? `; ${fresh.length} back in sync` : ""}`,
-      data: { sha: r.sha, branch: r.branch, published, stale, fresh },
+      summary: `landed ${changed.length} file(s)${short ? ` (${short})` : ""}${published.length ? `; published ${published.length} map draft(s)` : ""}${stale.length ? `; ${stale.length} node(s) drifted` : ""}${fresh.length ? `; ${fresh.length} back in sync` : ""}${publishedDocs.length ? `; published ${publishedDocs.length} doc draft(s)` : ""}${staleDocs.length ? `; ${staleDocs.length} doc(s) drifted` : ""}${freshDocs.length ? `; ${freshDocs.length} doc(s) back in sync` : ""}`,
+      data: { sha: r.sha, branch: r.branch, published, stale, fresh, publishedDocs, staleDocs, freshDocs },
     });
   }
-  return { files: changed.length, published, stale, fresh };
+  return { files: changed.length, published, stale, fresh, publishedDocs, staleDocs, freshDocs };
 }
 
 // ───────── debt ─────────

@@ -166,8 +166,19 @@ body {
 /* The first/last block of a compact message sits flush: these must be unlayered like .md p, or utilities lose to it. */
 .md-compact > :first-child { margin-top: 0; }
 .md-compact > :last-child { margin-bottom: 0; }
-.md h1, .md h2, .md h3 { @apply mt-3 mb-1 font-semibold; }
-.md h1 { @apply text-base; }
+/*
+ * A description read as reference rather than the main event: a size down and muted. Headings and bold keep full
+ * strength so the structure still reads. Unlayered and after .md on purpose: a utility class on the same element would lose to .md.
+ */
+.md-quiet {
+  @apply text-[13px] leading-relaxed text-muted;
+}
+.md-quiet h1, .md-quiet h2, .md-quiet h3, .md-quiet h4, .md-quiet strong { @apply text-fg; }
+.md h1, .md h2, .md h3, .md h4 { @apply mt-3 mb-1 font-semibold; }
+.md h1 { @apply text-2xl; }
+.md h2 { @apply text-lg; }
+.md h3 { @apply text-base; }
+.md h4 { @apply text-sm; }
 .md p { @apply my-2; }
 .md ul { @apply my-2 list-disc pl-5; }
 .md ol { @apply my-2 list-decimal pl-5; }

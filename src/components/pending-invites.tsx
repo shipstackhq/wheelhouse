@@ -1,5 +1,6 @@
 import { revokeInviteAction } from "@/app/actions";
 import type { PendingInvite } from "@/lib/invites";
+import { SubmitButton } from "./submit-button";
 
 /** Pending invites with a Revoke button. The link itself is never shown again. */
 export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
@@ -15,7 +16,7 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
               {i.kind === "new_team" ? `new team${i.teamName ? `: ${i.teamName}` : ""}` : i.role} · expires {i.expiresAt.toISOString().slice(0, 10)}
             </div>
           </div>
-          <button className="btn btn-danger">Revoke</button>
+          <SubmitButton className="btn btn-danger">Revoke</SubmitButton>
         </form>
       ))}
     </div>

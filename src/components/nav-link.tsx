@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { LinkPending } from "./link-pending";
 
 export function NavLink({ href, prefix, children }: { href: string; prefix?: boolean; children: React.ReactNode }) {
   const path = usePathname();
@@ -15,7 +16,10 @@ export function NavLink({ href, prefix, children }: { href: string; prefix?: boo
         active ? "bg-panel-2 text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
       )}
     >
-      {children}
+      <span className="flex items-center justify-between gap-2">
+        <span className="min-w-0 flex-1 truncate">{children}</span>
+        <LinkPending />
+      </span>
     </Link>
   );
 }

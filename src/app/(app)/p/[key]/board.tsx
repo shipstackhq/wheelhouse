@@ -21,7 +21,8 @@ import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
 import type { TicketWithLinks } from "@/lib/service";
 import { createTicketAction, moveTicketAction } from "@/app/actions";
-import { TicketDrawer } from "./ticket-drawer";
+import { TicketDialog } from "./ticket-dialog";
+import { neighbours, parseTicketParam } from "@/lib/ticket-nav";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 
 export type Col = { id: string; name: string };
@@ -57,7 +58,8 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
   const [notice, setNotice] = useState<string | null>(null);
   const viewKey = (colId: string) => `wh:view:${projectKey}:${colId}`;
   const viewOf = (colId: string) => views[colId] ?? EMPTY_VIEW;
-  const openRef = search.get("t");
+  // ?t= is the source of truth for the open ticket; a value that isn't a ticket ref is ignored.
+  const openRef = parseTicketParam(search.get("t"));
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {
@@ -176,6 +178,15 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
 
   const active = activeId ? byId.get(activeId) : null;
 
+  // Previous/next in the dialog walk the open ticket's column in the order the board shows it (filter and sort applied);
+  // if a filter hides the open ticket, fall back to the whole column.
+  const openCol = openRef ? Object.keys(items).find((c) => items[c].some((t) => t.ref === openRef)) : undefined;
+  const nav = (() => {
+    if (!openRef || !openCol) return neighbours([], openRef ?? "");
+    const shown = applyView(items[openCol], viewOf(openCol)).map((t) => t.ref);
+    return neighbours(shown.includes(openRef) ? shown : items[openCol].map((t) => t.ref), openRef);
+  })();
+
   return (
     <div className="flex h-full">
       <div className="min-w-0 flex-1 overflow-x-auto">
@@ -214,13 +225,15 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
         </DndContext>
       </div>
       {openRef && (
-        <TicketDrawer
+        <TicketDialog
           key={openRef}
           ticketRef={openRef}
           projectKey={projectKey}
           columns={columns}
           nodes={nodes}
           members={members}
+          nav={nav}
+          onNavigate={openTicket}
           onClose={() => openTicket(null)}
         />
       )}

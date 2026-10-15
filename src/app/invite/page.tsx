@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { acceptInviteAction, lookupInviteAction, type FormState, type InvitePeek } from "../actions";
+import { SubmitButton } from "@/components/submit-button";
 
 type Phase = { name: "loading" } | { name: "missing" } | { name: "bad"; message: string } | { name: "ready"; invite: NonNullable<InvitePeek["invite"]> };
 
@@ -14,7 +15,7 @@ export default function InvitePage() {
   const [phase, setPhase] = useState<Phase>({ name: "loading" });
   const [token, setToken] = useState("");
   const started = useRef(false);
-  const [state, action, pending] = useActionState<FormState, FormData>(acceptInviteAction, undefined);
+  const [state, action] = useActionState<FormState, FormData>(acceptInviteAction, undefined);
 
   useEffect(() => {
     if (started.current) return; // React strict mode runs effects twice in development
@@ -71,7 +72,7 @@ export default function InvitePage() {
         <input className="input" id="confirm" name="confirm" type="password" required minLength={12} autoComplete="new-password" />
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      <button className="btn btn-primary w-full" disabled={pending}>{pending ? "…" : "Create account"}</button>
+      <SubmitButton className="btn btn-primary w-full justify-center">Create account</SubmitButton>
     </form>
   );
 }

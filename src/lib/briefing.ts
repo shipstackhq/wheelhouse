@@ -1,6 +1,8 @@
 import "server-only";
 import type { Actor } from "./auth";
-import { getBoard, getChanges, getGraph, resolveTicket, getTicket, type NodeRow } from "./service";
+import { getBoard, getChanges, getGraph, listRepositories, resolveTicket, getTicket, checklistForProject, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
+import { timeAgo } from "./time";
+import { checklistBriefingLine } from "./setup-checklist";
 
 /**
  * Context for agents, so a fresh session starts warm instead of re-reading the
@@ -33,7 +35,14 @@ function budgeted(sections: (string | null)[], max: number) {
 
 export async function briefing(actor: Actor, projectRef: string, opts: { maxChars?: number } = {}) {
   const max = Math.min(Math.max(opts.maxChars ?? 6000, 1500), 20000);
-  const [g, board] = await Promise.all([getGraph(actor, projectRef), getBoard(actor, projectRef)]);
+  const [g, board, repos, checklist, docsIndex, staleDocs] = await Promise.all([
+    getGraph(actor, projectRef),
+    getBoard(actor, projectRef),
+    listRepositories(actor, projectRef),
+    checklistForProject(actor, projectRef),
+    listDocsIndex(actor, projectRef),
+    listStaleDocs(actor, projectRef),
+  ]);
   const p = g.project;
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const top = (layer: string) => g.nodes.filter((n) => n.layer === layer && !n.parentId).sort((a, b) => a.name.localeCompare(b.name));
@@ -109,10 +118,11 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
   const stale = g.nodes.filter((n) => n.stale).slice(0, 8);
   const flux = Object.entries(g.flux).slice(0, 8);
   const watch = [
-    decisions.length || gotchas.length || stale.length || flux.length ? "## Watch out" : null,
+    decisions.length || gotchas.length || stale.length || staleDocs.length || flux.length ? "## Watch out" : null,
     decisions.length ? `Decisions: ${decisions.map((d) => `ADR-${d.number} ${d.title}`).join("; ")}` : null,
     ...gotchas.map((n) => `- ${n.name}: ${clip(firstLine(n.gotchas), 160)}`),
     stale.length ? `Possibly out of date: ${stale.map((n) => `${n.layer}:${n.name}`).join(", ")}` : null,
+    staleDocs.length ? `Docs possibly out of date: ${staleDocs.map((d) => d.slug).join(", ")}` : null,
     flux.length
       ? `In flux (unlanded changes): ${flux
           .map(([id, f]) => `${byId.get(id)?.name} by ${f.sessions[0]?.by ?? f.drafts[0]?.authorName}${f.sessions[0]?.ticket ? ` (${f.sessions[0].ticket})` : ""}`)
@@ -122,15 +132,35 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
     .filter(Boolean)
     .join("\n");
 
+  // Docs index (WH-51): titles + slugs only, never bodies, to protect the token budget.
+  const docsSection = docsIndex.length
+    ? `## Docs\n${docsIndex.slice(0, 20).map((d) => `- ${d.title} (${d.slug})`).join("\n")}${docsIndex.length > 20 ? `\n…and ${docsIndex.length - 20} more` : ""}\nUse get_doc(slug) to read one, search_docs to find by keyword.\n`
+    : null;
+
   const flows = g.flows.length ? `## Flows\n${g.flows.map((f) => `- ${f.name} (${f.steps.length} steps)`).join("\n")}\nUse get_flows for steps.\n` : null;
   const terms = g.terms.length ? `## Glossary\n${g.terms.slice(0, 15).map((t) => `- **${t.term}**: ${clip(t.definition, 120)}`).join("\n")}\n` : null;
   const deeper =
     "## Go deeper\nget_ticket_context(ticket) for everything about one ticket, including which files to read first. get_node(node) for one part. get_schema for the data model.\n";
 
-  const markdown = budgeted([header, work + "\n", since, what, built, watch ? watch + "\n" : null, flows, deeper, terms], max);
+  // Where the code comes from and how much to trust "what landed" (ADR-7): said plainly, never left to be guessed.
+  const live = repos.filter((r) => r.lifecycle !== "retired");
+  const repoSection = live.length
+    ? `## Repositories\n${live
+        .map((r) =>
+          r.provider === "github"
+            ? `- ${r.displayName} (${r.role}): GitHub${r.githubFullName ? ` ${r.githubFullName}` : ""}, every push to ${r.defaultBranch} is reported${r.lastEventAt ? `, last ${timeAgo(r.lastEventAt)}` : ""}${r.lifecycle !== "live" ? `, ${r.lifecycle.replace("_", " ")}` : ""}`
+            : `- ${r.displayName} (${r.role}): local link only, changes are reported just from machines running the plugin or CLI${r.lifecycle !== "live" ? `, ${r.lifecycle.replace("_", " ")}` : ""}`,
+        )
+        .join("\n")}\n`
+    : `## Repositories\nNone connected: what landed and stale map nodes are not tracked.\n`;
+
+  // Setup checklist (WH-69): same computation as the project-page banner, so the two can't drift.
+  const setupLine = checklist.done ? null : `## Setup\n${checklistBriefingLine(checklist)}\n`;
+
+  const markdown = budgeted([header, work + "\n", since, what, built, repoSection, setupLine, watch ? watch + "\n" : null, flows, docsSection, deeper, terms], max);
   return {
     markdown,
-    stats: { nodes: g.nodes.length, openTickets: open.length, stale: g.nodes.filter((n) => n.stale).length, inFlux: Object.keys(g.flux).length },
+    stats: { nodes: g.nodes.length, openTickets: open.length, stale: g.nodes.filter((n) => n.stale).length, staleDocs: staleDocs.length, inFlux: Object.keys(g.flux).length },
   };
 }
 
@@ -202,6 +232,9 @@ export async function ticketContext(actor: Actor, ticketRef: string, opts: { max
         .map((c) => `- ${c.authorKind === "agent" ? "🤖 " : ""}${c.authorName}: ${clip(c.body, 400)}`)
         .join("\n")}\n`
     : null;
+  const prs = t.pullRequests.length
+    ? `## Pull requests\n${t.pullRequests.map((x) => `- #${x.number} ${clip(x.title, 100)} (${x.state}${x.draft ? ", draft" : ""}${x.ciState ? `, CI ${x.ciState === "failure" ? "failing" : x.ciState === "success" ? "passing" : "running"}` : ""}) ${x.url}`).join("\n")}\n`
+    : null;
   const read = files.length ? `## Read these files first\n${files.map((f) => `- ${f}`).join("\n")}\n` : null;
   const parts = linked.length
     ? `## ${guessed ? "Possibly related parts of the system (ticket isn't linked to the map yet; link with link_ticket_node)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
@@ -224,7 +257,7 @@ export async function ticketContext(actor: Actor, ticketRef: string, opts: { max
     : null;
 
   return {
-    markdown: budgeted([head, read, parts, adr, thread, data, flowTxt, near], max),
+    markdown: budgeted([head, prs, read, parts, adr, thread, data, flowTxt, near], max),
     files,
     nodes: all.map((n) => `${n.layer}:${n.name}`),
   };

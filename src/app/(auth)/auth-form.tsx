@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { login, signup, type FormState } from "../actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"; signupOpen?: boolean }) {
-  const [state, action, pending] = useActionState<FormState, FormData>(mode === "login" ? login : signup, undefined);
+  const [state, action] = useActionState<FormState, FormData>(mode === "login" ? login : signup, undefined);
   return (
     <form action={action} className="space-y-4">
       {mode === "signup" && (
@@ -37,9 +38,7 @@ export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"
         />
       </div>
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
-      <button className="btn btn-primary w-full" disabled={pending}>
-        {pending ? "…" : mode === "login" ? "Sign in" : "Create account"}
-      </button>
+      <SubmitButton className="btn btn-primary w-full justify-center">{mode === "login" ? "Sign in" : "Create account"}</SubmitButton>
       <p className="text-center text-sm text-muted">
         {mode === "login" ? (
           signupOpen ? <>No account? <Link className="text-accent" href="/signup">Sign up</Link></> : "Invite only. Ask for an invite link."

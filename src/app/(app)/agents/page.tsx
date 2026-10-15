@@ -2,10 +2,11 @@ import { headers } from "next/headers";
 import { desc, eq } from "drizzle-orm";
 import { requireHuman } from "@/lib/auth";
 import { getDb, schema } from "@/db";
-import { markAllSeenAction, revokeApiKey } from "../../actions";
+import { markAllSeenAction, revokeApiKey, setKeyDocsWriteAction } from "../../actions";
 import { CreateKeyForm } from "./create-key-form";
 import { CopyBlock } from "@/components/copy-block";
-import { ActiveKeys, splitKeys, type KeyRow } from "@/components/active-keys";
+import { ActiveKeysWithCapabilities } from "./active-keys-with-capabilities";
+import { splitKeys, type KeyRow } from "@/components/active-keys";
 import { RevokedKeys } from "@/components/revoked-keys";
 import { onboarding } from "@/lib/onboarding";
 import { SetupGuide } from "@/components/setup-guide";
@@ -14,7 +15,14 @@ export default async function AgentsPage() {
   const { team } = await requireHuman();
   const db = await getDb();
   const keys = await db.select().from(schema.apiKeys).where(eq(schema.apiKeys.teamId, team.id)).orderBy(desc(schema.apiKeys.createdAt));
-  const rows: KeyRow[] = keys.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, lastUsedAt: k.lastUsedAt?.toISOString() ?? null, revokedAt: k.revokedAt?.toISOString() ?? null }));
+  const rows: KeyRow[] = keys.map((k) => ({
+    id: k.id,
+    name: k.name,
+    prefix: k.prefix,
+    lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
+    revokedAt: k.revokedAt?.toISOString() ?? null,
+    canWriteDocs: k.capabilities.includes("docs:write"),
+  }));
   const { active, revoked } = splitKeys(rows);
   const h = await headers();
   const origin = process.env.APP_URL ?? `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
@@ -38,7 +46,7 @@ export default async function AgentsPage() {
           <h2 className="font-medium">1. Create a key</h2>
           <p className="text-sm text-muted">The key is shown once, right after you create it. Copy it then; if you lose it, revoke it and create another.</p>
           <CreateKeyForm />
-          <ActiveKeys keys={active} markAllSeen={markAllSeenAction} revoke={revokeApiKey} />
+          <ActiveKeysWithCapabilities keys={active} markAllSeen={markAllSeenAction} revoke={revokeApiKey} setDocsWrite={setKeyDocsWriteAction} />
           <RevokedKeys keys={revoked} />
         </div>
 

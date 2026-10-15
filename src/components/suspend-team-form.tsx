@@ -2,10 +2,11 @@
 
 import { useActionState } from "react";
 import { suspendTeamAction, type FormState } from "@/app/actions";
+import { SubmitButton } from "./submit-button";
 
 /** Suspending needs the team's exact name typed in, so it cannot happen by a stray click. */
 export function SuspendTeamForm({ teamId, teamName, members }: { teamId: string; teamName: string; members: number }) {
-  const [state, action, pending] = useActionState<FormState, FormData>(suspendTeamAction, undefined);
+  const [state, action] = useActionState<FormState, FormData>(suspendTeamAction, undefined);
   return (
     <form action={action} className="mt-4 space-y-3">
       <input type="hidden" name="teamId" value={teamId} />
@@ -17,7 +18,7 @@ export function SuspendTeamForm({ teamId, teamName, members }: { teamId: string;
       <input className="input" name="confirm" placeholder={`Type "${teamName}" to confirm`} required autoComplete="off" />
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
       {state?.ok && <p className="text-sm text-ok">{state.ok}</p>}
-      <button className="btn btn-danger" disabled={pending}>Suspend team</button>
+      <SubmitButton className="btn btn-danger">Suspend team</SubmitButton>
     </form>
   );
 }

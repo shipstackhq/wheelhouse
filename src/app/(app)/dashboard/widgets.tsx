@@ -14,6 +14,7 @@ import { Empty, StatTile, Widget } from "@/components/dashboard/widget";
 import { StageBar, StageLegend } from "@/components/dashboard/stage-bar";
 import { ColumnChart } from "@/components/dashboard/column-chart";
 import { markAllSeenAction } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 /**
  * Dashboard widgets. Each is an async server component that fetches its own
@@ -26,7 +27,7 @@ export type WidgetProps = { actor: Actor };
 export async function KpiRow({ actor }: WidgetProps) {
   const s = await m.summary(actor);
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
       <StatTile label="Open tickets" value={s.open} hint={`across ${s.projects} project${s.projects === 1 ? "" : "s"}`} />
       <StatTile label="In progress" value={s.inProgress} hint={`${s.inReview} waiting for review`} />
       <StatTile
@@ -40,6 +41,7 @@ export async function KpiRow({ actor }: WidgetProps) {
         hint={`${s.events7d} changes in 7 days`}
       />
       <StatTile label="Stale map nodes" value={s.staleNodes} hint={`of ${s.mapNodes} described`} />
+      <StatTile label="Stale docs" value={s.staleDocs} hint="possibly out of date" href="/dashboard" />
       <StatTile label="Agents connected" value={s.agents} hint="active API keys" href="/agents" />
     </div>
   );
@@ -71,6 +73,9 @@ export async function ProjectProgress({ actor }: WidgetProps) {
                   {p.agentReady > 0 && <span className="text-agent">🤖 {p.agentReady} AI-ready</span>}
                   {p.staleNodes > 0 && (
                     <Link href={`/p/${p.key}/map`} className="text-warn hover:underline">⚠ {p.staleNodes} stale</Link>
+                  )}
+                  {p.staleDocs > 0 && (
+                    <Link href={`/p/${p.key}/docs`} className="text-warn hover:underline">⚠ {p.staleDocs} stale doc{p.staleDocs === 1 ? "" : "s"}</Link>
                   )}
                   <span>{p.lastActivity ? `active ${timeAgo(p.lastActivity)}` : "no activity in 4 weeks"}</span>
                 </span>
@@ -172,9 +177,9 @@ export async function AgentQueues({ actor }: WidgetProps) {
                     </Tip>
                     <form action={markAllSeenAction}>
                       <input type="hidden" name="keyId" value={a.id} />
-                      <button className="mt-0.5 text-muted underline-offset-2 hover:text-fg hover:underline" title="Reset this agent's queue">
+                      <SubmitButton className="mt-0.5 text-muted underline-offset-2 hover:text-fg hover:underline" title="Reset this agent's queue">
                         mark all seen
-                      </button>
+                      </SubmitButton>
                     </form>
                   </>
                 ) : (
@@ -203,7 +208,7 @@ function AttentionSection({ title, count, children }: { title: string; count: nu
 
 export async function NeedsAttention({ actor }: WidgetProps) {
   const a = await m.needsAttention(actor);
-  const empty = !a.review.length && !a.urgent.length && !a.stale.length;
+  const empty = !a.review.length && !a.urgent.length && !a.stale.length && !a.staleDocs.length;
   return (
     <Widget title="Needs attention" subtitle="Where a human is the bottleneck">
       {empty ? (
@@ -241,6 +246,17 @@ export async function NeedsAttention({ actor }: WidgetProps) {
                   <span className="ml-auto shrink-0 text-xs uppercase text-muted">
                     {n.projectKey} · {n.layer}
                   </span>
+                </Link>
+              </li>
+            ))}
+          </AttentionSection>
+          <AttentionSection title="Stale docs" count={a.staleDocs.length}>
+            {a.staleDocs.map((d) => (
+              <li key={d.id}>
+                <Link href={`/p/${d.projectKey}/docs?doc=${d.id}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={d.reason ?? undefined}>
+                  <span className="shrink-0 text-xs text-warn">⚠</span>
+                  <span className="truncate">{d.title}</span>
+                  <span className="ml-auto shrink-0 text-xs uppercase text-muted">{d.projectKey}</span>
                 </Link>
               </li>
             ))}

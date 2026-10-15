@@ -1,35 +1,23 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { latestSeq } from "@/app/actions";
+import { useLiveStream } from "./use-live-stream";
 
-/** Re-renders the page when anyone (human or agent) changes the project. */
-export function LiveRefresh({ projectKey, intervalMs = 3000 }: { projectKey: string; intervalMs?: number }) {
+/**
+ * Re-renders the page when anyone (human or agent) changes the project, and tells the panels that keep their own copy of
+ * the data (ticket dialog, map, glossary...) with a `wheelhouse:changed` browser event. Driven by the server's event
+ * stream (WH-1); it only polls if the stream is not getting through.
+ */
+export function LiveRefresh({ projectKey }: { projectKey: string }) {
   const router = useRouter();
-  const last = useRef<number | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const tick = async () => {
-      if (document.hidden) return;
-      try {
-        const seq = await latestSeq(projectKey);
-        if (!alive) return;
-        if (last.current !== null && seq !== last.current) {
-          router.refresh();
-          window.dispatchEvent(new CustomEvent("wheelhouse:changed", { detail: { seq } }));
-        }
-        last.current = seq;
-      } catch {
-        /* transient; try next tick */
-      }
-    };
-    tick();
-    const id = setInterval(tick, intervalMs);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [projectKey, intervalMs, router]);
+  useLiveStream({
+    path: `/api/projects/${encodeURIComponent(projectKey)}/stream`,
+    poll: () => latestSeq(projectKey),
+    onSignal: (seq) => {
+      router.refresh();
+      window.dispatchEvent(new CustomEvent("wheelhouse:changed", { detail: { seq } }));
+    },
+  });
   return null;
 }

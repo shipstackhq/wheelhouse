@@ -6,6 +6,7 @@ import { AdminError, getTeamDetail } from "@/lib/teams-admin";
 import { restoreTeamAction } from "@/app/actions";
 import { SuspendTeamForm } from "@/components/suspend-team-form";
 import { timeAgo } from "@/lib/time";
+import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +89,7 @@ export default async function AdminTeamPage({ params }: { params: Promise<{ id: 
             </p>
             <form action={restoreTeamAction} className="mt-4">
               <input type="hidden" name="teamId" value={t.id} />
-              <button className="btn btn-primary">Restore team</button>
+              <SubmitButton className="btn btn-primary">Restore team</SubmitButton>
             </form>
           </div>
         ) : t.isYours ? (

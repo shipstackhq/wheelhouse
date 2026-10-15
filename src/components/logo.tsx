@@ -16,12 +16,13 @@ export function WheelIcon({ className = "", size = 22 }: { className?: string; s
   );
 }
 
-export function Logo({ className = "" }: { className?: string }) {
+export function Logo({ className = "", compact = false }: { className?: string; compact?: boolean }) {
   return (
     <span className={`inline-flex items-center gap-2 font-semibold tracking-tight ${className}`}>
       <WheelIcon />
       <span>
-        <span className="text-muted">Shipstack</span> Wheelhouse
+        {!compact && <span className="text-muted">Shipstack </span>}
+        Wheelhouse
       </span>
     </span>
   );

@@ -3,6 +3,9 @@ import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from "d
 import { getDb, schema, type DB } from "@/db";
 import type { Actor } from "./auth";
 import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buckets";
+import { bus, deferPublish } from "./event-bus";
+import { checklistStatus, type ChecklistState } from "./setup-checklist";
+import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
 
 /**
  * The single write path for Wheelhouse. UI server actions, the REST API and the
@@ -10,7 +13,7 @@ import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buck
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions } = schema;
+const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys } = schema;
 
 export class ServiceError extends Error {
   constructor(
@@ -39,18 +42,33 @@ export async function emit(
   projectId: string,
   e: { type: string; entity: (typeof events.$inferInsert)["entity"]; entityId: string; summary: string; data?: Record<string, unknown> },
 ) {
-  await q.insert(events).values({
+  const [row] = await q
+    .insert(events)
+    .values({
+      teamId: actor.teamId,
+      projectId,
+      actorKind: actor.kind,
+      actorId: actor.id,
+      actorName: actor.name,
+      type: e.type,
+      entity: e.entity,
+      entityId: e.entityId,
+      summary: e.summary,
+      data: e.data ?? {},
+      sessionId: actor.kind === "agent" ? (actor.sessionId ?? null) : null,
+    })
+    .returning({ seq: events.seq });
+  // Tell open browser streams (WH-1). Inside a transaction this waits for the commit, so a watcher never re-reads old data.
+  deferPublish(q, {
     teamId: actor.teamId,
     projectId,
-    actorKind: actor.kind,
-    actorId: actor.id,
-    actorName: actor.name,
+    seq: row.seq,
     type: e.type,
     entity: e.entity,
     entityId: e.entityId,
+    actorKind: actor.kind,
+    actorName: actor.name,
     summary: e.summary,
-    data: e.data ?? {},
-    sessionId: actor.kind === "agent" ? (actor.sessionId ?? null) : null,
   });
 }
 
@@ -252,7 +270,10 @@ export async function getTicket(actor: Actor, ref: string) {
     .where(and(eq(events.projectId, project.id), eq(events.entityId, ticket.id)))
     .orderBy(desc(events.seq))
     .limit(50);
-  return { ticket: { ...ticket, ref: r, column: col?.name }, project, comments: cs, nodes: linked, history };
+  // Pull requests GitHub reported against this ticket (WH-20). Loaded lazily: that module imports this one.
+  const { pullRequestsForTicket } = await import("./github/service");
+  const pullRequests = await pullRequestsForTicket(ticket.id);
+  return { ticket: { ...ticket, ref: r, column: col?.name }, project, comments: cs, nodes: linked, history, pullRequests };
 }
 
 async function positionAt(q: Q, columnId: string, index: number | undefined, excludeId?: string) {
@@ -1137,13 +1158,174 @@ export async function deleteFlow(actor: Actor, projectRef: string, ref: string) 
   return { ok: true };
 }
 
+// ───────── repositories (WH-68) ─────────
+
+export type RepositoryInput = {
+  displayName: string;
+  role: string;
+  provider?: (typeof schema.REPO_PROVIDERS)[number];
+  slug?: string;
+  githubRepoId?: string | null;
+  githubInstallationId?: string | null;
+  githubFullName?: string | null;
+  defaultBranch?: string;
+  pathLimit?: string | null;
+  lifecycle?: (typeof schema.REPO_LIFECYCLES)[number];
+};
+
+const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "repo";
+
+/** Map a repository's lifecycle to the map-node status its system node should carry. */
+export function statusForLifecycle(lifecycle: (typeof schema.REPO_LIFECYCLES)[number]): (typeof nodes.$inferSelect)["status"] {
+  const map = { live: "live", being_replaced: "deprecated", planned: "planned", retired: "deprecated" } satisfies Record<
+    (typeof schema.REPO_LIFECYCLES)[number],
+    (typeof nodes.$inferSelect)["status"]
+  >;
+  return map[lifecycle];
+}
+
+async function repoSystemNode(actor: Actor, projectId: string, repo: typeof repositories.$inferSelect) {
+  await upsertNode(actor, projectId, {
+    name: repo.displayName,
+    layer: "system",
+    kind: "service",
+    summary: `Repository: ${repo.role}`,
+    anchors: [`${repo.slug}:**`],
+    status: statusForLifecycle(repo.lifecycle),
+  });
+}
+
+export async function listRepositories(actor: Actor, projectRef: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  return db.select().from(repositories).where(eq(repositories.projectId, project.id)).orderBy(asc(repositories.createdAt));
+}
+
+async function resolveRepository(q: Q, projectId: string, ref: string) {
+  const [r] = await q.select().from(repositories).where(and(eq(repositories.projectId, projectId), isUuid(ref) ? eq(repositories.id, ref) : eq(repositories.slug, ref)));
+  if (!r) throw new ServiceError("not_found", `Repository "${ref}" not found`);
+  return r;
+}
+
+/** Owner-only create/update of a repository's management fields. Owners manage repos; see createTicket for the human/agent split used elsewhere. */
+export async function createRepository(actor: Actor, projectRef: string, input: RepositoryInput) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can add repositories");
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  if (!input.displayName?.trim()) throw new ServiceError("invalid", "displayName is required");
+  if (!input.role?.trim()) throw new ServiceError("invalid", "role is required");
+  const slug = input.slug?.trim() ? slugify(input.slug) : slugify(input.displayName);
+  const [existing] = await db.select().from(repositories).where(and(eq(repositories.projectId, project.id), eq(repositories.slug, slug)));
+  if (existing) throw new ServiceError("conflict", `A repository with slug "${slug}" already exists on this project`);
+  const [r] = await db
+    .insert(repositories)
+    .values({
+      projectId: project.id,
+      displayName: input.displayName.trim(),
+      role: input.role.trim(),
+      provider: input.provider ?? "local",
+      slug,
+      githubRepoId: input.githubRepoId ?? null,
+      githubInstallationId: input.githubInstallationId ?? null,
+      githubFullName: input.githubFullName ?? null,
+      defaultBranch: input.defaultBranch?.trim() || "main",
+      pathLimit: input.pathLimit?.trim() || null,
+      lifecycle: input.lifecycle ?? "live",
+    })
+    .returning();
+  await emit(db, actor, project.id, { type: "repository.created", entity: "project", entityId: r.id, summary: `added repository "${r.displayName}" (${r.role})` });
+  await repoSystemNode(actor, project.id, r);
+  return r;
+}
+
+export async function updateRepository(actor: Actor, projectRef: string, ref: string, patch: Partial<RepositoryInput>) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit repositories");
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const existing = await resolveRepository(db, project.id, ref);
+  const set: Partial<typeof repositories.$inferInsert> = { updatedAt: new Date() };
+  if (patch.displayName !== undefined) set.displayName = patch.displayName.trim();
+  if (patch.role !== undefined) set.role = patch.role.trim();
+  if (patch.provider !== undefined) set.provider = patch.provider;
+  if (patch.githubRepoId !== undefined) set.githubRepoId = patch.githubRepoId;
+  if (patch.githubInstallationId !== undefined) set.githubInstallationId = patch.githubInstallationId;
+  if (patch.defaultBranch !== undefined) set.defaultBranch = patch.defaultBranch.trim() || "main";
+  if (patch.pathLimit !== undefined) set.pathLimit = patch.pathLimit?.trim() || null;
+  if (patch.lifecycle !== undefined) set.lifecycle = patch.lifecycle;
+  const [r] = await db.update(repositories).set(set).where(eq(repositories.id, existing.id)).returning();
+  await emit(db, actor, project.id, { type: "repository.updated", entity: "project", entityId: r.id, summary: `updated repository "${r.displayName}"` });
+  if (patch.lifecycle !== undefined && patch.lifecycle !== existing.lifecycle) await repoSystemNode(actor, project.id, r);
+  return r;
+}
+
+/** Retire a repository (soft: lifecycle -> retired). Never deletes landed history (project_files rows keep their repositoryId). */
+export async function retireRepository(actor: Actor, projectRef: string, ref: string) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can retire repositories");
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const existing = await resolveRepository(db, project.id, ref);
+  const [r] = await db.update(repositories).set({ lifecycle: "retired", updatedAt: new Date() }).where(eq(repositories.id, existing.id)).returning();
+  await emit(db, actor, project.id, { type: "repository.retired", entity: "project", entityId: r.id, summary: `retired repository "${r.displayName}"` });
+  await repoSystemNode(actor, project.id, r);
+  return r;
+}
+
+/**
+ * Find-or-create used by the file-reporting path (wheelhouse.json names its repository on report;
+ * a repo linked locally before this change registers automatically on its next report). `ref` is the
+ * repo slug/name (or github id) the client sends; omitted falls back to a project-default row so old
+ * CLI versions / repos without wheelhouse.json repo info keep reporting unqualified, as before.
+ */
+export async function findOrCreateRepository(actor: Actor, projectId: string, ref?: string | null, role = "default") {
+  const db = await getDb();
+  const slug = slugify(ref?.trim() || "default");
+  const [existing] = await db.select().from(repositories).where(and(eq(repositories.projectId, projectId), eq(repositories.slug, slug)));
+  if (existing) return existing;
+  const [r] = await db
+    .insert(repositories)
+    .values({ projectId, displayName: ref?.trim() || "Default", role, provider: "local", slug, lifecycle: "live", lastEventAt: new Date() })
+    .returning();
+  await emit(db, actor, projectId, { type: "repository.created", entity: "project", entityId: r.id, summary: `registered repository "${r.displayName}" from a client report` });
+  await repoSystemNode(actor, projectId, r);
+  return r;
+}
+
 // ───────── freshness ─────────
 
 export const normPath = (p: string) => p.trim().replace(/^\.\//, "").replace(/\\/g, "/");
 
-/** How specifically `anchor` matches `file` (0 = no match). Longer literal prefix = more specific. */
-export function anchorScore(anchor: string, file: string) {
-  const a = normPath(anchor).split("#")[0];
+/**
+ * An anchor may carry an optional repo qualifier, "backend:src/**": only files
+ * reported under that repo's slug/role match. A bare anchor ("src/db/**") has
+ * no qualifier and matches files from any repository (the backward-compat
+ * default — existing single-repo projects keep working with no action).
+ *
+ * Heuristic: a qualifier is a prefix before the first colon, itself containing
+ * no "/" and no glob characters — real anchors are repo-relative paths/globs
+ * ("src/db/**", "drizzle/**") which never start that way, so this never
+ * misparses an existing anchor.
+ */
+export function parseAnchor(anchor: string): { repo: string | null; pattern: string } {
+  const i = anchor.indexOf(":");
+  if (i > 0) {
+    const prefix = anchor.slice(0, i);
+    if (!/[/*?]/.test(prefix)) return { repo: prefix.toLowerCase(), pattern: anchor.slice(i + 1) };
+  }
+  return { repo: null, pattern: anchor };
+}
+
+/**
+ * How specifically `anchor` matches `file` (0 = no match). Longer literal
+ * prefix = more specific. `fileRepo` is the repo slug/role the file was
+ * reported under (from project_files.repositoryId / the session's file
+ * tracking); an anchor qualified to a different repo never matches it, and an
+ * unqualified anchor matches regardless of `fileRepo` (including when it's
+ * unknown/null).
+ */
+export function anchorScore(anchor: string, file: string, fileRepo?: string | null) {
+  const { repo, pattern } = parseAnchor(anchor);
+  if (repo && (!fileRepo || fileRepo.toLowerCase() !== repo)) return 0;
+  const a = normPath(pattern).split("#")[0];
   const f = normPath(file);
   if (!a) return 0;
   if (/[*?]/.test(a)) {
@@ -1169,11 +1351,19 @@ export function anchorScore(anchor: string, file: string) {
  * specifically-anchored nodes are marked stale (so a tweak to service.ts flags
  * the "service layer" node, not every node anchored at src/**).
  */
-export async function reportChanges(actor: Actor, projectRef: string, input: { files: string[]; sha?: string; summary?: string }) {
+export async function reportChanges(
+  actor: Actor,
+  projectRef: string,
+  input: { files: string[]; sha?: string; summary?: string; repository?: string },
+) {
   const db = await getDb();
   const project = await getProject(actor, projectRef);
   const files = [...new Set(input.files.map(normPath).filter(Boolean))];
   if (!files.length) throw new ServiceError("invalid", "files is empty");
+  // Which repo these files belong to, for repo-qualified anchor matching ("backend:src/**").
+  // Omitted (old CLI / repos without wheelhouse.json repo info) falls back to the project's
+  // unqualified default repo, so unqualified anchors (the common case) keep matching regardless.
+  const repo = await findOrCreateRepository(actor, project.id, input.repository);
   const ns = await db.select().from(nodes).where(eq(nodes.projectId, project.id));
   const hits = new Map<string, { node: NodeRow; files: string[] }>();
   for (const f of files) {
@@ -1182,7 +1372,7 @@ export async function reportChanges(actor: Actor, projectRef: string, input: { f
     // node anchored at src/**.
     const best: Partial<Record<Layer, { score: number; nodes: NodeRow[] }>> = {};
     for (const n of ns) {
-      const s = Math.max(0, ...n.anchors.map((a) => anchorScore(a, f)));
+      const s = Math.max(0, ...n.anchors.map((a) => anchorScore(a, f, repo?.slug)));
       if (!s) continue;
       const b = best[n.layer];
       if (!b || s > b.score) best[n.layer] = { score: s, nodes: [n] };
@@ -1199,20 +1389,52 @@ export async function reportChanges(actor: Actor, projectRef: string, input: { f
   for (const [id, { node }] of hits) {
     if (input.sha && node.describedSha && (input.sha.startsWith(node.describedSha) || node.describedSha.startsWith(input.sha))) hits.delete(id);
   }
+
+  // Same pipeline for docs (WH-64): a doc anchored to a changed file is flagged, parallel to nodes.
+  // No per-layer "most specific" grouping here (docs aren't layered) — any anchor match flags the doc.
+  const allDocs = await db.select().from(docs).where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)));
+  const docHits = new Map<string, { doc: DocRow; files: string[] }>();
+  for (const f of files) {
+    for (const d of allDocs) {
+      if (!d.anchors.length) continue;
+      if (Math.max(0, ...d.anchors.map((a) => anchorScore(a, f, repo?.slug))) <= 0) continue;
+      const h = docHits.get(d.id) ?? { doc: d, files: [] };
+      h.files.push(f);
+      docHits.set(d.id, h);
+    }
+  }
+  for (const [id, { doc: d }] of docHits) {
+    if (input.sha && d.describedSha && (input.sha.startsWith(d.describedSha) || d.describedSha.startsWith(input.sha))) docHits.delete(id);
+  }
+
   return db.transaction(async (tx) => {
     for (const { node, files: fs } of hits.values()) {
       const reason = `${fs.slice(0, 3).join(", ")}${fs.length > 3 ? ` +${fs.length - 3} more` : ""} changed${short ? ` in ${short}` : ""}${input.summary ? `: ${input.summary}` : ""}`;
       await tx.update(nodes).set({ stale: true, staleSource: "report", staleReason: reason.slice(0, 500) }).where(eq(nodes.id, node.id));
     }
+    for (const { doc: d, files: fs } of docHits.values()) {
+      const reason = `${fs.slice(0, 3).join(", ")}${fs.length > 3 ? ` +${fs.length - 3} more` : ""} changed${short ? ` in ${short}` : ""}${input.summary ? `: ${input.summary}` : ""}`;
+      await tx.update(docs).set({ stale: true, staleSource: "report", staleReason: reason.slice(0, 500) }).where(eq(docs.id, d.id));
+    }
     const marked = [...hits.values()].map(({ node, files: fs }) => ({ name: node.name, layer: node.layer, files: fs }));
+    const docsMarked = [...docHits.values()].map(({ doc: d, files: fs }) => ({ id: d.id, title: d.title, slug: d.slug, files: fs }));
     await emit(tx, actor, project.id, {
       type: "code.changed",
       entity: "project",
       entityId: project.id,
-      summary: `reported ${files.length} changed file(s)${short ? ` (${short})` : ""}; ${marked.length} map node(s) need re-describing`,
-      data: { sha: input.sha, files: files.slice(0, 50), stale: marked.map((m) => `${m.layer}:${m.name}`) },
+      summary: `reported ${files.length} changed file(s)${short ? ` (${short})` : ""}; ${marked.length} map node(s)${docsMarked.length ? ` and ${docsMarked.length} doc(s)` : ""} need re-describing`,
+      data: { sha: input.sha, files: files.slice(0, 50), stale: marked.map((m) => `${m.layer}:${m.name}`), staleDocs: docsMarked.map((m) => m.slug) },
     });
-    return { files: files.length, staleMarked: marked, unanchored: files.filter((f) => !ns.some((n) => n.anchors.some((a) => anchorScore(a, f)))) };
+    if (repo) await tx.update(schema.repositories).set({ lastEventAt: new Date() }).where(eq(schema.repositories.id, repo.id));
+    const anchoredFiles = new Set<string>();
+    for (const n of ns) for (const f of files) if (n.anchors.some((a) => anchorScore(a, f, repo?.slug))) anchoredFiles.add(f);
+    for (const d of allDocs) for (const f of files) if (d.anchors.some((a) => anchorScore(a, f, repo?.slug))) anchoredFiles.add(f);
+    return {
+      files: files.length,
+      staleMarked: marked,
+      staleDocsMarked: docsMarked,
+      unanchored: files.filter((f) => !anchoredFiles.has(f)),
+    };
   });
 }
 
@@ -1228,6 +1450,16 @@ export async function listStale(actor: Actor, projectRef: string) {
 
 export async function markFresh(actor: Actor, projectRef: string, ref: string, sha?: string) {
   return upsertNode(actor, projectRef, { id: ref, markFresh: true, describedSha: sha });
+}
+
+/** Docs flagged stale (their anchored code changed since last confirmed), with reason and anchors to re-read. */
+export async function listStaleDocs(actor: Actor, projectRef: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  return db
+    .select({ id: docs.id, slug: docs.slug, title: docs.title, reason: docs.staleReason, anchors: docs.anchors })
+    .from(docs)
+    .where(and(eq(docs.projectId, project.id), eq(docs.stale, true), isNull(docs.deletedAt)));
 }
 
 // ───────── decisions ─────────
@@ -1598,6 +1830,12 @@ export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
     .from(nodes)
     .where(and(eq(nodes.projectId, project.id), eq(nodes.stale, true)))
     .limit(50);
+  // Same, for docs (WH-64): a doc whose anchored files changed since it was last confirmed accurate.
+  const staleDocs = await db
+    .select({ slug: docs.slug, title: docs.title, reason: docs.staleReason, anchors: docs.anchors })
+    .from(docs)
+    .where(and(eq(docs.projectId, project.id), eq(docs.stale, true), isNull(docs.deletedAt)))
+    .limit(50);
   return {
     session: actor.sessionId ?? null,
     cursor: after,
@@ -1607,6 +1845,7 @@ export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
     hasMore: Number(total) > rows.length,
     ...(summary ? { summary } : {}),
     staleNodes: stale,
+    staleDocs,
   };
 }
 
@@ -1629,6 +1868,8 @@ export async function ackChanges(actor: Actor, projectRef: string, seq: number) 
       target: [agentCursors.apiKeyId, agentCursors.projectId],
       set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${seq})` },
     });
+  // An ack is not an event in the log, but it changes the Bots menu's queue counts: tell open browsers (WH-1).
+  bus.publish({ teamId: actor.teamId, projectId: project.id, type: "queue.changed", actorKind: "agent", actorName: actor.name });
   return { ok: true, cursor: seq, session: actor.sessionId ?? null };
 }
 
@@ -1731,4 +1972,527 @@ export async function queueStatus(actor: Actor, projectRef: string) {
     out.push({ ...k, pending, sessions });
   }
   return out;
+}
+
+// ───────── setup checklist (WH-69) ─────────
+
+/**
+ * Gathers the rows checklistStatus() needs and computes the project's setup-checklist state. Shared by the
+ * project-page banner and the agent briefing so the two can't say different things about what's connected.
+ */
+export async function checklistForProject(actor: Actor, projectRef: string): Promise<ChecklistState> {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const [repos, [{ count: sessionCount }], [{ count: activeAgentKeyCount }], [{ count: nodeCount }], [{ count: memberCount }], [{ count: pendingInviteCount }]] =
+    await Promise.all([
+      db.select({ provider: repositories.provider, lifecycle: repositories.lifecycle }).from(repositories).where(eq(repositories.projectId, project.id)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(workSessions)
+        .where(eq(workSessions.projectId, project.id)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.apiKeys)
+        .where(and(eq(schema.apiKeys.teamId, project.teamId), isNull(schema.apiKeys.revokedAt))),
+      db.select({ count: sql<number>`count(*)::int` }).from(nodes).where(eq(nodes.projectId, project.id)),
+      db.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.teamId, project.teamId)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.invites)
+        .where(
+          and(
+            eq(schema.invites.kind, "join_team"),
+            eq(schema.invites.teamId, project.teamId),
+            isNull(schema.invites.usedAt),
+            isNull(schema.invites.revokedAt),
+            gt(schema.invites.expiresAt, new Date()),
+          ),
+        ),
+    ]);
+  return checklistStatus({
+    projectKey: project.key,
+    repositories: repos,
+    sessionCount,
+    activeAgentKeyCount,
+    nodeCount,
+    memberCount,
+    pendingInviteCount,
+  });
+}
+
+// ───────────────────────── team documentation (WH-51) ─────────────────────────
+//
+// Markdown docs stored in Wheelhouse, next to the board and map: runbooks, product
+// notes, conventions, onboarding, decisions in prose. A tree via parentId, optimistic
+// locking like tickets, soft delete (30-day purge; history lives in `events`). Reading
+// is open to any key; writing (upsertDoc/deleteDoc/moveDoc) requires a human actor or
+// a key with the "docs:write" capability — enforced here, and again at the tool layer
+// so a future caller of these functions can't skip the check by mistake.
+
+export const DOC_BODY_MAX_BYTES = 200_000; // 200 KB
+export const DOC_MAX_DEPTH = 4;
+export const DOC_MAX_PER_PROJECT = 500;
+
+export type DocRow = typeof docs.$inferSelect;
+
+/** Humans can always write docs; agent keys need the "docs:write" capability. */
+export function canWriteDocs(actor: Actor, capabilities?: string[]) {
+  if (actor.kind === "human") return true;
+  return (capabilities ?? []).includes("docs:write");
+}
+
+async function assertDocsWritable(actor: Actor, q: Q) {
+  if (actor.kind === "human") return;
+  const [key] = await q.select({ capabilities: apiKeys.capabilities }).from(apiKeys).where(eq(apiKeys.id, actor.id));
+  if (!canWriteDocs(actor, key?.capabilities)) {
+    throw new ServiceError("forbidden", 'This API key cannot write docs. Ask a teammate to grant it the "docs:write" capability, or write docs as a human.');
+  }
+}
+
+/** Accepts a doc uuid, or a "slug" / "parent-slug/slug" path, scoped to one project. Never returns a soft-deleted doc. */
+async function resolveDoc(q: Q, projectId: string, ref: string) {
+  if (isUuid(ref)) {
+    const [d] = await q.select().from(docs).where(and(eq(docs.id, ref), eq(docs.projectId, projectId), isNull(docs.deletedAt)));
+    if (!d) throw new ServiceError("not_found", `Doc ${ref} not found`);
+    return d;
+  }
+  // Walk a "/"-separated slug path from the root.
+  const parts = ref.split("/").filter(Boolean);
+  if (!parts.length) throw new ServiceError("invalid", "Doc ref is required");
+  let parentId: string | null = null;
+  let found: DocRow | undefined;
+  for (const slug of parts) {
+    const [d] = await q
+      .select()
+      .from(docs)
+      .where(and(eq(docs.projectId, projectId), eq(docs.slug, slug), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId)));
+    if (!d) throw new ServiceError("not_found", `Doc "${ref}" not found`);
+    found = d;
+    parentId = d.id;
+  }
+  return found!;
+}
+
+function slugifyDoc(title: string) {
+  return (
+    title
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "doc"
+  );
+}
+
+/** Depth of `parentId` itself (root = 0), by walking up its own ancestor chain. */
+async function depthOf(q: Q, projectId: string, parentId: string | null): Promise<number> {
+  let depth = 0;
+  let cur = parentId;
+  while (cur) {
+    const [p] = await q.select({ parentId: docs.parentId }).from(docs).where(and(eq(docs.id, cur), eq(docs.projectId, projectId)));
+    if (!p) break;
+    cur = p.parentId;
+    if (cur) depth += 1; // only count a hop to another ancestor, not the starting node itself
+    if (depth > DOC_MAX_DEPTH + 1) break; // guard against a cycle somehow sneaking in
+  }
+  return depth;
+}
+
+async function uniqueSlug(q: Q, projectId: string, parentId: string | null, base: string, excludeId?: string) {
+  let slug = base;
+  for (let i = 1; i < 50; i++) {
+    const [clash] = await q
+      .select({ id: docs.id })
+      .from(docs)
+      .where(
+        and(
+          eq(docs.projectId, projectId),
+          eq(docs.slug, slug),
+          isNull(docs.deletedAt),
+          parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId),
+          excludeId ? ne(docs.id, excludeId) : undefined,
+        ),
+      );
+    if (!clash) return slug;
+    slug = `${base}-${i + 1}`;
+  }
+  throw new ServiceError("conflict", `Could not find a free slug for "${base}"`);
+}
+
+export type DocInput = {
+  title?: string;
+  body?: string;
+  parent?: string | null; // parent doc ref (uuid or slug path); null = top level
+  slug?: string; // explicit slug override; defaults to slugify(title)
+  anchors?: string[]; // author-confirmed file paths/globs this doc describes (WH-64 freshness)
+  describedSha?: string;
+  markFresh?: boolean; // clear stale without changing title/body, recording who confirmed via updatedByKind/updatedById
+  template?: string; // WH-65: template id to seed `body` from on create, if no explicit body is given
+};
+
+/**
+ * Lightweight heuristic (WH-64, scope B): pull file-path-looking tokens out of a doc's
+ * Markdown — inline code spans (`` `src/lib/x.ts` ``) and bare tokens that look like a
+ * repo-relative path (contain a "/" and end in a plausible extension, or end in "/" for
+ * a directory). Not an NLP system — a few false negatives/positives are fine, since the
+ * ticket says these are SUGGESTIONS the author confirms, never auto-applied.
+ */
+const PATH_TOKEN_RE = /[A-Za-z0-9_.*-]+(?:\/[A-Za-z0-9_.*-]+)+\/?/g;
+const LIKELY_PATH_RE = /^(?:[A-Za-z0-9_.-]+\/)+(?:[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}|\*\*?|[A-Za-z0-9_.*-]+)\/?$/;
+
+export function extractPathTokens(markdown: string): string[] {
+  const codeSpans = [...markdown.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]);
+  const bare = [...markdown.matchAll(PATH_TOKEN_RE)].map((m) => m[0]);
+  const candidates = [...codeSpans, ...bare].map((s) => s.trim().replace(/[.,;:!?)]+$/, "")).filter(Boolean);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of candidates) {
+    const p = normPath(c);
+    if (!LIKELY_PATH_RE.test(p) && !/[*?]/.test(p)) continue;
+    if (seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Candidate anchors for a doc: path-like tokens found in its body, plus the anchors of
+ * any map nodes it's linked to. Never applied automatically — surfaced for the author
+ * to accept/reject (upsert_doc / the docs UI pass `anchors` explicitly to confirm them).
+ */
+export async function suggestDocAnchors(actor: Actor, projectRef: string, ref: string): Promise<string[]> {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const d = await resolveDoc(db, project.id, ref);
+  const fromBody = extractPathTokens(d.body);
+  const linkedNodeIds = await db.select({ nodeId: docNodes.nodeId }).from(docNodes).where(eq(docNodes.docId, d.id));
+  const fromNodes = linkedNodeIds.length
+    ? (await db.select({ anchors: nodes.anchors }).from(nodes).where(inArray(nodes.id, linkedNodeIds.map((x) => x.nodeId)))).flatMap((n) => n.anchors)
+    : [];
+  return [...new Set([...fromBody, ...fromNodes])].filter((a) => !d.anchors.includes(a));
+}
+
+/** Static list of the five doc templates (id/name/description, no bodies) — no DB access needed. */
+export function listDocTemplates() {
+  return listDocTemplatesStatic();
+}
+
+/** The tree of a project's (non-deleted) docs: id, slug, title, parentId, position, updatedAt. */
+export async function listDocs(actor: Actor, projectRef: string, parentRef?: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const parentId = parentRef ? (await resolveDoc(db, project.id, parentRef)).id : undefined;
+  const rows = await db
+    .select({
+      id: docs.id,
+      parentId: docs.parentId,
+      slug: docs.slug,
+      title: docs.title,
+      version: docs.version,
+      position: docs.position,
+      updatedAt: docs.updatedAt,
+      stale: docs.stale,
+    })
+    .from(docs)
+    .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)))
+    .orderBy(asc(docs.position));
+  if (parentRef !== undefined) return rows.filter((d) => d.parentId === parentId);
+  return rows;
+}
+
+export async function getDoc(actor: Actor, projectRef: string, ref: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const d = await resolveDoc(db, project.id, ref);
+  const linked = await db
+    .select({ id: nodes.id, name: nodes.name, kind: nodes.kind, layer: nodes.layer })
+    .from(docNodes)
+    .innerJoin(nodes, eq(nodes.id, docNodes.nodeId))
+    .where(eq(docNodes.docId, d.id));
+  return { doc: d, nodes: linked };
+}
+
+export async function createDoc(actor: Actor, projectRef: string, input: DocInput & { title: string }) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  await assertDocsWritable(actor, db);
+  if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
+  // WH-65: explicit body always wins; the template is only a convenience default for a blank doc.
+  const body = input.body ?? getDocTemplate(input.template)?.body ?? "";
+  const bodyBytes = Buffer.byteLength(body, "utf8");
+  if (bodyBytes > DOC_BODY_MAX_BYTES) throw new ServiceError("invalid", `Doc body is ${bodyBytes} bytes; the limit is ${DOC_BODY_MAX_BYTES} (200 KB)`);
+
+  return db.transaction(async (tx) => {
+    const parentId = input.parent === null || input.parent === undefined ? null : (await resolveDoc(tx, project.id, input.parent)).id;
+    const depth = await depthOf(tx, project.id, parentId);
+    if (depth + 1 > DOC_MAX_DEPTH) throw new ServiceError("invalid", `Docs can nest at most ${DOC_MAX_DEPTH} levels deep`);
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(docs).where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)));
+    if (n >= DOC_MAX_PER_PROJECT) throw new ServiceError("invalid", `This project already has ${DOC_MAX_PER_PROJECT} docs, the limit`);
+
+    const base = slugifyDoc(input.slug ?? input.title);
+    const slug = await uniqueSlug(tx, project.id, parentId, base);
+    const siblings = await tx.select({ position: docs.position }).from(docs).where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId)));
+    const position = siblings.length ? Math.max(...siblings.map((s) => s.position)) + 1000 : 1000;
+
+    const anchors = input.anchors ?? [];
+    const [d] = await tx
+      .insert(docs)
+      .values({
+        projectId: project.id,
+        parentId,
+        slug,
+        title: input.title.trim(),
+        body,
+        position,
+        anchors,
+        describedHashes: await landedHashesFor(tx, project.id, anchors),
+        describedSha: input.describedSha ?? null,
+        describedAt: new Date(),
+        createdByKind: actor.kind,
+        createdById: actor.id,
+        updatedByKind: actor.kind,
+        updatedById: actor.id,
+      })
+      .returning();
+    await emit(tx, actor, project.id, {
+      type: "doc.created",
+      entity: "doc",
+      entityId: d.id,
+      summary: `created doc "${d.title}"`,
+      data: { slug: d.slug, title: d.title },
+    });
+    return d;
+  });
+}
+
+export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "describedSha" | "markFresh"> & {
+  forcePublish?: boolean; // skip the in-flux draft check (used when publishing a draft on land)
+  describedHashes?: Record<string, string>; // content hashes the edit/confirmation was made against
+};
+
+/**
+ * Patch a doc's title/body/anchors, or just confirm it's still accurate (markFresh).
+ * Pass `expectedVersion` for optimistic locking, same pattern as updateTicket.
+ *
+ * Mirrors upsertNode: an agent session editing a doc whose anchored files are still
+ * in flux (changed in that same session, not landed) gets the edit stored as a
+ * doc_drafts row instead of applied directly — published when land() processes
+ * those files (WH-64 scope E).
+ */
+export async function updateDoc(actor: Actor, projectRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  await assertDocsWritable(actor, db);
+  if (patch.body !== undefined) {
+    const bodyBytes = Buffer.byteLength(patch.body, "utf8");
+    if (bodyBytes > DOC_BODY_MAX_BYTES) throw new ServiceError("invalid", `Doc body is ${bodyBytes} bytes; the limit is ${DOC_BODY_MAX_BYTES} (200 KB)`);
+  }
+
+  if (actor.kind === "agent" && !patch.forcePublish) {
+    const existing = await resolveDoc(db, project.id, ref).catch(() => undefined);
+    if (existing) {
+      const { maybeDraftDoc } = await import("./sync");
+      const d = await maybeDraftDoc(actor, existing, patch);
+      if (d) return { ...existing, ...d };
+    }
+  }
+
+  return db.transaction(async (tx) => {
+    const d = await resolveDoc(tx, project.id, ref);
+    if (expectedVersion !== undefined && expectedVersion !== d.version) {
+      throw new ServiceError("conflict", `Doc "${d.title}" was changed (version ${d.version}, you had ${expectedVersion}). Re-read and retry.`, { current: d });
+    }
+    const clean: Record<string, unknown> = {};
+    if (patch.title !== undefined) clean.title = patch.title.trim();
+    if (patch.body !== undefined) clean.body = patch.body;
+    if (patch.anchors !== undefined) clean.anchors = patch.anchors;
+    const changes = diff(d as unknown as Record<string, unknown>, clean);
+    // Editing title/body/anchors, or an explicit confirm (mark_doc_fresh-equivalent), clears staleness —
+    // same rule as upsertNode's EXPLAINER_FIELDS/anchors/markFresh check.
+    const described = "title" in changes || "body" in changes || "anchors" in changes || patch.markFresh || patch.describedSha;
+    const fresh = described
+      ? {
+          stale: false,
+          staleReason: null,
+          staleSource: null,
+          driftPaths: [],
+          describedHashes: patch.describedHashes ?? (await landedHashesFor(tx, project.id, patch.anchors ?? d.anchors)),
+          describedAt: new Date(),
+          describedSha: patch.describedSha ?? d.describedSha,
+        }
+      : {};
+    if (!Object.keys(changes).length && !described) return d;
+    const [updated] = await tx
+      .update(docs)
+      .set({ ...clean, ...fresh, version: d.version + 1, updatedAt: new Date(), updatedByKind: actor.kind, updatedById: actor.id })
+      .where(eq(docs.id, d.id))
+      .returning();
+    const meaningful = Object.keys(changes);
+    if (meaningful.length || (d.stale && described)) {
+      await emit(tx, actor, project.id, {
+        type: "doc.updated",
+        entity: "doc",
+        entityId: updated.id,
+        summary: `updated doc "${updated.title}"${meaningful.length ? `: ${meaningful.join(", ")}` : ""}${d.stale && described ? " (now fresh)" : ""}`,
+        data: { slug: updated.slug, changes: meaningful },
+      });
+    }
+    return updated;
+  });
+}
+
+/** Clear a doc's stale flag after confirming it's still accurate (no edits needed) — mirrors markFresh for nodes. */
+export async function markDocFresh(actor: Actor, projectRef: string, ref: string, sha?: string) {
+  return updateDoc(actor, projectRef, ref, { markFresh: true, describedSha: sha });
+}
+
+/** Move a doc to a new parent and/or position among its siblings. */
+export async function moveDoc(actor: Actor, projectRef: string, ref: string, opts: { parent?: string | null; index?: number }, expectedVersion?: number) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  await assertDocsWritable(actor, db);
+  return db.transaction(async (tx) => {
+    const d = await resolveDoc(tx, project.id, ref);
+    if (expectedVersion !== undefined && expectedVersion !== d.version) {
+      throw new ServiceError("conflict", `Doc "${d.title}" was changed since you read it`, { current: d });
+    }
+    const parentId = opts.parent === undefined ? d.parentId : opts.parent === null ? null : (await resolveDoc(tx, project.id, opts.parent)).id;
+    if (parentId === d.id) throw new ServiceError("invalid", "A doc cannot be its own parent");
+    // Prevent cycles: the new parent can't be one of this doc's own descendants.
+    if (parentId) {
+      let cur: string | null = parentId;
+      while (cur) {
+        if (cur === d.id) throw new ServiceError("invalid", "Can't move a doc under one of its own descendants");
+        const [p] = await tx.select({ parentId: docs.parentId }).from(docs).where(eq(docs.id, cur));
+        cur = p?.parentId ?? null;
+      }
+    }
+    if (parentId !== d.parentId) {
+      const depth = await depthOf(tx, project.id, parentId);
+      if (depth + 1 > DOC_MAX_DEPTH) throw new ServiceError("invalid", `Docs can nest at most ${DOC_MAX_DEPTH} levels deep`);
+    }
+    const slug = parentId !== d.parentId ? await uniqueSlug(tx, project.id, parentId, d.slug, d.id) : d.slug;
+    const siblings = await tx
+      .select({ id: docs.id, position: docs.position })
+      .from(docs)
+      .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId), ne(docs.id, d.id)))
+      .orderBy(asc(docs.position));
+    const i = opts.index === undefined || opts.index < 0 || opts.index > siblings.length ? siblings.length : opts.index;
+    const before = siblings[i - 1]?.position;
+    const after = siblings[i]?.position;
+    const position = before === undefined && after === undefined ? 1000 : before === undefined ? after! - 1000 : after === undefined ? before + 1000 : (before + after) / 2;
+    const [updated] = await tx
+      .update(docs)
+      .set({ parentId, slug, position, version: d.version + 1, updatedAt: new Date(), updatedByKind: actor.kind, updatedById: actor.id })
+      .where(eq(docs.id, d.id))
+      .returning();
+    await emit(tx, actor, project.id, {
+      type: "doc.moved",
+      entity: "doc",
+      entityId: updated.id,
+      summary: `moved doc "${updated.title}"`,
+      data: { slug: updated.slug },
+    });
+    return updated;
+  });
+}
+
+/** Soft delete: sets deletedAt (kept 30 days for recovery/purge); history lives in `events`. */
+export async function deleteDoc(actor: Actor, projectRef: string, ref: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  await assertDocsWritable(actor, db);
+  return db.transaction(async (tx) => {
+    const d = await resolveDoc(tx, project.id, ref);
+    await tx.update(docs).set({ deletedAt: new Date() }).where(eq(docs.id, d.id));
+    // Soft-delete descendants too, so a deleted branch doesn't linger half-visible.
+    const toDelete = [d.id];
+    for (let i = 0; i < toDelete.length; i++) {
+      const kids = await tx.select({ id: docs.id }).from(docs).where(and(eq(docs.parentId, toDelete[i]), isNull(docs.deletedAt)));
+      for (const k of kids) toDelete.push(k.id);
+    }
+    if (toDelete.length > 1) await tx.update(docs).set({ deletedAt: new Date() }).where(inArray(docs.id, toDelete.slice(1)));
+    await emit(tx, actor, project.id, {
+      type: "doc.deleted",
+      entity: "doc",
+      entityId: d.id,
+      summary: `deleted doc "${d.title}"${toDelete.length > 1 ? ` (and ${toDelete.length - 1} nested)` : ""}`,
+      data: { slug: d.slug, title: d.title },
+    });
+    return { ok: true };
+  });
+}
+
+export async function linkDocNode(actor: Actor, projectRef: string, docRef: string, nodeRef: string, unlink = false) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  await assertDocsWritable(actor, db);
+  const d = await resolveDoc(db, project.id, docRef);
+  const n = await resolveNode(db, project.id, nodeRef);
+  if (unlink) {
+    await db.delete(docNodes).where(and(eq(docNodes.docId, d.id), eq(docNodes.nodeId, n.id)));
+  } else {
+    await db.insert(docNodes).values({ docId: d.id, nodeId: n.id }).onConflictDoNothing();
+  }
+  return { ok: true };
+}
+
+/**
+ * Full-text search over doc title + body, ranked by ts_rank, with snippets.
+ * Computed at query time (to_tsvector('english', …)) rather than a persisted
+ * generated column: kept simple and portable between the embedded PGlite used
+ * in local dev/tests and real Postgres in prod (ADR: see final report).
+ * `max_tokens` is approximated from characters (~4 chars/token, same rule of
+ * thumb the briefing budget uses) so results fit an agent's context budget.
+ */
+export async function searchDocs(actor: Actor, projectRef: string, query: string, opts: { maxTokens?: number } = {}) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  const q = query.trim();
+  if (!q) throw new ServiceError("invalid", "query is required");
+  const maxChars = Math.min(Math.max((opts.maxTokens ?? 800) * 4, 400), 80_000);
+
+  const tsq = sql`websearch_to_tsquery('english', ${q})`;
+  const vector = sql`setweight(to_tsvector('english', ${docs.title}), 'A') || setweight(to_tsvector('english', ${docs.body}), 'B')`;
+  const rows = await db
+    .select({
+      id: docs.id,
+      slug: docs.slug,
+      title: docs.title,
+      body: docs.body,
+      updatedAt: docs.updatedAt,
+      rank: sql<number>`ts_rank(${vector}, ${tsq})`,
+      snippet: sql<string>`ts_headline('english', ${docs.body}, ${tsq}, 'MaxFragments=2, MinWords=5, MaxWords=25')`,
+    })
+    .from(docs)
+    .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt), sql`${vector} @@ ${tsq}`))
+    .orderBy(desc(sql`ts_rank(${vector}, ${tsq})`))
+    .limit(50);
+
+  const out: { slug: string; title: string; snippet: string; updatedAt: Date; rank: number }[] = [];
+  let used = 0;
+  for (const r of rows) {
+    const snippet = r.snippet || clipText(r.body, 240);
+    const cost = r.title.length + snippet.length + 20;
+    if (used + cost > maxChars && out.length) break;
+    out.push({ slug: r.slug, title: r.title, snippet, updatedAt: r.updatedAt, rank: r.rank });
+    used += cost;
+    if (used > maxChars) break;
+  }
+  return { query: q, results: out, truncated: out.length < rows.length };
+}
+
+function clipText(s: string, n: number) {
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+/** Short index for the briefing: titles + slugs only, never bodies (protects the token budget). */
+export async function listDocsIndex(actor: Actor, projectRef: string) {
+  const db = await getDb();
+  const project = await getProject(actor, projectRef);
+  return db
+    .select({ slug: docs.slug, title: docs.title, parentId: docs.parentId })
+    .from(docs)
+    .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)))
+    .orderBy(asc(docs.position));
 }

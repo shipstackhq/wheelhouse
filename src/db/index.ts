@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
+import { publishAfterCommit } from "@/lib/event-bus";
 
 // Production: real Postgres via DATABASE_URL.
 // Local dev without DATABASE_URL: embedded PGlite persisted to ./.data/pglite,
@@ -24,7 +25,7 @@ function init(): Holder {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const postgres = require("postgres") as typeof import("postgres");
     const client = postgres(url, { max: 5, prepare: false });
-    const db = drizzlePg(client, { schema });
+    const db = publishAfterCommit(drizzlePg(client, { schema }));
     const ready = (async () => {
       const { migrate } = await import("drizzle-orm/postgres-js/migrator");
       await migrate(db, { migrationsFolder: MIGRATIONS });
@@ -40,7 +41,7 @@ function init(): Holder {
   const dir = process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite");
   if (!dir.startsWith("memory://")) fs.mkdirSync(dir, { recursive: true });
   const client = new PGlite(dir);
-  const db = drizzleLite(client, { schema }) as unknown as DB;
+  const db = publishAfterCommit(drizzleLite(client, { schema }) as unknown as DB);
   const ready = (async () => {
     const { migrate } = await import("drizzle-orm/pglite/migrator");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

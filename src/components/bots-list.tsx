@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { timeAgo } from "@/lib/time";
 import { List } from "./list";
 import { SessionGroups, type SessionView } from "./session-row";
+import { SubmitButton } from "./submit-button";
 
 /** `sessions`: active client sessions on this key; with any, `pending` is the key's queue as seen by its recent sessions. */
 export type Bot = { id: string; name: string; pending: number; sessions: SessionView[]; lastUsedAt: string | null };
@@ -44,9 +45,9 @@ export function BotsList({
               >
                 <input type="hidden" name="keyId" value={b.id} />
                 <input type="hidden" name="project" value={projectKey} />
-                <button className="underline-offset-2 hover:text-fg hover:underline" title="Mark everything as seen for this agent in this project">
+                <SubmitButton className="underline-offset-2 hover:text-fg hover:underline" title="Mark everything as seen for this agent in this project">
                   mark all seen
-                </button>
+                </SubmitButton>
               </form>
             )}
           </div>

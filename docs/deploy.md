@@ -186,6 +186,70 @@ cd /opt/apps/wheelhouse && ./restore.sh backups/nightly-YYYYMMDD-HHMMSS.sql.gz
 docker exec PG_CONTAINER psql -U PG_SUPERUSER -d postgres -c 'drop database wheelhouse_restore_check'
 ```
 
+## GitHub App (optional)
+
+With a GitHub App, GitHub tells Wheelhouse about every push to a connected repository's default branch (so people and
+agents see each other's changes, and map nodes whose code changed are flagged, whether or not anyone runs the plugin),
+links pull requests to the tickets they name, and shows CI results on those tickets. Without it everything else works;
+repositories linked from a machine with the plugin or CLI keep reporting from there.
+
+A self-hosted Wheelhouse needs **its own** GitHub App (ours cannot reach your server). Create it under your account or
+organisation: *Settings → Developer settings → GitHub Apps → New GitHub App*.
+
+| Setting | Value |
+|---|---|
+| Homepage URL | your `APP_URL` |
+| Callback URL | `APP_URL/api/github/callback` |
+| Setup URL | `APP_URL/api/github/callback`, with **Redirect on update** ticked |
+| Request user authorization (OAuth) during installation | **ticked** (this is how Wheelhouse proves who is connecting an installation) |
+| Webhook URL | `APP_URL/api/webhooks/github` |
+| Webhook secret | a long random string (`openssl rand -hex 32`) |
+| Repository permissions | Contents: **Read-only**, Pull requests: **Read-only**, Checks: **Read-only** (Metadata is added for you) |
+| Subscribe to events | Push, Pull request, Check run |
+| Where can it be installed | Only on this account (or any account, if other people will connect their own) |
+
+Then put these in `/opt/apps/wheelhouse/.env` and redeploy (see `.env.example`):
+
+| Variable | Where it comes from |
+|---|---|
+| `GITHUB_APP_ID` | the App's settings page |
+| `GITHUB_APP_SLUG` | the last part of the App's public URL (`github.com/apps/<slug>`) |
+| `GITHUB_APP_PRIVATE_KEY` | *Generate a private key* on the App's page; paste the `.pem`, or one line with literal `\n` |
+| `GITHUB_WEBHOOK_SECRET` | the secret you chose |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the App's *Client ID* and a generated client secret |
+
+Leave all six empty to keep the integration off. Anyone who is a team **owner** then opens a project's
+*Repositories* page, presses *Connect GitHub*, installs the App on the repositories they choose, and picks which of them
+this project uses (a monorepo can be limited to a path). Push, pull request and CI events then arrive at the webhook.
+
+What to know:
+
+- **Signed and scoped.** Every delivery is checked against the webhook secret before anything is read, and a delivery can
+  only reach a repository that a team connected through *its own* installation. An installation is tied to the team
+  whose owner proved, through GitHub's sign-in, that they administer it; no one can claim someone else's.
+- **Nothing but metadata.** Wheelhouse reads which files changed and their git hashes. It never stores file contents.
+- **Pull requests move tickets with care.** Opened (not draft) moves a ticket to Review, closed without merging moves it
+  back to In Progress, merged leaves it in Review for a person, a ticket in Done is never moved, and a ticket someone
+  moved in the last ten minutes is left alone (the comment says so). Tickets are found by a ref such as `WH-12` in the
+  pull request title or branch name.
+- **Test it** from the App's *Advanced* tab: *Recent deliveries* shows each webhook's response and lets you redeliver.
+  `200` with `"status":"ignored"` means the delivery was understood but is not about a connected repository.
+
+## Live updates (server-sent events)
+
+Open pages learn about changes over a long-lived connection, `GET /api/projects/<key>/stream` (and `/api/stream` for
+the dashboard), instead of polling. It needs nothing beyond what is above, with two things to keep:
+
+- **Caddy**: keep `flush_interval -1` in the site block, so events are passed on as they happen, not buffered.
+- **Cloudflare** (or any proxy in front): streaming works as long as the response is not cached or buffered; the app sends
+  `Cache-Control: no-cache, no-transform` and a heartbeat every 25 seconds, well inside the proxy's idle timeout.
+
+The stream is fed by an in-process event bus, so it works on one app container, which is also the only supported
+setup (migrations run at boot). It needs a long-running server like this one: serverless hosts that end a request after
+a few seconds cannot hold the connection, and pages would fall back to slower polling. A person can have 12 streams open
+at once (a project tab plus the dashboard each use one). If the stream cannot connect, pages poll every 10 seconds and
+keep retrying it with backoff.
+
 ## Limits to know about
 
 - **One app container only.** Migrations run when the app boots, so two replicas starting together would race.

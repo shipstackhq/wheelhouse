@@ -97,39 +97,3 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
     </div>
   );
 }
-
-export type HistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date | string };
-
-const HISTORY_PREVIEW = 10;
-
-/** Ticket history, newest first: the latest ten, then "show more" opens a scrollable list of everything. */
-export function HistoryList({ items }: { items: HistoryItem[] }) {
-  const [expanded, setExpanded] = useState(false);
-  if (!items.length) return <p className="text-xs text-muted">No history yet.</p>;
-  const hidden = Math.max(0, items.length - HISTORY_PREVIEW);
-  const shown = expanded ? items : items.slice(0, HISTORY_PREVIEW);
-  const list = (
-    <ul className="space-y-1.5 text-xs">
-      {shown.map((h) => (
-        <li key={h.seq} className="flex gap-2">
-          <span className={h.actorKind === "agent" ? "text-agent" : "text-fg"}>
-            {h.actorKind === "agent" ? "🤖 " : ""}
-            {h.actorName}
-          </span>
-          <span className="min-w-0 text-muted">{h.summary}</span>
-          <span className="ml-auto shrink-0 text-muted/70">{timeAgo(h.createdAt)}</span>
-        </li>
-      ))}
-    </ul>
-  );
-  return (
-    <div>
-      {expanded ? <div className="max-h-64 overflow-y-auto overflow-x-hidden rounded-md border border-line bg-bg/30 p-3">{list}</div> : list}
-      {hidden > 0 && (
-        <button className="mt-2 text-xs text-muted hover:text-fg" onClick={() => setExpanded((e) => !e)}>
-          {expanded ? "Show less" : `Show ${hidden} more`}
-        </button>
-      )}
-    </div>
-  );
-}
