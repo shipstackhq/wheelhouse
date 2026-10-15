@@ -47,7 +47,7 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const top = (layer: string) => g.nodes.filter((n) => n.layer === layer && !n.parentId).sort((a, b) => a.name.localeCompare(b.name));
   const colName = new Map(board.columns.map((c) => [c.id, c.name]));
-  const doneCol = board.columns[board.columns.length - 1]?.id;
+  const colRole = new Map(board.columns.map((c) => [c.id, c.role]));
 
   const header = `# ${p.key}: ${p.name}\n${p.description ? p.description + "\n" : ""}_Wheelhouse briefing generated ${new Date().toISOString()}. The map explains intent; the code is the source of truth._\n`;
 
@@ -77,12 +77,12 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
       : null;
 
   // Your work + board state
-  const open = board.tickets.filter((t) => t.columnId !== doneCol);
+  const open = board.tickets.filter((t) => colRole.get(t.columnId) !== "done");
   const mine = actor.kind === "agent" ? open.filter((t) => t.claimedByKeyId === actor.id) : open.filter((t) => t.assigneeId === actor.id);
-  const inProgress = open.filter((t) => colName.get(t.columnId)?.toLowerCase() === "in progress");
-  const review = open.filter((t) => colName.get(t.columnId)?.toLowerCase() === "review");
+  const inProgress = open.filter((t) => colRole.get(t.columnId) === "in_progress");
+  const review = open.filter((t) => colRole.get(t.columnId) === "review");
   const urgent = open.filter((t) => t.priority === "urgent" || t.priority === "high");
-  const busy = (t: (typeof open)[number]) => ["in progress", "review"].includes(colName.get(t.columnId)?.toLowerCase() ?? "");
+  const busy = (t: (typeof open)[number]) => ["in_progress", "review"].includes(colRole.get(t.columnId) ?? "");
   const ready = open.filter((t) => t.agentClaimable && !t.claimedByKeyId && !busy(t));
   const tl = (t: (typeof open)[number]) => `${t.ref} ${t.title} [${colName.get(t.columnId)}${t.priority !== "medium" ? `, ${t.priority}` : ""}]`;
   const work = [

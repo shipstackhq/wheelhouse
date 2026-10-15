@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { appJwt, GithubApi, GithubApiError, isZeroSha } from "./api";
 import { githubConfig, githubMissing, type GithubConfig } from "./config";
+import { roleFromText, type RoleColumn } from "../column-roles";
 import { ciState, decideMove, RECENT_MOVE_MS } from "./pr-rules";
 import { parseTicketRefs, refsForProject } from "./refs";
 import { signBody, verifySignature } from "./signature";
@@ -46,10 +47,15 @@ describe("ticket references", () => {
 });
 
 describe("what a pull request does to its ticket", () => {
-  const order = ["Backlog", "Todo", "In Progress", "Review", "Done"];
+  // Columns carry a role (WH-86); the rules only ever look at roles. Standard names get their standard roles here.
+  const cols = (...names: string[]): RoleColumn[] => names.map((name) => ({ name, role: roleFromText(name) }));
+  const board = cols("Backlog", "Todo", "In Progress", "Review", "Done");
   const now = new Date("2026-10-15T12:00:00Z");
-  const base = { merged: false, draft: false, order, now, lastMove: null };
-  const d = (over: Partial<Parameters<typeof decideMove>[0]> & { action: string; column: string }) => decideMove({ ...base, ...over });
+  const base = { merged: false, draft: false, columns: board, now, lastMove: null };
+  const d = (over: Partial<Omit<Parameters<typeof decideMove>[0], "column">> & { action: string; column: string }) => {
+    const columns = over.columns ?? board;
+    return decideMove({ ...base, ...over, columns, column: columns.find((c) => c.name === over.column)! });
+  };
 
   test("opened moves the ticket to Review, from anywhere before it", () => {
     for (const column of ["Backlog", "Todo", "In Progress"]) assert.equal(d({ action: "opened", column }).move, "Review", column);
@@ -86,7 +92,37 @@ describe("what a pull request does to its ticket", () => {
     assert.equal(d({ action: "opened", column: "In Progress", lastMove: old, recentMs: 60 * 60_000 }).move, null);
   });
   test("a board without a Review column is left alone instead of guessed at", () => {
-    assert.equal(d({ action: "opened", column: "Todo", order: ["Todo", "Doing", "Done"] }).move, null);
+    assert.equal(d({ action: "opened", column: "Todo", columns: cols("Todo", "Doing", "Done") }).move, null);
+  });
+  test("columns are found by role, so renaming them changes nothing", () => {
+    const renamed: RoleColumn[] = [
+      { name: "Ideas", role: "backlog" },
+      { name: "Ready", role: "todo" },
+      { name: "Doing", role: "in_progress" },
+      { name: "QA", role: "review" },
+      { name: "Shipped", role: "done" },
+    ];
+    assert.equal(d({ action: "opened", column: "Doing", columns: renamed }).move, "QA");
+    assert.equal(d({ action: "closed", column: "QA", columns: renamed }).move, "Doing");
+    assert.equal(d({ action: "closed", merged: true, column: "Ready", columns: renamed }).move, "QA");
+    assert.equal(d({ action: "closed", merged: true, column: "QA", columns: renamed }).move, null);
+    assert.equal(d({ action: "opened", column: "Shipped", columns: renamed }).move, null);
+    assert.match(d({ action: "opened", column: "Doing", columns: renamed }).note!, /moved to QA: pull request opened/);
+  });
+  test("a column literally named Review but with no role is not treated as the review column", () => {
+    const odd: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: null }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", column: "Todo", columns: odd }).move, null);
+    assert.equal(d({ action: "closed", column: "Review", columns: odd }).move, null);
+  });
+  test("a custom column with no role is never a target, but a ticket in one is still moved on", () => {
+    const custom: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", column: "Blocked", columns: custom }).move, "Review");
+    assert.equal(d({ action: "closed", column: "Review", columns: custom }).move, "Doing");
+  });
+  test("two columns with the review role: the first in board order is the target", () => {
+    const two: RoleColumn[] = [{ name: "Doing", role: "in_progress" }, { name: "Code review", role: "review" }, { name: "Design review", role: "review" }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", column: "Doing", columns: two }).move, "Code review");
+    assert.equal(d({ action: "opened", column: "Design review", columns: two }).move, null, "already in a review column");
   });
   test("the note explains a move", () => {
     assert.match(d({ action: "opened", column: "Todo" }).note!, /moved to Review: pull request opened/);

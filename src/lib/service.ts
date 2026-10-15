@@ -1,3 +1,4 @@
+import { columnForRole, DEFAULT_COLUMN_DEFS, roleFromText } from "./column-roles";
 import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "@/db";
@@ -31,7 +32,7 @@ export class ServiceError extends Error {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
 
-export const DEFAULT_COLUMNS = ["Backlog", "Todo", "In Progress", "Review", "Done"];
+export const DEFAULT_COLUMNS = DEFAULT_COLUMN_DEFS.map((c) => c.name);
 
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 export type Q = DB | Tx;
@@ -135,7 +136,7 @@ export async function createProject(actor: Actor, input: { name: string; key?: s
       .insert(projects)
       .values({ teamId: actor.teamId, name, key, description: input.description ?? "" })
       .returning();
-    await tx.insert(columns).values(DEFAULT_COLUMNS.map((n, i) => ({ projectId: p.id, name: n, position: i + 1 })));
+    await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ projectId: p.id, name: c.name, role: c.role, position: i + 1 })));
     await emit(tx, actor, p.id, { type: "project.created", entity: "project", entityId: p.id, summary: `created project ${p.name}` });
     return p;
   });
@@ -224,7 +225,9 @@ async function assertAssignee(q: Q, teamId: string, userId: string | null | unde
 
 async function resolveColumn(q: Q, projectId: string, ref: string) {
   const cols = await q.select().from(columns).where(eq(columns.projectId, projectId)).orderBy(asc(columns.position));
-  const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase());
+  // An id or an exact name wins; otherwise a role ("review") finds the column with that role even if it was renamed.
+  const role = roleFromText(ref);
+  const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase()) ?? (role ? columnForRole(cols, role) : undefined);
   if (!c) throw new ServiceError("invalid", `Unknown column "${ref}". Valid: ${cols.map((c) => c.name).join(", ")}`);
   return c;
 }
@@ -406,7 +409,7 @@ async function moveTicketTx(actor: Actor, ref: string, column: string, index?: n
         entity: "ticket",
         entityId: t.id,
         summary: `moved ${r} from ${from.name} → ${to.name}`,
-        data: { ref: r, from: from.name, to: to.name },
+        data: { ref: r, from: from.name, to: to.name, fromRole: from.role, toRole: to.role },
       });
     }
     return { ...t, ref: r, column: to.name };

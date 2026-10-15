@@ -122,7 +122,7 @@ export const tools = {
   }),
 
   move_ticket: tool({
-    description: 'Move a ticket to a column (e.g. "In Progress" when you start, "Review" when done — leave "Done" for humans unless told otherwise).',
+    description: 'Move a ticket to a column, by name or by role ("in_progress", "review", "done"; a role finds the column even if it was renamed). Use in_progress when you start and review when done — leave done for humans unless told otherwise.',
     input: z.object({
       ticket,
       column: z.string(),

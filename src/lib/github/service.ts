@@ -233,7 +233,7 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
 
     const actor = githubActor(t.project.teamId);
-    const order = (await db.select({ name: columns.name }).from(columns).where(eq(columns.projectId, t.project.id)).orderBy(columns.position)).map((c) => c.name);
+    const boardColumns = await db.select({ id: columns.id, name: columns.name, role: columns.role }).from(columns).where(eq(columns.projectId, t.project.id)).orderBy(columns.position);
     for (const tk of linked) {
       if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
         await emit(db, actor, t.project.id, {
@@ -250,12 +250,14 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
         .where(and(eq(events.entityId, tk.id), eq(events.type, "ticket.moved")))
         .orderBy(desc(events.seq))
         .limit(1);
+      const current = boardColumns.find((c) => c.id === tk.columnId);
+      if (!current) continue;
       const decision = decideMove({
         action,
         merged,
         draft: !!pr.draft,
-        column: tk.column,
-        order,
+        column: current,
+        columns: boardColumns,
         lastMove: last && last.actorId !== GITHUB_ACTOR_ID ? { at: last.at, by: last.by } : null,
         now: new Date(),
       });

@@ -85,6 +85,13 @@
       "when": 1792096808503,
       "tag": "0011_docs_freshness_and_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792104507742,
+      "tag": "0012_column_roles",
+      "breakpoints": true
     }
   ]
 }

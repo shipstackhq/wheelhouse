@@ -1,3 +1,4 @@
+import { idsWithRole } from "./column-roles";
 import "server-only";
 import { cache } from "react";
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
@@ -49,20 +50,18 @@ const snapshot = cache(async (teamId: string) => {
 
 type Snap = Awaited<ReturnType<typeof snapshot>>;
 
-/** The last column (by position) counts as "done"; a column named "In Progress"/"Review" is matched by name. */
+/** Columns are found by role (WH-86), so renaming one changes nothing here. */
 function columnRoles(s: Snap) {
   const byProject = new Map<string, Snap["columns"]>();
   for (const c of s.columns) byProject.set(c.projectId, [...(byProject.get(c.projectId) ?? []), c]);
-  const done = new Map<string, Snap["columns"][number]>();
-  for (const [pid, cs] of byProject) done.set(pid, cs[cs.length - 1]);
-  const named = (name: string) => new Set(s.columns.filter((c) => c.name.toLowerCase() === name).map((c) => c.id));
-  return { byProject, done, inProgress: named("in progress"), review: named("review") };
+  return { byProject, doneIds: idsWithRole(s.columns, "done"), inProgress: idsWithRole(s.columns, "in_progress"), review: idsWithRole(s.columns, "review") };
 }
 
-/** Moves into a project's done column, from the event log. */
+/** Moves into a project's done column, from the event log. Older events only recorded the column's name. */
 function completions(s: Snap) {
-  const { done } = columnRoles(s);
-  return s.events.filter((e) => e.type === "ticket.moved" && e.data?.to === done.get(e.projectId)?.name);
+  const doneNames = new Map<string, Set<string>>();
+  for (const c of s.columns) if (c.role === "done") doneNames.set(c.projectId, (doneNames.get(c.projectId) ?? new Set()).add(c.name));
+  return s.events.filter((e) => e.type === "ticket.moved" && (e.data?.toRole ? e.data.toRole === "done" : doneNames.get(e.projectId)?.has(String(e.data?.to)) ?? false));
 }
 
 // ───────── widgets ─────────
@@ -70,8 +69,7 @@ function completions(s: Snap) {
 export async function summary(actor: Actor) {
   const s = await snapshot(actor.teamId);
   const roles = columnRoles(s);
-  const doneIds = new Set([...roles.done.values()].map((c) => c.id));
-  const open = s.tickets.filter((t) => !doneIds.has(t.columnId));
+  const open = s.tickets.filter((t) => !roles.doneIds.has(t.columnId));
   const now = Date.now();
   const within = (d: Date, from: number, to: number) => {
     const age = now - new Date(d).getTime();
@@ -108,11 +106,10 @@ export async function projectProgress(actor: Actor) {
   return s.projects.map((p) => {
     const cols = roles.byProject.get(p.id) ?? [];
     const ts = s.tickets.filter((t) => t.projectId === p.id);
-    const doneCol = roles.done.get(p.id);
     const stages = cols.map((c) => ({ id: c.id, name: c.name, count: ts.filter((t) => t.columnId === c.id).length }));
-    const done = stages.find((x) => x.id === doneCol?.id)?.count ?? 0;
+    const done = ts.filter((t) => roles.doneIds.has(t.columnId)).length;
     const lastEvent = s.events.find((e) => e.projectId === p.id);
-    const open = ts.filter((t) => t.columnId !== doneCol?.id);
+    const open = ts.filter((t) => !roles.doneIds.has(t.columnId));
     return {
       id: p.id,
       key: p.key,
@@ -187,7 +184,7 @@ export async function needsAttention(actor: Actor) {
   const s = await snapshot(actor.teamId);
   const roles = columnRoles(s);
   const pkey = new Map(s.projects.map((p) => [p.id, p.key]));
-  const doneIds = new Set([...roles.done.values()].map((c) => c.id));
+  const doneIds = roles.doneIds;
   const ref = (t: Snap["tickets"][number]) => `${pkey.get(t.projectId)}-${t.number}`;
   const byUpdated = (a: { updatedAt: Date }, b: { updatedAt: Date }) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   const review = s.tickets
@@ -230,7 +227,7 @@ export async function syncHealth(actor: Actor) {
   if (!pids.length) return { untracked: [], quiet: [], drafts: [] };
   const pkey = new Map(s.projects.map((p) => [p.id, p.key]));
   const roles = columnRoles(s);
-  const doneIds = new Set([...roles.done.values()].map((c) => c.id));
+  const doneIds = roles.doneIds;
 
   const sessions = await db
     .select()

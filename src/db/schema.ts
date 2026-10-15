@@ -13,6 +13,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { COLUMN_ROLES } from "../lib/column-roles";
 import { sql } from "drizzle-orm";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -113,6 +114,8 @@ export const columns = pgTable("columns", {
   projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   position: doublePrecision("position").notNull(),
+  // What stage of work this column stands for (WH-86); rules and reports use it, never the name. Null: a custom column.
+  role: text("role", { enum: COLUMN_ROLES }),
 });
 
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;

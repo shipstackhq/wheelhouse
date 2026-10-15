@@ -1,6 +1,7 @@
 /**
  * What a pull request event does to the ticket it names (WH-20). Pure, so the rules can be tested exactly.
  *
+ *   (columns are found by role: review, in_progress, done; names do not matter)
  *   opened / reopened / ready for review  -> Review
  *   merged                               -> Review if it was earlier; otherwise left alone (a person closes the ticket)
  *   closed without merging               -> back to In Progress, but only from Review
@@ -8,6 +9,8 @@
  *   a ticket in Done                     -> never moved
  *   the ticket was moved by someone else in the last few minutes -> left alone, and the comment says so
  */
+
+import { columnForRole, hasRole, type RoleColumn } from "../column-roles";
 
 export const RECENT_MOVE_MS = 10 * 60_000;
 
@@ -18,9 +21,9 @@ export type MoveInput = {
   merged: boolean;
   draft: boolean;
   /** The column the ticket is in now. */
-  column: string;
-  /** Column names in board order, so "earlier than Review" can be decided. */
-  order: string[];
+  column: RoleColumn;
+  /** The project's columns in board order, so "earlier than the review column" can be decided. */
+  columns: RoleColumn[];
   /** When someone other than GitHub last moved this ticket, and who. */
   lastMove?: { at: Date; by: string } | null;
   now: Date;
@@ -29,47 +32,46 @@ export type MoveInput = {
 
 export type MoveDecision = { move: string | null; note: string | null };
 
-const REVIEW = "Review";
-const PROGRESS = "In Progress";
-const DONE = "Done";
+const same = (a: RoleColumn, b: RoleColumn) => (a.id !== undefined && b.id !== undefined ? a.id === b.id : a.name === b.name);
+const NONE: MoveDecision = { move: null, note: null };
 
 export function decideMove(i: MoveInput): MoveDecision {
-  const idx = (c: string) => i.order.findIndex((x) => x.toLowerCase() === c.toLowerCase());
-  const here = idx(i.column);
-  const reviewAt = idx(REVIEW);
-  const progressAt = idx(PROGRESS);
-  const lc = i.column.toLowerCase();
+  // Columns are found by role, never by name, so a board can rename them (WH-86). No review column: leave tickets alone.
+  const review = columnForRole(i.columns, "review");
+  const progress = columnForRole(i.columns, "in_progress");
+  const inReviewOrDone = hasRole(i.column, "review", "done");
 
-  let target: string | null = null;
+  let target: RoleColumn | undefined;
   let why = "";
 
   if (i.action === "closed" && i.merged) {
-    if (lc === DONE.toLowerCase() || lc === REVIEW.toLowerCase()) return { move: null, note: null };
-    if (here >= 0 && reviewAt >= 0 && here < reviewAt) {
-      target = REVIEW;
-      why = "merged";
-    } else return { move: null, note: null };
+    if (inReviewOrDone) return NONE;
+    const here = i.columns.findIndex((c) => same(c, i.column));
+    const reviewAt = review ? i.columns.findIndex((c) => same(c, review)) : -1;
+    if (here < 0 || reviewAt < 0 || here >= reviewAt) return NONE;
+    target = review;
+    why = "merged";
   } else if (i.action === "closed") {
-    if (lc !== REVIEW.toLowerCase()) return { move: null, note: null };
-    target = PROGRESS;
+    if (!hasRole(i.column, "review")) return NONE;
+    target = progress;
     why = "closed without merging";
   } else if (["opened", "reopened", "ready_for_review"].includes(i.action)) {
-    if (i.draft) return { move: null, note: null }; // not ready for anyone's eyes yet
-    if (lc === DONE.toLowerCase() || lc === REVIEW.toLowerCase()) return { move: null, note: null };
-    target = REVIEW;
+    if (i.draft) return NONE; // not ready for anyone's eyes yet
+    if (inReviewOrDone) return NONE;
+    target = review;
     why = i.action === "reopened" ? "reopened" : "opened";
   } else {
-    return { move: null, note: null }; // pushes, edits and label changes never move a ticket
+    return NONE; // pushes, edits and label changes never move a ticket
   }
 
-  if (target === null || (progressAt < 0 && target === PROGRESS) || (reviewAt < 0 && target === REVIEW)) return { move: null, note: null };
+  if (!target) return NONE;
 
   const window = i.recentMs ?? RECENT_MOVE_MS;
   if (i.lastMove && i.now.getTime() - i.lastMove.at.getTime() < window) {
     const mins = Math.max(1, Math.round((i.now.getTime() - i.lastMove.at.getTime()) / 60_000));
-    return { move: null, note: `left in ${i.column}: ${i.lastMove.by} moved it ${mins} minute${mins === 1 ? "" : "s"} ago, so the pull request (${why}) did not move it` };
+    return { move: null, note: `left in ${i.column.name}: ${i.lastMove.by} moved it ${mins} minute${mins === 1 ? "" : "s"} ago, so the pull request (${why}) did not move it` };
   }
-  return { move: target, note: `moved to ${target}: pull request ${why}` };
+  return { move: target.name, note: `moved to ${target.name}: pull request ${why}` };
 }
 
 export type CheckState = "success" | "failure" | "pending";
