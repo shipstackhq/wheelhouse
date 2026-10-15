@@ -7,6 +7,7 @@
  *   closed without merging               -> back to In Progress, but only from Review
  *   draft pull requests                  -> left alone until they are ready
  *   a ticket in Done                     -> never moved
+ *   a ticket in a custom column (no role) -> never moved: a person put it outside the workflow on purpose (WH-86)
  *   the ticket was moved by someone else in the last few minutes -> left alone, and the comment says so
  */
 
@@ -36,6 +37,7 @@ const same = (a: RoleColumn, b: RoleColumn) => (a.id !== undefined && b.id !== u
 const NONE: MoveDecision = { move: null, note: null };
 
 export function decideMove(i: MoveInput): MoveDecision {
+  if (!i.column.role) return NONE; // custom columns are outside the workflow; automation never moves a ticket out of one
   // Columns are found by role, never by name, so a board can rename them (WH-86). No review column: leave tickets alone.
   const review = columnForRole(i.columns, "review");
   const progress = columnForRole(i.columns, "in_progress");

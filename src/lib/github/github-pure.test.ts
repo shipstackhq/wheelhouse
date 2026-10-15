@@ -114,9 +114,13 @@ describe("what a pull request does to its ticket", () => {
     assert.equal(d({ action: "opened", column: "Todo", columns: odd }).move, null);
     assert.equal(d({ action: "closed", column: "Review", columns: odd }).move, null);
   });
-  test("a custom column with no role is never a target, but a ticket in one is still moved on", () => {
+  test("a custom column with no role is outside the workflow: never a target, and a ticket in one is left where a person put it", () => {
     const custom: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
-    assert.equal(d({ action: "opened", column: "Blocked", columns: custom }).move, "Review");
+    for (const action of ["opened", "reopened", "ready_for_review", "closed"]) {
+      assert.equal(d({ action, column: "Blocked", columns: custom }).move, null, action);
+      assert.equal(d({ action, merged: action === "closed", column: "Blocked", columns: custom }).move, null, `${action} merged`);
+    }
+    assert.equal(d({ action: "opened", column: "Doing", columns: custom }).move, "Review", "custom columns between the standard ones do not get in the way");
     assert.equal(d({ action: "closed", column: "Review", columns: custom }).move, "Doing");
   });
   test("two columns with the review role: the first in board order is the target", () => {
