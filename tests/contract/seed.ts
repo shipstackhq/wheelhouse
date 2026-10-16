@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@wheelhouse/core/db";
 import * as svc from "@wheelhouse/core/lib/service";
 import type { Actor } from "@wheelhouse/core/lib/access";
+import { hashPassword } from "@wheelhouse/core/lib/auth-core";
 import type { Fixtures, GithubFixture, TeamFixture } from "./lib/fixtures";
 
 const arg = (name: string) => {
@@ -33,14 +34,15 @@ if (databaseUrl) {
   delete process.env.DATABASE_URL;
 }
 
+const PASSWORD = "contract-password-1";
 const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 const token = (prefix: string) => `${prefix}${crypto.randomBytes(24).toString("base64url")}`;
 
-async function team(letter: "A" | "B"): Promise<TeamFixture> {
+async function team(letter: "A" | "B", passwordHash: string): Promise<TeamFixture> {
   const db = await getDb();
   const [t] = await db.insert(schema.teams).values({ name: `Contract team ${letter}` }).returning();
   const mkUser = async (label: string, role: "owner" | "member") => {
-    const [u] = await db.insert(schema.users).values({ email: `ct-${letter.toLowerCase()}-${label}@example.test`, name: `Contract ${letter} ${label}`, passwordHash: "not-a-real-hash" }).returning();
+    const [u] = await db.insert(schema.users).values({ email: `ct-${letter.toLowerCase()}-${label}@example.test`, name: `Contract ${letter} ${label}`, passwordHash }).returning();
     await db.insert(schema.memberships).values({ userId: u.id, teamId: t.id, role });
     return u;
   };
@@ -65,6 +67,7 @@ async function team(letter: "A" | "B"): Promise<TeamFixture> {
     teamId: t.id,
     userId: owner.id,
     email: owner.email,
+    memberEmail: member.email,
     projectKey,
     ticketRef: ticket.ref,
     webhookTicketRef: webhookTicket.ref,
@@ -79,12 +82,13 @@ async function team(letter: "A" | "B"): Promise<TeamFixture> {
 
 async function main() {
   const db = await getDb();
-  const a = await team("A");
-  const b = await team("B");
+  const passwordHash = await hashPassword(PASSWORD);
+  const a = await team("A", passwordHash);
+  const b = await team("B", passwordHash);
 
   // A suspended team: its keys are refused with 403 and its members count as signed out.
   const [st] = await db.insert(schema.teams).values({ name: "Contract suspended team", suspendedAt: new Date(), suspendedReason: "contract test" }).returning();
-  const [su] = await db.insert(schema.users).values({ email: "ct-suspended@example.test", name: "Contract suspended", passwordHash: "not-a-real-hash" }).returning();
+  const [su] = await db.insert(schema.users).values({ email: "ct-suspended@example.test", name: "Contract suspended", passwordHash }).returning();
   await db.insert(schema.memberships).values({ userId: su.id, teamId: st.id, role: "owner" });
   const skey = token("wh_");
   await db.insert(schema.apiKeys).values({ teamId: st.id, name: "suspended key", prefix: skey.slice(0, 10), keyHash: sha256(skey) });
@@ -143,7 +147,8 @@ async function main() {
     for (const k of ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_API_URL", "GITHUB_WEB_URL"]) serverEnv[k] = "";
   }
 
-  const fixtures: Fixtures = { a, b, suspended: { apiKey: skey, sessionToken: stok }, github, serverEnv };
+  serverEnv.ALLOW_SIGNUP = "true"; // the web-app API tests create accounts
+  const fixtures: Fixtures = { a, b, password: PASSWORD, suspended: { apiKey: skey, sessionToken: stok, email: "ct-suspended@example.test" }, github, serverEnv };
   fs.mkdirSync(path.dirname(path.resolve(out!)), { recursive: true });
   fs.writeFileSync(out!, JSON.stringify(fixtures, null, 2));
 

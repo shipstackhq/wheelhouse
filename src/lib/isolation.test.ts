@@ -634,7 +634,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
   "packages/core/src/db/index.ts": "the connection itself",
   "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
-  "src/lib/auth.ts": "signup, sessions, membership of the signed-in user",
+  "packages/core/src/lib/accounts.ts": "signup creates the new user and a team they own; login looks one account up by email and checks its password; neither reads another team's data (tested)",
   "packages/core/src/lib/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
   "packages/core/src/lib/invites.ts": "tokens; scoped by issuer team, or by the invite's own team at acceptance",
   "packages/core/src/lib/members.ts": "every statement scoped by the caller's team id (tested)",

@@ -1,16 +1,14 @@
 import "server-only";
-import crypto from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import bcrypt from "bcryptjs";
-import { eq, sql } from "drizzle-orm";
-import { getDb, schema } from "@wheelhouse/core/db";
-import { signupOpen } from "@wheelhouse/core/lib/auth-policy";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
-import { sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
-import { actorFromCredentials, currentMembership, humanFromSession, SESSION_COOKIE, SESSION_DAYS } from "@wheelhouse/core/lib/auth-core";
+import { userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
+import { actorFromCredentials, currentMembership, endSession, humanFromSession, SESSION_COOKIE, startSession } from "@wheelhouse/core/lib/auth-core";
 
 export { currentMembership };
+// Passwords, tokens and the signup rules are @wheelhouse/core's; the API uses the same ones.
+export { hashPassword, randomToken, verifyPassword } from "@wheelhouse/core/lib/auth-core";
+export { signupAllowed } from "@wheelhouse/core/lib/accounts";
 
 // Everything that decides who may come in lives in access.ts (testable without Next.js); re-exported so the rest
 // of the app keeps importing it from here.
@@ -28,23 +26,9 @@ export {
 
 const COOKIE = SESSION_COOKIE;
 
-export const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString("base64url");
-
-export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
-export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
-
-/** Whether the signup page and action are open (see auth-policy.ts). */
-export async function signupAllowed() {
-  const db = await getDb();
-  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.users);
-  return signupOpen({ allowSignup: process.env.ALLOW_SIGNUP, nodeEnv: process.env.NODE_ENV, userCount: n });
-}
-
+/** Start a session and set the cookie (the same cookie the API sets). */
 export async function createSession(userId: string) {
-  const db = await getDb();
-  const token = randomToken();
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
-  await db.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt });
+  const { token, expiresAt } = await startSession(userId);
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -56,11 +40,7 @@ export async function createSession(userId: string) {
 
 export async function destroySession() {
   const jar = await cookies();
-  const token = jar.get(COOKIE)?.value;
-  if (token) {
-    const db = await getDb();
-    await db.delete(schema.sessions).where(eq(schema.sessions.id, sha256(token)));
-  }
+  await endSession(jar.get(COOKIE)?.value);
   jar.delete(COOKIE);
 }
 

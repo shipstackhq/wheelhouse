@@ -1,0 +1,32 @@
+{
+  "unauthorized": {
+    "error": {
+      "code": "string",
+      "message": "string"
+    }
+  },
+  "csrf_failed": {
+    "error": {
+      "code": "string",
+      "message": "string"
+    }
+  },
+  "invalid_with_fields": {
+    "error": {
+      "code": "string",
+      "details": {
+        "fields": {
+          "email": "string",
+          "name": "string"
+        }
+      },
+      "message": "string"
+    }
+  },
+  "rate_limited": {
+    "error": {
+      "code": "string",
+      "message": "string"
+    }
+  }
+}

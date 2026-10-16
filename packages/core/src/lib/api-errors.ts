@@ -1,4 +1,5 @@
 import { AuthError } from "./access";
+import { AccountError } from "./accounts";
 import { ServiceError } from "./service";
 
 /** How a failure is answered over HTTP: shared by every host so the REST and MCP error shapes cannot drift apart. */
@@ -24,4 +25,19 @@ export function mcpAuthFailure(e: AuthError): Failure {
     body: { jsonrpc: "2.0", id: null, error: { code: -32001, message: e.message } },
     headers: e.retryAfter ? { "Retry-After": String(e.retryAfter) } : e.status === 401 ? { "WWW-Authenticate": 'Bearer realm="wheelhouse"' } : undefined,
   };
+}
+
+/**
+ * The web app's API (/api/app/*): the same `{ error: { code, message, details? } }` as /api/v1, plus the account errors
+ * (sign in, sign up). A field-level problem is `details.fields` = `{ fieldName: message }`; an optimistic-lock conflict is
+ * code "conflict" with the current state in `details.current`.
+ */
+export function appFailure(e: unknown): Failure {
+  if (e instanceof AccountError)
+    return {
+      status: e.status,
+      body: { error: { code: e.code, message: e.message, details: e.fields ? { fields: e.fields } : undefined } },
+      headers: e.retryAfter ? { "Retry-After": String(e.retryAfter) } : undefined,
+    };
+  return v1Failure(e);
 }
