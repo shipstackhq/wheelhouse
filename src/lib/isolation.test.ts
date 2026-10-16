@@ -644,6 +644,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (getProject / the caller's own team id, tested in live-events.test.ts), capped per user",
   "packages/core/src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
   "packages/core/src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
+  "packages/core/src/lib/team-app.ts": "the web app's team, key and invite functions: every statement is scoped by the signed-in person's team id (members, keys, pending invites), a user or key id from another team matches nothing and reads as not found (tested)",
 };
 
 const walk = (dir: string): string[] =>
@@ -697,6 +698,27 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/auth/logout": "deletes the session named by the caller's own cookie",
   "GET /api/app/me": "the signed-in person from their session (SessionGuard); nothing taken from the request",
   "GET /api/app/projects": "listProjects(actor) for the signed-in person's team (SessionGuard); a teamId in the query or a header is ignored (tested)",
+  "POST /api/app/projects": "svc.createProject(actor): the project is made in the actor's own team; the team is never taken from the request (tested)",
+  "DELETE /api/app/projects/:key/sessions/:sessionId": "svc.removeSession(actor): the project is resolved through getProject(actor) and the session must belong to it, so another team's is a 404 (tested)",
+  "POST /api/app/me/password": "changes the signed-in person's own password, after checking the current one; nothing is taken from the request but the two passwords",
+  "GET /api/app/team": "teamOverview(human): the memberships of the person's own team; pending invites only for its owners (tested)",
+  "PATCH /api/app/team/members/:userId": "owners only; members.updateMember is scoped by the caller's team id, so another team's user matches nothing and is a 404 (tested)",
+  "DELETE /api/app/team/members/:userId": "owners only; members.removeMember is scoped by the caller's team id, so another team's user is a 404 (tested)",
+  "GET /api/app/agents": "the keys of the caller's own team (where team_id is the session's team) and the printed commands; a key value is never returned (tested)",
+  "POST /api/app/agents/mark-all-seen": "svc.markAllSeen(actor): keys and projects of the actor's team only; another team's key id is a 404 (tested)",
+  "POST /api/app/keys": "creates a key in the caller's own team; the secret is in this response only and 10 an hour per person (tested)",
+  "DELETE /api/app/keys/:id": "members.revokeApiKey is scoped by key id AND the caller's team id; another team's key is a 404 and keeps working (tested)",
+  "PATCH /api/app/keys/:id": "scoped by key id AND the caller's team id; another team's key is a 404 (tested)",
+  "GET /api/app/invites": "listInvites(issuer): a team's join invites for its owners only, new-team invites for instance admins only (404 for anyone else) (tested)",
+  "POST /api/app/invites": "createInvite(issuer): an owner of the caller's own team (join) or an instance admin (new_team); 20 an hour per person (tested)",
+  "DELETE /api/app/invites/:id": "revokeInvite(issuer), scoped like the list; another team's invite is a 404 and stays pending (tested)",
+  "POST /api/app/invites/peek": "public, rate limited per address; finds one invite by the hash of its token; the same answer for every bad link (tested)",
+  "POST /api/app/invites/accept": "public, rate limited per address; the invite fixes the email, team and role, none is taken from the request; one use only (tested)",
+  "GET /api/app/admin/teams": "instance admins only (a 404 for anyone else); names, emails and counts, never what a team wrote (tested)",
+  "GET /api/app/admin/teams/:id": "instance admins only (a 404 for anyone else); metadata only (tested)",
+  "POST /api/app/admin/teams/:id/suspend": "instance admins only; needs the team's exact name; refuses the admin's own team (tested)",
+  "POST /api/app/admin/teams/:id/restore": "instance admins only (tested)",
+  "GET /api/app/dashboard/:widget": "metrics.*(actor): every query is by the actor's team id; a teamId in the query or a header is ignored; an unknown widget is a 404 (tested)",
 };
 
 const controllerFiles = (dir: string) => walk(dir).filter((f) => f.endsWith(".controller.ts"));
@@ -719,16 +741,35 @@ describe("every API route must be audited", () => {
     assert.deepEqual(stale, [], `audit entries for routes that are gone: ${stale.join(", ")}`);
   });
 
-  test("every /api/app controller uses @AppEndpoints(), and SessionGuard unless all its routes are the open sign-in ones", () => {
-    const open = new Set(["GET /api/app/auth/options", "POST /api/app/auth/login", "POST /api/app/auth/signup", "POST /api/app/auth/logout"]);
+  test("every /api/app controller uses @AppEndpoints(), and every route has SessionGuard unless it is one of the open sign-in or invite routes", () => {
+    const open = new Set([
+      "GET /api/app/auth/options",
+      "POST /api/app/auth/login",
+      "POST /api/app/auth/signup",
+      "POST /api/app/auth/logout",
+      "POST /api/app/invites/peek",
+      "POST /api/app/invites/accept",
+    ]);
     let checked = 0;
     for (const f of controllerFiles("apps/api/src")) {
       const src = fs.readFileSync(f, "utf8");
-      if (!prefixOf(src).startsWith("api/app")) continue;
+      const prefix = prefixOf(src);
+      if (!prefix.startsWith("api/app")) continue;
       checked++;
       assert.match(src, /@AppEndpoints\(\)/, `${f} must use @AppEndpoints() for CSRF and the error envelope`);
-      if (routesIn(src).some((r) => !open.has(r))) assert.match(src, /SessionGuard/, `${f} serves routes that need a signed-in person but does not use SessionGuard`);
+      if (/@UseGuards\(SessionGuard\)\s*\n\s*export class/.test(src)) continue; // the whole controller needs a signed-in person
+      // Otherwise decide route by route: a method's decorators all sit between the previous method's signature and its own.
+      let from = 0;
+      for (const sig of src.matchAll(/^ {2}(?:async )?\w+\(.*$/gm)) {
+        const chunk = src.slice(from, sig.index! + sig[0].length);
+        from = sig.index! + sig[0].length;
+        for (const m of chunk.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(?:"([^"]*)")?\s*\)/g)) {
+          const route = `${m[1].toUpperCase()} /${[prefix, m[2] ?? ""].filter(Boolean).join("/")}`;
+          if (open.has(route)) continue;
+          assert.match(chunk, /@UseGuards\(SessionGuard\)/, `${route} in ${f} needs @UseGuards(SessionGuard), or must be listed as an open route here`);
+        }
+      }
     }
-    assert.ok(checked >= 3, "no /api/app controllers found; the scan may be broken");
+    assert.ok(checked >= 8, "no /api/app controllers found; the scan may be broken");
   });
 });

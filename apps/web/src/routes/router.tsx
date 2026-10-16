@@ -1,22 +1,19 @@
 import { type RouteObject } from "react-router";
-import { TeamLiveRefresh } from "../components/live-refresh";
 import type { Services } from "../lib/services";
+import { AdminInvitesPage, AdminTeamPage, AdminTeamsPage } from "../pages/admin";
+import { AgentsPage } from "../pages/agents";
+import { LoginPage, SignupPage } from "../pages/auth";
+import { Dashboard } from "../pages/dashboard";
+import { InvitePage } from "../pages/invite";
+import { NewProjectPage } from "../pages/new-project";
+import { TeamPage } from "../pages/team";
 import { NotFound, RouteError } from "./errors";
 import { redirectIfSignedIn, requireSignedIn } from "./guards";
-import { AppLayout, AuthLayout, FullPageSkeleton, ProjectLayout, RequireAdmin, RootLayout } from "./layouts";
+import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, ProjectLayout, RequireAdmin, RootLayout } from "./layouts";
 import { OfflinePage } from "./offline";
-import { PageStub, stub } from "./stub";
+import { stub } from "./stub";
 
-/** The page-port tickets replace these stubs one by one. */
-function Dashboard() {
-  return (
-    <>
-      <TeamLiveRefresh />
-      <PageStub title="Home" owner="WH-95" />
-    </>
-  );
-}
-
+/** The pages still to be ported (WH-96, WH-97, WH-98) are stubs; each of those tickets replaces its own. */
 /**
  * Every address the Next app serves, at the same address, so links, bookmarks and the links the plugin prints keep working.
  * The auth gate is a loader: it runs before anything renders.
@@ -30,13 +27,13 @@ export function buildRoutes(services: Services): RouteObject[] {
       HydrateFallback: FullPageSkeleton,
       children: [
         { path: "offline", Component: OfflinePage },
-        { path: "invite", Component: stub("Accept an invite", "WH-95") },
+        { path: "invite", Component: InviteLayout, children: [{ index: true, Component: InvitePage }] },
         {
           Component: AuthLayout,
           loader: redirectIfSignedIn(services),
           children: [
-            { path: "login", Component: stub("Sign in", "WH-95") },
-            { path: "signup", Component: stub("Create your account", "WH-95") },
+            { path: "login", Component: LoginPage },
+            { path: "signup", Component: SignupPage },
           ],
         },
         {
@@ -44,15 +41,15 @@ export function buildRoutes(services: Services): RouteObject[] {
           loader: requireSignedIn(services),
           children: [
             { index: true, Component: Dashboard },
-            { path: "projects/new", Component: stub("New project", "WH-95") },
-            { path: "team", Component: stub("Members", "WH-95") },
-            { path: "agents", Component: stub("Agents & API keys", "WH-95") },
+            { path: "projects/new", Component: NewProjectPage },
+            { path: "team", Component: TeamPage },
+            { path: "agents", Component: AgentsPage },
             {
               Component: RequireAdmin,
               children: [
-                { path: "admin/teams", Component: stub("Teams", "WH-95") },
-                { path: "admin/teams/:id", Component: stub("Team", "WH-95") },
-                { path: "admin/invites", Component: stub("Invite a new team", "WH-95") },
+                { path: "admin/teams", Component: AdminTeamsPage },
+                { path: "admin/teams/:id", Component: AdminTeamPage },
+                { path: "admin/invites", Component: AdminInvitesPage },
               ],
             },
             {

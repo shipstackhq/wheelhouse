@@ -14,7 +14,24 @@
  * The conventions behind it are in docs/ui-api.md.
  */
 
-export type Role = "owner" | "member";
+import type {
+  AcceptInviteInput,
+  AdminTeam,
+  AdminTeamDetail,
+  AgentsPage,
+  CreatedInvite,
+  CreatedKey,
+  CreateInviteInput,
+  DashboardWidgets,
+  InvitePeek,
+  KeyView,
+  PendingInvite,
+  Role,
+  TeamMember,
+  TeamOverview,
+} from "./types";
+
+export type * from "./types";
 
 export type Me = {
   user: { id: string; name: string; email: string };
@@ -28,6 +45,7 @@ export type Me = {
 };
 
 export type Project = { id: string; key: string; name: string; description: string; createdAt: string };
+export type CreateProjectInput = { name: string; key?: string; description?: string };
 
 export type LoginInput = { email: string; password: string };
 export type SignupInput = { name: string; email: string; password: string; team?: string };
@@ -155,6 +173,60 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     projects: {
       list: async () => (await request<{ projects: Project[] }>("GET", "/api/app/projects")).projects,
+      create: async (input: CreateProjectInput) => (await request<{ project: Project }>("POST", "/api/app/projects", input)).project,
+      /** Teammates remove an agent session from a project. */
+      removeSession: (projectKey: string, sessionId: string) =>
+        request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/sessions/${encodeURIComponent(sessionId)}`),
+    },
+
+    /** Change your own password. */
+    changePassword: (input: { current: string; next: string }) => request<{ ok: true }>("POST", "/api/app/me/password", input),
+
+    team: {
+      overview: () => request<TeamOverview>("GET", "/api/app/team"),
+      /** Owners only. `tags` as a list or a comma-separated string. */
+      updateMember: async (userId: string, input: { role: Role; tags: string[] | string }) =>
+        (await request<{ member: TeamMember }>("PATCH", `/api/app/team/members/${encodeURIComponent(userId)}`, input)).member,
+      removeMember: (userId: string) => request<{ ok: true }>("DELETE", `/api/app/team/members/${encodeURIComponent(userId)}`),
+    },
+
+    agents: {
+      /** The team's keys (never their values) and the commands for connecting an agent. */
+      page: () => request<AgentsPage>("GET", "/api/app/agents"),
+      /** Reset an agent's queue: one key and/or one project, or everything. */
+      markAllSeen: (input: { keyId?: string; projectKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/agents/mark-all-seen", input),
+    },
+
+    keys: {
+      /** The secret is in this response only. */
+      create: (name: string) => request<CreatedKey>("POST", "/api/app/keys", { name }),
+      revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/keys/${encodeURIComponent(id)}`),
+      setDocsWrite: async (id: string, docsWrite: boolean) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { docsWrite })).key,
+    },
+
+    invites: {
+      /** Pending invites: join invites of your team (owners), or new-team invites (instance admins). */
+      list: async (kind: "join_team" | "new_team" = "join_team") =>
+        (await request<{ invites: PendingInvite[] }>("GET", `/api/app/invites?kind=${kind}`)).invites,
+      create: (input: CreateInviteInput) => request<CreatedInvite>("POST", "/api/app/invites", input),
+      revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/invites/${encodeURIComponent(id)}`),
+      /** For the invite page, before anyone is signed in. */
+      peek: async (token: string) => (await request<{ invite: InvitePeek }>("POST", "/api/app/invites/peek", { token })).invite,
+      /** Creates the account and signs the new person in. */
+      accept: async (input: AcceptInviteInput) => adopt(await request<Me>("POST", "/api/app/invites/accept", input)),
+    },
+
+    admin: {
+      teams: async () => (await request<{ teams: AdminTeam[] }>("GET", "/api/app/admin/teams")).teams,
+      team: async (id: string) => (await request<{ team: AdminTeamDetail }>("GET", `/api/app/admin/teams/${encodeURIComponent(id)}`)).team,
+      suspend: (id: string, input: { confirm: string; reason?: string }) =>
+        request<{ name: string; sessionsEnded: number }>("POST", `/api/app/admin/teams/${encodeURIComponent(id)}/suspend`, input),
+      restore: (id: string) => request<{ ok: true }>("POST", `/api/app/admin/teams/${encodeURIComponent(id)}/restore`, {}),
+    },
+
+    dashboard: {
+      /** One widget's data. */
+      widget: <W extends keyof DashboardWidgets>(widget: W) => request<DashboardWidgets[W]>("GET", `/api/app/dashboard/${widget}`),
     },
   };
 }

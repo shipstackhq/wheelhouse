@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Navigate, Outlet, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
@@ -36,6 +37,39 @@ export function AuthLayout() {
         <div className="mb-8 text-center">
           <Logo className="text-lg" />
           <p className="mt-2 text-sm text-muted">The board your team and your AI agents share.</p>
+        </div>
+        <div className="card p-6">
+          <Outlet />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+/**
+ * The invite page. The link carries a secret in its fragment, so: never index it, never send it as a referrer. (The page is one
+ * shared HTML file, so these are set here, as the page opens, rather than in the document the server sends.)
+ */
+export function InviteLayout() {
+  useEffect(() => {
+    const before = document.title;
+    document.title = "Join Wheelhouse";
+    const tags = [
+      Object.assign(document.createElement("meta"), { name: "robots", content: "noindex, nofollow" }),
+      Object.assign(document.createElement("meta"), { name: "referrer", content: "no-referrer" }),
+    ];
+    tags.forEach((t) => document.head.appendChild(t));
+    return () => {
+      document.title = before;
+      tags.forEach((t) => t.remove());
+    };
+  }, []);
+  return (
+    <main className="flex min-h-dvh items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <Logo className="text-lg" />
+          <p className="mt-2 text-sm text-muted">You have been invited.</p>
         </div>
         <div className="card p-6">
           <Outlet />

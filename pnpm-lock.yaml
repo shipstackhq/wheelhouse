@@ -190,6 +190,9 @@ importers:
       '@wheelhouse/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@wheelhouse/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

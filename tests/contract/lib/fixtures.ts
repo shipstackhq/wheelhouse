@@ -41,6 +41,8 @@ export type Fixtures = {
   /** The password every seeded user signs in with. */
   password: string;
   suspended: { apiKey: string; sessionToken: string; email: string };
+  /** An instance admin (the server under test lists this address in ADMIN_EMAILS), owner of a team of their own. */
+  admin: { email: string; userId: string; teamId: string };
   /** null when the server under test has no GitHub App configured. */
   github: GithubFixture | null;
   /** Environment the server under test needs (database location and GitHub settings). */
