@@ -4,6 +4,7 @@ export type TeamFixture = {
   teamId: string;
   userId: string;
   email: string;
+  memberEmail: string;
   projectKey: string;
   /** A ticket tests may freely edit and move. */
   ticketRef: string;
@@ -37,7 +38,9 @@ export type GithubFixture = {
 export type Fixtures = {
   a: TeamFixture;
   b: TeamFixture;
-  suspended: { apiKey: string; sessionToken: string };
+  /** The password every seeded user signs in with. */
+  password: string;
+  suspended: { apiKey: string; sessionToken: string; email: string };
   /** null when the server under test has no GitHub App configured. */
   github: GithubFixture | null;
   /** Environment the server under test needs (database location and GitHub settings). */

@@ -13,12 +13,10 @@ import {
   requireHuman,
   randomToken,
   sha256,
-  signupAllowed,
-  TEAM_SUSPENDED_MESSAGE,
-  userTeamSuspended,
 } from "@/lib/auth";
 import { AdminError, restoreTeam, suspendTeam, type Admin } from "@wheelhouse/core/lib/teams-admin";
-import { clientIp, minutes, rateLimit, resetRateLimit } from "@wheelhouse/core/lib/rate-limit";
+import { clientIp, minutes, rateLimit } from "@wheelhouse/core/lib/rate-limit";
+import { AccountError, logIn, signUp } from "@wheelhouse/core/lib/accounts";
 import { passwordProblem } from "@wheelhouse/core/lib/auth-policy";
 import {
   acceptInvite,
@@ -38,8 +36,6 @@ import { askMap } from "@wheelhouse/core/lib/ask";
 
 export type FormState = { error?: string; ok?: string; secret?: string } | undefined;
 
-const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-
 function fail(e: unknown): FormState {
   if (e instanceof svc.ServiceError) return { error: e.message };
   throw e;
@@ -52,47 +48,27 @@ const tooMany = (retryAfter: number): FormState => ({
 });
 
 export async function signup(_: FormState, fd: FormData): Promise<FormState> {
-  if (!(await signupAllowed())) return { error: "Signups are closed. Ask a team owner to add you." };
-  const ipHit = rateLimit(`signup:${clientIp(await headers())}`, 10, 60 * 60_000);
-  if (!ipHit.ok) return tooMany(ipHit.retryAfter);
-  const name = String(fd.get("name") ?? "").trim();
-  const email = String(fd.get("email") ?? "").trim().toLowerCase();
-  const password = String(fd.get("password") ?? "");
-  const teamName = String(fd.get("team") ?? "").trim() || `${name}'s team`;
-  if (!name || !emailOk(email)) return { error: "Enter your name and a valid email" };
-  const weak = passwordProblem(password);
-  if (weak) return { error: weak };
-
-  const db = await getDb();
-  const [exists] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email));
-  if (exists) return { error: "An account with that email already exists" };
-
-  const passwordHash = await hashPassword(password);
-  const userId = await db.transaction(async (tx) => {
-    const [u] = await tx.insert(schema.users).values({ email, name, passwordHash }).returning();
-    const [t] = await tx.insert(schema.teams).values({ name: teamName }).returning();
-    await tx.insert(schema.memberships).values({ userId: u.id, teamId: t.id, role: "owner" });
-    return u.id;
-  });
-  await createSession(userId);
+  try {
+    const { userId } = await signUp(
+      { name: String(fd.get("name") ?? ""), email: String(fd.get("email") ?? ""), password: String(fd.get("password") ?? ""), team: String(fd.get("team") ?? "") },
+      clientIp(await headers()),
+    );
+    await createSession(userId);
+  } catch (e) {
+    if (e instanceof AccountError) return { error: e.message };
+    throw e;
+  }
   redirect("/");
 }
 
 export async function login(_: FormState, fd: FormData): Promise<FormState> {
-  const email = String(fd.get("email") ?? "").trim().toLowerCase();
-  const password = String(fd.get("password") ?? "");
-  // Per address (spraying many accounts) and per account (guessing one password from many addresses).
-  const ipHit = rateLimit(`login-ip:${clientIp(await headers())}`, 30, 15 * 60_000);
-  if (!ipHit.ok) return tooMany(ipHit.retryAfter);
-  const emailHit = rateLimit(`login-email:${email}`, 8, 15 * 60_000);
-  if (!emailHit.ok) return tooMany(emailHit.retryAfter);
-  const db = await getDb();
-  const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
-  if (!u || !(await verifyPassword(password, u.passwordHash))) return { error: "Invalid email or password" };
-  resetRateLimit(`login-email:${email}`);
-  // Only someone who knows the password learns the team is suspended.
-  if (await userTeamSuspended(u.id)) return { error: TEAM_SUSPENDED_MESSAGE };
-  await createSession(u.id);
+  try {
+    const { userId } = await logIn({ email: String(fd.get("email") ?? ""), password: String(fd.get("password") ?? "") }, clientIp(await headers()));
+    await createSession(userId);
+  } catch (e) {
+    if (e instanceof AccountError) return { error: e.message };
+    throw e;
+  }
   redirect("/");
 }
 

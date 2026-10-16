@@ -11,7 +11,9 @@ The NestJS API (WH-91, part of the Next.js to NestJS + React migration, WH-87 / 
 | `GET /api/github/install`, `GET /api/github/callback` | connecting GitHub for a project: owners only, a signed state and a cookie (ADR-12) |
 | `GET /api/stream`, `GET /api/projects/:key/stream` | server-sent events for the signed-in team or one project (WH-1) |
 
-The JSON API for the web app follows in WH-93.
+| `GET /api/app/auth/options`, `POST /api/app/auth/login`, `/signup`, `/logout`, `GET /api/app/me`, `GET /api/app/projects` | the web app's own API (WH-93); the rest follows in WH-95 to WH-98 |
+
+`/api/app/*` is **new surface, used only by the React app** (conventions, CSRF and the inventory of the 59 server actions it replaces: `docs/ui-api.md`; typed client: `@wheelhouse/api-client`). Every controller there uses `@AppEndpoints()` (CSRF check and the error envelope) and `@UseGuards(SessionGuard)` for signed-in routes.
 
 ## Run
 
@@ -35,5 +37,6 @@ The environment is the Next app's: `DATABASE_URL` (a real Postgres) or, without 
 `pnpm --filter @wheelhouse/api test` for the unit tests. The behaviour is checked by the contract suite from the repository root:
 
 ```bash
-pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"   # the whole suite, both passes
+pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"                  # the frozen contract, both passes
+pnpm test:contract --suite app --server-cmd "pnpm --filter @wheelhouse/api start"      # the web app's API (/api/app)
 ```

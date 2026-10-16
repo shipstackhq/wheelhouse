@@ -9,9 +9,13 @@ import { McpController } from "./mcp/mcp.controller";
 import { StreamController } from "./stream/stream.controller";
 import { StreamRegistry } from "./stream/stream.registry";
 import { V1Controller } from "./v1/v1.controller";
+import { AuthController } from "./web/auth.controller";
+import { CsrfGuard, SessionGuard } from "./web/endpoints";
+import { MeController } from "./web/me.controller";
+import { ProjectsController } from "./web/projects.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController],
-  providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ProjectsController],
+  providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard],
 })
 export class AppModule {}

@@ -1,0 +1,19 @@
+{
+  "name": "@wheelhouse/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A typed client for the web app's API (/api/app): handles the CSRF token and the error envelope. No framework, only fetch.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}

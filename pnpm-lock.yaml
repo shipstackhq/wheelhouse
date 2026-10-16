@@ -178,6 +178,18 @@ importers:
 
   apps/web: {}
 
+  packages/api-client:
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.43
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@anthropic-ai/sdk':

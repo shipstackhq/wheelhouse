@@ -1,0 +1,14 @@
+{
+  "csrfToken": "string",
+  "isInstanceAdmin": "boolean",
+  "role": "string",
+  "team": {
+    "id": "string",
+    "name": "string"
+  },
+  "user": {
+    "email": "string",
+    "id": "string",
+    "name": "string"
+  }
+}

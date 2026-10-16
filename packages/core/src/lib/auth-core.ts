@@ -1,6 +1,8 @@
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import { actorForKey, AuthError, userForSessionToken, type Actor } from "./access";
+import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from "./access";
 
 /**
  * Who is calling, from the raw credentials of a request. Framework-free so the Next app and the API share one
@@ -50,3 +52,27 @@ export async function humanFromSession(token: string | undefined | null) {
 }
 
 export type Human = NonNullable<Awaited<ReturnType<typeof humanFromSession>>>;
+
+export const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString("base64url");
+
+export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
+export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);
+
+/**
+ * Start a session: a random token goes in the cookie, only its sha256 is stored. The host sets the cookie (name
+ * SESSION_COOKIE, httpOnly, SameSite=Lax, Secure in production, path /, expiring at `expiresAt`).
+ */
+export async function startSession(userId: string) {
+  const db = await getDb();
+  const token = randomToken();
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
+  await db.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt });
+  return { token, expiresAt };
+}
+
+/** End a session by its cookie value. Harmless if there is none or it is already gone. */
+export async function endSession(token: string | undefined | null) {
+  if (!token) return;
+  const db = await getDb();
+  await db.delete(schema.sessions).where(eq(schema.sessions.id, sha256(token)));
+}
