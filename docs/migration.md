@@ -31,7 +31,15 @@ git worktree add ../wh-job-WH-90 -b wh/WH-90-monorepo migration/nest-react
 
 PRs go into `migration/nest-react`, never `main`. Name the branch or PR title with the ticket ref (`WH-90`) so the GitHub App links it. A branch named just `migration` is not allowed: it would block `migration/...` names.
 
-Every new worktree needs its own `pnpm install` and a copy of `.env.local` (git-ignored). Give each running instance its own port and its own copy of the data directory.
+Every new worktree needs its own `pnpm install --offline` (falls back to `pnpm install` if the store lacks something) and a copy of `.env.local` (git-ignored). Give each running instance its own port and its own copy of the data directory.
+
+When a ticket is merged into `migration/nest-react`, remove its worktree (the branch stays as history):
+
+```bash
+git worktree remove ../wh-job-WH-90 && git worktree prune
+```
+
+A worktree is a full `node_modules` (about 750MB on disk, less where pnpm clones from the store), so do not leave merged ones around.
 
 ## Running the old app
 
