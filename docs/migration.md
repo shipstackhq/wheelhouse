@@ -73,7 +73,7 @@ Everything in Todo and Backlog outside the migration is untouched. WH-20 (GitHub
 
 ```
 packages/core     @wheelhouse/core: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries
-apps/api          the NestJS API: /mcp, /api/v1, /api/health (WH-91); webhooks, GitHub connect and streams in WH-92
+apps/api          the NestJS API: /mcp, /api/v1, /api/health (WH-91); GitHub webhook, connect flow and live streams (WH-92)
 apps/web          empty until WH-94 (React)
 src/              still the Next.js app (pages, server actions, components) until the cutover
 ```
@@ -83,4 +83,4 @@ src/              still the Next.js app (pages, server actions, components) unti
 - `pnpm test` runs core's tests, then the app's. `pnpm typecheck` checks the whole tree and then core on its own. `pnpm test:contract` is the HTTP contract suite (WH-89); it also takes `--database-url` to run against a real Postgres.
 - `src/lib` keeps only what belongs to the Next app: `auth.ts` (cookies and redirects), `stream-route.ts`, and UI helpers (labels, history groups, map layout and collapse, the markdown editor setup, navigation progress, ticket navigation, the browser side of the live stream). `isolation.test.ts` and `invites.test.ts` stay there because they audit the app's own files; the isolation audit walks `src` and `packages/core/src`.
 - Core has no per-request cache. The Next app registers React's `cache()` for the dashboard's shared query in `src/lib/core-host.ts`; the API does not need it.
-- Run the API with `pnpm --filter @wheelhouse/api start` (port 3000 by default; use 3460 next to the old app). Check it with `pnpm test:contract --only health,mcp,v1,auth,isolation --server-cmd "pnpm --filter @wheelhouse/api start"`. Authentication, the MCP protocol and the error shapes are in `@wheelhouse/core` and shared with the Next app; change them there, once.
+- Run the API with `pnpm --filter @wheelhouse/api start` (port 3000 by default; use 3460 next to the old app). Check it with `pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"` (the whole contract suite). Authentication, the MCP protocol and the error shapes are in `@wheelhouse/core` and shared with the Next app; change them there, once.

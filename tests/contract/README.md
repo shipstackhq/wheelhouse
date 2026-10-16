@@ -43,7 +43,7 @@ The server must use the seeded database (`PGLITE_DIR` or `DATABASE_URL` from the
 | `webhook.contract.test.ts` | signatures, framing, idempotency, push, pull request, CI, two teams sharing a repository id |
 | `github-connect.contract.test.ts` | install redirect, state cookie, callback checks, ownership, takeover |
 | `github-unconfigured.contract.test.ts` | the same routes on a server with no GitHub App |
-| `stream.contract.test.ts` | SSE headers and events, resume, team and project scoping |
+| `stream.contract.test.ts` | SSE headers and events, resume, team and project scoping, the 12-streams-per-person cap, no slot leaks |
 | `health.contract.test.ts` | liveness |
 
 ## Golden files

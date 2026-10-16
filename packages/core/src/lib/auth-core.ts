@@ -35,3 +35,18 @@ export async function actorFromCredentials(c: { authorization?: string | null; s
   if (!m) throw new AuthError("No team");
   return { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
 }
+
+/**
+ * The person behind a session cookie, with their team and membership, or null when signed out. Pages and routes that
+ * are only for people (connecting GitHub, the live streams) use this; each host decides what "signed out" looks like.
+ */
+export async function humanFromSession(token: string | undefined | null) {
+  const user = token ? await userForSessionToken(token) : null;
+  if (!user) return null;
+  const m = await currentMembership(user.id);
+  if (!m) return null;
+  const actor: Actor = { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
+  return { user, team: m.team, membership: m.membership, actor };
+}
+
+export type Human = NonNullable<Awaited<ReturnType<typeof humanFromSession>>>;

@@ -641,7 +641,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/metrics.ts": "everything derived from the caller's team's project ids",
   "packages/core/src/lib/github/service.ts": "webhooks reach a repository only through its team's own registered installation (targetsFor joins installation team = project team; tested with two teams sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's team",
   "packages/core/src/lib/service.ts": "every function resolves through getProject / resolveTicket (tested)",
-  "src/lib/stream-route.ts": "live streams: human sessions only, scope from stream-scope.ts (getProject / the caller's own team id, tested in live-events.test.ts), capped per user",
+  "packages/core/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (getProject / the caller's own team id, tested in live-events.test.ts), capped per user",
   "packages/core/src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
   "packages/core/src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
 };

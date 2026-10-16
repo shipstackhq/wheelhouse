@@ -88,4 +88,42 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
       projB.close();
     }
   });
+
+  test("a person can hold 12 streams; the 13th is refused with Retry-After, and closing one frees its slot", async () => {
+    const as = { cookie: fx.a.memberSessionToken };
+    const held: Awaited<ReturnType<typeof openSse>>[] = [];
+    try {
+      for (let i = 0; i < 12; i++) {
+        const s = await openSse("/api/stream", as);
+        assert.equal(s.status, 200, `stream ${i + 1} of 12`);
+        held.push(s);
+      }
+      const over = await openSse("/api/stream", as);
+      assert.equal(over.status, 429);
+      assert.equal(over.headers.get("retry-after"), "10");
+      assert.equal(over.body, "Too many open streams");
+      held.pop()!.close();
+      // The server notices a disconnect a moment later.
+      let again;
+      for (let i = 0; i < 30 && !again; i++) {
+        const s = await openSse("/api/stream", as);
+        if (s.status === 200) again = s;
+        else await sleep(100);
+      }
+      assert.ok(again, "closing a stream never freed its slot");
+      again.close();
+    } finally {
+      for (const s of held) s.close();
+    }
+  });
+
+  test("opening and closing streams over and over never runs out of slots (no leak)", async () => {
+    for (let i = 0; i < 30; i++) {
+      const s = await openSse(`/api/projects/${fx.a.projectKey}/stream`, { cookie: fx.a.memberSessionToken });
+      assert.equal(s.status, 200, `stream ${i + 1}`);
+      await s.waitFor((e) => e.event === "ready");
+      s.close();
+      await sleep(25);
+    }
+  });
 });

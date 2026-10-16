@@ -8,7 +8,7 @@ import { getDb, schema } from "@wheelhouse/core/db";
 import { signupOpen } from "@wheelhouse/core/lib/auth-policy";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
 import { sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
-import { actorFromCredentials, currentMembership, SESSION_COOKIE, SESSION_DAYS } from "@wheelhouse/core/lib/auth-core";
+import { actorFromCredentials, currentMembership, humanFromSession, SESSION_COOKIE, SESSION_DAYS } from "@wheelhouse/core/lib/auth-core";
 
 export { currentMembership };
 
@@ -72,12 +72,9 @@ export async function currentUser() {
 
 /** For pages + server actions. Redirects to /login when signed out. */
 export async function requireHuman() {
-  const user = await currentUser();
-  if (!user) redirect("/login");
-  const m = await currentMembership(user.id);
-  if (!m) redirect("/login");
-  const actor: Actor = { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
-  return { user, team: m.team, membership: m.membership, actor };
+  const human = await humanFromSession((await cookies()).get(COOKIE)?.value);
+  if (!human) redirect("/login");
+  return human;
 }
 
 /**
