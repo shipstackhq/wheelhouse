@@ -11,6 +11,10 @@ pnpm --filter @wheelhouse/web typecheck
 
 ## Shape
 
+- `src/pages/` is a page per file (or folder): `auth` (sign-in, sign-up), `invite`, `new-project`, `team`, `agents`, `admin`, `dashboard/` (one component per widget, laid out by `registry.tsx`). They read through `lib/queries.ts` and write through the typed client; none of them knows a URL.
+- Forms are React 19 form actions (`useActionState` plus `SubmitButton`, which shows the pending state). A failed call becomes a message with `lib/form-state.ts`: the server's own words (they are the Next app's), or "Cannot reach Wheelhouse" for a dropped connection.
+- A page that reads one thing wraps it in `components/query-state.tsx`'s `Loaded`: a skeleton while it loads, "not found" for a 404, a message with Try again for anything else. The dashboard's widgets each load and fail on their own.
+- After this browser changes something, `lib/refresh.ts` reads again whatever may show it; changes by other people arrive on the live stream.
 - `src/routes/router.tsx` builds every route. Pages are `PageStub`s until their ticket lands (WH-95 board, WH-96 map, WH-97 docs, WH-98 the rest); replace the stub, keep the path.
 - Guards (`routes/guards.ts`) decide in loaders: signed out goes to `/login`, signed in skips `/login`, `/admin/*` needs an admin. The session is the `["me"]` query.
 - `lib/services.tsx` owns the API client and query client. When the API says the session ended, `["me"]` becomes null first, then everything else is dropped.
