@@ -5,7 +5,9 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // PGlite ships wasm + data files that must be loaded from node_modules at runtime.
   serverExternalPackages: ["@electric-sql/pglite"],
-  outputFileTracingIncludes: { "/**": ["./drizzle/**/*"] },
+  // The workspace package is TypeScript source; Next compiles it with the app.
+  transpilePackages: ["@wheelhouse/core"],
+  outputFileTracingIncludes: { "/**": ["./packages/core/drizzle/**/*"] },
   async headers() {
     // The invite link's secret is in its fragment; these keep it out of caches, referrers and search indexes.
     return [

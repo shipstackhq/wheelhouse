@@ -1,9 +1,8 @@
-import "server-only";
 import fs from "node:fs";
 import path from "node:path";
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
-import { publishAfterCommit } from "@/lib/event-bus";
+import { publishAfterCommit } from "../lib/event-bus";
 
 // Production: real Postgres via DATABASE_URL.
 // Local dev without DATABASE_URL: embedded PGlite persisted to ./.data/pglite,
@@ -14,7 +13,15 @@ export type DB = PostgresJsDatabase<typeof schema>;
 type Holder = { db: DB; ready: Promise<void> };
 const g = globalThis as unknown as { __wheelhouseDb?: Holder };
 
-const MIGRATIONS = path.join(process.cwd(), "drizzle");
+/**
+ * Where the migration files are. WHEELHOUSE_MIGRATIONS_DIR wins; otherwise the layouts we run in are tried in turn: the
+ * repository root (packages/core/drizzle), the core package itself, and the flat layout of the container image (./drizzle).
+ */
+function migrationsDir() {
+  const candidates = [process.env.WHEELHOUSE_MIGRATIONS_DIR, path.join(process.cwd(), "packages", "core", "drizzle"), path.join(process.cwd(), "drizzle")].filter(Boolean) as string[];
+  return candidates.find((d) => fs.existsSync(path.join(d, "meta", "_journal.json"))) ?? candidates[0];
+}
+const MIGRATIONS = migrationsDir();
 
 function init(): Holder {
   const url = process.env.DATABASE_URL;

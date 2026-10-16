@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
 import { Avatar } from "@/components/profile-menu";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 
 export type ThreadComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date | string };
 

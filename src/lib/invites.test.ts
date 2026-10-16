@@ -22,7 +22,7 @@ import crypto from "node:crypto";
 import { beforeEach, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "@wheelhouse/core/db";
 import {
   acceptInvite,
   createInvite,
@@ -33,7 +33,7 @@ import {
   revokeInvite,
   seatInfo,
   type Issuer,
-} from "./invites";
+} from "@wheelhouse/core/lib/invites";
 
 const PW = "correct horse battery"; // 21 chars
 const run = RUN;

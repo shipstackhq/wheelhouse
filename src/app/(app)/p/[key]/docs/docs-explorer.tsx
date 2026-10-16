@@ -24,7 +24,7 @@ import {
 } from "@/app/actions";
 import { Select, useDialogs } from "@/components/ui";
 import { DescriptionEditor } from "@/components/description-editor";
-import { DOC_TEMPLATES, extractActionItems, type DocTemplateId } from "@/lib/doc-templates";
+import { DOC_TEMPLATES, extractActionItems, type DocTemplateId } from "@wheelhouse/core/lib/doc-templates";
 
 type TreeDoc = { id: string; parentId: string | null; slug: string; title: string; version: number; position: number; updatedAt: string | Date; stale?: boolean };
 type NodeLite = { id: string; name: string; layer: string; parentId: string | null };

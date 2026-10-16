@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { actorFromRequest, AuthError } from "@/lib/auth";
-import { runTool } from "@/lib/tools";
-import { ServiceError } from "@/lib/service";
+import { runTool } from "@wheelhouse/core/lib/tools";
+import { ServiceError } from "@wheelhouse/core/lib/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

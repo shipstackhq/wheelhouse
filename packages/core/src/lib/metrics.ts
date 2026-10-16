@@ -1,11 +1,9 @@
 import { idsWithRole } from "./column-roles";
-import "server-only";
-import { cache } from "react";
 import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
-import { getDb, schema } from "@/db";
-import type { Actor } from "./auth";
+import { getDb, schema } from "../db";
+import type { Actor } from "./access";
 import { queueStatus } from "./service";
-import type { SessionView } from "@/components/session-row";
+import type { SessionView } from "./session-buckets";
 
 /**
  * Read-only aggregates for the dashboard. One function per widget so new
@@ -22,8 +20,22 @@ export function lastNDays(n: number) {
   return Array.from({ length: n }, (_, i) => dayKey(new Date(today.getTime() - (n - 1 - i) * DAY)));
 }
 
-/** Shared per-request snapshot: projects, columns, tickets, recent events. Deduped with React cache(). */
-const snapshot = cache(async (teamId: string) => {
+/**
+ * Per-request memoisation is the host's business: a dashboard render calls several widgets that each read the same snapshot,
+ * and the Next app registers React's cache() here so they share one query. Without a host (the API, tests) every call reads
+ * afresh, which is correct, just not deduplicated.
+ */
+type Memo = <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R;
+let memo: Memo = (fn) => fn;
+let memoised: ((teamId: string) => ReturnType<typeof loadSnapshot>) | null = null;
+export function setRequestMemo(m: Memo) {
+  memo = m;
+  memoised = null;
+}
+const snapshot = (teamId: string) => (memoised ??= memo(loadSnapshot))(teamId);
+
+/** Projects, columns, tickets, recent events for one team. */
+const loadSnapshot = async (teamId: string) => {
   const db = await getDb();
   const ps = await db.select().from(projects).where(eq(projects.teamId, teamId)).orderBy(asc(projects.createdAt));
   const pids = ps.map((p) => p.id);
@@ -46,7 +58,7 @@ const snapshot = cache(async (teamId: string) => {
       .where(and(inArray(docs.projectId, pids), isNull(docs.deletedAt))),
   ]);
   return { projects: ps, columns: cs, tickets: ts, events: es, nodes: ns, docs: ds };
-});
+};
 
 type Snap = Awaited<ReturnType<typeof snapshot>>;
 

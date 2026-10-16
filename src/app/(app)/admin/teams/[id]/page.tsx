@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireHuman } from "@/lib/auth";
-import { isInstanceAdmin } from "@/lib/auth-policy";
-import { AdminError, getTeamDetail } from "@/lib/teams-admin";
+import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
+import { AdminError, getTeamDetail } from "@wheelhouse/core/lib/teams-admin";
 import { restoreTeamAction } from "@/app/actions";
 import { SuspendTeamForm } from "@/components/suspend-team-form";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import { SubmitButton } from "@/components/submit-button";
 
 export const dynamic = "force-dynamic";

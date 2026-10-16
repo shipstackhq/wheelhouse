@@ -1,6 +1,5 @@
-import "server-only";
 import { eq } from "drizzle-orm";
-import { schema } from "@/db";
+import { schema } from "../db";
 import type { Actor } from "./access";
 import type { Scope } from "./event-bus";
 import { getProject } from "./service";

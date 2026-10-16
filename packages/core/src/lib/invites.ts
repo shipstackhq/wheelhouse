@@ -1,9 +1,8 @@
-import "server-only";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
-import { getDb, schema, type DB } from "@/db";
-import { inviteTtlHours, isInstanceAdmin, maxTeamMembers, passwordProblem } from "./auth-policy";
+import { getDb, schema, type DB } from "@wheelhouse/core/db";
+import { inviteTtlHours, isInstanceAdmin, maxTeamMembers, passwordProblem } from "@wheelhouse/core/lib/auth-policy";
 
 /**
  * Invite-only signup (WH-49).

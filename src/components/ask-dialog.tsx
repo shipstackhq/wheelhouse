@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Dialog } from "radix-ui";
 import { askAction } from "@/app/actions";
 import { Markdown } from "./markdown";
-import { linkifyRefs } from "@/lib/map-shared";
+import { linkifyRefs } from "@wheelhouse/core/lib/map-shared";
 
 type QA = { q: string; a?: string; error?: string; truncated?: boolean };
 

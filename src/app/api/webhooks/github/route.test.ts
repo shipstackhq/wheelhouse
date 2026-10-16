@@ -5,8 +5,8 @@ delete process.env.DATABASE_URL;
 import { afterEach, beforeEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { POST } from "@/app/api/webhooks/github/route";
-import { signBody } from "./signature";
+import { POST } from "./route";
+import { signBody } from "@wheelhouse/core/lib/github/signature";
 
 const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } });
 const SECRET = "route-test-secret";

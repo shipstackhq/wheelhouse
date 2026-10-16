@@ -1,5 +1,5 @@
 import { CopyBlock } from "@/components/copy-block";
-import type { onboarding } from "@/lib/onboarding";
+import type { onboarding } from "@wheelhouse/core/lib/onboarding";
 
 type Cmd = ReturnType<typeof onboarding>;
 

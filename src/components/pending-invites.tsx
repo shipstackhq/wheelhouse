@@ -1,5 +1,5 @@
 import { revokeInviteAction } from "@/app/actions";
-import type { PendingInvite } from "@/lib/invites";
+import type { PendingInvite } from "@wheelhouse/core/lib/invites";
 import { SubmitButton } from "./submit-button";
 
 /** Pending invites with a Revoke button. The link itself is never shown again. */

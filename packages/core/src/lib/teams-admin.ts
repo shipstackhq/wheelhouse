@@ -1,6 +1,5 @@
-import "server-only";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../db";
 import { isInstanceAdmin, maxTeamMembers } from "./auth-policy";
 
 /**

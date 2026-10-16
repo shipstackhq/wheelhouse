@@ -1,6 +1,5 @@
-import "server-only";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../../db";
 import type { Actor } from "../access";
 import { addComment, createRepository, emit, getProject, moveTicket, ServiceError } from "../service";
 import { land } from "../sync";

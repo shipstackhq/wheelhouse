@@ -13,7 +13,7 @@ delete process.env.ANTHROPIC_AUTH_TOKEN;
 import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import * as svc from "./service";
 import { runTool } from "./tools";

@@ -41,19 +41,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
-      - run: pnpm exec tsc --noEmit
+      - run: pnpm typecheck
       - run: pnpm test
       - name: Database suites on a real Postgres (queue, invites, admin, isolation)
         env:
           TEST_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/wheelhouse_test
         run: >-
           pnpm exec tsx --conditions=react-server --test --test-force-exit --test-concurrency=1
-          src/lib/queue.test.ts src/lib/invites.test.ts src/lib/teams-admin.test.ts src/lib/isolation.test.ts
+          packages/core/src/lib/queue.test.ts src/lib/invites.test.ts packages/core/src/lib/teams-admin.test.ts src/lib/isolation.test.ts
       - name: Migrations are in sync with the schema
         run: |
-          pnpm exec drizzle-kit generate
-          git status --porcelain drizzle
-          test -z "$(git status --porcelain drizzle)" || { echo "::error::src/db/schema.ts changed without a migration. Run pnpm db:generate and commit drizzle/."; exit 1; }
+          pnpm db:generate
+          git status --porcelain packages/core/drizzle
+          test -z "$(git status --porcelain packages/core/drizzle)" || { echo "::error::packages/core/src/db/schema.ts changed without a migration. Run pnpm db:generate and commit packages/core/drizzle/."; exit 1; }
       - run: pnpm build
 
   image:
@@ -98,7 +98,7 @@ jobs:
           exit 1
       - name: Every migration was applied
         run: |
-          expected=$(node -p "require('./drizzle/meta/_journal.json').entries.length")
+          expected=$(node -p "require('./packages/core/drizzle/meta/_journal.json').entries.length")
           applied=$(docker exec -e PGPASSWORD=ci $(docker ps -qf ancestor=postgres:18) psql -U postgres -d wheelhouse -tAc 'select count(*) from drizzle.__drizzle_migrations')
           echo "expected=$expected applied=$applied"
           test "$expected" = "$applied"

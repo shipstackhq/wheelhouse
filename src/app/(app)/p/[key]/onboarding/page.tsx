@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { requireHuman } from "@/lib/auth";
-import { getProject, listRepositories, ServiceError } from "@/lib/service";
-import { onboarding } from "@/lib/onboarding";
+import { getProject, listRepositories, ServiceError } from "@wheelhouse/core/lib/service";
+import { onboarding } from "@wheelhouse/core/lib/onboarding";
 import { GithubConnect } from "../repos/github-connect";
 import { Repos } from "../repos/repos";
 import { OnboardingWizard } from "./wizard";

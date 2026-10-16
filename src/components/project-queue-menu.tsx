@@ -1,5 +1,5 @@
 import { requireHuman } from "@/lib/auth";
-import { queueStatus } from "@/lib/service";
+import { queueStatus } from "@wheelhouse/core/lib/service";
 import { BotsMenu } from "./bots-menu";
 import { Skeleton } from "./skeleton";
 

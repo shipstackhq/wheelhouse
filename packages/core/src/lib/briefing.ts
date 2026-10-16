@@ -1,5 +1,4 @@
-import "server-only";
-import type { Actor } from "./auth";
+import type { Actor } from "./access";
 import { getBoard, getChanges, getGraph, listRepositories, resolveTicket, getTicket, checklistForProject, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
 import { timeAgo } from "./time";
 import { checklistBriefingLine } from "./setup-checklist";

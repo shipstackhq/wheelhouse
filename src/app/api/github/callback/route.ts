@@ -1,10 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { requireHuman } from "@/lib/auth";
-import { ServiceError } from "@/lib/service";
-import { github } from "@/lib/github/runtime";
-import { readState, STATE_COOKIE } from "@/lib/github/state";
-import { registerInstallation } from "@/lib/github/service";
+import { ServiceError } from "@wheelhouse/core/lib/service";
+import { github } from "@wheelhouse/core/lib/github/runtime";
+import { readState, STATE_COOKIE } from "@wheelhouse/core/lib/github/state";
+import { registerInstallation } from "@wheelhouse/core/lib/github/service";
 
 export const dynamic = "force-dynamic";
 

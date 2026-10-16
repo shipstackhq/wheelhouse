@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
 import { requireHuman } from "@/lib/auth";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "@wheelhouse/core/db";
 import { removeMember, updateMember } from "../../actions";
 import { Select } from "@/components/ui";
 import { ChangePasswordForm } from "./forms";
 import { InviteForm } from "@/components/invite-form";
 import { PendingInvites } from "@/components/pending-invites";
-import { listInvites, seatInfo } from "@/lib/invites";
+import { listInvites, seatInfo } from "@wheelhouse/core/lib/invites";
 import { SubmitButton } from "@/components/submit-button";
 
 export default async function TeamPage() {

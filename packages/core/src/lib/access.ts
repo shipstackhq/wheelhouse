@@ -1,7 +1,6 @@
-import "server-only";
 import crypto from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../db";
 import { rateLimit } from "./rate-limit";
 
 /**

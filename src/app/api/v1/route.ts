@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listToolDefs } from "@/lib/tools";
+import { listToolDefs } from "@wheelhouse/core/lib/tools";
 
 export const dynamic = "force-dynamic";
 

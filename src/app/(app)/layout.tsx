@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { requireHuman } from "@/lib/auth";
-import { listProjects } from "@/lib/service";
+import { listProjects } from "@wheelhouse/core/lib/service";
 import { Sidebar } from "@/components/sidebar";
 import { ProfileMenu } from "@/components/profile-menu";
 import { NavigationProgress } from "@/components/navigation-progress";
-import { isInstanceAdmin } from "@/lib/auth-policy";
+import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, team, membership, actor } = await requireHuman();

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import clsx from "clsx";
-import type { Column } from "@/lib/map-shared";
+import type { Column } from "@wheelhouse/core/lib/map-shared";
 
 /** Read-only column list for a table/view/enum, with clickable FK targets. */
 export function ColumnsTable(props: { columns: Column[]; isEnum: boolean; onTarget: (table: string) => void; highlight?: string | null }) {

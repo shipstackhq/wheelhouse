@@ -8,7 +8,7 @@ import clsx from "clsx";
 import { upsertDecisionAction } from "@/app/actions";
 import { GlossaryProvider, Markdown, type GlossaryTerm } from "@/components/markdown";
 import { Select } from "@/components/ui";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 
 type Decision = {
   id: string;

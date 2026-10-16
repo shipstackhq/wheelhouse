@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
-import type { ChecklistItem, ChecklistState } from "@/lib/setup-checklist";
+import type { ChecklistItem, ChecklistState } from "@wheelhouse/core/lib/setup-checklist";
 
 const ACTION_LABEL: Record<ChecklistItem["id"], string> = {
   repos: "Connect a repository",

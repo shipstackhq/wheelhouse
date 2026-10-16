@@ -1,7 +1,7 @@
-import { githubConfig } from "@/lib/github/config";
-import { verifySignature } from "@/lib/github/signature";
-import { github } from "@/lib/github/runtime";
-import { handleDelivery } from "@/lib/github/service";
+import { githubConfig } from "@wheelhouse/core/lib/github/config";
+import { verifySignature } from "@wheelhouse/core/lib/github/signature";
+import { github } from "@wheelhouse/core/lib/github/runtime";
+import { handleDelivery } from "@wheelhouse/core/lib/github/service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

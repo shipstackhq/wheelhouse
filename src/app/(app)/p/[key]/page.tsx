@@ -1,6 +1,6 @@
 import { requireHuman } from "@/lib/auth";
-import { getBoard, getGraph, checklistForProject } from "@/lib/service";
-import { getDb, schema } from "@/db";
+import { getBoard, getGraph, checklistForProject } from "@wheelhouse/core/lib/service";
+import { getDb, schema } from "@wheelhouse/core/db";
 import { eq } from "drizzle-orm";
 import { Board } from "./board";
 import { SetupChecklist } from "@/components/setup-checklist";

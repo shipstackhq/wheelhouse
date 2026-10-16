@@ -18,7 +18,7 @@ import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../db";
 import { actorForKey, SuspendedError, TEAM_SUSPENDED_MESSAGE, sha256, userForSessionToken, userTeamSuspended } from "./access";
 import { acceptInvite, createInvite, InviteError, InviteFailure, peekInvite, type Issuer } from "./invites";
 import { AdminError, getTeamDetail, listTeams, restoreTeam, suspendTeam, type Admin } from "./teams-admin";
