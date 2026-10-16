@@ -8,10 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
-    "test": "pnpm --filter @wheelhouse/core test && pnpm --filter @wheelhouse/api test && pnpm --filter @wheelhouse/api-client test && tsx --conditions=react-server --test \"src/**/*.test.ts\" && tsx --tsconfig tsconfig.test.json --test \"src/**/*.test.tsx\"",
+    "test": "pnpm --filter @wheelhouse/core test && pnpm --filter @wheelhouse/api test && pnpm --filter @wheelhouse/api-client test && pnpm --filter @wheelhouse/web test && tsx --conditions=react-server --test \"src/**/*.test.ts\" && tsx --tsconfig tsconfig.test.json --test \"src/**/*.test.tsx\"",
     "db:generate": "pnpm --filter @wheelhouse/core db:generate",
     "test:contract": "tsx --conditions=react-server tests/contract/run.ts",
-    "typecheck": "tsc --noEmit && pnpm --filter @wheelhouse/core typecheck && pnpm --filter @wheelhouse/api typecheck && pnpm --filter @wheelhouse/api-client typecheck"
+    "typecheck": "tsc --noEmit && pnpm --filter @wheelhouse/core typecheck && pnpm --filter @wheelhouse/api typecheck && pnpm --filter @wheelhouse/api-client typecheck && pnpm --filter @wheelhouse/web typecheck"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

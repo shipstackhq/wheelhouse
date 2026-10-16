@@ -17,7 +17,7 @@ describe("POST /api/app/auth/login", () => {
   test("starts a session: the person, their team and role, the CSRF token, and the same cookie the Next app sets", async () => {
     const r = await login(fx.a.email);
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json).sort(), ["csrfToken", "isInstanceAdmin", "role", "team", "user"]);
+    assert.deepEqual(Object.keys(r.json).sort(), ["csrfToken", "isInstanceAdmin", "role", "tags", "team", "user"]);
     assert.deepEqual(r.json.user, { id: fx.a.userId, name: "Contract A owner", email: fx.a.email });
     assert.equal(r.json.team.id, fx.a.teamId);
     assert.equal(r.json.role, "owner");
