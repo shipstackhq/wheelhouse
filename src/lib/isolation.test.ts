@@ -631,10 +631,11 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "src/app/(app)/p/[key]/docs/page.tsx": "members filtered by the caller's team id, for the doc byline; the project/docs via service",
   "src/app/(app)/team/page.tsx": "members filtered by the caller's team id; invites via invites.ts",
   "src/app/actions.ts": "see ACTION_AUDIT",
-  "src/app/api/health/route.ts": "select 1, no data",
+  "apps/api/src/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
   "packages/core/src/db/index.ts": "the connection itself",
   "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
   "src/lib/auth.ts": "signup, sessions, membership of the signed-in user",
+  "packages/core/src/lib/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
   "packages/core/src/lib/invites.ts": "tokens; scoped by issuer team, or by the invite's own team at acceptance",
   "packages/core/src/lib/members.ts": "every statement scoped by the caller's team id (tested)",
   "packages/core/src/lib/metrics.ts": "everything derived from the caller's team's project ids",
@@ -659,8 +660,9 @@ describe("new entry points must be audited", () => {
   });
 
   test("every file that touches the database directly has an audit entry", () => {
-    // The Next app and the core package: the service layer lives in packages/core and must stay covered.
-    const files = [...walk("src"), ...walk("packages/core/src")]
+    // The Next app, the core package and the API: the service layer lives in packages/core and must stay covered.
+    // The API too: its controllers and guards must not touch the database, so none has an audit entry and any that does fails here.
+    const files = [...walk("src"), ...walk("packages/core/src"), ...walk("apps/api/src")]
       .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f))
       .filter((f) => /\bgetDb\(/.test(fs.readFileSync(f, "utf8")))
       .map((f) => f.split(path.sep).join("/"))

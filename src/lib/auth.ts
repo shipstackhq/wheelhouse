@@ -7,7 +7,10 @@ import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@wheelhouse/core/db";
 import { signupOpen } from "@wheelhouse/core/lib/auth-policy";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
-import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
+import { sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
+import { actorFromCredentials, currentMembership, SESSION_COOKIE, SESSION_DAYS } from "@wheelhouse/core/lib/auth-core";
+
+export { currentMembership };
 
 // Everything that decides who may come in lives in access.ts (testable without Next.js); re-exported so the rest
 // of the app keeps importing it from here.
@@ -23,8 +26,7 @@ export {
   type Actor,
 } from "@wheelhouse/core/lib/access";
 
-const COOKIE = "wh_session";
-const SESSION_DAYS = 30;
+const COOKIE = SESSION_COOKIE;
 
 export const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString("base64url");
 
@@ -68,18 +70,6 @@ export async function currentUser() {
   return userForSessionToken(token);
 }
 
-/** MVP: one team per user (the first membership). */
-export async function currentMembership(userId: string) {
-  const db = await getDb();
-  const [m] = await db
-    .select({ membership: schema.memberships, team: schema.teams })
-    .from(schema.memberships)
-    .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
-    .where(eq(schema.memberships.userId, userId))
-    .limit(1);
-  return m ?? null;
-}
-
 /** For pages + server actions. Redirects to /login when signed out. */
 export async function requireHuman() {
   const user = await currentUser();
@@ -96,11 +86,5 @@ export async function requireHuman() {
  */
 export async function actorFromRequest(): Promise<Actor> {
   const h = await headers();
-  const auth = h.get("authorization");
-  if (auth?.startsWith("Bearer ")) return actorForKey(auth.slice(7).trim(), clientIp(h));
-  const user = await currentUser();
-  if (!user) throw new AuthError("Not authenticated");
-  const m = await currentMembership(user.id);
-  if (!m) throw new AuthError("No team");
-  return { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
+  return actorFromCredentials({ authorization: h.get("authorization"), sessionToken: (await cookies()).get(COOKIE)?.value, ip: clientIp(h) });
 }
