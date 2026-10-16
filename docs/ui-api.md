@@ -172,3 +172,33 @@ Rules worth knowing:
 - **Every bad invite link reads the same** (`400 invalid`, "This invite link is invalid or has expired."), so a link cannot be probed.
 - The dashboard's widgets are separate requests so each one paints as soon as its own data arrives. They do not share a snapshot the
   way the Next app's single render did; if that matters under load, memoise per request in `@wheelhouse/core/lib/metrics` (`setRequestMemo`).
+
+## Built by WH-96
+
+The board and the ticket dialog. Everything needs a session. A ticket is addressed by its ref (`WH-12`, case-insensitive in the key), which already names its project, and a ticket or project of another team is a 404.
+
+| Endpoint | What it is |
+|---|---|
+| `GET /api/app/projects/:key/board` | the project page in one read: `project`, `columns` (id, name, role, position), `tickets` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
+| `GET /api/app/projects/:key/queue` | the Bots menu: `{ bots }`, each agent key with its queue depth and live sessions in this project |
+| `PATCH /api/app/tickets/:ref` | see "The version check" below |
+| `POST /api/app/tickets/:ref/move` | `{ column, index?, version? }`: the column by id, name or role; `index` is the place in the column (the end when absent) |
+
+A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
+
+**Claiming.** Only agents claim a ticket (over MCP or `/api/v1`). A person decides whether agents may pick a ticket up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
+
+**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`column`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's team.
+
+### The version check
+
+The first real use of the optimistic-lock pattern described under "Optimistic locking" above.
+
+- `PATCH` and `move` take `version`: the version you last read. If anyone (a person or an agent) changed the ticket since, the answer is `409 conflict`, nothing is changed, and `details.current` is the ticket as it is now, in the same trimmed shape (`ApiError.current` in the client).
+- Two edits made from the same version: exactly one is applied and the other is a 409 (tested with two requests at once).
+- Without `version` the change is applied over whatever is there, as the agents' own tools do. The web app always sends it for edits and not for moves made by dragging, because a drag is about position, not about what the ticket says.
+- A change that alters nothing does not bump the version.
+
+### Live updates
+
+A change made by an agent over MCP or `/api/v1`, or by anyone through these endpoints, is one write path: it publishes an event on the project's stream (`/api/projects/:key/stream`) after it commits. A test holds a stream open, moves a ticket as an agent, and requires the `change` event within a second.

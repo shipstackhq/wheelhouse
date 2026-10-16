@@ -2,6 +2,7 @@ import { type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
 import { AdminInvitesPage, AdminTeamPage, AdminTeamsPage } from "../pages/admin";
 import { AgentsPage } from "../pages/agents";
+import { BoardPage } from "../pages/board";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
 import { InvitePage } from "../pages/invite";
@@ -56,7 +57,7 @@ export function buildRoutes(services: Services): RouteObject[] {
               path: "p/:key",
               Component: ProjectLayout,
               children: [
-                { index: true, Component: stub("Board", "WH-96") },
+                { index: true, Component: BoardPage },
                 { path: "activity", Component: stub("Activity", "WH-97") },
                 { path: "map", Component: stub("Map", "WH-97") },
                 { path: "docs", Component: stub("Docs", "WH-98") },

@@ -4,16 +4,16 @@ import { ApiError } from "@wheelhouse/api-client";
 import { ADA, renderApp, signedOut } from "../test/harness";
 import { FakeEventSource } from "../test/fake-event-source";
 
-/** The pages ported in WH-95, by address, with something only that page shows. The addresses are the Next app's, unchanged. */
+/** The pages ported so far (WH-95, WH-96), by address, with something only that page shows. The addresses are the Next app's, unchanged. */
 const PORTED_PAGES: [path: string, heading: RegExp][] = [
   ["/", /^Good (morning|afternoon|evening), Ada$/],
   ["/projects/new", /^New project$/],
   ["/team", /^Analytical Engines$/],
   ["/agents", /^Agents & API keys$/],
+  ["/p/AA", /^Alpha$/],
 ];
-/** Still stubs: the project pages are ported by WH-96, WH-97 and WH-98. */
+/** Still stubs: the rest of the project pages (WH-97, WH-98). */
 const STUB_PAGES: [path: string, owner: string][] = [
-  ["/p/AA", "WH-96"],
   ["/p/AA/activity", "WH-97"],
   ["/p/AA/map", "WH-97"],
   ["/p/AA/docs", "WH-98"],
@@ -143,7 +143,7 @@ describe("signed out: the gate", () => {
 
 describe("the session ends while the page is open", () => {
   test("the next request that learns it goes to /login and forgets the person", async () => {
-    const { at, server, services } = renderApp("/p/AA");
+    const { at, server, services } = renderApp("/p/AA/docs");
     await screen.findByTestId("page-stub");
     server.me = null; // signed out in another tab
     await services.queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -159,7 +159,7 @@ describe("the session ends while the page is open", () => {
 describe("loading and failing", () => {
   test("while the first screen's data loads there is a busy skeleton, not a blank page", async () => {
     let release!: () => void;
-    renderApp("/p/AA", (s) => (s.hold = new Promise<void>((r) => (release = r))));
+    renderApp("/p/AA/docs", (s) => (s.hold = new Promise<void>((r) => (release = r))));
     const status = await screen.findByRole("status");
     expect(status.getAttribute("aria-busy")).toBe("true");
     expect(screen.getByText("Loading Wheelhouse…")).toBeTruthy();

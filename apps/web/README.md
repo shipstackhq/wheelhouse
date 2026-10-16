@@ -11,7 +11,7 @@ pnpm --filter @wheelhouse/web typecheck
 
 ## Shape
 
-- `src/pages/` is a page per file (or folder): `auth` (sign-in, sign-up), `invite`, `new-project`, `team`, `agents`, `admin`, `dashboard/` (one component per widget, laid out by `registry.tsx`). They read through `lib/queries.ts` and write through the typed client; none of them knows a URL.
+- `src/pages/` is a page per file (or folder): `auth` (sign-in, sign-up), `invite`, `new-project`, `team`, `agents`, `admin`, `dashboard/` (one component per widget, laid out by `registry.tsx`), `board/` (the kanban board, its ticket dialog and the pure rules of a drag in `board-state.ts`). They read through `lib/queries.ts` and write through the typed client; none of them knows a URL.
 - Forms are React 19 form actions (`useActionState` plus `SubmitButton`, which shows the pending state). A failed call becomes a message with `lib/form-state.ts`: the server's own words (they are the Next app's), or "Cannot reach Wheelhouse" for a dropped connection.
 - A page that reads one thing wraps it in `components/query-state.tsx`'s `Loaded`: a skeleton while it loads, "not found" for a 404, a message with Try again for anything else. The dashboard's widgets each load and fail on their own.
 - After this browser changes something, `lib/refresh.ts` reads again whatever may show it; changes by other people arrive on the live stream.
@@ -24,3 +24,9 @@ pnpm --filter @wheelhouse/web typecheck
 ## PWA
 
 `public/sw.js` caches only `/assets/*` and `/offline.html`; navigations always go to the network, and `/api` and `/mcp` are never touched. The worker registers in production builds only. Signing out wipes its caches.
+
+## The board
+
+The board keeps a local copy of the tickets so a drag moves cards at once. The server's copy replaces it whenever nothing is being dragged (that is how an agent's or a teammate's change shows up: the live stream refreshes the board query), and again, with the real positions, when a drop has been saved. The ticket dialog is its own query (`["ticket", ref]`), so it follows the stream too; an edit in progress is never overwritten (a title being typed is kept, and a description edit that started on an older version warns and is refused on save). `?t=` names the open ticket. Every edit sends the `version` it was made from; a stale one is a 409 whose `current` the dialog shows.
+
+dnd-kit's pointer sensor cannot be driven in jsdom, so the rules of a drag are pure functions in `pages/board/board-state.ts` with their own tests, and the real drag (into an empty column, into a populated one, within one) was checked in a browser.

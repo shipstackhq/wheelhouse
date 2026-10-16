@@ -24,6 +24,14 @@ if (!("ResizeObserver" in window)) {
   };
 }
 
+// Radix menus and selects use these; jsdom has none of them.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+
 import { FakeEventSource } from "./fake-event-source";
 import { beforeEach } from "vitest";
 beforeEach(() => {
