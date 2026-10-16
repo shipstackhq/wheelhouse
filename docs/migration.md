@@ -75,6 +75,7 @@ Everything in Todo and Backlog outside the migration is untouched. WH-20 (GitHub
 packages/core     @wheelhouse/core: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries
 apps/api          the NestJS API: /mcp, /api/v1, /api/health (WH-91); GitHub webhook, connect flow and live streams (WH-92)
 apps/web          empty until WH-94 (React)
+packages/api-client  @wheelhouse/api-client: the typed client the React app uses for /api/app (WH-93)
 src/              still the Next.js app (pages, server actions, components) until the cutover
 ```
 
@@ -84,3 +85,4 @@ src/              still the Next.js app (pages, server actions, components) unti
 - `src/lib` keeps only what belongs to the Next app: `auth.ts` (cookies and redirects), `stream-route.ts`, and UI helpers (labels, history groups, map layout and collapse, the markdown editor setup, navigation progress, ticket navigation, the browser side of the live stream). `isolation.test.ts` and `invites.test.ts` stay there because they audit the app's own files; the isolation audit walks `src` and `packages/core/src`.
 - Core has no per-request cache. The Next app registers React's `cache()` for the dashboard's shared query in `src/lib/core-host.ts`; the API does not need it.
 - Run the API with `pnpm --filter @wheelhouse/api start` (port 3000 by default; use 3460 next to the old app). Check it with `pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"` (the whole contract suite). Authentication, the MCP protocol and the error shapes are in `@wheelhouse/core` and shared with the Next app; change them there, once.
+- The web app's own API is `/api/app/*` (WH-93): conventions, the CSRF rules and the inventory of the 59 server actions it replaces, with the ticket that owns each, are in `docs/ui-api.md`. Its tests are `tests/contract/*.app.contract.test.ts`, run with `--suite app`; the frozen contract is the default suite.

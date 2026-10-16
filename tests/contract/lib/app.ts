@@ -1,4 +1,4 @@
-import { BASE, call, fx, type CallOpts, type Res } from "./http";
+import { BASE, call, freshIp, fx, type CallOpts, type Res } from "./http";
 
 /** Helpers for the web app's API (/api/app): a browser-like session with the CSRF header handled. */
 export const ORIGIN = new URL(BASE).origin;
@@ -32,3 +32,25 @@ export async function signIn(email: string): Promise<Sess> {
 
 let n = 0;
 export const newEmail = () => `web-${Date.now().toString(36)}-${++n}@example.test`;
+
+/** A fetch with a cookie jar and a browser's Origin header, for the typed client (which just calls fetch). */
+export function browserFetch(): typeof fetch {
+  const jar = new Map<string, string>();
+  const ip = freshIp();
+  return (async (input: string | URL | Request, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers);
+    headers.set("origin", ORIGIN);
+    headers.set("x-forwarded-for", ip);
+    if (jar.size) headers.set("cookie", [...jar].map(([k, v]) => `${k}=${v}`).join("; "));
+    const res = await fetch(input, { ...init, headers, redirect: "manual" });
+    for (const c of res.headers.getSetCookie()) {
+      const [pair] = c.split(";");
+      const i = pair.indexOf("=");
+      const name = pair.slice(0, i);
+      const value = pair.slice(i + 1);
+      if (/Expires=Thu, 01 Jan 1970|Max-Age=0/i.test(c)) jar.delete(name);
+      else jar.set(name, value);
+    }
+    return res;
+  }) as typeof fetch;
+}

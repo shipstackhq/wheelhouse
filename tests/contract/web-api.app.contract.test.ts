@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { call, fx, freshIp, unique, v1 } from "./lib/http";
+import { fx, freshIp, unique, v1 } from "./lib/http";
 import { anon, app, login, newEmail, sessionFrom, signIn } from "./lib/app";
 import { expectGolden } from "./lib/golden";
 import { shape } from "./lib/shape";

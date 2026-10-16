@@ -7,6 +7,7 @@ FROM base AS deps
 # A workspace install needs every package.json present, not just the root one.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/core/package.json packages/core/package.json
+COPY packages/api-client/package.json packages/api-client/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile

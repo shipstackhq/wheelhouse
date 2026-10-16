@@ -673,3 +673,62 @@ describe("new entry points must be audited", () => {
     assert.deepEqual(stale, [], `audit entries for files that no longer query the database: ${stale.join(", ")}`);
   });
 });
+
+/**
+ * Every route the API serves, and what keeps it to the caller's own team (WH-93). The routes are read from the controllers, so a
+ * new endpoint cannot be added without saying here how it is scoped. Controllers never touch the database (the audit above), so
+ * "scoped" means: the person or key is resolved first, and everything after is the service layer, which takes the actor.
+ */
+const API_ROUTE_AUDIT: Record<string, string> = {
+  "GET /api/health": "select 1; no data, no auth",
+  "POST /mcp": "actor from the API key or session (ActorGuard); every tool runs through the service layer with that actor (tested over HTTP in the contract suite)",
+  "GET /mcp": "405, nothing read",
+  "DELETE /mcp": "405, nothing read",
+  "GET /api/v1": "tool definitions only; no data",
+  "POST /api/v1/:tool": "actor from the API key or session (ActorGuard); the service layer is team scoped (tested over HTTP)",
+  "POST /api/webhooks/github": "signature over the raw body first; a delivery reaches a repository only through its own team's registered installation (targetsFor joins installation team = project team; tested with two teams sharing a repository id and a forged row)",
+  "GET /api/github/install": "a signed-in owner (HumanGuard); the project is resolved through getProject(actor), so another team's project is a 404",
+  "GET /api/github/callback": "a signed-in owner; the signed state must name this person and the cookie's nonce; GitHub must say this person administers the installation; an installation belongs to one team",
+  "GET /api/stream": "a person's session only; the scope is the caller's own team id (teamScope), never from the request",
+  "GET /api/projects/:key/stream": "a person's session only; the project is resolved through getProject(actor), another team's is a 404",
+  "GET /api/app/auth/options": "whether sign-up is open; no data about any team, no auth",
+  "POST /api/app/auth/login": "one account by email and password; rate limited per address and per account; starts that person's own session",
+  "POST /api/app/auth/signup": "creates a new user and a new team they own; reads nothing of any team",
+  "POST /api/app/auth/logout": "deletes the session named by the caller's own cookie",
+  "GET /api/app/me": "the signed-in person from their session (SessionGuard); nothing taken from the request",
+  "GET /api/app/projects": "listProjects(actor) for the signed-in person's team (SessionGuard); a teamId in the query or a header is ignored (tested)",
+};
+
+const controllerFiles = (dir: string) => walk(dir).filter((f) => f.endsWith(".controller.ts"));
+const prefixOf = (src: string) => /@Controller\(\s*(?:"([^"]*)")?\s*\)/.exec(src)?.[1] ?? "";
+const routesIn = (src: string): string[] =>
+  [...src.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(?:"([^"]*)")?\s*\)/g)].map((m) => `${m[1].toUpperCase()} /${[prefixOf(src), m[2] ?? ""].filter(Boolean).join("/").replace(/^\/+/, "")}`);
+const routesOf = (dir: string): string[] => controllerFiles(dir).flatMap((f) => routesIn(fs.readFileSync(f, "utf8"))).sort();
+
+describe("every API route must be audited", () => {
+  test("each route a controller serves has an entry saying how it is scoped", () => {
+    const routes = routesOf("apps/api/src");
+    assert.ok(routes.length >= 15, `found only ${routes.length} routes; the scan may be broken`);
+    const missing = routes.filter((r) => !(r in API_ROUTE_AUDIT));
+    assert.deepEqual(missing, [], `API routes without an isolation audit entry: ${missing.join(", ")}`);
+  });
+
+  test("no entry is left for a route that no longer exists", () => {
+    const routes = routesOf("apps/api/src");
+    const stale = Object.keys(API_ROUTE_AUDIT).filter((r) => !routes.includes(r));
+    assert.deepEqual(stale, [], `audit entries for routes that are gone: ${stale.join(", ")}`);
+  });
+
+  test("every /api/app controller uses @AppEndpoints(), and SessionGuard unless all its routes are the open sign-in ones", () => {
+    const open = new Set(["GET /api/app/auth/options", "POST /api/app/auth/login", "POST /api/app/auth/signup", "POST /api/app/auth/logout"]);
+    let checked = 0;
+    for (const f of controllerFiles("apps/api/src")) {
+      const src = fs.readFileSync(f, "utf8");
+      if (!prefixOf(src).startsWith("api/app")) continue;
+      checked++;
+      assert.match(src, /@AppEndpoints\(\)/, `${f} must use @AppEndpoints() for CSRF and the error envelope`);
+      if (routesIn(src).some((r) => !open.has(r))) assert.match(src, /SessionGuard/, `${f} serves routes that need a signed-in person but does not use SessionGuard`);
+    }
+    assert.ok(checked >= 3, "no /api/app controllers found; the scan may be broken");
+  });
+});

@@ -14,6 +14,7 @@ any server that implements the contract.
 pnpm test:contract                                  # seeds a throwaway database, starts the app, runs everything, cleans up
 pnpm test:contract --only webhook,v1                # only test files whose name contains one of these
 pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"   # a different server; {PORT} is replaced
+pnpm test:contract --suite app --server-cmd "pnpm --filter @wheelhouse/api start"   # the web app's API (/api/app): only the Nest app has it
 pnpm test:contract --update-golden                  # accept a deliberate contract change (review the diff in golden/)
 pnpm test:contract --keep                           # keep tests/contract/.work (databases, server logs) for inspection
 ```
@@ -45,6 +46,11 @@ The server must use the seeded database (`PGLITE_DIR` or `DATABASE_URL` from the
 | `github-unconfigured.contract.test.ts` | the same routes on a server with no GitHub App |
 | `stream.contract.test.ts` | SSE headers and events, resume, team and project scoping, the 12-streams-per-person cap, no slot leaks |
 | `health.contract.test.ts` | liveness |
+| `csrf.app.contract.test.ts` | **suite `app`:** forged and cross-site requests to the web app's API are refused, tokens are bound to a session |
+| `web-api.app.contract.test.ts` | **suite `app`:** sign in, sign up, sign out, who am I, projects; cookie attributes; rate limits; error envelopes |
+| `client.app.contract.test.ts` | **suite `app`:** the typed client over real HTTP |
+
+The default suite (`frozen`) is the external contract that both the Next app and the Nest app must meet. Files named `*.app.contract.test.ts` are the web app's own API, which only the Nest app has; run them with `--suite app` (or everything with `--suite all`).
 
 ## Golden files
 
