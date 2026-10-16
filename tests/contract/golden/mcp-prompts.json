@@ -1,0 +1,61 @@
+[
+  {
+    "name": "brief",
+    "arguments": [
+      {
+        "name": "project",
+        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "explain",
+    "arguments": [
+      {
+        "name": "project",
+        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "required": true
+      },
+      {
+        "name": "topic",
+        "description": "What to explain, e.g. a feature, node or flow",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "map_codebase",
+    "arguments": [
+      {
+        "name": "project",
+        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "required": true
+      },
+      {
+        "name": "focus",
+        "description": "Optional: limit to one area (directory or feature)"
+      }
+    ]
+  },
+  {
+    "name": "map_schema",
+    "arguments": [
+      {
+        "name": "project",
+        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "required": true
+      }
+    ]
+  },
+  {
+    "name": "refresh_map",
+    "arguments": [
+      {
+        "name": "project",
+        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "required": true
+      }
+    ]
+  }
+]

@@ -1,0 +1,1587 @@
+[
+  {
+    "name": "ack_changes",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "seq"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "claim_ticket",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "comment",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket",
+        "body"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_project",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string",
+          "maxLength": 6
+        },
+        "description": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_ticket",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "column": {
+          "description": "Column name, default Backlog",
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "link_nodes": {
+          "description": "Graph node names/ids this ticket touches",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_doc",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "doc"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_flow",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "flow": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "flow"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_node",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "node": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "node"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_term",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "term": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "term"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_activity",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_board",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_briefing",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "max_chars": {
+          "description": "Default 6000",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_changes",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_doc",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "doc"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_flows",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_graph",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "layer": {
+          "type": "string",
+          "enum": [
+            "concept",
+            "system",
+            "data",
+            "code"
+          ]
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_node",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "node": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "node"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_schema",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_stale_docs",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_stale_nodes",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_ticket",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_ticket_context",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "max_chars": {
+          "description": "Default 8000",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "link_doc_node",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
+        },
+        "node": {
+          "type": "string"
+        },
+        "unlink": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "doc",
+        "node"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "link_ticket_node",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "node": {
+          "type": "string"
+        },
+        "unlink": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket",
+        "node"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_decisions",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_doc_drafts",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_doc_templates",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_docs",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "parent": {
+          "description": "List only this doc's direct children",
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_drafts",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_projects",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_repositories",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_terms",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mark_doc_fresh",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "doc"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mark_fresh",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "node": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "node"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "move_ticket",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "column": {
+          "type": "string"
+        },
+        "index": {
+          "description": "Position in column, default end",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "expected_version": {
+          "description": "Ticket version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket",
+        "column"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "report_changes",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "files": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Repo-relative paths"
+        },
+        "sha": {
+          "description": "Commit sha the changes landed in",
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "repository": {
+          "description": "wheelhouse.json's repository name/slug, for multi-repo projects (WH-68)",
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "files"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "resume_session",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "replay",
+            "skip"
+          ]
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "mode"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_docs",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "query": {
+          "type": "string"
+        },
+        "max_tokens": {
+          "description": "Approximate budget for returned snippets, default 800",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "query"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "suggest_doc_anchors",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "doc": {
+          "type": "string",
+          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "doc"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "unlink_nodes",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "depends",
+            "implements",
+            "references"
+          ]
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_ticket",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ticket": {
+          "type": "string",
+          "description": "Ticket ref like \"WH-12\" (or id)"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_version": {
+          "description": "Ticket version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ticket"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_decision",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "proposed",
+            "accepted",
+            "superseded",
+            "rejected"
+          ]
+        },
+        "context": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "consequences": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_doc",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "doc": {
+          "description": "Omit to create a new doc",
+          "type": "string"
+        },
+        "title": {
+          "description": "Required when creating",
+          "type": "string"
+        },
+        "body": {
+          "description": "Markdown",
+          "type": "string"
+        },
+        "parent": {
+          "description": "Parent doc slug path or id; null moves to top level; only used on create or move",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "description": "Seed a new doc's body from one of the five standard templates (see list_doc_templates). Only used on create; ignored if `body` is also given (body wins). No effect on updates.",
+          "type": "string",
+          "enum": [
+            "spec",
+            "decision-record",
+            "runbook",
+            "meeting-notes",
+            "onboarding"
+          ]
+        },
+        "anchors": {
+          "description": "Repo paths/globs this doc describes; confirmed by you, never inferred automatically",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "described_sha": {
+          "type": "string"
+        },
+        "mark_fresh": {
+          "description": "Clear the stale flag without changing title/body (like mark_fresh for nodes)",
+          "type": "boolean"
+        },
+        "expected_version": {
+          "description": "Doc version you last read. Required for safe updates; ignored on create.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_edge",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "depends",
+            "implements",
+            "references"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_flow",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "node": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "node",
+              "title"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_node",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "layer": {
+          "description": "Default system (or the parent's layer)",
+          "type": "string",
+          "enum": [
+            "concept",
+            "system",
+            "data",
+            "code"
+          ]
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "concept",
+            "capability",
+            "actor",
+            "service",
+            "module",
+            "component",
+            "database",
+            "queue",
+            "external",
+            "table",
+            "view",
+            "enum",
+            "directory",
+            "file",
+            "symbol",
+            "endpoint"
+          ]
+        },
+        "parent": {
+          "description": "Parent node (same layer) name or id; null moves to top level",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "responsibilities": {
+          "type": "string"
+        },
+        "interfaces": {
+          "type": "string"
+        },
+        "gotchas": {
+          "type": "string"
+        },
+        "details": {
+          "description": "Free-form notes (markdown)",
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "planned",
+            "building",
+            "live",
+            "deprecated"
+          ]
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "implements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "described_sha": {
+          "type": "string"
+        },
+        "mark_fresh": {
+          "type": "boolean"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_table",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "table",
+            "view",
+            "enum"
+          ]
+        },
+        "summary": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "gotchas": {
+          "description": "Invariants, soft-delete rules, denormalisations, hot paths",
+          "type": "string"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "description": "SQL type as written, e.g. \"uuid\", \"text\", \"timestamptz\", \"jsonb\""
+              },
+              "pk": {
+                "type": "boolean"
+              },
+              "nullable": {
+                "type": "boolean"
+              },
+              "unique": {
+                "type": "boolean"
+              },
+              "default": {
+                "type": "string"
+              },
+              "references": {
+                "description": "\"table.column\"",
+                "type": "string"
+              },
+              "onDelete": {
+                "description": "cascade | set null | restrict | no action",
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "description": "All columns, in schema order"
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "unique": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "columns"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "implements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "described_sha": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "name",
+        "columns"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "upsert_term",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "term": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "node": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "term",
+        "definition"
+      ],
+      "additionalProperties": false
+    }
+  }
+]
