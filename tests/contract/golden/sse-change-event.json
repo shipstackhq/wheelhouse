@@ -1,0 +1,9 @@
+{
+  "actorKind": "string",
+  "actorName": "string",
+  "entity": "string",
+  "entityId": "string",
+  "seq": "number",
+  "summary": "string",
+  "type": "string"
+}

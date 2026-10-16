@@ -44,3 +44,6 @@ next-env.d.ts
 .wheelhouse/
 
 !.env.example
+
+# contract suite scratch (databases, logs)
+tests/contract/.work/

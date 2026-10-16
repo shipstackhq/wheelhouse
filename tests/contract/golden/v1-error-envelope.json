@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "string",
+    "message": "string"
+  }
+}

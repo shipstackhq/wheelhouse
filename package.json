@@ -9,7 +9,8 @@
     "lint": "eslint",
     "seed": "tsx scripts/seed.ts",
     "test": "tsx --conditions=react-server --test \"src/**/*.test.ts\" && tsx --tsconfig tsconfig.test.json --test \"src/**/*.test.tsx\"",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "test:contract": "tsx --conditions=react-server tests/contract/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

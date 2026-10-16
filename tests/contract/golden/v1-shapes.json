@@ -1,0 +1,184 @@
+{
+  "list_projects": [
+    {
+      "createdAt": "string",
+      "description": "string",
+      "id": "string",
+      "key": "string",
+      "name": "string",
+      "teamId": "string",
+      "ticketCounter": "number"
+    }
+  ],
+  "get_board": {
+    "columns": [
+      {
+        "name": "string",
+        "tickets": [
+          {
+            "agentClaimable": "boolean",
+            "claimed": "boolean",
+            "comments": "number",
+            "labels": [
+              "string"
+            ],
+            "linkedNodes": "number",
+            "priority": "string",
+            "ref": "string",
+            "title": "string",
+            "version": "number"
+          }
+        ]
+      }
+    ],
+    "project": {
+      "description": "string",
+      "key": "string",
+      "name": "string"
+    }
+  },
+  "create_ticket": {
+    "agentClaimable": "boolean",
+    "assigneeId": "null",
+    "body": "string",
+    "claimedByKeyId": "null",
+    "column": "string",
+    "columnId": "string",
+    "createdAt": "string",
+    "createdById": "string",
+    "createdByKind": "string",
+    "id": "string",
+    "labels": [
+      "string"
+    ],
+    "number": "number",
+    "position": "number",
+    "priority": "string",
+    "projectId": "string",
+    "ref": "string",
+    "title": "string",
+    "updatedAt": "string",
+    "version": "number"
+  },
+  "get_ticket": {
+    "comments": [],
+    "history": [
+      {
+        "actorId": "string",
+        "actorKind": "string",
+        "actorName": "string",
+        "createdAt": "string",
+        "data": {
+          "column": "string",
+          "ref": "string",
+          "title": "string"
+        },
+        "entity": "string",
+        "entityId": "string",
+        "projectId": "string",
+        "seq": "number",
+        "sessionId": "null",
+        "summary": "string",
+        "teamId": "string",
+        "type": "string"
+      }
+    ],
+    "nodes": [],
+    "project": {
+      "createdAt": "string",
+      "description": "string",
+      "id": "string",
+      "key": "string",
+      "name": "string",
+      "teamId": "string",
+      "ticketCounter": "number"
+    },
+    "pullRequests": [],
+    "ticket": {
+      "agentClaimable": "boolean",
+      "assigneeId": "null",
+      "body": "string",
+      "claimedByKeyId": "null",
+      "column": "string",
+      "columnId": "string",
+      "createdAt": "string",
+      "createdById": "string",
+      "createdByKind": "string",
+      "id": "string",
+      "labels": [
+        "string"
+      ],
+      "number": "number",
+      "position": "number",
+      "priority": "string",
+      "projectId": "string",
+      "ref": "string",
+      "title": "string",
+      "updatedAt": "string",
+      "version": "number"
+    }
+  },
+  "get_changes": {
+    "changes": [
+      {
+        "actorId": "string",
+        "actorKind": "string",
+        "actorName": "string",
+        "createdAt": "string",
+        "data": {
+          "column": "string",
+          "ref": "string",
+          "title": "string"
+        },
+        "entity": "string",
+        "entityId": "string",
+        "projectId": "string",
+        "seq": "number",
+        "sessionId": "null",
+        "summary": "string",
+        "teamId": "string",
+        "type": "string"
+      }
+    ],
+    "cursor": "number",
+    "hasMore": "boolean",
+    "latestSeq": "number",
+    "session": "null",
+    "staleDocs": [],
+    "staleNodes": [],
+    "total": "number"
+  },
+  "get_activity": [
+    {
+      "actorId": "string",
+      "actorKind": "string",
+      "actorName": "string",
+      "createdAt": "string",
+      "data": {
+        "body": "string",
+        "changes": {
+          "title": {
+            "from": "string",
+            "to": "string"
+          }
+        },
+        "column": "string",
+        "commentId": "string",
+        "from": "string",
+        "fromRole": "string",
+        "ref": "string",
+        "title": "string",
+        "to": "string",
+        "toRole": "string"
+      },
+      "entity": "string",
+      "entityId": "string",
+      "projectId": "string",
+      "seq": "number",
+      "sessionId": "null",
+      "summary": "string",
+      "teamId": "string",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+import { describe, test } from "node:test";
+import assert from "node:assert/strict";
+import { asKey, fx, v1, v1ok } from "./lib/http";
+
+/**
+ * Cross-team isolation seen from outside (WH-50): one team's key can neither read nor change another team's data, and the
+ * failure looks exactly like the data not existing.
+ */
+const A = asKey(fx.a.apiKey);
+const B = asKey(fx.b.apiKey);
+
+describe("one team cannot reach another's data over HTTP", () => {
+  test("reading another team's project, board, ticket, changes and activity is not_found", async () => {
+    const attempts: [string, Record<string, unknown>][] = [
+      ["get_board", { project: fx.a.projectKey }],
+      ["get_ticket", { ticket: fx.a.ticketRef }],
+      ["get_changes", { project: fx.a.projectKey }],
+      ["get_activity", { project: fx.a.projectKey }],
+      ["get_graph", { project: fx.a.projectKey }],
+      ["get_briefing", { project: fx.a.projectKey }],
+    ];
+    for (const [tool, args] of attempts) {
+      const r = await v1(B, tool, args);
+      assert.equal(r.status, 404, tool);
+      assert.equal(r.json.error.code, "not_found", tool);
+    }
+  });
+
+  test("a ticket id (uuid) from another team is no more reachable than its ref", async () => {
+    const id = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket.id;
+    assert.equal((await v1(B, "get_ticket", { ticket: id })).status, 404);
+  });
+
+  test("writing to another team's project or ticket is refused and changes nothing", async () => {
+    const before = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket;
+    const writes: [string, Record<string, unknown>][] = [
+      ["create_ticket", { project: fx.a.projectKey, title: "intruder" }],
+      ["update_ticket", { ticket: fx.a.ticketRef, title: "hijacked" }],
+      ["move_ticket", { ticket: fx.a.ticketRef, column: "Done" }],
+      ["comment", { ticket: fx.a.ticketRef, body: "intruder" }],
+      ["claim_ticket", { ticket: fx.a.ticketRef }],
+      ["upsert_node", { project: fx.a.projectKey, name: "intruder node" }],
+    ];
+    for (const [tool, args] of writes) {
+      const r = await v1(B, tool, args);
+      assert.equal(r.status, 404, tool);
+    }
+    const after = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket;
+    assert.equal(after.title, before.title);
+    assert.equal(after.version, before.version);
+    assert.equal(after.columnId, before.columnId);
+  });
+
+  test("a team's project list holds only its own projects", async () => {
+    const a = (await v1ok(A, "list_projects")).map((p: { key: string }) => p.key);
+    const b = (await v1ok(B, "list_projects")).map((p: { key: string }) => p.key);
+    assert.deepEqual(a, [fx.a.projectKey]);
+    assert.deepEqual(b, [fx.b.projectKey]);
+  });
+});
