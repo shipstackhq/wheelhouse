@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { sql } from "drizzle-orm";
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 import { publishAfterCommit } from "../lib/event-bus";
@@ -10,7 +11,7 @@ import { publishAfterCommit } from "../lib/event-bus";
 
 export type DB = PostgresJsDatabase<typeof schema>;
 
-type Holder = { db: DB; ready: Promise<void> };
+type Holder = { db: DB; ready: Promise<void>; close: () => Promise<void> };
 const g = globalThis as unknown as { __wheelhouseDb?: Holder };
 
 /**
@@ -37,7 +38,7 @@ function init(): Holder {
       const { migrate } = await import("drizzle-orm/postgres-js/migrator");
       await migrate(db, { migrationsFolder: MIGRATIONS });
     })();
-    return { db, ready };
+    return { db, ready, close: () => client.end() };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -54,12 +55,30 @@ function init(): Holder {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await migrate(db as any, { migrationsFolder: MIGRATIONS });
   })();
-  return { db, ready };
+  return { db, ready, close: () => client.close() };
 }
 
 function holder(): Holder {
   if (!g.__wheelhouseDb) g.__wheelhouseDb = init();
   return g.__wheelhouseDb;
+}
+
+/**
+ * Close the connection (PGlite flushes to disk; Postgres drains its pool). Call it on shutdown. The next getDb() opens a
+ * fresh one, which is what tests that restart a database rely on.
+ */
+export async function closeDb(): Promise<void> {
+  const h = g.__wheelhouseDb;
+  if (!h) return;
+  g.__wheelhouseDb = undefined;
+  await h.ready.catch(() => undefined);
+  await h.close();
+}
+
+/** Throws if the database cannot answer a trivial query: for liveness checks. */
+export async function pingDb(): Promise<void> {
+  const db = await getDb();
+  await db.execute(sql`select 1`);
 }
 
 /** Returns the db once migrations have been applied. */

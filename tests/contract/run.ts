@@ -8,7 +8,7 @@
  *   pnpm test:contract --server-cmd "pnpm --filter api start"      # another server; {PORT} is replaced
  *   pnpm test:contract --database-url "postgres://u:p@host/wh_p{PASS}"   # a real Postgres: {PASS} becomes 1, then 2; both must exist and be empty
  *   pnpm test:contract --update-golden                              # accept a deliberate contract change
- *   pnpm test:contract --only mcp                                   # only files matching a name
+ *   pnpm test:contract --only mcp,v1                                # only files whose name contains one of these
  *
  * Against a server you started yourself (it needs the environment from `prepare`):
  *
@@ -99,7 +99,7 @@ const allTests = () =>
   fs
     .readdirSync(import.meta.dirname)
     .filter((f) => f.endsWith(".contract.test.ts"))
-    .filter((f) => !opt("only") || f.includes(opt("only")!))
+    .filter((f) => !opt("only") || opt("only")!.split(",").some((part) => f.includes(part.trim())))
     .map((f) => path.join("tests", "contract", f));
 
 async function main() {

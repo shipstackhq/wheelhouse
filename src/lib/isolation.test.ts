@@ -635,6 +635,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/db/index.ts": "the connection itself",
   "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
   "src/lib/auth.ts": "signup, sessions, membership of the signed-in user",
+  "packages/core/src/lib/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
   "packages/core/src/lib/invites.ts": "tokens; scoped by issuer team, or by the invite's own team at acceptance",
   "packages/core/src/lib/members.ts": "every statement scoped by the caller's team id (tested)",
   "packages/core/src/lib/metrics.ts": "everything derived from the caller's team's project ids",
