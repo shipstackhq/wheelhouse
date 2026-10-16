@@ -12,8 +12,8 @@ any server that implements the contract.
 
 ```bash
 pnpm test:contract                                  # seeds a throwaway database, starts the app, runs everything, cleans up
-pnpm test:contract --only webhook                   # only test files whose name contains "webhook"
-pnpm test:contract --server-cmd "pnpm --filter api start"   # a different server; {PORT} is replaced
+pnpm test:contract --only webhook,v1                # only test files whose name contains one of these
+pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"   # a different server; {PORT} is replaced
 pnpm test:contract --update-golden                  # accept a deliberate contract change (review the diff in golden/)
 pnpm test:contract --keep                           # keep tests/contract/.work (databases, server logs) for inspection
 ```

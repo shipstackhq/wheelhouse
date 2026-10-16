@@ -7,7 +7,7 @@ import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@wheelhouse/core/db";
 import { signupOpen } from "@wheelhouse/core/lib/auth-policy";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
-import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
+import { sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
 import { actorFromCredentials, currentMembership, SESSION_COOKIE, SESSION_DAYS } from "@wheelhouse/core/lib/auth-core";
 
 export { currentMembership };
