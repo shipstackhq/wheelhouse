@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 export const STATE_TTL_MS = 10 * 60_000;
 /** The cookie that holds the nonce, scoped to the GitHub endpoints only. */
 export const STATE_COOKIE = "wh_gh_state";
+export const STATE_COOKIE_PATH = "/api/github";
 
 export type ConnectState = { user: string; project: string; nonce: string; exp: number };
 
