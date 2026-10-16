@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Req, Res } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Req, Res } from "@nestjs/common";
 import { Readable } from "node:stream";
 import type { Request, Response } from "express";
 import { actorFromCredentials, SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
@@ -7,9 +7,12 @@ import { openStream } from "@wheelhouse/core/lib/stream-open";
 import { projectScope, teamScope, type StreamScope } from "@wheelhouse/core/lib/stream-scope";
 import type { Actor } from "@wheelhouse/core/lib/access";
 import { cookieValue, toHeaders } from "../http/util";
+import { StreamRegistry } from "./stream.registry";
 
 @Controller()
 export class StreamController {
+  constructor(@Inject(StreamRegistry) private readonly streams: StreamRegistry) {}
+
   /** Server-sent changes across the signed-in user's whole team, for the dashboard (WH-1). */
   @Get("api/stream")
   team(@Req() req: Request, @Res() res: Response) {
@@ -25,7 +28,11 @@ export class StreamController {
   private async serve(req: Request, res: Response, scopeFor: (actor: Actor) => Promise<StreamScope>) {
     // The client going away ends the stream, which releases its slot and its listener on the event bus.
     const gone = new AbortController();
-    res.on("close", () => gone.abort());
+    const untrack = this.streams.track(gone);
+    res.on("close", () => {
+      gone.abort();
+      untrack();
+    });
     const last = req.headers["last-event-id"];
     const r = await openStream({
       getActor: () => actorFromCredentials({ authorization: req.headers.authorization ?? null, sessionToken: cookieValue(req.headers.cookie, SESSION_COOKIE), ip: clientIp(toHeaders(req.headers)) }),

@@ -73,14 +73,40 @@ function startServer(cmd: string, port: number, env: Record<string, string>, log
   return child;
 }
 
+/**
+ * Stop the server and wait until its whole process group is really gone before returning, so the next pass cannot start
+ * while the last one still holds its port, its database directory or its build cache. SIGTERM first (so PGlite flushes),
+ * SIGKILL if it has not gone within 30 seconds.
+ */
 async function stopServer(child: ChildProcess) {
-  if (child.exitCode !== null || !child.pid) return;
+  const pid = child.pid;
+  if (!pid) return;
+  const alive = () => {
+    try {
+      process.kill(-pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const gone = async (seconds: number) => {
+    for (let i = 0; i < seconds * 5 && alive(); i++) await new Promise((r) => setTimeout(r, 200));
+    return !alive();
+  };
+  if (!alive()) return;
   try {
-    process.kill(-child.pid, "SIGTERM"); // the whole group, so a dev server's own child goes too and PGlite can flush
+    process.kill(-pid, "SIGTERM"); // the whole group, so a dev server's own child goes too
   } catch {
     /* already gone */
   }
-  for (let i = 0; i < 30 && child.exitCode === null; i++) await new Promise((r) => setTimeout(r, 200));
+  if (await gone(30)) return;
+  console.warn("the server did not exit within 30s of SIGTERM; killing it");
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    /* already gone */
+  }
+  await gone(5);
 }
 
 /** Async on purpose: the fake GitHub lives in this process, so blocking here would stop it answering the server under test. */

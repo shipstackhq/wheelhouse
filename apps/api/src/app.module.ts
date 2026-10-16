@@ -7,10 +7,11 @@ import { WebhookController } from "./github/webhook.controller";
 import { HealthController } from "./health/health.controller";
 import { McpController } from "./mcp/mcp.controller";
 import { StreamController } from "./stream/stream.controller";
+import { StreamRegistry } from "./stream/stream.registry";
 import { V1Controller } from "./v1/v1.controller";
 
 @Module({
   controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController],
-  providers: [DatabaseService, ActorGuard, HumanGuard],
+  providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry],
 })
 export class AppModule {}
