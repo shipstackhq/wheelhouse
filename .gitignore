@@ -49,3 +49,6 @@ next-env.d.ts
 
 # contract suite scratch (databases, logs)
 tests/contract/.work/
+
+# web app build output
+/apps/web/dist

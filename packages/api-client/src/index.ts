@@ -20,6 +20,8 @@ export type Me = {
   user: { id: string; name: string; email: string };
   team: { id: string; name: string };
   role: Role;
+  /** The person's labels within the team (for example "eng"). */
+  tags: string[];
   isInstanceAdmin: boolean;
   /** Sent back as X-CSRF-Token on state-changing requests; the client does this for you. */
   csrfToken: string;

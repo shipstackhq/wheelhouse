@@ -2,6 +2,7 @@
   "csrfToken": "string",
   "isInstanceAdmin": "boolean",
   "role": "string",
+  "tags": [],
   "team": {
     "id": "string",
     "name": "string"

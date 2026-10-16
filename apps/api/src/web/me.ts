@@ -8,6 +8,7 @@ export function meView(h: Human, sessionToken: string) {
     user: { id: h.user.id, name: h.user.name, email: h.user.email },
     team: { id: h.team.id, name: h.team.name },
     role: h.membership.role,
+    tags: h.membership.tags,
     isInstanceAdmin: isInstanceAdmin(h.user.email),
     csrfToken: csrfToken(sessionToken),
   };

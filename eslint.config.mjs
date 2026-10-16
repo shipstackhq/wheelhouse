@@ -18,8 +18,11 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "**/dist/**",
     ],
   },
+  // apps/web is a Vite app, not Next: plain <a> and the Next page rules do not apply there.
+  { files: ["apps/web/**"], rules: { "@next/next/no-html-link-for-pages": "off" } },
 ];
 
 export default eslintConfig;

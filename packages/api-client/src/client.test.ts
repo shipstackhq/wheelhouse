@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ApiError, createApiClient, type Me } from "./index";
 
 type Call = { method: string; url: string; headers: Record<string, string>; body: unknown };
-const me = (token: string): Me => ({ user: { id: "u1", name: "Ada", email: "ada@example.test" }, team: { id: "t1", name: "Ada's team" }, role: "owner", isInstanceAdmin: false, csrfToken: token });
+const me = (token: string): Me => ({ user: { id: "u1", name: "Ada", email: "ada@example.test" }, team: { id: "t1", name: "Ada's team" }, role: "owner", tags: ["eng"], isInstanceAdmin: false, csrfToken: token });
 
 /** A scripted fetch: each call takes the next reply (a status and JSON body, plus optional headers). */
 function script(replies: { status?: number; json?: unknown; text?: string; headers?: Record<string, string> }[]) {
