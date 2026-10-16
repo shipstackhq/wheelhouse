@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireHuman } from "@/lib/auth";
-import { isInstanceAdmin } from "@/lib/auth-policy";
-import { listInvites } from "@/lib/invites";
+import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
+import { listInvites } from "@wheelhouse/core/lib/invites";
 import { InviteForm } from "@/components/invite-form";
 import { PendingInvites } from "@/components/pending-invites";
 

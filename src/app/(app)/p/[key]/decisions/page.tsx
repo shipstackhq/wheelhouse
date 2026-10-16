@@ -1,5 +1,5 @@
 import { requireHuman } from "@/lib/auth";
-import { getGraph } from "@/lib/service";
+import { getGraph } from "@wheelhouse/core/lib/service";
 import { Decisions } from "./decisions";
 
 export default async function DecisionsPage({ params }: { params: Promise<{ key: string }> }) {

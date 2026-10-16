@@ -68,3 +68,18 @@ Checked from `wheelhouse-migration` (WH-88):
 Tickets that were in Review when the freeze started, left as they were (not moved):
 WH-20, WH-21, WH-22, WH-23, WH-51, WH-64, WH-65, WH-69, WH-82, WH-83, WH-84, WH-86.
 Everything in Todo and Backlog outside the migration is untouched. WH-20 (GitHub App) has still not been run against real github.com.
+
+## Repository layout after WH-90
+
+```
+packages/core     @wheelhouse/core: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries
+apps/api          empty until WH-91 (NestJS)
+apps/web          empty until WH-94 (React)
+src/              still the Next.js app (pages, server actions, components) until the cutover
+```
+
+- Import core as `@wheelhouse/core/db`, `@wheelhouse/core/db/schema` and `@wheelhouse/core/lib/<module>` (including `lib/github/<module>`). Inside core, use relative imports. Core must not import `next/*`, `react`, `server-only`, `@/components` or `@/app`; the type check and `grep` in the WH-90 acceptance criteria enforce it.
+- Migrations live in `packages/core/drizzle` and are frozen (0000 to 0013). `pnpm db:generate` must report no changes. Set `WHEELHOUSE_MIGRATIONS_DIR` to point a process somewhere else; otherwise `./packages/core/drizzle` and `./drizzle` are tried from the working directory.
+- `pnpm test` runs core's tests, then the app's. `pnpm typecheck` checks the whole tree and then core on its own. `pnpm test:contract` is the HTTP contract suite (WH-89); it also takes `--database-url` to run against a real Postgres.
+- `src/lib` keeps only what belongs to the Next app: `auth.ts` (cookies and redirects), `stream-route.ts`, and UI helpers (labels, history groups, map layout and collapse, the markdown editor setup, navigation progress, ticket navigation, the browser side of the live stream). `isolation.test.ts` and `invites.test.ts` stay there because they audit the app's own files; the isolation audit walks `src` and `packages/core/src`.
+- Core has no per-request cache. The Next app registers React's `cache()` for the dashboard's shared query in `src/lib/core-host.ts`; the API does not need it.

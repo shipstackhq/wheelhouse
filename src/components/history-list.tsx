@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import clsx from "clsx";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import { groupHistory, type HistoryGroup } from "@/lib/history-groups";
 
 export type HistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date | string };

@@ -1,7 +1,6 @@
-import "server-only";
 import { and, asc, desc, eq, gt, gte, inArray, isNull } from "drizzle-orm";
-import { getDb, schema } from "@/db";
-import type { Actor } from "./auth";
+import { getDb, schema } from "../db";
+import type { Actor } from "./access";
 import {
   anchorScore,
   emit,

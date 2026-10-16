@@ -1,0 +1,6 @@
+{
+  "name": "@wheelhouse/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The React app (WH-94). Empty until then."
+}

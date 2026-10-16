@@ -3,6 +3,7 @@
  * This is the only part of the suite that touches the app's code (to set up data); the tests themselves speak only HTTP.
  *
  *   tsx --conditions=react-server tests/contract/seed.ts --dir <pglite dir> --out <fixtures.json> --fake-port <n> [--no-github]
+ *   tsx --conditions=react-server tests/contract/seed.ts --database-url <postgres url> --out <fixtures.json> --fake-port <n>   (a real Postgres; it must be empty)
  *
  * Run it while no server is using the database (PGlite allows one process per directory).
  */
@@ -10,9 +11,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../../src/db";
-import * as svc from "../../src/lib/service";
-import type { Actor } from "../../src/lib/access";
+import { getDb, schema } from "@wheelhouse/core/db";
+import * as svc from "@wheelhouse/core/lib/service";
+import type { Actor } from "@wheelhouse/core/lib/access";
 import type { Fixtures, GithubFixture, TeamFixture } from "./lib/fixtures";
 
 const arg = (name: string) => {
@@ -20,12 +21,17 @@ const arg = (name: string) => {
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 const dir = arg("dir");
+const databaseUrl = arg("database-url");
 const out = arg("out");
 const fakePort = Number(arg("fake-port") ?? 0);
 const withGithub = !process.argv.includes("--no-github");
-if (!dir || !out) throw new Error("usage: seed.ts --dir <pglite dir> --out <fixtures.json> --fake-port <n> [--no-github]");
-process.env.PGLITE_DIR = path.resolve(dir);
-delete process.env.DATABASE_URL;
+if ((!dir && !databaseUrl) || !out) throw new Error("usage: seed.ts (--dir <pglite dir> | --database-url <url>) --out <fixtures.json> --fake-port <n> [--no-github]");
+if (databaseUrl) {
+  process.env.DATABASE_URL = databaseUrl;
+} else {
+  process.env.PGLITE_DIR = path.resolve(dir!);
+  delete process.env.DATABASE_URL;
+}
 
 const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 const token = (prefix: string) => `${prefix}${crypto.randomBytes(24).toString("base64url")}`;
@@ -86,7 +92,7 @@ async function main() {
   await db.insert(schema.sessions).values({ id: sha256(stok), userId: su.id, expiresAt: new Date(Date.now() + 30 * 864e5) });
 
   let github: GithubFixture | null = null;
-  const serverEnv: Record<string, string> = { PGLITE_DIR: path.resolve(dir!), DATABASE_URL: "" };
+  const serverEnv: Record<string, string> = databaseUrl ? { DATABASE_URL: databaseUrl } : { PGLITE_DIR: path.resolve(dir!), DATABASE_URL: "" };
   if (withGithub) {
     const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } });
     const fake = `http://127.0.0.1:${fakePort}`;
@@ -144,8 +150,9 @@ async function main() {
   // Close cleanly so PGlite flushes before the server opens the same directory.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = (db as any).$client ?? (globalThis as any).__wheelhouseDb?.db?.$client;
-  await client?.close?.();
-  console.log(`seeded ${dir} -> ${out}`);
+  await client?.close?.(); // PGlite
+  await client?.end?.(); // postgres-js
+  console.log(`seeded ${databaseUrl ? "a Postgres database" : dir} -> ${out}`);
 }
 
 main().then(() => process.exit(0), (e) => {

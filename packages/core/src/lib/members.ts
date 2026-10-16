@@ -1,6 +1,5 @@
-import "server-only";
 import { and, eq, sql } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../db";
 
 /**
  * Team membership and API-key changes made by a team owner. Every statement is scoped by `teamId`, so a user id

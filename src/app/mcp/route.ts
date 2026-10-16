@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { actorFromRequest, AuthError } from "@/lib/auth";
-import { listToolDefs, runTool } from "@/lib/tools";
-import { ServiceError } from "@/lib/service";
-import { getPrompt, listPromptDefs } from "@/lib/prompts";
+import { listToolDefs, runTool } from "@wheelhouse/core/lib/tools";
+import { ServiceError } from "@wheelhouse/core/lib/service";
+import { getPrompt, listPromptDefs } from "@wheelhouse/core/lib/prompts";
 
 /**
  * Stateless MCP server over Streamable HTTP (JSON responses, no SSE).

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { getDb } from "@/db";
+import { getDb } from "@wheelhouse/core/db";
 
 export const dynamic = "force-dynamic";
 

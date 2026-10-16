@@ -4,10 +4,10 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { eq, sql } from "drizzle-orm";
-import { getDb, schema } from "@/db";
-import { signupOpen } from "./auth-policy";
-import { clientIp } from "./rate-limit";
-import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from "./access";
+import { getDb, schema } from "@wheelhouse/core/db";
+import { signupOpen } from "@wheelhouse/core/lib/auth-policy";
+import { clientIp } from "@wheelhouse/core/lib/rate-limit";
+import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from "@wheelhouse/core/lib/access";
 
 // Everything that decides who may come in lives in access.ts (testable without Next.js); re-exported so the rest
 // of the app keeps importing it from here.
@@ -21,7 +21,7 @@ export {
   userForSessionToken,
   userTeamSuspended,
   type Actor,
-} from "./access";
+} from "@wheelhouse/core/lib/access";
 
 const COOKIE = "wh_session";
 const SESSION_DAYS = 30;

@@ -6,6 +6,7 @@
  *
  *   pnpm test:contract
  *   pnpm test:contract --server-cmd "pnpm --filter api start"      # another server; {PORT} is replaced
+ *   pnpm test:contract --database-url "postgres://u:p@host/wh_p{PASS}"   # a real Postgres: {PASS} becomes 1, then 2; both must exist and be empty
  *   pnpm test:contract --update-golden                              # accept a deliberate contract change
  *   pnpm test:contract --only mcp                                   # only files matching a name
  *
@@ -41,10 +42,12 @@ const freePort = () =>
     s.on("error", reject);
   });
 
-function seed(dir: string, fakePort: number, github: boolean) {
+function seed(dir: string, fakePort: number, github: boolean, pass = 1) {
   fs.rmSync(dir, { recursive: true, force: true });
   fs.mkdirSync(dir, { recursive: true });
-  const r = spawnSync("pnpm", ["exec", "tsx", "--conditions=react-server", "tests/contract/seed.ts", "--dir", path.join(dir, "db"), "--out", path.join(dir, "fixtures.json"), "--fake-port", String(fakePort), ...(github ? [] : ["--no-github"])], { cwd: ROOT, stdio: "inherit" });
+  const url = opt("database-url")?.replaceAll("{PASS}", String(pass));
+  const where = url ? ["--database-url", url] : ["--dir", path.join(dir, "db")];
+  const r = spawnSync("pnpm", ["exec", "tsx", "--conditions=react-server", "tests/contract/seed.ts", ...where, "--out", path.join(dir, "fixtures.json"), "--fake-port", String(fakePort), ...(github ? [] : ["--no-github"])], { cwd: ROOT, stdio: "inherit" });
   if (r.status !== 0) throw new Error("seeding failed");
   return JSON.parse(fs.readFileSync(path.join(dir, "fixtures.json"), "utf8")) as Fixtures;
 }
@@ -153,7 +156,7 @@ async function main() {
   // Pass 2: no GitHub App configured on the server.
   if (unconfigured.length) {
     const dir = path.join(WORK, "pass2");
-    const f = seed(dir, fakePort, false);
+    const f = seed(dir, fakePort, false, 2);
     const port = await freePort();
     const server = startServer(cmd, port, f.serverEnv, path.join(WORK, "pass2-server.log"));
     try {

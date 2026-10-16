@@ -1,6 +1,5 @@
-import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import type { Actor } from "./auth";
+import type { Actor } from "./access";
 import { getGraph, ServiceError } from "./service";
 
 /**

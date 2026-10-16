@@ -1,4 +1,4 @@
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import { List } from "./list";
 import { SubmitButton } from "./submit-button";
 

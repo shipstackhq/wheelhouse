@@ -1,6 +1,6 @@
 import { requireHuman } from "@/lib/auth";
-import { getGraph, listDocs } from "@/lib/service";
-import { getDb, schema } from "@/db";
+import { getGraph, listDocs } from "@wheelhouse/core/lib/service";
+import { getDb, schema } from "@wheelhouse/core/db";
 import { eq } from "drizzle-orm";
 import { DocsExplorer } from "./docs-explorer";
 

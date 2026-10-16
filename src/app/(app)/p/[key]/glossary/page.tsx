@@ -1,5 +1,5 @@
 import { requireHuman } from "@/lib/auth";
-import { getGraph } from "@/lib/service";
+import { getGraph } from "@wheelhouse/core/lib/service";
 import { Glossary } from "./glossary";
 
 export default async function GlossaryPage({ params }: { params: Promise<{ key: string }> }) {

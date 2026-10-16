@@ -20,17 +20,17 @@ import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq, inArray } from "drizzle-orm";
-import { getDb, schema } from "@/db";
-import type { Actor } from "./access";
-import { actorForKey, sha256, userForSessionToken } from "./access";
-import * as svc from "./service";
-import * as members from "./members";
-import { runTool, tools } from "./tools";
-import { askMap } from "./ask";
-import { briefing, ticketContext } from "./briefing";
-import * as metrics from "./metrics";
-import { resolveDraft } from "./sync";
-import * as sync from "./sync";
+import { getDb, schema } from "@wheelhouse/core/db";
+import type { Actor } from "@wheelhouse/core/lib/access";
+import { actorForKey, sha256, userForSessionToken } from "@wheelhouse/core/lib/access";
+import * as svc from "@wheelhouse/core/lib/service";
+import * as members from "@wheelhouse/core/lib/members";
+import { runTool, tools } from "@wheelhouse/core/lib/tools";
+import { askMap } from "@wheelhouse/core/lib/ask";
+import { briefing, ticketContext } from "@wheelhouse/core/lib/briefing";
+import * as metrics from "@wheelhouse/core/lib/metrics";
+import { resolveDraft } from "@wheelhouse/core/lib/sync";
+import * as sync from "@wheelhouse/core/lib/sync";
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything team A owns carries this
@@ -632,17 +632,17 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "src/app/(app)/team/page.tsx": "members filtered by the caller's team id; invites via invites.ts",
   "src/app/actions.ts": "see ACTION_AUDIT",
   "src/app/api/health/route.ts": "select 1, no data",
-  "src/db/index.ts": "the connection itself",
-  "src/lib/access.ts": "session and key lookup, the suspension check",
+  "packages/core/src/db/index.ts": "the connection itself",
+  "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
   "src/lib/auth.ts": "signup, sessions, membership of the signed-in user",
-  "src/lib/invites.ts": "tokens; scoped by issuer team, or by the invite's own team at acceptance",
-  "src/lib/members.ts": "every statement scoped by the caller's team id (tested)",
-  "src/lib/metrics.ts": "everything derived from the caller's team's project ids",
-  "src/lib/github/service.ts": "webhooks reach a repository only through its team's own registered installation (targetsFor joins installation team = project team; tested with two teams sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's team",
-  "src/lib/service.ts": "every function resolves through getProject / resolveTicket (tested)",
+  "packages/core/src/lib/invites.ts": "tokens; scoped by issuer team, or by the invite's own team at acceptance",
+  "packages/core/src/lib/members.ts": "every statement scoped by the caller's team id (tested)",
+  "packages/core/src/lib/metrics.ts": "everything derived from the caller's team's project ids",
+  "packages/core/src/lib/github/service.ts": "webhooks reach a repository only through its team's own registered installation (targetsFor joins installation team = project team; tested with two teams sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's team",
+  "packages/core/src/lib/service.ts": "every function resolves through getProject / resolveTicket (tested)",
   "src/lib/stream-route.ts": "live streams: human sessions only, scope from stream-scope.ts (getProject / the caller's own team id, tested in live-events.test.ts), capped per user",
-  "src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
-  "src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
+  "packages/core/src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
+  "packages/core/src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
 };
 
 const walk = (dir: string): string[] =>
@@ -659,7 +659,8 @@ describe("new entry points must be audited", () => {
   });
 
   test("every file that touches the database directly has an audit entry", () => {
-    const files = walk("src")
+    // The Next app and the core package: the service layer lives in packages/core and must stay covered.
+    const files = [...walk("src"), ...walk("packages/core/src")]
       .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f))
       .filter((f) => /\bgetDb\(/.test(fs.readFileSync(f, "utf8")))
       .map((f) => f.split(path.sep).join("/"))

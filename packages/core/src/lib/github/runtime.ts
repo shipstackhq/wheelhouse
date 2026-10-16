@@ -1,4 +1,3 @@
-import "server-only";
 import { githubConfig, type GithubConfig } from "./config";
 import { GithubApi } from "./api";
 

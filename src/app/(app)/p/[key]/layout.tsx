@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireHuman } from "@/lib/auth";
-import { getProject, ServiceError } from "@/lib/service";
+import { getProject, ServiceError } from "@wheelhouse/core/lib/service";
 import { LiveRefresh } from "@/components/live-refresh";
 import { BotsMenuFallback, ProjectQueueMenu } from "@/components/project-queue-menu";
 

@@ -1,5 +1,5 @@
 import { requireHuman } from "@/lib/auth";
-import { listRepositories } from "@/lib/service";
+import { listRepositories } from "@wheelhouse/core/lib/service";
 import { Repos } from "./repos";
 import { GithubConnect } from "./github-connect";
 

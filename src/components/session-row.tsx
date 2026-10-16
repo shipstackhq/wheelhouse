@@ -1,22 +1,10 @@
 import clsx from "clsx";
-import { timeAgo } from "@/lib/time";
-import { groupByBucket, type BucketId } from "@/lib/session-buckets";
+import { timeAgo } from "@wheelhouse/core/lib/time";
+import { groupByBucket, type SessionView } from "@wheelhouse/core/lib/session-buckets";
+
+export type { SessionView };
 import { Tip } from "./tip";
 
-/** One active client session (e.g. a Claude Code session) on an API key, as shown under the key. */
-export type SessionView = {
-  id: string;
-  pending: number;
-  lastSeenAt: string;
-  /** How recently it was active; assigned by the server so every surface groups the same way. */
-  bucket: BucketId;
-  /** False until the session has read its own queue once: it has no cursor, so "in sync" would be a lie. */
-  reading: boolean;
-  branch: string | null;
-  ticket: string | null;
-  /** Set when the same key has sessions in several projects, so rows say which. */
-  projectKey?: string;
-};
 
 /** Claude Code session ids are UUIDs; the first block is enough to tell sessions apart. */
 export const shortSession = (id: string) => id.split("-")[0].slice(0, 8);

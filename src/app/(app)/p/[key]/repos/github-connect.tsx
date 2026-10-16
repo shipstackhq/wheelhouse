@@ -1,9 +1,9 @@
 import { connectGithubRepositoryAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
-import { githubConfig, githubMissing } from "@/lib/github/config";
-import { github } from "@/lib/github/runtime";
-import { listInstallations } from "@/lib/github/service";
-import type { Actor } from "@/lib/access";
+import { githubConfig, githubMissing } from "@wheelhouse/core/lib/github/config";
+import { github } from "@wheelhouse/core/lib/github/runtime";
+import { listInstallations } from "@wheelhouse/core/lib/github/service";
+import type { Actor } from "@wheelhouse/core/lib/access";
 
 const MESSAGES: Record<string, string> = {
   not_configured: "GitHub is not set up on this server yet.",

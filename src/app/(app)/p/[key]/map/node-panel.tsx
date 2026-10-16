@@ -5,11 +5,11 @@ import Link from "next/link";
 import clsx from "clsx";
 import { Select } from "@/components/ui";
 import { Markdown } from "@/components/markdown";
-import { KINDS, KIND_STYLE, LAYER_META, STATUS_STYLE, subtree, type LayerId } from "@/lib/map-shared";
-import { timeAgo } from "@/lib/time";
+import { KINDS, KIND_STYLE, LAYER_META, STATUS_STYLE, subtree, type LayerId } from "@wheelhouse/core/lib/map-shared";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import type { Graph, GNode } from "./knowledge-map";
 import { ColumnsEditor, ColumnsTable } from "./columns";
-import type { Column } from "@/lib/map-shared";
+import type { Column } from "@wheelhouse/core/lib/map-shared";
 
 type Patch = Partial<{
   name: string;

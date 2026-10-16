@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import { List } from "./list";
 import type { KeyRow } from "./active-keys";
 

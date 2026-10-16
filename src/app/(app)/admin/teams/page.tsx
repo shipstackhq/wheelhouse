@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireHuman } from "@/lib/auth";
-import { isInstanceAdmin } from "@/lib/auth-policy";
-import { listTeams } from "@/lib/teams-admin";
-import { timeAgo } from "@/lib/time";
+import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
+import { listTeams } from "@wheelhouse/core/lib/teams-admin";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 
 export const dynamic = "force-dynamic";
 

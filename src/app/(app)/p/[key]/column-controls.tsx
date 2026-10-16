@@ -2,7 +2,7 @@
 
 import { DropdownMenu } from "radix-ui";
 import clsx from "clsx";
-import type { TicketWithLinks } from "@/lib/service";
+import type { TicketWithLinks } from "@wheelhouse/core/lib/service";
 import type { Member } from "./board";
 
 type Ticket = TicketWithLinks;

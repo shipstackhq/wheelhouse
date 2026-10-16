@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+# workspace packages have their own
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*

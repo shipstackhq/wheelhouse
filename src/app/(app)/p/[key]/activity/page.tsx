@@ -1,8 +1,8 @@
 import Link from "next/link";
 import clsx from "clsx";
 import { requireHuman } from "@/lib/auth";
-import { getProject, listEvents } from "@/lib/service";
-import { timeAgo } from "@/lib/time";
+import { getProject, listEvents } from "@wheelhouse/core/lib/service";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 
 export default async function ActivityPage({ params, searchParams }: { params: Promise<{ key: string }>; searchParams: Promise<{ who?: string }> }) {
   const { key } = await params;

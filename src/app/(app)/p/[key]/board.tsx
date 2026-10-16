@@ -19,7 +19,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import type { TicketWithLinks } from "@/lib/service";
+import type { TicketWithLinks } from "@wheelhouse/core/lib/service";
 import { createTicketAction, moveTicketAction } from "@/app/actions";
 import { TicketDialog } from "./ticket-dialog";
 import { neighbours, parseTicketParam } from "@/lib/ticket-nav";

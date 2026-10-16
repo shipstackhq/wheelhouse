@@ -1,5 +1,5 @@
 import { openStream } from "@/lib/stream-route";
-import { projectScope } from "@/lib/stream-scope";
+import { projectScope } from "@wheelhouse/core/lib/stream-scope";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

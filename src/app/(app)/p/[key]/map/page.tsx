@@ -1,6 +1,6 @@
 import { requireHuman } from "@/lib/auth";
-import { getGraph } from "@/lib/service";
-import { askEnabled } from "@/lib/ask";
+import { getGraph } from "@wheelhouse/core/lib/service";
+import { askEnabled } from "@wheelhouse/core/lib/ask";
 import { KnowledgeMap } from "./knowledge-map";
 
 export default async function MapPage({

@@ -1,8 +1,7 @@
 import { columnForRole, DEFAULT_COLUMN_DEFS, roleFromText } from "./column-roles";
-import "server-only";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
-import { getDb, schema, type DB } from "@/db";
-import type { Actor } from "./auth";
+import { getDb, schema, type DB } from "../db";
+import type { Actor } from "./access";
 import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buckets";
 import { bus, deferPublish } from "./event-bus";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";

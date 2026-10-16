@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { sha256 } from "./access";
 import * as svc from "./service";

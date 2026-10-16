@@ -9,7 +9,7 @@ import { CopyBlock } from "@/components/copy-block";
 import { SubmitButton } from "@/components/submit-button";
 import { SecretBox } from "@/components/secret-box";
 import { Select } from "@/components/ui";
-import type { onboarding } from "@/lib/onboarding";
+import type { onboarding } from "@wheelhouse/core/lib/onboarding";
 
 type Cmd = ReturnType<typeof onboarding>;
 type CodeLocation = "github" | "local" | "none" | "skip" | null;

@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { and, desc, eq } from "drizzle-orm";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "@wheelhouse/core/db";
 import {
   createSession,
   destroySession,
@@ -17,9 +17,9 @@ import {
   TEAM_SUSPENDED_MESSAGE,
   userTeamSuspended,
 } from "@/lib/auth";
-import { AdminError, restoreTeam, suspendTeam, type Admin } from "@/lib/teams-admin";
-import { clientIp, minutes, rateLimit, resetRateLimit } from "@/lib/rate-limit";
-import { passwordProblem } from "@/lib/auth-policy";
+import { AdminError, restoreTeam, suspendTeam, type Admin } from "@wheelhouse/core/lib/teams-admin";
+import { clientIp, minutes, rateLimit, resetRateLimit } from "@wheelhouse/core/lib/rate-limit";
+import { passwordProblem } from "@wheelhouse/core/lib/auth-policy";
 import {
   acceptInvite,
   createInvite,
@@ -29,12 +29,12 @@ import {
   peekInvite,
   revokeInvite,
   type Issuer,
-} from "@/lib/invites";
-import * as svc from "@/lib/service";
-import * as gh from "@/lib/github/service";
-import { github } from "@/lib/github/runtime";
-import * as members from "@/lib/members";
-import { askMap } from "@/lib/ask";
+} from "@wheelhouse/core/lib/invites";
+import * as svc from "@wheelhouse/core/lib/service";
+import * as gh from "@wheelhouse/core/lib/github/service";
+import { github } from "@wheelhouse/core/lib/github/runtime";
+import * as members from "@wheelhouse/core/lib/members";
+import { askMap } from "@wheelhouse/core/lib/ask";
 
 export type FormState = { error?: string; ok?: string; secret?: string } | undefined;
 
@@ -617,12 +617,12 @@ export async function removeSessionAction(projectKey: string, sessionId: string)
 
 export async function resolveDraftAction(projectKey: string, draftId: string, action: "publish" | "discard") {
   const { actor } = await requireHuman();
-  const { resolveDraft } = await import("@/lib/sync");
+  const { resolveDraft } = await import("@wheelhouse/core/lib/sync");
   return wrap(() => resolveDraft(actor, projectKey, draftId, action));
 }
 
 export async function resolveDocDraftAction(projectKey: string, draftId: string, action: "publish" | "discard") {
   const { actor } = await requireHuman();
-  const { resolveDocDraft } = await import("@/lib/sync");
+  const { resolveDocDraft } = await import("@wheelhouse/core/lib/sync");
   return wrap(() => resolveDocDraft(actor, projectKey, draftId, action));
 }

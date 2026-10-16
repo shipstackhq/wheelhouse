@@ -8,13 +8,13 @@ import path from "node:path";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import * as schema from "../src/db/schema";
+import * as schema from "@wheelhouse/core/db/schema";
 
 const EMAIL = process.env.SEED_EMAIL ?? "demo@wheelhouse.local";
 const PASSWORD = process.env.SEED_PASSWORD ?? "wheelhouse-demo";
 
 async function getDb() {
-  const migrationsFolder = path.join(process.cwd(), "drizzle");
+  const migrationsFolder = path.join(process.cwd(), "packages", "core", "drizzle");
   if (process.env.DATABASE_URL) {
     const postgres = (await import("postgres")).default;
     const { drizzle } = await import("drizzle-orm/postgres-js");

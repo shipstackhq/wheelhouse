@@ -1,8 +1,9 @@
+import "@/lib/core-host";
 import Link from "next/link";
 import clsx from "clsx";
 import type { Actor } from "@/lib/auth";
-import * as m from "@/lib/metrics";
-import { timeAgo } from "@/lib/time";
+import * as m from "@wheelhouse/core/lib/metrics";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import { SessionGroups } from "@/components/session-row";
 import { Tip } from "@/components/tip";
 import { LimitedSection, SECTION_LIMIT, TwoLineRow } from "@/components/dashboard/limited-list";

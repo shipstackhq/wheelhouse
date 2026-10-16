@@ -1,14 +1,14 @@
 import { headers } from "next/headers";
 import { desc, eq } from "drizzle-orm";
 import { requireHuman } from "@/lib/auth";
-import { getDb, schema } from "@/db";
+import { getDb, schema } from "@wheelhouse/core/db";
 import { markAllSeenAction, revokeApiKey, setKeyDocsWriteAction } from "../../actions";
 import { CreateKeyForm } from "./create-key-form";
 import { CopyBlock } from "@/components/copy-block";
 import { ActiveKeysWithCapabilities } from "./active-keys-with-capabilities";
 import { splitKeys, type KeyRow } from "@/components/active-keys";
 import { RevokedKeys } from "@/components/revoked-keys";
-import { onboarding } from "@/lib/onboarding";
+import { onboarding } from "@wheelhouse/core/lib/onboarding";
 import { SetupGuide } from "@/components/setup-guide";
 
 export default async function AgentsPage() {

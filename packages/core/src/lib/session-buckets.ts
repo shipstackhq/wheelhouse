@@ -26,3 +26,18 @@ export function bucketOf(lastSeenAt: Date | string | number, now: number = Date.
 export function groupByBucket<T extends { bucket: BucketId }>(sessions: T[]) {
   return BUCKETS.map((b) => ({ id: b.id, label: b.label, sessions: sessions.filter((s) => s.bucket === b.id) })).filter((g) => g.sessions.length > 0);
 }
+
+/** One active client session (e.g. a Claude Code session) on an API key, as shown under the key. */
+export type SessionView = {
+  id: string;
+  pending: number;
+  lastSeenAt: string;
+  /** How recently it was active; assigned by the server so every surface groups the same way. */
+  bucket: BucketId;
+  /** False until the session has read its own queue once: it has no cursor, so "in sync" would be a lie. */
+  reading: boolean;
+  branch: string | null;
+  ticket: string | null;
+  /** Set when the same key has sessions in several projects, so rows say which. */
+  projectKey?: string;
+};

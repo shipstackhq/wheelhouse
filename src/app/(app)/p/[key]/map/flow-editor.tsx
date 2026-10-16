@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Dialog } from "radix-ui";
 import { Select } from "@/components/ui";
-import { LAYER_ORDER } from "@/lib/map-shared";
+import { LAYER_ORDER } from "@wheelhouse/core/lib/map-shared";
 import type { Graph } from "./knowledge-map";
 
 type Step = { nodeId: string; title: string; detail: string };

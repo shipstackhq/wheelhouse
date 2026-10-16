@@ -1,4 +1,4 @@
-import { timeAgo } from "@/lib/time";
+import { timeAgo } from "@wheelhouse/core/lib/time";
 import { TwoLineRow } from "./limited-list";
 
 export type ActivityEvent = { seq: number; projectKey: string; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date | string };
