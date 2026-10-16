@@ -405,9 +405,13 @@ export async function deleteNodeAction(projectKey: string, nodeId: string) {
   return wrap(() => svc.deleteNode(actor, projectKey, nodeId));
 }
 
-export async function saveLayoutAction(projectKey: string, positions: { id: string; x: number; y: number; width?: number; height?: number }[]) {
+export async function saveLayoutAction(
+  projectKey: string,
+  positions: { id: string; x: number; y: number; width?: number; height?: number }[],
+  opts?: { placed?: boolean },
+) {
   const { actor } = await requireHuman();
-  return wrap(() => svc.saveLayout(actor, projectKey, positions));
+  return wrap(() => svc.saveLayout(actor, projectKey, positions, opts));
 }
 
 export async function connectNodesAction(projectKey: string, from: string, to: string, label?: string, kind: "depends" | "implements" = "depends") {

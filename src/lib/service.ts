@@ -696,6 +696,9 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
         y: input.y ?? (reparented ? 60 : undefined),
         width: reparented ? null : undefined,
         height: reparented ? null : undefined,
+        // An explicit x/y from the caller counts as a person placing it; a reparent resets
+        // to the fixed offset above, which is grid-placement again, not a deliberate position.
+        placed: input.x !== undefined && input.y !== undefined && !reparented ? true : reparented ? false : undefined,
       };
       const changes = diff(existing as unknown as Record<string, unknown>, patch as Record<string, unknown>);
       const described =
@@ -945,15 +948,26 @@ export async function getSchema(actor: Actor, projectRef: string) {
   };
 }
 
-/** Bulk position save from the canvas. Layout-only, not logged as events. */
-export async function saveLayout(actor: Actor, projectRef: string, positions: { id: string; x: number; y: number; width?: number; height?: number }[]) {
+/**
+ * Bulk position save from the canvas. Layout-only, not logged as events.
+ * `placed` marks these positions as deliberately assigned (a drag or resize), so a future
+ * auto-layout pass knows to leave them alone; a whole-lens "Tidy" run passes `placed: false`
+ * instead, since it's an explicit, visible, user-triggered rearrangement of everything in that lens.
+ */
+export async function saveLayout(
+  actor: Actor,
+  projectRef: string,
+  positions: { id: string; x: number; y: number; width?: number; height?: number }[],
+  opts?: { placed?: boolean },
+) {
   const db = await getDb();
   const project = await getProject(actor, projectRef);
+  const placed = opts?.placed ?? true;
   await db.transaction(async (tx) => {
     for (const p of positions) {
       await tx
         .update(nodes)
-        .set({ x: p.x, y: p.y, ...(p.width ? { width: p.width, height: p.height } : {}) })
+        .set({ x: p.x, y: p.y, ...(p.width ? { width: p.width, height: p.height } : {}), placed })
         .where(and(eq(nodes.id, p.id), eq(nodes.projectId, project.id)));
     }
   });

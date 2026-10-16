@@ -225,6 +225,10 @@ export const nodes = pgTable("nodes", {
   y: doublePrecision("y").notNull().default(0),
   width: doublePrecision("width"),
   height: doublePrecision("height"),
+  // True once a person has explicitly positioned/resized this node (drag, resize, or an
+  // explicit x/y in an upsert) — distinguishes that from the server's fixed-grid auto-placement
+  // at creation time, so a bulk "Tidy" run knows what it's safe to rearrange (WH-21).
+  placed: boolean("placed").notNull().default(false),
   version: integer("version").notNull().default(1),
   updatedAt: updatedAt(),
 });

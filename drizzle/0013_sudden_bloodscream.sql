@@ -1,0 +1,1 @@
+ALTER TABLE "nodes" ADD COLUMN "placed" boolean DEFAULT false NOT NULL;

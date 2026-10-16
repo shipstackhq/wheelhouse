@@ -55,6 +55,8 @@ import {
 import dagre from "@dagrejs/dagre";
 import { NodePanel } from "./node-panel";
 import { FlowEditor, type FlowDraft } from "./flow-editor";
+import { dagreLayout, treeLayout, elkLayout, violatesLeftToRight, breakCycles, type Direction } from "@/lib/map-layout";
+import { collapseKey, seenKey, loadCollapsed, saveCollapsed, remapCollapsedEdges } from "@/lib/map-collapse";
 
 export type Graph = Extract<Awaited<ReturnType<typeof getGraphAction>>, { ok: true }>["data"];
 export type GNode = Graph["nodes"][number];
@@ -74,6 +76,10 @@ type NodeData = {
   hlCols?: Set<string>; // data layer: highlighted column names
   flux?: { by: string; ticket: string | null; drafts: number } | null;
   onColumnClick?: (nodeId: string, column: string) => void;
+  /** WH-22: collapse state for a container node (undefined = not a container). */
+  collapsed?: boolean;
+  hiddenCount?: number; // descendants hidden while collapsed
+  onToggleCollapse?: (id: string) => void;
 };
 
 function ringClass(d: NodeData) {
@@ -122,7 +128,21 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
             </div>
             {n.summary && <div className="truncate text-[11px] text-muted">{n.summary}</div>}
           </div>
+          {data.collapsed && (data.hiddenCount ?? 0) > 0 && (
+            <span className="chip bg-bg text-muted" title={`${data.hiddenCount} hidden module(s) — click ▸ to expand`}>
+              +{data.hiddenCount} modules
+            </span>
+          )}
           {tickets > 0 && <span className="chip bg-bg text-muted">{tickets} 🎫</span>}
+          {data.onToggleCollapse && (
+            <button
+              className="nodrag rounded px-1 text-[11px] text-muted hover:bg-panel-2 hover:text-fg"
+              title={data.collapsed ? "Expand" : "Collapse"}
+              onClick={(e) => (e.stopPropagation(), data.onToggleCollapse!(n.id))}
+            >
+              {data.collapsed ? "▸" : "▾"}
+            </button>
+          )}
           <button
             className="nodrag rounded px-1 text-[11px] text-muted hover:bg-panel-2 hover:text-fg"
             title="Drill in"
@@ -272,6 +292,9 @@ function depthOf(id: string, byId: Map<string, GNode>) {
   return d;
 }
 
+/** Header-only size for a collapsed container (WH-22: "shrinks to its header"). */
+const COLLAPSED_SIZE = { w: 240, h: 44 };
+
 /** Size a group to fit its children unless the user has resized it. */
 function groupSize(n: GNode, children: GNode[], sizes: Map<string, { w: number; h: number }>) {
   if (n.width && n.height) return { w: n.width, h: n.height };
@@ -300,6 +323,8 @@ function toFlow(
   hl: Highlight,
   onFocus: (id: string) => void,
   onColumnClick: (nodeId: string, column: string) => void,
+  collapsedIds: Set<string>,
+  onToggleCollapse: (id: string) => void,
 ) {
   const erd = lens === "data";
   // The data layer is flat (an ERD), so ignore nesting there.
@@ -311,11 +336,26 @@ function toFlow(
   const ticketCount = new Map<string, number>();
   for (const l of g.ticketLinks) ticketCount.set(l.nodeId, (ticketCount.get(l.nodeId) ?? 0) + 1);
 
+  // WH-22: collapsed containers hide their whole subtree (but never the focus-drill root itself).
+  const collapsedActive = !erd ? [...collapsedIds].filter((id) => id !== focusId && visible.has(id)) : [];
+  const hiddenByCollapse = new Set<string>();
+  for (const cid of collapsedActive) for (const x of subtree(cid, layerNodes)) if (x !== cid) hiddenByCollapse.add(x);
+  // Nearest visible ancestor of a (possibly hidden) node — itself if already visible.
+  const nearestVisible = (id: string): string => {
+    let cur: string | undefined = id;
+    while (cur && hiddenByCollapse.has(cur)) cur = byId.get(cur)?.parentId ?? undefined;
+    return cur ?? id;
+  };
+
   // Deepest first so group sizes can include their children's sizes.
-  const ordered = layerNodes.filter((n) => visible.has(n.id)).sort((a, b) => depthOf(b.id, byId) - depthOf(a.id, byId));
+  const ordered = layerNodes.filter((n) => visible.has(n.id) && !hiddenByCollapse.has(n.id)).sort((a, b) => depthOf(b.id, byId) - depthOf(a.id, byId));
   const sizes = new Map<string, { w: number; h: number }>();
   for (const n of ordered) {
-    const c = (kids.get(n.id) ?? []).filter((x) => visible.has(x.id));
+    if (collapsedActive.includes(n.id)) {
+      sizes.set(n.id, n.width && n.height ? { w: n.width, h: n.height } : COLLAPSED_SIZE);
+      continue;
+    }
+    const c = (kids.get(n.id) ?? []).filter((x) => visible.has(x.id) && !hiddenByCollapse.has(x.id));
     if (c.length) sizes.set(n.id, groupSize(n, c, sizes));
   }
   // A group counts as related if anything inside it is.
@@ -325,9 +365,18 @@ function toFlow(
     return false;
   };
 
+  // Count hidden descendant nodes per collapsed container, for the "+N modules" label.
+  const hiddenCountOf = (id: string) => {
+    let n = 0;
+    for (const x of subtree(id, layerNodes)) if (x !== id && hiddenByCollapse.has(x)) n++;
+    return n;
+  };
+
   const nodes: Node<NodeData>[] = [...ordered].reverse().map((n) => {
-    const hasChildren = (kids.get(n.id) ?? []).some((x) => visible.has(x.id));
-    const parentVisible = n.parentId && visible.has(n.parentId) && n.id !== focusId;
+    const allKids = kids.get(n.id) ?? [];
+    const hasChildren = allKids.some((x) => visible.has(x.id));
+    const collapsed = collapsedActive.includes(n.id);
+    const parentVisible = n.parentId && visible.has(n.parentId) && !hiddenByCollapse.has(n.parentId) && n.id !== focusId;
     const s = sizes.get(n.id);
     const related = !!hl.related?.has(n.id);
     return {
@@ -357,15 +406,23 @@ function toFlow(
               hlCols: new Set(n.columns.map((c) => c.name).filter((c) => hl.cols.has(`${n.id}:${c}`))),
               onColumnClick,
             }
-          : {}),
+          : {
+              ...(hasChildren || collapsed ? { collapsed, hiddenCount: hiddenCountOf(n.id), onToggleCollapse } : {}),
+            }),
       },
     };
   });
   const hasCol = (id: string, col?: string) => !!col && !!byId.get(id)?.columns.some((c) => c.name === col);
 
+  // WH-22: edges touching a hidden node are re-pointed to its nearest visible (collapsed) ancestor,
+  // and duplicates created by that remap are merged into one edge carrying a "×N" count.
+  const liveEdges = g.edges.filter(
+    (e) => (e.kind === "depends" || (erd && e.kind === "references")) && visible.has(e.fromNodeId) && visible.has(e.toNodeId),
+  );
+  const remapped = erd ? liveEdges : remapCollapsedEdges(liveEdges, nearestVisible);
+
   const stepKey = hl.stepEdge ? `${hl.stepEdge[0]}>${hl.stepEdge[1]}` : null;
-  const edges: Edge[] = g.edges
-    .filter((e) => (e.kind === "depends" || (erd && e.kind === "references")) && visible.has(e.fromNodeId) && visible.has(e.toNodeId))
+  const edges: Edge[] = remapped
     .map((e): Edge => {
       if (e.kind === "references") {
         const m = e.meta ?? {};
@@ -463,6 +520,66 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
   const theme = useResolvedTheme();
   const { confirm, prompt, dialogs } = useDialogs();
 
+  // WH-22: collapse state per lens, persisted per browser (localStorage), following the
+  // loadView/saveView pattern. Containers are collapsed by default until a person toggles one.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (lens === "data") {
+      setCollapsedIds(new Set());
+      return;
+    }
+    setCollapsedIds(loadCollapsed(collapseKey(projectKey, lens)));
+  }, [projectKey, lens]);
+  const toggleCollapse = useCallback(
+    (id: string) => {
+      setCollapsedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        saveCollapsed(collapseKey(projectKey, lens), next);
+        const seen = loadCollapsed(seenKey(projectKey, lens));
+        seen.add(id);
+        saveCollapsed(seenKey(projectKey, lens), seen);
+        return next;
+      });
+      // WH-22: collapsing/expanding changes the lens's footprint (shrinks to a header, or
+      // regrows) — re-run the lens's auto-layout so siblings reflow instead of leaving dead
+      // space or new overlaps. Only re-places nodes nobody has manually dragged (onlyUnplaced
+      // would be too narrow here since a collapse genuinely changes everyone's neighbors, so
+      // this intentionally passes `false`, same as a manual Tidy click).
+      setTimeout(() => runAutoLayoutRef.current?.(lens, layoutDirRef.current, false), 140);
+    },
+    [projectKey, lens],
+  );
+  // Containers nobody has touched yet default to collapsed; mark them collapsed once per id
+  // the first time they're seen in this lens (new node created after a prior visit, etc).
+  const defaultedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (lens === "data") return;
+    const kidsOf = new Set(graph.nodes.filter((n) => n.layer === lens && n.parentId).map((n) => n.parentId!));
+    const seen = loadCollapsed(seenKey(projectKey, lens));
+    const toAdd = [...kidsOf].filter((id) => !seen.has(id) && !defaultedRef.current.has(id));
+    if (!toAdd.length) return;
+    for (const id of toAdd) defaultedRef.current.add(id);
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of toAdd) next.add(id);
+      saveCollapsed(collapseKey(projectKey, lens), next);
+      const seen2 = loadCollapsed(seenKey(projectKey, lens));
+      for (const id of toAdd) seen2.add(id);
+      saveCollapsed(seenKey(projectKey, lens), seen2);
+      return next;
+    });
+  }, [graph.nodes, lens, projectKey]);
+
+  const [layoutDir, setLayoutDir] = useState<Direction>("LR");
+  const [laying, setLaying] = useState(false);
+  // Refs so toggleCollapse (defined above runAutoLayout) can trigger a re-layout without a
+  // declaration-order dependency cycle.
+  const layoutDirRef = useRef(layoutDir);
+  useEffect(() => void (layoutDirRef.current = layoutDir), [layoutDir]);
+  const runAutoLayoutRef = useRef<((targetLens: LayerId, dir: Direction, onlyUnplaced: boolean) => Promise<void>) | null>(null);
+
   const reload = useCallback(async () => {
     if (busy.current) return;
     const res = await getGraphAction(projectKey);
@@ -539,7 +656,10 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
     setSelectedEdgeId(null);
     setColHl((c) => (c && c.nodeId === nodeId && c.column === column ? null : { nodeId, column }));
   }, []);
-  const flow = useMemo(() => toFlow(graph, lens, focusId, highlight, setFocusId, onColumnClick), [graph, lens, focusId, highlight, onColumnClick]);
+  const flow = useMemo(
+    () => toFlow(graph, lens, focusId, highlight, setFocusId, onColumnClick, collapsedIds, toggleCollapse),
+    [graph, lens, focusId, highlight, onColumnClick, collapsedIds, toggleCollapse],
+  );
   const [nodes, setNodes] = useState(flow.nodes);
   useEffect(() => setNodes(flow.nodes.map((n) => ({ ...n, selected: n.id === selectedId }))), [flow.nodes, selectedId]);
   useEffect(() => {
@@ -577,6 +697,32 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
   );
 
   const onNodeDragStart = () => (busy.current = true);
+  /**
+   * WH-23: after a drag, warn (non-blocking) if the node now sits to the left of something that
+   * points into it — the layout's left-to-right reading order would be broken. We warn rather than
+   * snap: snapping a manual drag back would be surprising and silently overrides the person's intent,
+   * which cuts against this app's general "never block/override manual work" UX (see the undo-toast
+   * pattern for connections, and the non-blocking `error` banner elsewhere in this component).
+   */
+  const checkLeftToRight = useCallback(
+    (positions: { id: string; x: number }[]) => {
+      if (lens === "data") return; // ERD has its own established child-left/parent-right convention
+      const edgeKind = "depends";
+      const xOf = (id: string) => positions.find((p) => p.id === id)?.x ?? byId.get(id)?.x;
+      const widthOf = (id: string) => byId.get(id)?.width ?? LEAF_W;
+      for (const p of positions) {
+        const incoming = graph.edges.filter((e) => e.kind === edgeKind && e.toNodeId === p.id).map((e) => e.fromNodeId);
+        if (!incoming.length) continue;
+        const { violates } = violatesLeftToRight(p.id, p.x, widthOf, incoming, xOf);
+        if (violates) {
+          const n = byId.get(p.id);
+          setError(`"${n?.name ?? "This node"}" is now left of something that depends on it — the left-to-right reading order is broken. Use Tidy to re-arrange.`);
+          return;
+        }
+      }
+    },
+    [lens, graph.edges, byId],
+  );
   const onNodeDragStop = (_: unknown, __: Node, dragged: Node[]) => {
     const positions = dragged.map((d) => ({ id: d.id, x: Math.round(d.position.x), y: Math.round(d.position.y) }));
     saveLayoutAction(projectKey, positions).then(() => {
@@ -588,6 +734,7 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
           return p ? { ...n, x: p.x, y: p.y } : n;
         }),
       }));
+      checkLeftToRight(positions);
     });
   };
 
@@ -686,9 +833,110 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
       return { id: t.id, x: Math.round(p.x - TABLE_W / 2), y: Math.round(p.y - p.height / 2) };
     });
     setGraph((gr) => ({ ...gr, nodes: gr.nodes.map((n) => ({ ...n, ...(positions.find((p) => p.id === n.id) ?? {}) })) }));
-    saveLayoutAction(projectKey, positions);
+    saveLayoutAction(projectKey, positions, { placed: false });
     setTimeout(() => rf.fitView({ padding: 0.12, duration: 400 }), 60);
   };
+
+  /**
+   * WH-21/WH-23: measured size for a node on the current lens — prefer React Flow's own
+   * post-render `measured` dimensions (real rendered size), then a manually resized
+   * `width`/`height`, then a sane per-kind default. Used as layout-engine input so dagre/ELK
+   * place boxes by their real footprint, not an estimate.
+   */
+  const measuredSize = useCallback(
+    (n: GNode, hasKids: boolean) => {
+      const live = nodes.find((x) => x.id === n.id) as (Node<NodeData> & { measured?: { width?: number; height?: number } }) | undefined;
+      const mw = live?.measured?.width ?? (typeof live?.style?.width === "number" ? live.style.width : undefined);
+      const mh = live?.measured?.height ?? (typeof live?.style?.height === "number" ? live.style.height : undefined);
+      if (mw && mh) return { w: mw, h: mh };
+      if (n.width && n.height) return { w: n.width, h: n.height };
+      if (hasKids) return { w: 280, h: 150 };
+      return n.layer === "concept" ? { w: LEAF_W + 20, h: LEAF_H } : { w: LEAF_W, h: LEAF_H };
+    },
+    [nodes],
+  );
+
+  /**
+   * WH-21: auto-layout dispatcher for every lens other than Data (which keeps its own
+   * FK-driven `tidyLayout` above, deliberately using rankdir "RL" so FK arrows read
+   * child-left → parent-right per the ERD's established convention — see that function's
+   * doc comment; changing it would flip the crow's-foot drag-to-connect direction).
+   *
+   * `onlyUnplaced`: when true (an automatic pass on load), only nodes that have never been
+   * explicitly positioned (`placed === false`, the server-side flag set by saveLayout/upsertNode)
+   * are moved; a manual "Tidy" click passes false and rearranges everything in the lens, since
+   * that's an explicit, visible, user-triggered action (mirrors `saveLayout`'s own `placed` opt).
+   */
+  const runAutoLayout = useCallback(
+    async (targetLens: LayerId, dir: Direction, onlyUnplaced: boolean) => {
+      if (targetLens === "data") return; // data lens uses its own FK-oriented tidyLayout
+      const all = graph.nodes.filter((n) => n.layer === targetLens);
+      if (!all.length) return;
+      const kids = new Map<string, GNode[]>();
+      for (const n of all) if (n.parentId) kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
+      const targets = onlyUnplaced ? all.filter((n) => !n.placed) : all;
+      if (!targets.length) return;
+      const targetIds = new Set(targets.map((n) => n.id));
+
+      const layoutNodes = all.map((n) => {
+        const s = measuredSize(n, (kids.get(n.id) ?? []).length > 0);
+        return { id: n.id, width: s.w, height: s.h, parentId: n.parentId };
+      });
+      // WH-23: break cycles in the `depends` graph before ranking, so a layered layout still
+      // gets a valid left-to-right order; the back-edge found last in DFS is treated as the
+      // "weakest" one (simplest proxy available — the schema has no edge-weight/recency field
+      // exposed to the client, and "most recently traversed back-edge" approximates "most
+      // tangential to the main dependency chain" well enough for ranking purposes). The edge
+      // still renders in its real direction — only the rank-assignment input is flipped.
+      const dependsEdges = graph.edges.filter((e) => e.kind === "depends" && targetIds.has(e.fromNodeId) === targetIds.has(e.toNodeId) && all.some((n) => n.id === e.fromNodeId) && all.some((n) => n.id === e.toNodeId));
+      const acyclicEdges = breakCycles(
+        all.map((n) => n.id),
+        dependsEdges.map((e) => ({ source: e.fromNodeId, target: e.toNodeId })),
+      );
+
+      setLaying(true);
+      try {
+        const result =
+          targetLens === "system"
+            ? await elkLayout(layoutNodes, acyclicEdges, dir)
+            : targetLens === "code"
+              ? treeLayout(layoutNodes, acyclicEdges, dir)
+              : dagreLayout(layoutNodes, acyclicEdges, dir);
+
+        const positions = targets
+          .map((n) => {
+            const p = result.get(n.id);
+            return p ? { id: n.id, x: Math.round(p.x), y: Math.round(p.y) } : null;
+          })
+          .filter((p): p is { id: string; x: number; y: number } => !!p);
+        if (!positions.length) return;
+        setGraph((gr) => ({ ...gr, nodes: gr.nodes.map((n) => ({ ...n, ...(positions.find((p) => p.id === n.id) ?? {}) })) }));
+        await saveLayoutAction(projectKey, positions, { placed: onlyUnplaced ? true : false });
+        setTimeout(() => rf.fitView({ padding: 0.12, duration: 400 }), 60);
+      } finally {
+        setLaying(false);
+      }
+    },
+    [graph.nodes, graph.edges, measuredSize, projectKey, rf],
+  );
+  useEffect(() => void (runAutoLayoutRef.current = runAutoLayout), [runAutoLayout]);
+
+  // WH-21: on load (and whenever the lens's node set changes), auto-place any node that was
+  // never explicitly positioned (fresh agent-created nodes land with placed=false server-side).
+  // Dragged/tidied nodes have placed=true and are left exactly where they are.
+  const autoLaidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lens === "data") return;
+    const unplaced = graph.nodes.filter((n) => n.layer === lens && !n.placed);
+    if (!unplaced.length) return;
+    const key = `${lens}:${unplaced.map((n) => n.id).sort().join(",")}`;
+    if (autoLaidRef.current === key) return;
+    autoLaidRef.current = key;
+    // Let React Flow render + measure the freshly-synced nodes first.
+    const t = setTimeout(() => runAutoLayout(lens, layoutDir, true), 120);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph.nodes, lens]);
 
   const selectedEdge = selectedEdgeId ? graph.edges.find((e) => e.id === selectedEdgeId) : undefined;
   const edges = useMemo(
@@ -833,6 +1081,25 @@ function MapInner({ projectKey, initial, askEnabled, initialNode, initialFlow, i
             <button className="btn py-1" onClick={tidyLayout} title="Arrange tables along their foreign keys">
               ⇆ Tidy
             </button>
+          )}
+          {lens !== "data" && counts[lens] > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                className="btn py-1 disabled:opacity-50"
+                disabled={laying}
+                onClick={() => runAutoLayout(lens, layoutDir, false)}
+                title="Auto-arrange this layer"
+              >
+                ⇆ Tidy
+              </button>
+              <button
+                className="btn px-1.5 py-1 text-[11px]"
+                title={layoutDir === "LR" ? "Switch to top-to-bottom" : "Switch to left-to-right"}
+                onClick={() => setLayoutDir((d) => (d === "LR" ? "TB" : "LR"))}
+              >
+                {layoutDir === "LR" ? "→" : "↓"}
+              </button>
+            </div>
           )}
           {staleCounts[lens] > 0 && (
             <button className={clsx("btn py-1", staleOnly && "border-warn text-warn")} onClick={() => (setStaleOnly((s) => !s), setPlay(null))}>
