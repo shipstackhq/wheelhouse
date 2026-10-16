@@ -19,16 +19,24 @@ import type {
   AdminTeam,
   AdminTeamDetail,
   AgentsPage,
+  BoardView,
+  Bot,
   CreatedInvite,
   CreatedKey,
   CreateInviteInput,
   DashboardWidgets,
   InvitePeek,
   KeyView,
+  MoveTicket,
+  NewTicket,
   PendingInvite,
   Role,
   TeamMember,
   TeamOverview,
+  TicketComment,
+  TicketDetail,
+  TicketPatch,
+  TicketView,
 } from "./types";
 
 export type * from "./types";
@@ -174,9 +182,27 @@ export function createApiClient(options: ApiClientOptions = {}) {
     projects: {
       list: async () => (await request<{ projects: Project[] }>("GET", "/api/app/projects")).projects,
       create: async (input: CreateProjectInput) => (await request<{ project: Project }>("POST", "/api/app/projects", input)).project,
+      /** The project page in one read: columns, tickets, map nodes, members and the setup checklist. */
+      board: (projectKey: string) => request<BoardView>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/board`),
+      /** The Bots menu: each agent key with its queue in this project. */
+      queue: async (projectKey: string) => (await request<{ bots: Bot[] }>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/queue`)).bots,
       /** Teammates remove an agent session from a project. */
       removeSession: (projectKey: string, sessionId: string) =>
         request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/sessions/${encodeURIComponent(sessionId)}`),
+    },
+
+    tickets: {
+      create: async (projectKey: string, input: NewTicket) =>
+        (await request<{ ticket: TicketView & { column: string | undefined } }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/tickets`, input)).ticket,
+      get: (ref: string) => request<TicketDetail>("GET", `/api/app/tickets/${encodeURIComponent(ref)}`),
+      /** With `version`, a stale edit rejects with an ApiError whose `current` is the ticket as it is now. */
+      update: async (ref: string, patch: TicketPatch) => (await request<{ ticket: TicketView }>("PATCH", `/api/app/tickets/${encodeURIComponent(ref)}`, patch)).ticket,
+      move: async (ref: string, move: MoveTicket) =>
+        (await request<{ ticket: TicketView & { column: string | undefined } }>("POST", `/api/app/tickets/${encodeURIComponent(ref)}/move`, move)).ticket,
+      remove: (ref: string) => request<{ ok: true }>("DELETE", `/api/app/tickets/${encodeURIComponent(ref)}`),
+      comment: async (ref: string, body: string) => (await request<{ comment: TicketComment }>("POST", `/api/app/tickets/${encodeURIComponent(ref)}/comments`, { body })).comment,
+      link: (ref: string, nodeId: string) => request<{ ok: true }>("PUT", `/api/app/tickets/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
+      unlink: (ref: string, nodeId: string) => request<{ ok: true }>("DELETE", `/api/app/tickets/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
     },
 
     /** Change your own password. */

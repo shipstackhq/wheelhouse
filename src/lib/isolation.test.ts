@@ -644,6 +644,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (getProject / the caller's own team id, tested in live-events.test.ts), capped per user",
   "packages/core/src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
   "packages/core/src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
+  "packages/core/src/lib/board-app.ts": "the board's reads: the project is resolved through getProject(actor) (the service layer, scoped by team), and the map nodes and members are selected by that project's id and the actor's team id (tested over HTTP with two teams)",
   "packages/core/src/lib/team-app.ts": "the web app's team, key and invite functions: every statement is scoped by the signed-in person's team id (members, keys, pending invites), a user or key id from another team matches nothing and reads as not found (tested)",
 };
 
@@ -718,6 +719,16 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/admin/teams/:id": "instance admins only (a 404 for anyone else); metadata only (tested)",
   "POST /api/app/admin/teams/:id/suspend": "instance admins only; needs the team's exact name; refuses the admin's own team (tested)",
   "POST /api/app/admin/teams/:id/restore": "instance admins only (tested)",
+  "GET /api/app/projects/:key/board": "boardView(actor): the project is resolved through getProject(actor), so another team's is a 404; members are this team's memberships only (tested)",
+  "POST /api/app/projects/:key/tickets": "svc.createTicket(actor): the project through getProject(actor) (another team's is a 404), the column resolved inside that project, the assignee must be a member of the actor's team (tested)",
+  "GET /api/app/projects/:key/queue": "svc.queueStatus(actor): the project through getProject(actor); the keys are this team's (tested)",
+  "GET /api/app/tickets/:ref": "svc.getTicket(actor): resolveTicket joins the project and requires its team to be the actor's, so another team's ticket is a 404 (tested, including two teams with the same key)",
+  "PATCH /api/app/tickets/:ref": "svc.updateTicket(actor): resolveTicket is team scoped; a stale version is a 409 that returns the trimmed current ticket and changes nothing; the assignee must be on the actor's team (tested)",
+  "POST /api/app/tickets/:ref/move": "svc.moveTicket(actor): resolveTicket is team scoped and the column is resolved inside the ticket's own project (tested)",
+  "DELETE /api/app/tickets/:ref": "svc.deleteTicket(actor): resolveTicket is team scoped (tested)",
+  "POST /api/app/tickets/:ref/comments": "svc.addComment(actor): resolveTicket is team scoped (tested)",
+  "PUT /api/app/tickets/:ref/nodes/:nodeId": "svc.linkTicketNode(actor): the ticket is team scoped and the node is resolved inside the ticket's own project, so another team's node is a 404 (tested)",
+  "DELETE /api/app/tickets/:ref/nodes/:nodeId": "svc.linkTicketNode(actor, unlink): same scoping as linking (tested)",
   "GET /api/app/dashboard/:widget": "metrics.*(actor): every query is by the actor's team id; a teamId in the query or a header is ignored; an unknown widget is a 404 (tested)",
 };
 

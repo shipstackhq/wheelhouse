@@ -208,3 +208,43 @@ describe("the page endpoints (WH-95)", () => {
     assert.deepEqual(await sent((a) => a.dashboard.widget("activity-split"), { json: [] }), { method: "GET", url: "/api/app/dashboard/activity-split", body: undefined });
   });
 });
+
+describe("the board endpoints (WH-96)", () => {
+  const sent = async (run: (api: ReturnType<typeof createApiClient>) => Promise<unknown>, reply: { status?: number; json?: unknown } = { json: { ok: true } }) => {
+    const s = script([{ json: me("tok") }, reply]);
+    const api = createApiClient({ fetch: s.f });
+    await api.me();
+    await run(api);
+    const { method, url, body } = s.calls[1];
+    return { method, url, body };
+  };
+
+  test("the board and the queue are reads, with the project key escaped; the queue comes out of its envelope", async () => {
+    assert.deepEqual(await sent((a) => a.projects.board("W H"), { json: {} }), { method: "GET", url: "/api/app/projects/W%20H/board", body: undefined });
+    const s = script([{ json: { bots: [{ id: "k1" }] } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).projects.queue("WH"), [{ id: "k1" }]);
+    assert.equal(s.calls[0].url, "/api/app/projects/WH/queue");
+  });
+
+  test("tickets: create, read, edit, move, delete, comment, link and unlink, each at its address with the ref escaped", async () => {
+    const t = { ticket: { ref: "WH-1" } };
+    assert.deepEqual(await sent((a) => a.tickets.create("WH", { title: "x", column: "review" }), { status: 201, json: t }), { method: "POST", url: "/api/app/projects/WH/tickets", body: { title: "x", column: "review" } });
+    assert.deepEqual(await sent((a) => a.tickets.get("WH-1"), { json: {} }), { method: "GET", url: "/api/app/tickets/WH-1", body: undefined });
+    assert.deepEqual(await sent((a) => a.tickets.update("WH-1", { title: "y", version: 3 }), { json: t }), { method: "PATCH", url: "/api/app/tickets/WH-1", body: { title: "y", version: 3 } });
+    assert.deepEqual(await sent((a) => a.tickets.move("WH-1", { column: "Done", index: 0 }), { json: t }), { method: "POST", url: "/api/app/tickets/WH-1/move", body: { column: "Done", index: 0 } });
+    assert.deepEqual(await sent((a) => a.tickets.remove("WH-1")), { method: "DELETE", url: "/api/app/tickets/WH-1", body: undefined });
+    assert.deepEqual(await sent((a) => a.tickets.comment("WH-1", "hi"), { status: 201, json: { comment: {} } }), { method: "POST", url: "/api/app/tickets/WH-1/comments", body: { body: "hi" } });
+    assert.deepEqual(await sent((a) => a.tickets.link("WH-1", "n/1")), { method: "PUT", url: "/api/app/tickets/WH-1/nodes/n%2F1", body: {} });
+    assert.deepEqual(await sent((a) => a.tickets.unlink("WH-1", "n1")), { method: "DELETE", url: "/api/app/tickets/WH-1/nodes/n1", body: undefined });
+  });
+
+  test("a stale edit rejects with the ticket as it is now in `current`, and says it is a conflict", async () => {
+    const s = script([{ json: me("tok") }, { status: 409, json: { error: { code: "conflict", message: "WH-1 was changed (version 2, you had 1).", details: { current: { ref: "WH-1", version: 2 } } } } }]);
+    const api = createApiClient({ fetch: s.f });
+    await api.me();
+    const e = await failure(api.tickets.update("WH-1", { body: "mine", version: 1 }));
+    assert.equal(e.isConflict, true);
+    assert.deepEqual(e.current, { ref: "WH-1", version: 2 });
+    assert.equal(e.status, 409);
+  });
+});

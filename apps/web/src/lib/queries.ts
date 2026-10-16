@@ -19,3 +19,10 @@ export const useInvites = (kind: "join_team" | "new_team") => useQuery(invitesQu
 export const useAdminTeams = () => useQuery(adminTeamsQuery(useServices().api));
 export const useAdminTeam = (id: string) => useQuery(adminTeamQuery(useServices().api, id));
 export const useWidget = <W extends keyof DashboardWidgets>(widget: W) => useQuery(widgetQuery(useServices().api, widget));
+
+/** The project page and its ticket dialog. Grouped under "board", "ticket" and "queue" so a change refreshes the right ones. */
+export const boardQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["board", projectKey] as const, queryFn: () => api.projects.board(projectKey) });
+export const ticketQuery = (api: ApiClient, ref: string) => ({ queryKey: ["ticket", ref] as const, queryFn: () => api.tickets.get(ref) });
+export const queueQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["queue", projectKey] as const, queryFn: () => api.projects.queue(projectKey) });
+
+export const useBoard = (projectKey: string) => useQuery(boardQuery(useServices().api, projectKey));

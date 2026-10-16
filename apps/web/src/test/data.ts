@@ -132,3 +132,85 @@ export const widgets = (): DashboardWidgets => ({
 export const serveWidgets = (server: { on: (route: string, answer: unknown) => unknown }, data = widgets()) => {
   for (const [name, value] of Object.entries(data)) server.on(`GET /api/app/dashboard/${name}`, value);
 };
+
+// ───────── the board ─────────
+
+import type { BoardTicket, BoardView, Bot, TicketDetail } from "@wheelhouse/api-client";
+
+export const COLUMNS = [
+  { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
+  { id: "c-todo", name: "Todo", role: "todo", position: 2000 },
+  { id: "c-progress", name: "In Progress", role: "in_progress", position: 3000 },
+  { id: "c-review", name: "Review", role: "review", position: 4000 },
+  { id: "c-done", name: "Done", role: "done", position: 5000 },
+];
+
+let seq = 0;
+export const ticket = (over: Partial<BoardTicket> = {}): BoardTicket => {
+  const n = over.number ?? ++seq + 100;
+  return {
+    id: `t-${n}`,
+    ref: `AA-${n}`,
+    number: n,
+    title: `Ticket ${n}`,
+    body: "",
+    columnId: "c-backlog",
+    priority: "medium",
+    assigneeId: null,
+    agentClaimable: false,
+    claimedByKeyId: null,
+    labels: [],
+    position: n * 1000,
+    version: 1,
+    createdByKind: "human",
+    createdAt: "2026-10-10T00:00:00.000Z",
+    updatedAt: "2026-10-12T00:00:00.000Z",
+    nodeIds: [],
+    commentCount: 0,
+    ...over,
+  };
+};
+
+export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => ({
+  project: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
+  columns: COLUMNS,
+  tickets: [
+    ticket({ number: 1, title: "Write the plan", columnId: "c-backlog", priority: "high", labels: ["docs"] }),
+    ticket({ number: 2, title: "Build the board", columnId: "c-todo", agentClaimable: true }),
+    ticket({ number: 3, title: "Fix the crash", columnId: "c-todo", createdByKind: "agent", commentCount: 2 }),
+    ticket({ number: 4, title: "Ship it", columnId: "c-done" }),
+  ],
+  nodes: [
+    { id: "n-api", name: "API", kind: "service", parentId: null, layer: "system" },
+    { id: "n-board", name: "Board UI", kind: "component", parentId: "n-api", layer: "system" },
+  ],
+  members: [
+    { id: "u1", name: "Ada Lovelace" },
+    { id: "u2", name: "Grace Hopper" },
+  ],
+  checklist: {
+    items: [
+      { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/p/${key}/repos` },
+      { id: "machines", label: "Machines", done: true, status: "linked", href: `/p/${key}` },
+      { id: "agents", label: "Agents", done: true, status: "1 key", href: "/agents" },
+      { id: "map", label: "Map", done: true, status: "built", href: `/p/${key}/map` },
+      { id: "teammates", label: "Teammates", done: true, status: "invited", href: "/team" },
+    ],
+    done: true,
+    doneCount: 5,
+    total: 5,
+  },
+  ...over,
+});
+
+export const detail = (t: BoardTicket, over: Partial<TicketDetail> = {}): TicketDetail => ({
+  ticket: { ...t, column: COLUMNS.find((c) => c.id === t.columnId)?.name },
+  project: { key: "AA", name: "Alpha" },
+  comments: [],
+  nodes: [],
+  history: [{ seq: 1, actorKind: "human", actorName: "Ada Lovelace", summary: `created ${t.ref} "${t.title}" in Backlog`, createdAt: "2026-10-10T00:00:00.000Z" }],
+  pullRequests: [],
+  ...over,
+});
+
+export const bot = (over: Partial<Bot> = {}): Bot => ({ id: "k1", name: "Claude — Ada's laptop", pending: 0, lastUsedAt: null, sessions: [], ...over });

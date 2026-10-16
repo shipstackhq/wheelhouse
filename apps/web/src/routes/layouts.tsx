@@ -3,6 +3,7 @@ import { Navigate, Outlet, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
 import { ProfileMenu } from "../components/profile-menu";
+import { ProjectQueueMenu } from "../components/project-queue-menu";
 import { PwaRegister } from "../components/pwa";
 import { ProjectLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
@@ -115,6 +116,9 @@ export function ProjectLayout() {
             <span className="chip bg-accent/15 font-mono text-accent">{project.key}</span>
             <h1 className="truncate font-semibold">{project.name}</h1>
           </div>
+        </div>
+        <div className="ml-auto">
+          <ProjectQueueMenu projectKey={project.key} />
         </div>
       </header>
       <ProjectLiveRefresh projectKey={project.key} />

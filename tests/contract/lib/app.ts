@@ -54,3 +54,11 @@ export function browserFetch(): typeof fetch {
     return res;
   }) as typeof fetch;
 }
+
+/** A brand-new account and team, for tests that change data and must not touch the seeded teams. */
+export async function newAccount(name = "Owner") {
+  const email = newEmail();
+  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: "a-long-enough-password", team: `${name} team` } });
+  if (r.status !== 201) throw new Error(`could not sign up: ${r.status} ${r.text.slice(0, 200)}`);
+  return { email, sess: sessionFrom(r), me: r.json as { user: { id: string }; team: { id: string }; role: string } };
+}

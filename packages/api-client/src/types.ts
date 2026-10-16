@@ -163,3 +163,91 @@ export type DashboardWidgets = {
   recent: ActivityEvent[];
   sync: SyncHealth;
 };
+
+// ───────── the board and its tickets ─────────
+
+export type Priority = "low" | "medium" | "high" | "urgent";
+
+export type TicketView = {
+  id: string;
+  ref: string;
+  number: number;
+  title: string;
+  body: string;
+  columnId: string;
+  priority: Priority;
+  assigneeId: string | null;
+  agentClaimable: boolean;
+  claimedByKeyId: string | null;
+  labels: string[];
+  position: number;
+  version: number;
+  createdByKind: "human" | "agent";
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A ticket on the board also says which map nodes it touches and how many comments it has. */
+export type BoardTicket = TicketView & { nodeIds: string[]; commentCount: number };
+
+export type ChecklistItem = {
+  id: "repos" | "machines" | "agents" | "map" | "teammates";
+  label: string;
+  done: boolean;
+  status: string;
+  href: string;
+};
+export type ChecklistState = { items: ChecklistItem[]; done: boolean; doneCount: number; total: number };
+
+export type BoardColumn = { id: string; name: string; role: string | null; position: number };
+export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
+export type BoardMember = { id: string; name: string };
+
+export type BoardView = {
+  project: { id: string; key: string; name: string; description: string };
+  columns: BoardColumn[];
+  tickets: BoardTicket[];
+  nodes: BoardNode[];
+  members: BoardMember[];
+  checklist: ChecklistState;
+};
+
+export type TicketComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
+export type TicketHistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: string };
+export type TicketPullRequest = {
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  draft: boolean;
+  ciState: string | null;
+  headBranch: string | null;
+  repository: string;
+  updatedAt: string;
+};
+
+export type TicketDetail = {
+  ticket: TicketView & { column: string | undefined };
+  project: { key: string; name: string };
+  comments: TicketComment[];
+  nodes: { id: string; name: string; kind: string; parentId: string | null }[];
+  history: TicketHistoryItem[];
+  pullRequests: TicketPullRequest[];
+};
+
+/** The fields of a ticket a person can change. `version` is what you last read: a change by anyone since is a 409 conflict. */
+export type TicketPatch = {
+  title?: string;
+  body?: string;
+  priority?: Priority;
+  assigneeId?: string | null;
+  agentClaimable?: boolean;
+  labels?: string[];
+  version?: number;
+};
+export type NewTicket = Omit<TicketPatch, "version"> & { title: string; column?: string };
+export type MoveTicket = { column: string; index?: number; version?: number };
+
+export type BotSession = SessionView;
+/** An agent key and its queue in one project. */
+export type Bot = { id: string; name: string; pending: number; lastUsedAt: string | null; sessions: BotSession[] };

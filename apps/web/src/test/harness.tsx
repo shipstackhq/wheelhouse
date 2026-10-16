@@ -3,7 +3,7 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { createApiClient, type Me, type Project } from "@wheelhouse/api-client";
 import { createServices, ServicesProvider } from "../lib/services";
-import { adminTeam, adminTeamDetail, agentsPage, serveWidgets, team } from "./data";
+import { adminTeam, adminTeamDetail, agentsPage, board, serveWidgets, team } from "./data";
 import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
@@ -85,6 +85,10 @@ export function serverWithData() {
   server.on("GET /api/app/admin/teams", { teams: [adminTeam()] });
   server.on("GET /api/app/admin/teams/t2", { team: adminTeamDetail() });
   serveWidgets(server);
+  for (const key of ["AA", "BB"]) {
+    server.on(`GET /api/app/projects/${key}/board`, board(key));
+    server.on(`GET /api/app/projects/${key}/queue`, { bots: [] });
+  }
   return server;
 }
 
@@ -115,3 +119,11 @@ export function renderIn(ui: React.ReactNode, path = "/", server = serverWithDat
   );
   return { ...view, router, services, server };
 }
+
+/** A board that changes: tests move tickets in `state`, and the fake server answers with it (as the real one would after a change). */
+export function liveBoard(server: FakeServer, key: string, start: BoardView) {
+  const state = { board: start };
+  server.on(`GET /api/app/projects/${key}/board`, () => state.board);
+  return state;
+}
+import type { BoardView } from "@wheelhouse/api-client";

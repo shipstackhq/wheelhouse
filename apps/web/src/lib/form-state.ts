@@ -8,8 +8,13 @@ export type FormState = { error?: string; ok?: string; secret?: string } | undef
  * and a dropped connection says so. Anything else is a bug and goes to the error page.
  */
 export function failure(e: unknown): FormState {
-  if (e instanceof ApiError) return { error: e.message };
-  if (e instanceof TypeError) return { error: "Cannot reach Wheelhouse. Check your connection and try again." };
+  return { error: describeFailure(e) };
+}
+
+/** The same, as a plain message, for places that are not a form (the board, the ticket dialog). Anything unexpected is rethrown. */
+export function describeFailure(e: unknown): string {
+  if (e instanceof ApiError) return e.message;
+  if (e instanceof TypeError) return "Cannot reach Wheelhouse. Check your connection and try again.";
   throw e;
 }
 
