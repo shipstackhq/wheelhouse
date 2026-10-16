@@ -95,6 +95,12 @@ async function main() {
   const stok = token("sess_");
   await db.insert(schema.sessions).values({ id: sha256(stok), userId: su.id, expiresAt: new Date(Date.now() + 30 * 864e5) });
 
+  // An instance admin, alone in a team of their own (the web app's admin pages; the server is told this address in ADMIN_EMAILS).
+  const ADMIN_EMAIL = "ct-admin@example.test";
+  const [at] = await db.insert(schema.teams).values({ name: "Contract admin team" }).returning();
+  const [au] = await db.insert(schema.users).values({ email: ADMIN_EMAIL, name: "Contract admin", passwordHash }).returning();
+  await db.insert(schema.memberships).values({ userId: au.id, teamId: at.id, role: "owner" });
+
   let github: GithubFixture | null = null;
   const serverEnv: Record<string, string> = databaseUrl ? { DATABASE_URL: databaseUrl } : { PGLITE_DIR: path.resolve(dir!), DATABASE_URL: "" };
   if (withGithub) {
@@ -148,7 +154,16 @@ async function main() {
   }
 
   serverEnv.ALLOW_SIGNUP = "true"; // the web-app API tests create accounts
-  const fixtures: Fixtures = { a, b, password: PASSWORD, suspended: { apiKey: skey, sessionToken: stok, email: "ct-suspended@example.test" }, github, serverEnv };
+  serverEnv.ADMIN_EMAILS = ADMIN_EMAIL;
+  const fixtures: Fixtures = {
+    a,
+    b,
+    password: PASSWORD,
+    suspended: { apiKey: skey, sessionToken: stok, email: "ct-suspended@example.test" },
+    admin: { email: ADMIN_EMAIL, userId: au.id, teamId: at.id },
+    github,
+    serverEnv,
+  };
   fs.mkdirSync(path.dirname(path.resolve(out!)), { recursive: true });
   fs.writeFileSync(out!, JSON.stringify(fixtures, null, 2));
 

@@ -1,14 +1,14 @@
 import { Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { AccountError, logIn, signUp, signupAllowed } from "@wheelhouse/core/lib/accounts";
-import { endSession, humanFromSession, SESSION_COOKIE, startSession } from "@wheelhouse/core/lib/auth-core";
+import { logIn, signUp, signupAllowed } from "@wheelhouse/core/lib/accounts";
+import { endSession, SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
 import { cookieValue, toHeaders } from "../http/util";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints } from "./endpoints";
-import { meView } from "./me";
-import { clearSessionCookie, setSessionCookie } from "./session-cookie";
+import { beginSession } from "./begin";
+import { clearSessionCookie } from "./session-cookie";
 
 @Controller("api/app/auth")
 @AppEndpoints()
@@ -46,11 +46,7 @@ export class AuthController {
     return { ok: true };
   }
 
-  private async begin(userId: string, res: Response) {
-    const { token, expiresAt } = await startSession(userId);
-    setSessionCookie(res, token, expiresAt);
-    const human = await humanFromSession(token);
-    if (!human) throw new AccountError("unauthorized", "Could not start a session");
-    return meView(human, token);
+  private begin(userId: string, res: Response) {
+    return beginSession(userId, res);
   }
 }

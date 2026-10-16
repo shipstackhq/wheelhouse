@@ -5,8 +5,9 @@ the data its pages read on the server. It is **new surface, used only by the web
 contract (`/mcp`, `/api/v1`, webhooks, streams), and the Next app does not have it. The typed client is
 `@wheelhouse/api-client`; the CSRF rules are in `apps/api/src/web/csrf.ts`.
 
-Built so far (WH-93): `GET /api/app/auth/options`, `POST /api/app/auth/login`, `POST /api/app/auth/signup`,
-`POST /api/app/auth/logout`, `GET /api/app/me`, `GET /api/app/projects`. The page-port tickets add the rest (inventory below).
+Built so far: `GET /api/app/auth/options`, `POST /api/app/auth/login`, `POST /api/app/auth/signup`,
+`POST /api/app/auth/logout`, `GET /api/app/me`, `GET /api/app/projects` (WH-93), and everything under "Built by WH-95" below. The
+other page-port tickets add the rest (inventory below).
 
 ## Conventions
 
@@ -144,4 +145,30 @@ the reason.
 | `retireRepositoryAction` | `POST /api/app/projects/:key/repositories/:id/retire` | WH-98 | owners only |
 | `browseRepoTreeAction` | `GET /api/app/projects/:key/repositories/:id/tree` | WH-98 | for the anchor picker |
 | `markAllSeenAction` | `POST /api/app/agents/mark-all-seen` | WH-95 | `{ keyId?, projectKey? }`; also used by the bots menu on the board (WH-96) |
-| `removeSessionAction` | `DELETE /api/app/projects/:key/sessions/:sessionId` | WH-96 | the bots menu on the board and dashboard |
+| `removeSessionAction` | `DELETE /api/app/projects/:key/sessions/:sessionId` | WH-95 | built with the dashboard, whose agents widget uses it; the board's bots menu (WH-96) calls the same endpoint |
+
+## Built by WH-95
+
+The reads the pages make (not actions, so not in the inventory), and the endpoints from the inventory above that belong to this
+ticket. Anything not marked public needs a session.
+
+| Endpoint | What it is |
+|---|---|
+| `GET /api/app/team` | the team page: members with roles and tags, seats, and (owners only) the pending join invites |
+| `GET /api/app/agents` | the Agents page: the team's keys (name, prefix, last used, `canWriteDocs`; never a key value) and the printed setup commands |
+| `GET /api/app/invites?kind=join_team\|new_team` | pending invites. `new_team` is for instance admins; anyone else gets a 404 |
+| `GET /api/app/admin/teams`, `GET /api/app/admin/teams/:id` | instance admins only; anyone else gets a 404. Names, emails and counts, never what a team wrote |
+| `GET /api/app/dashboard/:widget` | one dashboard widget's data: `kpis`, `progress`, `throughput`, `activity-split`, `agents`, `attention`, `recent`, `sync`. An unknown widget is a 404 |
+| `POST /api/app/invites/peek`, `POST /api/app/invites/accept` | **public** (no session; the CSRF token is `anonymous`), rate limited per address (30 tries per 15 minutes) |
+
+Rules worth knowing:
+
+- **Secrets are returned once.** `POST /api/app/keys` answers `{ key, secret }`; `POST /api/app/invites` answers `{ ..., link }` with the
+  token in the link's `#fragment`. No later response contains either, and the client never needs to ask.
+- **Limits live in core**, with the rules: 10 keys an hour and 20 invites an hour per person, 30 invite lookups per 15 minutes per address.
+  A limit answers `429 rate_limited` with `Retry-After`.
+- **Not found beats forbidden across teams.** Another team's member, key or invite is a 404 on every endpoint; only the same team's
+  non-owner gets a 403.
+- **Every bad invite link reads the same** (`400 invalid`, "This invite link is invalid or has expired."), so a link cannot be probed.
+- The dashboard's widgets are separate requests so each one paints as soon as its own data arrives. They do not share a snapshot the
+  way the Next app's single render did; if that matters under load, memoise per request in `@wheelhouse/core/lib/metrics` (`setRequestMemo`).

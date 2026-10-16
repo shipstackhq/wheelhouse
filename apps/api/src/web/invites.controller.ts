@@ -1,0 +1,59 @@
+import { Controller, Delete, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import type { Response } from "express";
+import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
+import { clientIp } from "@wheelhouse/core/lib/rate-limit";
+import { ServiceError } from "@wheelhouse/core/lib/service";
+import { acceptInviteAs, createInviteAs, pendingInvites, peekInviteAs, revokeInviteAs } from "@wheelhouse/core/lib/team-app";
+import type { RawTextRequest } from "../http/raw-text";
+import { toHeaders } from "../http/util";
+import { jsonBody, str } from "./body";
+import { beginSession } from "./begin";
+import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
+import { requestOrigin } from "./origin";
+
+@Controller("api/app/invites")
+@AppEndpoints()
+export class InvitesController {
+  /** Pending invites: `?kind=join_team` (owners; the default) or `?kind=new_team` (instance admins; anyone else gets a 404). */
+  @Get()
+  @UseGuards(SessionGuard)
+  async list(@Req() req: SessionRequest, @Query("kind") kind?: string) {
+    if (kind === "new_team") {
+      if (!isInstanceAdmin(req.human.user.email)) throw new ServiceError("not_found", "Not found");
+      return { invites: await pendingInvites(req.human, "new_team") };
+    }
+    return { invites: await pendingInvites(req.human, "join_team") };
+  }
+
+  /** `{ kind, email, role?, tags?, team? }`. The link is returned once: the token is in its #fragment and is not stored. */
+  @Post()
+  @UseGuards(SessionGuard)
+  @HttpCode(201)
+  create(@Req() req: SessionRequest & RawTextRequest) {
+    const b = jsonBody(req);
+    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, team: str(b.team) }, requestOrigin(req));
+  }
+
+  /** Public, rate limited per address. POST so the token never sits in a URL or a log. The same answer for every bad link. */
+  @Post("peek")
+  @HttpCode(200)
+  async peek(@Req() req: RawTextRequest) {
+    return { invite: await peekInviteAs(str(jsonBody(req).token), clientIp(toHeaders(req.headers))) };
+  }
+
+  /** Public. Creates the account like sign-up does and signs the new person in. `{ token, name, password, confirm }`. */
+  @Post("accept")
+  @HttpCode(201)
+  async accept(@Req() req: RawTextRequest, @Res({ passthrough: true }) res: Response) {
+    const b = jsonBody(req);
+    const { userId } = await acceptInviteAs({ token: str(b.token), name: str(b.name), password: str(b.password), confirm: str(b.confirm) }, clientIp(toHeaders(req.headers)));
+    return beginSession(userId, res);
+  }
+
+  @Delete(":id")
+  @UseGuards(SessionGuard)
+  @HttpCode(200)
+  revoke(@Req() req: SessionRequest, @Param("id") id: string) {
+    return revokeInviteAs(req.human, id);
+  }
+}

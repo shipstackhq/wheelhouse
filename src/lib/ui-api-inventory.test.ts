@@ -1,12 +1,25 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import path from "node:path";
 
 /**
  * docs/ui-api.md carries the inventory of the server actions that the web app's API replaces (WH-93). Every exported
  * action has exactly one row with an owner, so none is forgotten when the Next app goes.
  */
 const OWNERS = ["WH-93", "WH-95", "WH-96", "WH-97", "WH-98", "unneeded"];
+
+/** Every `METHOD /path` the API's controllers serve, read from the source (the same scan the isolation audit uses). */
+function servedRoutes(dir = "apps/api/src"): string[] {
+  const files = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(d, e.name)) : [path.join(d, e.name)]));
+  return files(dir)
+    .filter((f) => f.endsWith(".controller.ts"))
+    .flatMap((f) => {
+      const src = fs.readFileSync(f, "utf8");
+      const prefix = /@Controller\(\s*(?:"([^"]*)")?\s*\)/.exec(src)?.[1] ?? "";
+      return [...src.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(?:"([^"]*)")?\s*\)/g)].map((m) => `${m[1].toUpperCase()} /${[prefix, m[2] ?? ""].filter(Boolean).join("/")}`);
+    });
+}
 
 describe("the server action inventory", () => {
   const doc = fs.readFileSync("docs/ui-api.md", "utf8");
@@ -37,5 +50,31 @@ describe("the server action inventory", () => {
     assert.equal(actions.length, 59);
     const built = rows.filter((r) => r.owner === "WH-93");
     assert.deepEqual(built.map((r) => r.action).sort(), ["login", "logout", "signup"]);
+    const served = servedRoutes();
+    for (const r of rows.filter((x) => x.owner === "WH-93" || x.owner === "WH-95")) {
+      const route = r.endpoint.replace(/`/g, "");
+      assert.ok(served.includes(route), `${r.action}: ${route} is not served by any controller`);
+    }
+  });
+
+  test("WH-95 owns the pages' endpoints, including the one the dashboard's agents widget needs", () => {
+    const mine = rows.filter((r) => r.owner === "WH-95").map((r) => r.action).sort();
+    assert.deepEqual(mine, [
+      "acceptInviteAction",
+      "changePassword",
+      "createApiKey",
+      "createInviteAction",
+      "createProjectAction",
+      "lookupInviteAction",
+      "markAllSeenAction",
+      "removeMember",
+      "removeSessionAction",
+      "restoreTeamAction",
+      "revokeApiKey",
+      "revokeInviteAction",
+      "setKeyDocsWriteAction",
+      "suspendTeamAction",
+      "updateMember",
+    ]);
   });
 });

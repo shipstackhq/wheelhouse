@@ -144,3 +144,67 @@ describe("requests", () => {
     assert.deepEqual(list.map((p) => p.key), ["WH"]);
   });
 });
+
+describe("the page endpoints (WH-95)", () => {
+  const ok = { json: { ok: true } };
+  /** One call each, in order: what the client sent. */
+  const sent = async (run: (api: ReturnType<typeof createApiClient>) => Promise<unknown>, reply: { status?: number; json?: unknown } = ok) => {
+    const s = script([{ json: me("tok") }, reply]);
+    const api = createApiClient({ fetch: s.f });
+    await api.me();
+    await run(api);
+    const { method, url, body } = s.calls[1];
+    return { method, url, body };
+  };
+
+  test("team: overview is a read; a member change is a PATCH with the id escaped; removal is a DELETE; the member comes out of the envelope", async () => {
+    assert.deepEqual(await sent((a) => a.team.overview(), { json: { team: {} } }), { method: "GET", url: "/api/app/team", body: undefined });
+    const patch = await sent((a) => a.team.updateMember("a b/c", { role: "owner", tags: ["x"] }), { json: { member: {} } });
+    assert.deepEqual(patch, { method: "PATCH", url: "/api/app/team/members/a%20b%2Fc", body: { role: "owner", tags: ["x"] } });
+    assert.deepEqual(await sent((a) => a.team.removeMember("u1")), { method: "DELETE", url: "/api/app/team/members/u1", body: undefined });
+    const s = script([{ json: { member: { userId: "u1", tags: ["x"] } } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).team.updateMember("u1", { role: "member", tags: "x" }), { userId: "u1", tags: ["x"] });
+  });
+
+  test("password: POST /me/password with both passwords", async () => {
+    assert.deepEqual(await sent((a) => a.changePassword({ current: "old", next: "new" })), { method: "POST", url: "/api/app/me/password", body: { current: "old", next: "new" } });
+  });
+
+  test("keys: create sends only the name and hands back the secret; revoke and capability use the key's id", async () => {
+    const s = script([{ status: 201, json: { key: { id: "k1" }, secret: "wh_secret" } }]);
+    const made = await createApiClient({ fetch: s.f }).keys.create("CI");
+    assert.deepEqual(s.calls[0].body, { name: "CI" });
+    assert.equal(made.secret, "wh_secret");
+    assert.deepEqual(await sent((a) => a.keys.revoke("k 1")), { method: "DELETE", url: "/api/app/keys/k%201", body: undefined });
+    assert.deepEqual(await sent((a) => a.keys.setDocsWrite("k1", true), { json: { key: { id: "k1", canWriteDocs: true } } }), { method: "PATCH", url: "/api/app/keys/k1", body: { docsWrite: true } });
+    assert.deepEqual(await sent((a) => a.agents.page(), { json: { keys: [], setup: {} } }), { method: "GET", url: "/api/app/agents", body: undefined });
+    assert.deepEqual(await sent((a) => a.agents.markAllSeen({ keyId: "k1" })), { method: "POST", url: "/api/app/agents/mark-all-seen", body: { keyId: "k1" } });
+  });
+
+  test("invites: list picks the kind and unwraps; peek is a POST so the token never sits in a URL; accept adopts the new session's token", async () => {
+    const list = script([{ json: { invites: [{ id: "i1" }] } }]);
+    assert.deepEqual(await createApiClient({ fetch: list.f }).invites.list("new_team"), [{ id: "i1" }]);
+    assert.equal(list.calls[0].url, "/api/app/invites?kind=new_team");
+    assert.deepEqual(await sent((a) => a.invites.create({ kind: "join_team", email: "x@y.z" }), { status: 201, json: {} }), { method: "POST", url: "/api/app/invites", body: { kind: "join_team", email: "x@y.z" } });
+    const peek = await sent((a) => a.invites.peek("TOKEN"), { json: { invite: { email: "x@y.z" } } });
+    assert.deepEqual(peek, { method: "POST", url: "/api/app/invites/peek", body: { token: "TOKEN" } });
+    assert.ok(!peek.url.includes("TOKEN"));
+    const accept = script([{ status: 201, json: me("fresh") }, { json: { ok: true } }]);
+    const api = createApiClient({ fetch: accept.f });
+    await api.invites.accept({ token: "T", name: "N", password: "p", confirm: "p" });
+    assert.equal(accept.calls[0].headers["x-csrf-token"], "anonymous");
+    await api.post("/api/app/x", {});
+    assert.equal(accept.calls[1].headers["x-csrf-token"], "fresh", "signed in by accepting");
+    assert.deepEqual(await sent((a) => a.invites.revoke("i1")), { method: "DELETE", url: "/api/app/invites/i1", body: undefined });
+  });
+
+  test("admin, projects and dashboard", async () => {
+    assert.deepEqual(await sent((a) => a.admin.suspend("t1", { confirm: "Acme", reason: "x" }), { json: { name: "Acme", sessionsEnded: 0 } }), { method: "POST", url: "/api/app/admin/teams/t1/suspend", body: { confirm: "Acme", reason: "x" } });
+    assert.deepEqual(await sent((a) => a.admin.restore("t1")), { method: "POST", url: "/api/app/admin/teams/t1/restore", body: {} });
+    assert.deepEqual(await sent((a) => a.admin.teams(), { json: { teams: [] } }), { method: "GET", url: "/api/app/admin/teams", body: undefined });
+    assert.deepEqual(await sent((a) => a.admin.team("t1"), { json: { team: {} } }), { method: "GET", url: "/api/app/admin/teams/t1", body: undefined });
+    assert.deepEqual(await sent((a) => a.projects.create({ name: "Rocket" }), { status: 201, json: { project: {} } }), { method: "POST", url: "/api/app/projects", body: { name: "Rocket" } });
+    assert.deepEqual(await sent((a) => a.projects.removeSession("WH", "s/1")), { method: "DELETE", url: "/api/app/projects/WH/sessions/s%2F1", body: undefined });
+    assert.deepEqual(await sent((a) => a.dashboard.widget("activity-split"), { json: [] }), { method: "GET", url: "/api/app/dashboard/activity-split", body: undefined });
+  });
+});
