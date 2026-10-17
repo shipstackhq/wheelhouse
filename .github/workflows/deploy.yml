@@ -14,6 +14,10 @@ on:
       sha:
         description: "Commit SHA of an already-published image to deploy (leave empty to build and deploy main)"
         required: false
+      dry_run:
+        description: "Dry run: build the image (not pushed) and check the deploy configuration, without logging in to the registry or touching the server"
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy
@@ -39,6 +43,7 @@ jobs:
           ref: ${{ env.SHA }}
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
+        if: ${{ !inputs.dry_run }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -46,7 +51,7 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: ${{ !inputs.dry_run }}
           tags: |
             ${{ env.IMAGE }}:${{ env.SHA }}
             ${{ env.IMAGE }}:latest
@@ -56,8 +61,8 @@ jobs:
   deploy:
     name: Deploy to the VPS
     needs: publish
-    # Run when the image was just built, or when publish was skipped on purpose (manual redeploy of a SHA).
-    if: ${{ always() && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && github.event_name == 'workflow_dispatch')) }}
+    # Run when the image was just built, or when publish was skipped on purpose (manual redeploy of a SHA). Never on a dry run.
+    if: ${{ always() && !inputs.dry_run && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && github.event_name == 'workflow_dispatch')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production   # add required reviewers here for a manual approval gate
@@ -83,3 +88,31 @@ jobs:
           printf '%s\n%s\n%s\n' "$SHA" "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}" | \
             ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+
+  dry-run:
+    name: Dry run (nothing is pushed or deployed)
+    needs: publish
+    if: ${{ always() && inputs.dry_run && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - name: What would be deployed, and is everything in place to do it
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          echo "Would deploy $IMAGE:$SHA"
+          missing=0
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            if [ -z "${!v}" ]; then echo "::warning::secret $v is not set in the production environment"; missing=1; fi
+          done
+          bash -n deploy/deploy.sh deploy/backup.sh deploy/restore.sh
+          touch .env && POSTGRES_NETWORK=x docker compose -f docker-compose.yml config -q && echo "docker-compose.yml is valid"
+          echo "The server was not contacted and nothing was pushed."
+          exit $missing

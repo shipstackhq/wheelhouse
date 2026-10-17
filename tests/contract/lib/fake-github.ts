@@ -77,6 +77,6 @@ export function startFakeGithub(port: number, connectInstallationId: string): Pr
   });
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => resolve({ requests, close: () => new Promise((r) => server.close(() => r())) }));
+    server.listen(port, process.env.CONTRACT_FAKE_HOST ?? "127.0.0.1", () => resolve({ requests, close: () => new Promise((r) => server.close(() => r())) }));
   });
 }
