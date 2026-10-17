@@ -23,6 +23,8 @@ function migrationsDir() {
   return candidates.find((d) => fs.existsSync(path.join(d, "meta", "_journal.json"))) ?? candidates[0];
 }
 const MIGRATIONS = migrationsDir();
+/** The folder of migration files the app applies at boot (the data tools apply the same ones to a fresh target). */
+export const migrationsFolder = () => MIGRATIONS;
 
 function init(): Holder {
   const url = process.env.DATABASE_URL;
