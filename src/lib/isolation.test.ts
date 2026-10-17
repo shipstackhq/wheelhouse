@@ -645,6 +645,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/sync.ts": "every entry point resolves through getProject first (tested)",
   "packages/core/src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
   "packages/core/src/lib/board-app.ts": "the board's reads: the project is resolved through getProject(actor) (the service layer, scoped by team), and the map nodes and members are selected by that project's id and the actor's team id (tested over HTTP with two teams)",
+  "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own team; everything else goes through the service layer, which resolves the project with getProject(actor) and finds docs, nodes and repositories inside it (tested)",
   "packages/core/src/lib/team-app.ts": "the web app's team, key and invite functions: every statement is scoped by the signed-in person's team id (members, keys, pending invites), a user or key id from another team matches nothing and reads as not found (tested)",
 };
 
@@ -744,6 +745,25 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/projects/:key/drafts/:id/resolve": "resolveDraft(actor): the draft must belong to the actor's project and be pending, so another team's is a 404 and stays pending (tested)",
   "POST /api/app/projects/:key/ask": "askAs(actor): the project is resolved first (another team's is a 404 before anything is counted or called); the prompt is built from the actor's own project only; 20 questions per person per 10 minutes; the server's API key is in no answer (tested against a fake Claude)",
   "GET /api/app/projects/:key/activity": "activityView(actor): svc.listEvents resolves the project through getProject(actor); events are by that project's id; data is cut down to what the page links with (tested)",
+  "GET /api/app/projects/:key/docs": "docsIndex(human): svc.listDocs and svc.getGraph resolve the project through getProject(actor); members are those of the person's own team (tested)",
+  "GET /api/app/projects/:key/docs/:ref": "svc.getDoc(actor): the doc is resolved inside the actor's project (by id or slug), so another team's doc is a 404 (tested)",
+  "POST /api/app/projects/:key/docs": "svc.createDoc(actor): the project through getProject(actor); the parent is resolved inside it, so another team's doc cannot be a parent (tested)",
+  "PATCH /api/app/projects/:key/docs/:ref": "svc.updateDoc(actor): the doc is resolved inside the actor's project; a stale version is a 409 returning the trimmed current doc and changes nothing (tested)",
+  "POST /api/app/projects/:key/docs/:ref/fresh": "svc.markDocFresh(actor): resolved inside the actor's project (tested)",
+  "GET /api/app/projects/:key/docs/:ref/anchor-suggestions": "svc.suggestDocAnchors(actor): the doc and its linked nodes are read inside the actor's project (tested)",
+  "POST /api/app/projects/:key/docs/:ref/move": "svc.moveDoc(actor): doc and new parent are both resolved inside the actor's project; cycles are refused (tested)",
+  "DELETE /api/app/projects/:key/docs/:ref": "svc.deleteDoc(actor): resolved inside the actor's project (tested)",
+  "PUT /api/app/projects/:key/docs/:ref/nodes/:nodeId": "svc.linkDocNode(actor): the doc and the node are both resolved inside the actor's project, so another team's node is a 404 (tested)",
+  "DELETE /api/app/projects/:key/docs/:ref/nodes/:nodeId": "svc.linkDocNode(actor, unlink): same scoping as linking (tested)",
+  "GET /api/app/projects/:key/repositories": "svc.listRepositories(actor): rows are selected by the project found through getProject(actor); the answer is a view without installation ids (tested)",
+  "POST /api/app/projects/:key/repositories": "svc.createRepository(actor): the project through getProject(actor); humans only (tested)",
+  "GET /api/app/projects/:key/repositories/github": "githubStatus(human): installations are listed by the person's team id, and only for owners; repositories GitHub lists are asked per installation (tested against a fake GitHub)",
+  "POST /api/app/projects/:key/repositories/github": "connectGithubRepository(actor): owners only, and the installation must be one of the actor's team (ADR-12); name and branch are read from GitHub (tested against a fake GitHub)",
+  "PATCH /api/app/projects/:key/repositories/:id": "svc.updateRepository(actor): the repository is resolved inside the actor's project (tested)",
+  "POST /api/app/projects/:key/repositories/:id/retire": "svc.retireRepository(actor): resolved inside the actor's project (tested)",
+  "GET /api/app/projects/:key/repositories/:id/tree": "browseRepoTreeAs(actor): the repository is looked up in the actor's own project, so another team's repository id is a 404 and no tree is fetched (tested)",
+  "GET /api/app/projects/:key/onboarding": "onboardingPage(actor): the project through getProject(actor); the commands carry no API key (tested)",
+  "POST /api/app/projects/:key/onboarding/concept": "createConceptAs(actor): the project through getProject(actor); the node is written to that project (tested)",
   "GET /api/app/dashboard/:widget": "metrics.*(actor): every query is by the actor's team id; a teamId in the query or a header is ignored; an unknown widget is a 404 (tested)",
 };
 

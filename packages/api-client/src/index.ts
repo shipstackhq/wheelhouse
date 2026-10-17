@@ -34,6 +34,15 @@ import type {
   BoardView,
   Bot,
   CreatedInvite,
+  Doc,
+  DocDetail,
+  DocPatch,
+  DocsIndex,
+  GithubStatus,
+  NewDoc,
+  OnboardingPage,
+  Repository,
+  RepositoryInput,
   CreatedKey,
   CreateInviteInput,
   DashboardWidgets,
@@ -114,6 +123,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
   const base = (options.baseUrl ?? "").replace(/\/+$/, "");
   const doFetch = options.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
   let csrf = ANONYMOUS;
+
+  const project = (key: string) => `/api/app/projects/${encodeURIComponent(key)}`;
 
   async function request<T>(method: string, path: string, body?: unknown, retried = false): Promise<T> {
     const m = method.toUpperCase();
@@ -245,6 +256,48 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<AskAnswer>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/ask`, { question, ...(focus ? { focus } : {}) }),
       activity: async (projectKey: string, who?: "agent" | "human") =>
         (await request<{ events: ActivityEvent2[] }>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/activity${who ? `?who=${who}` : ""}`)).events,
+    },
+
+    docs: {
+      /** The tree, and what the page's side panels offer. */
+      index: (projectKey: string) => request<DocsIndex>("GET", `${project(projectKey)}/docs`),
+      get: (projectKey: string, ref: string) => request<DocDetail>("GET", `${project(projectKey)}/docs/${encodeURIComponent(ref)}`),
+      create: async (projectKey: string, input: NewDoc) => (await request<{ doc: Doc }>("POST", `${project(projectKey)}/docs`, input)).doc,
+      /** With `version`, a doc changed since rejects with an ApiError whose `current` is the doc now. */
+      update: async (projectKey: string, ref: string, patch: DocPatch) => (await request<{ doc: Doc }>("PATCH", `${project(projectKey)}/docs/${encodeURIComponent(ref)}`, patch)).doc,
+      markFresh: async (projectKey: string, ref: string) => (await request<{ doc: Doc }>("POST", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/fresh`, {})).doc,
+      anchorSuggestions: async (projectKey: string, ref: string) =>
+        (await request<{ anchors: string[] }>("GET", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/anchor-suggestions`)).anchors,
+      move: async (projectKey: string, ref: string, to: { parent?: string | null; index?: number; version?: number }) =>
+        (await request<{ doc: Doc }>("POST", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/move`, to)).doc,
+      delete: (projectKey: string, ref: string) => request<{ ok: true }>("DELETE", `${project(projectKey)}/docs/${encodeURIComponent(ref)}`),
+      linkNode: (projectKey: string, ref: string, nodeId: string) =>
+        request<{ ok: true }>("PUT", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
+      unlinkNode: (projectKey: string, ref: string, nodeId: string) =>
+        request<{ ok: true }>("DELETE", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
+    },
+
+    repos: {
+      list: async (projectKey: string) => (await request<{ repositories: Repository[] }>("GET", `${project(projectKey)}/repositories`)).repositories,
+      create: async (projectKey: string, input: RepositoryInput & { displayName: string; role: string }) =>
+        (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories`, input)).repository,
+      update: async (projectKey: string, id: string, patch: RepositoryInput) =>
+        (await request<{ repository: Repository }>("PATCH", `${project(projectKey)}/repositories/${encodeURIComponent(id)}`, patch)).repository,
+      retire: async (projectKey: string, id: string) =>
+        (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories/${encodeURIComponent(id)}/retire`, {})).repository,
+      /** The file paths of a connected GitHub repository's default branch. */
+      tree: (projectKey: string, id: string) =>
+        request<{ files: string[]; truncated: boolean }>("GET", `${project(projectKey)}/repositories/${encodeURIComponent(id)}/tree`),
+      /** Is GitHub set up here, and (owners) which repositories of the team's installations could still be connected. */
+      github: (projectKey: string) => request<GithubStatus>("GET", `${project(projectKey)}/repositories/github`),
+      connectGithub: async (projectKey: string, input: { installationId: string; repoId: string; role?: string; pathLimit?: string | null }) =>
+        (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories/github`, input)).repository,
+    },
+
+    onboarding: {
+      page: (projectKey: string) => request<OnboardingPage>("GET", `${project(projectKey)}/onboarding`),
+      /** The "no code yet" path: a few sentences become the map's first concept. */
+      startMap: (projectKey: string, description: string) => request<{ ok: true }>("POST", `${project(projectKey)}/onboarding/concept`, { description }),
     },
 
     /** Change your own password. */

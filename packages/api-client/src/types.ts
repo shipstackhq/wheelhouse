@@ -379,3 +379,57 @@ export type ActivityEvent2 = {
   data: { ref?: string; number?: number; body?: string };
   createdAt: string;
 };
+
+// ───────── docs, repositories, onboarding (WH-98) ─────────
+
+export type DocTreeItem = { id: string; parentId: string | null; slug: string; title: string; version: number; position: number; updatedAt: string; stale: boolean };
+export type Doc = DocTreeItem & {
+  body: string;
+  anchors: string[];
+  staleReason: string | null;
+  updatedByKind: "human" | "agent";
+  updatedById: string | null;
+  createdAt: string;
+};
+export type DocsIndex = {
+  docs: DocTreeItem[];
+  nodes: { id: string; name: string; layer: LayerId; parentId: string | null }[];
+  decisions: { id: string; number: number; title: string }[];
+  members: { id: string; name: string }[];
+};
+export type DocDetail = { doc: Doc; nodes: { id: string; name: string; kind: string; layer: LayerId }[] };
+export type DocTemplateId = "spec" | "decision-record" | "runbook" | "meeting-notes" | "onboarding";
+export type NewDoc = { title: string; body?: string; parent?: string | null; template?: DocTemplateId };
+export type DocPatch = { title?: string; body?: string; anchors?: string[]; version?: number };
+
+export type RepoLifecycle = "live" | "being_replaced" | "planned" | "retired";
+export type Repository = {
+  id: string;
+  displayName: string;
+  role: string;
+  provider: "github" | "local";
+  slug: string;
+  githubFullName: string | null;
+  defaultBranch: string;
+  pathLimit: string | null;
+  lifecycle: RepoLifecycle;
+  lastEventAt: string | null;
+  /** A GitHub repository whose file tree can be browsed (the doc anchor picker). */
+  browsable: boolean;
+};
+export type RepositoryInput = {
+  displayName?: string;
+  role?: string;
+  provider?: "github" | "local";
+  defaultBranch?: string;
+  pathLimit?: string | null;
+  lifecycle?: RepoLifecycle;
+};
+export type GithubStatus = {
+  configured: boolean;
+  /** Owners only: the settings an administrator must set to turn GitHub on. */
+  missing: string[];
+  isOwner: boolean;
+  installations: { installationId: string; account: string; failed: boolean; repositories: { id: string; fullName: string; private: boolean }[] }[];
+};
+export type OnboardingPage = { project: { key: string; name: string }; hasRepos: boolean; setup: SetupCommands };

@@ -33,6 +33,9 @@ export type GithubFixture = {
   repoId: string;
   /** An installation id the OAuth code "good" proves ownership of, and that no team has connected yet. */
   connectInstallationId: string;
+  /** An installation connected to the "connect" team (and a repository only it can see), for tests that connect a repository. */
+  installationC: string;
+  connectRepoId: string;
 };
 
 export type Fixtures = {
@@ -43,6 +46,8 @@ export type Fixtures = {
   suspended: { apiKey: string; sessionToken: string; email: string };
   /** An instance admin (the server under test lists this address in ADMIN_EMAILS), owner of a team of their own. */
   admin: { email: string; userId: string; teamId: string };
+  /** A team that owns nothing yet: tests that connect GitHub repositories do it here so the seeded teams stay as they are. Has an owner and a member. */
+  connect: { email: string; memberEmail: string; teamId: string };
   /** null when the server under test has no GitHub App configured. */
   github: GithubFixture | null;
   /** Environment the server under test needs (database location and GitHub settings). */

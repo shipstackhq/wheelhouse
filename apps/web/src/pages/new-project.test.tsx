@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiError, project, renderApp } from "../test/harness";
+import { onboardingPage } from "../test/data";
 
 const key = () => screen.getByLabelText("Key") as HTMLInputElement;
 
@@ -35,6 +36,9 @@ describe("new project", () => {
         s.projects = [...s.projects, created];
         return Response.json({ project: created }, { status: 201 });
       });
+      s.on("GET /api/app/projects/NT/onboarding", onboardingPage("NT", { project: { key: "NT", name: "New Thing" } }));
+      s.on("GET /api/app/projects/NT/repositories", { repositories: [] });
+      s.on("GET /api/app/projects/NT/docs", { docs: [] });
     });
     const user = userEvent.setup();
     await user.type(await screen.findByLabelText("Name"), "New Thing");
@@ -43,7 +47,7 @@ describe("new project", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/p/NT/onboarding"));
     expect(server.sent("POST /api/app/projects")[0].body).toEqual({ name: "New Thing", key: "NT", description: "Agents read this." });
     expect(server.sent("POST /api/app/projects")[0].headers["x-csrf-token"]).toBe("csrf-ada");
-    await screen.findByTestId("page-stub");
+    await screen.findByRole("heading", { level: 2, name: "Where does your code live?" });
     const projects = services.queryClient.getQueryData(["projects"]) as { key: string }[];
     expect(projects.map((p) => p.key)).toContain("NT"); // so the sidebar's switcher and the project header know it at once
     expect(screen.getAllByText("NT").length).toBeGreaterThan(0);

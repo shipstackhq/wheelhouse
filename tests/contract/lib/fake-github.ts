@@ -58,11 +58,15 @@ export function startFakeGithub(port: number, connectInstallationId: string): Pr
       const p = url.pathname;
       if (req.method === "POST" && p === "/v1/messages") return anthropicAnswer(req, Buffer.concat(chunks).toString(), res);
       const bearer = (req.headers.authorization ?? "").replace(/^Bearer /, "");
-      if (req.method === "POST" && /^\/app\/installations\/[^/]+\/access_tokens$/.test(p)) return json(res, 201, { token: "ghs_fake", expires_at: new Date(Date.now() + 3600_000).toISOString() });
+      if (req.method === "POST" && /^\/app\/installations\/[^/]+\/access_tokens$/.test(p)) return json(res, 201, { token: `ghs_fake_${p.split("/")[3]}`, expires_at: new Date(Date.now() + 3600_000).toISOString() });
       if (req.method === "GET" && /^\/repositories\/[^/]+\/compare\//.test(p)) return json(res, 200, { files: [{ filename: LANDED_FILE, status: "modified", sha: "c0ffee0000000000000000000000000000000001" }] });
       if (req.method === "GET" && /^\/repositories\/[^/]+\/git\/trees\//.test(p)) return json(res, 200, { tree: [{ path: LANDED_FILE, type: "blob", sha: "c0ffee0000000000000000000000000000000001" }], truncated: false });
       if (req.method === "GET" && /^\/app\/installations\/[^/]+$/.test(p)) return json(res, 200, { account: { login: "contract-org", type: "Organization" } });
-      if (req.method === "GET" && p === "/installation/repositories") return json(res, 200, { repositories: [{ id: 5001, full_name: "ct/app", default_branch: "main", private: false }] });
+      if (req.method === "GET" && p === "/installation/repositories") {
+        // The connect team's installation (3001) sees its own repository; every other installation sees ct/app.
+        if (bearer.endsWith("_3001")) return json(res, 200, { repositories: [{ id: 7001, full_name: "ct/connect-app", default_branch: "trunk", private: true }] });
+        return json(res, 200, { repositories: [{ id: 5001, full_name: "ct/app", default_branch: "main", private: false }] });
+      }
       if (req.method === "POST" && p === "/login/oauth/access_token") {
         const code = (JSON.parse(Buffer.concat(chunks).toString() || "{}") as { code?: string }).code;
         return code === "good" || code === "stranger" ? json(res, 200, { access_token: `gho_${code}` }) : json(res, 401, { error: "bad_verification_code" });

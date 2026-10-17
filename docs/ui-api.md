@@ -139,10 +139,10 @@ the reason.
 | `linkDocNodeAction` | `PUT /api/app/projects/:key/docs/:ref/nodes/:nodeId` | WH-98 | DELETE on the same path unlinks |
 | `resolveDocDraftAction` | none | unneeded | not called by any page today; if the docs UI needs it later, add `POST /api/app/projects/:key/doc-drafts/:id/resolve` |
 | `listRepositoriesAction` | `GET /api/app/projects/:key/repositories` | WH-98 | also read by the docs anchor picker |
-| `createRepositoryAction` | `POST /api/app/projects/:key/repositories` | WH-98 | owners only; 201 |
+| `createRepositoryAction` | `POST /api/app/projects/:key/repositories` | WH-98 | any teammate (as before); 201 |
 | `connectGithubRepositoryAction` | `POST /api/app/projects/:key/repositories/github` | WH-98 | owners only; the installation must be the team's own (ADR-12); name and branch are read from GitHub |
-| `updateRepositoryAction` | `PATCH /api/app/projects/:key/repositories/:id` | WH-98 | owners only |
-| `retireRepositoryAction` | `POST /api/app/projects/:key/repositories/:id/retire` | WH-98 | owners only |
+| `updateRepositoryAction` | `PATCH /api/app/projects/:key/repositories/:id` | WH-98 | any teammate (as before) |
+| `retireRepositoryAction` | `POST /api/app/projects/:key/repositories/:id/retire` | WH-98 | any teammate (as before) |
 | `browseRepoTreeAction` | `GET /api/app/projects/:key/repositories/:id/tree` | WH-98 | for the anchor picker |
 | `markAllSeenAction` | `POST /api/app/agents/mark-all-seen` | WH-95 | `{ keyId?, projectKey? }`; also used by the bots menu on the board (WH-96) |
 | `removeSessionAction` | `DELETE /api/app/projects/:key/sessions/:sessionId` | WH-95 | built with the dashboard, whose agents widget uses it; the board's bots menu (WH-96) calls the same endpoint |

@@ -3,7 +3,7 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { createApiClient, type Me, type Project } from "@wheelhouse/api-client";
 import { createServices, ServicesProvider } from "../lib/services";
-import { activityEvent, adminTeam, adminTeamDetail, agentsPage, board, graph, serveWidgets, team } from "./data";
+import { activityEvent, adminTeam, adminTeamDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, repo, serveWidgets, team } from "./data";
 import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
@@ -90,6 +90,11 @@ export function serverWithData() {
     server.on(`GET /api/app/projects/${key}/queue`, { bots: [] });
     server.on(`GET /api/app/projects/${key}/graph`, graph(key));
     server.on(`GET /api/app/projects/${key}/activity`, { events: [activityEvent()] });
+    server.on(`GET /api/app/projects/${key}/docs`, docsIndex());
+    for (const d of DOCS) server.on(`GET /api/app/projects/${key}/docs/${d.id}`, docDetail(d));
+    server.on(`GET /api/app/projects/${key}/repositories`, { repositories: [repo()] });
+    server.on(`GET /api/app/projects/${key}/repositories/github`, githubStatus());
+    server.on(`GET /api/app/projects/${key}/onboarding`, onboardingPage(key));
   }
   return server;
 }

@@ -101,6 +101,12 @@ async function main() {
   const [au] = await db.insert(schema.users).values({ email: ADMIN_EMAIL, name: "Contract admin", passwordHash }).returning();
   await db.insert(schema.memberships).values({ userId: au.id, teamId: at.id, role: "owner" });
 
+  // A team for the tests that connect GitHub repositories, so the seeded teams (and their project lists, webhooks and counts) stay as they are.
+  const [ct] = await db.insert(schema.teams).values({ name: "Contract connect team" }).returning();
+  const [cu] = await db.insert(schema.users).values({ email: "ct-connect-owner@example.test", name: "Contract connect owner", passwordHash }).returning();
+  const [cm] = await db.insert(schema.users).values({ email: "ct-connect-member@example.test", name: "Contract connect member", passwordHash }).returning();
+  await db.insert(schema.memberships).values([{ userId: cu.id, teamId: ct.id, role: "owner" }, { userId: cm.id, teamId: ct.id, role: "member" }]);
+
   let github: GithubFixture | null = null;
   const serverEnv: Record<string, string> = databaseUrl ? { DATABASE_URL: databaseUrl } : { PGLITE_DIR: path.resolve(dir!), DATABASE_URL: "" };
   if (withGithub) {
@@ -116,6 +122,8 @@ async function main() {
       installationB: "1002",
       repoId: "5001",
       connectInstallationId: "2001",
+      installationC: "3001",
+      connectRepoId: "7001",
     };
     Object.assign(serverEnv, {
       GITHUB_APP_ID: "424242",
@@ -144,6 +152,7 @@ async function main() {
         defaultBranch: "main",
       });
     }
+    await db.insert(schema.githubInstallations).values({ installationId: github.installationC, teamId: ct.id, accountLogin: "contract-connect", accountType: "Organization", connectedBy: cu.id });
     // A forged row: team B's project claims a repository through TEAM A's installation. Webhooks must resolve an installation to
     // its own team (the join on github_installations.team_id), so this row must never be reached.
     const projB = (await db.select().from(schema.projects).where(eq(schema.projects.teamId, b.teamId)))[0];
@@ -164,6 +173,7 @@ async function main() {
     password: PASSWORD,
     suspended: { apiKey: skey, sessionToken: stok, email: "ct-suspended@example.test" },
     admin: { email: ADMIN_EMAIL, userId: au.id, teamId: at.id },
+    connect: { email: cu.email, memberEmail: cm.email, teamId: ct.id },
     github,
     serverEnv,
   };

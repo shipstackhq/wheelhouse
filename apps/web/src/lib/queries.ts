@@ -34,3 +34,12 @@ export const activityQuery = (api: ApiClient, projectKey: string, who?: "agent" 
   queryFn: () => api.map.activity(projectKey, who),
 });
 export const useGraph = (projectKey: string) => useQuery(graphQuery(useServices().api, projectKey));
+
+/** The docs page (the tree and its side panels), one doc, the repositories, the Connect GitHub card and the onboarding wizard. */
+export const docsQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["docs", projectKey] as const, queryFn: () => api.docs.index(projectKey) });
+export const docQuery = (api: ApiClient, projectKey: string, ref: string) => ({ queryKey: ["doc", projectKey, ref] as const, queryFn: () => api.docs.get(projectKey, ref) });
+export const reposQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["repos", projectKey] as const, queryFn: () => api.repos.list(projectKey) });
+export const githubQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["github", projectKey] as const, queryFn: () => api.repos.github(projectKey) });
+export const onboardingQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["onboarding", projectKey] as const, queryFn: () => api.onboarding.page(projectKey) });
+export const useDocs = (projectKey: string) => useQuery(docsQuery(useServices().api, projectKey));
+export const useRepos = (projectKey: string) => useQuery(reposQuery(useServices().api, projectKey));
