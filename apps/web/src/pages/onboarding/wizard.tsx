@@ -212,7 +212,7 @@ function InviteStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
         <p className="mt-1 text-sm text-muted">Send a one-time invite link. You can always invite more people later from Team settings.</p>
       </div>
       <div className="card p-5">
-        <InviteForm kind="join_team" />
+        <InviteForm kind="join_team" className="" />
       </div>
       <div className="flex gap-2">
         <button className="btn" onClick={onBack}>

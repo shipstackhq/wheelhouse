@@ -228,3 +228,36 @@ The map, decisions, glossary and activity pages. Everything needs a session. A p
 **In flux and drafts.** When an agent's session is changing a node's files and the agent edits that node, the edit is stored as a draft and published when the code lands. `flux` in the graph lists those sessions and drafts per node; `resolve` publishes or discards one by hand.
 
 **Renaming a term** is a delete of the old name and a define of the new one, as before (terms are keyed by name), so it is two calls.
+
+## Built by WH-98
+
+The docs, repositories and onboarding pages. Everything needs a session. A project, doc, map node or repository of another team is a 404.
+
+| Endpoint | What it is |
+|---|---|
+| `GET /api/app/projects/:key/docs` | the tree (`docs`: id, parent, slug, title, version, position, updatedAt, stale) and what the page's panels offer: `nodes` to link, `decisions` to link, `members` (who wrote what) |
+| `GET /api/app/projects/:key/docs/:ref` | one doc (a doc's id, or its slug) with the map nodes it is linked to. Only what the page shows: the internal freshness columns are not sent |
+| `POST /api/app/projects/:key/docs` | `{ title, body?, parent?, template? }`; 201. A `template` (`spec`, `decision-record`, `runbook`, `meeting-notes`, `onboarding`) fills the body when none is given |
+| `PATCH /api/app/projects/:key/docs/:ref` | `{ title?, body?, anchors?, version? }`; with `version`, a doc changed since is a `409 conflict` and `details.current` is the doc now. Editing text or anchors clears the stale flag |
+| `POST /api/app/projects/:key/docs/:ref/fresh` | "still accurate" |
+| `GET /api/app/projects/:key/docs/:ref/anchor-suggestions` | `{ anchors }`: path-like words in the text and the anchors of the linked nodes |
+| `POST /api/app/projects/:key/docs/:ref/move` | `{ parent?, index?, version? }`; `parent: null` is the top level; cycles are refused |
+| `DELETE /api/app/projects/:key/docs/:ref` | the doc and the docs nested under it |
+| `PUT/DELETE /api/app/projects/:key/docs/:ref/nodes/:nodeId` | link / unlink a map node |
+| `GET /api/app/projects/:key/repositories` | `{ repositories }`: a view without installation or GitHub ids; `browsable` says a GitHub repository's tree can be fetched |
+| `POST /api/app/projects/:key/repositories` | `{ displayName, role, provider?, defaultBranch?, pathLimit?, lifecycle? }`; 201 |
+| `PATCH /api/app/projects/:key/repositories/:id` | any of the same fields (`pathLimit: null` clears it) |
+| `POST /api/app/projects/:key/repositories/:id/retire` | |
+| `GET /api/app/projects/:key/repositories/github` | the Connect GitHub card: `configured`, `missing` (settings to set; owners only), `isOwner`, and for owners each installation of the team with the repositories this project could still connect. GitHub is asked on every read |
+| `POST /api/app/projects/:key/repositories/github` | `{ installationId, repoId, role?, pathLimit? }`; 201. Owners only; the installation must be the team's own (ADR-12); the name and default branch are read from GitHub, not the request |
+| `GET /api/app/projects/:key/repositories/:id/tree` | `{ files, truncated }` for the doc anchor picker; only for a GitHub repository of the person's own project |
+| `GET /api/app/projects/:key/onboarding` | the wizard: the project, `hasRepos`, and the commands to paste (with this project's key; never an API key) |
+| `POST /api/app/projects/:key/onboarding/concept` | `{ description }`: the "no code yet" path; becomes the map's first concept. An empty one is a 400 on `description` |
+
+Creating, editing and retiring repositories is open to any teammate, as it was in the Next app (the inventory above first said "owners only"; the code never checked it). Connecting GitHub is owners only.
+
+**The Connect GitHub redirects are unchanged.** `/api/github/install` and `/api/github/callback` are the same Nest routes as before and send the person back to `/p/KEY/repos?github=connected` (or `github_error=...`), which the React page turns into the same notes. The GitHub App's settings and callback URL need no change.
+
+**Connecting a repository** used to be a form that redirected to `?github=repo_connected`; it is now a fetch, and the page shows "Repository connected." (or the server's reason) on that installation and reads the list again. The words are the same.
+
+**An action item becomes a ticket** through `POST /api/app/projects/:key/tickets` (WH-96), then the page ticks the box with an ordinary `PATCH` of the doc against the version it read. "Create ADR from this doc" is `PUT /api/app/projects/:key/decisions` (WH-97).
