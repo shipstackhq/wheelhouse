@@ -2,7 +2,11 @@ import { type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
 import { AdminInvitesPage, AdminTeamPage, AdminTeamsPage } from "../pages/admin";
 import { AgentsPage } from "../pages/agents";
+import { ActivityPage } from "../pages/activity/activity";
 import { BoardPage } from "../pages/board";
+import { DecisionsPage } from "../pages/decisions";
+import { GlossaryPage } from "../pages/glossary";
+import { MapPage } from "../pages/map";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
 import { InvitePage } from "../pages/invite";
@@ -14,7 +18,7 @@ import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, ProjectLayout, R
 import { OfflinePage } from "./offline";
 import { stub } from "./stub";
 
-/** The pages still to be ported (WH-96, WH-97, WH-98) are stubs; each of those tickets replaces its own. */
+/** The pages still to be ported (WH-98: docs, repositories, onboarding) are stubs; that ticket replaces its own. */
 /**
  * Every address the Next app serves, at the same address, so links, bookmarks and the links the plugin prints keep working.
  * The auth gate is a loader: it runs before anything renders.
@@ -58,11 +62,11 @@ export function buildRoutes(services: Services): RouteObject[] {
               Component: ProjectLayout,
               children: [
                 { index: true, Component: BoardPage },
-                { path: "activity", Component: stub("Activity", "WH-97") },
-                { path: "map", Component: stub("Map", "WH-97") },
+                { path: "activity", Component: ActivityPage },
+                { path: "map", Component: MapPage },
                 { path: "docs", Component: stub("Docs", "WH-98") },
-                { path: "decisions", Component: stub("Decisions", "WH-97") },
-                { path: "glossary", Component: stub("Glossary", "WH-97") },
+                { path: "decisions", Component: DecisionsPage },
+                { path: "glossary", Component: GlossaryPage },
                 { path: "repos", Component: stub("Repositories", "WH-98") },
                 { path: "onboarding", Component: stub("Set up this project", "WH-98") },
               ],

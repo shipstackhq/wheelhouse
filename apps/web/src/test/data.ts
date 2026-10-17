@@ -214,3 +214,119 @@ export const detail = (t: BoardTicket, over: Partial<TicketDetail> = {}): Ticket
 });
 
 export const bot = (over: Partial<Bot> = {}): Bot => ({ id: "k1", name: "Claude — Ada's laptop", pending: 0, lastUsedAt: null, sessions: [], ...over });
+
+// ───────── the map ─────────
+
+import type { Flow, GraphView, MapEdge, MapNode, Decision, Term } from "@wheelhouse/api-client";
+
+export const mapNode = (over: Partial<MapNode> & Pick<MapNode, "id" | "name" | "layer">): MapNode => ({
+  parentId: null,
+  kind: over.layer === "concept" ? "concept" : over.layer === "data" ? "table" : over.layer === "code" ? "directory" : "service",
+  summary: "",
+  purpose: "",
+  responsibilities: "",
+  interfaces: "",
+  gotchas: "",
+  details: "",
+  anchors: [],
+  columns: [],
+  indexes: [],
+  describedSha: null,
+  describedAt: "2026-10-10T00:00:00.000Z",
+  stale: false,
+  staleReason: null,
+  status: "live",
+  x: 0,
+  y: 0,
+  width: null,
+  height: null,
+  placed: true,
+  version: 1,
+  ...over,
+});
+
+export const MAP_NODES: MapNode[] = [
+  mapNode({ id: "c-bill", name: "Billing", layer: "concept", summary: "Takes the money", purpose: "Why we charge", x: 60, y: 60 }),
+  mapNode({ id: "s-api", name: "API", layer: "system", summary: "The HTTP API", purpose: "Serves every client", anchors: ["apps/api/**"], x: 60, y: 60, width: 520, height: 260 }),
+  mapNode({ id: "s-auth", name: "Auth", layer: "system", kind: "module", parentId: "s-api", summary: "Who is calling", x: 20, y: 70 }),
+  mapNode({ id: "s-pay", name: "Payments", layer: "system", kind: "module", parentId: "s-api", summary: "Charges cards", x: 250, y: 70, stale: true, staleReason: "src/pay/charge.ts changed in abc1234" }),
+  mapNode({ id: "s-web", name: "Web", layer: "system", summary: "The app", x: 700, y: 60 }),
+  mapNode({
+    id: "d-users",
+    name: "users",
+    layer: "data",
+    summary: "People",
+    x: 400,
+    y: 60,
+    columns: [
+      { name: "id", type: "uuid", pk: true },
+      { name: "email", type: "text", unique: true },
+    ],
+  }),
+  mapNode({
+    id: "d-posts",
+    name: "posts",
+    layer: "data",
+    x: 60,
+    y: 60,
+    columns: [
+      { name: "id", type: "uuid", pk: true },
+      { name: "author_id", type: "uuid", references: "users.id", onDelete: "cascade" },
+    ],
+  }),
+  mapNode({ id: "k-pay", name: "src/pay", layer: "code", kind: "directory", anchors: ["src/pay/**"], x: 60, y: 60 }),
+];
+
+export const MAP_EDGES: MapEdge[] = [
+  { id: "e1", kind: "depends", fromNodeId: "s-web", toNodeId: "s-api", label: "REST", meta: {} },
+  { id: "e2", kind: "implements", fromNodeId: "s-pay", toNodeId: "c-bill", label: "", meta: {} },
+  { id: "e3", kind: "references", fromNodeId: "d-posts", toNodeId: "d-users", label: "author_id → id", meta: { fromColumn: "author_id", toColumn: "id", cardinality: "n-1", derived: true, onDelete: "cascade" } },
+];
+
+export const MAP_FLOWS: Flow[] = [
+  { id: "f1", name: "Sign in", description: "How a person gets in", version: 2, steps: [
+    { nodeId: "s-web", title: "Open the page", detail: "The **app** loads" },
+    { nodeId: "s-auth", title: "Check the password", detail: "" },
+  ] },
+];
+
+export const MAP_DECISIONS: Decision[] = [
+  { id: "dec1", number: 1, title: "Use REST", status: "accepted", context: "We needed one protocol", decision: "REST over HTTP", consequences: "No streaming", nodeIds: ["s-api"], authorKind: "human", authorName: "Ada Lovelace", version: 1, updatedAt: "2026-10-12T00:00:00.000Z" },
+  { id: "dec2", number: 2, title: "Drop GraphQL", status: "rejected", context: "", decision: "Not now", consequences: "", nodeIds: [], authorKind: "agent", authorName: "Claude", version: 3, updatedAt: "2026-10-13T00:00:00.000Z" },
+];
+
+export const MAP_TERMS: Term[] = [
+  { id: "t1", term: "Invoice", definition: "A bill we send", nodeId: "c-bill" },
+  { id: "t2", term: "Tenant", definition: "One customer's workspace", nodeId: null },
+];
+
+export const graph = (key = "AA", over: Partial<GraphView> = {}): GraphView => ({
+  project: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
+  nodes: MAP_NODES,
+  edges: MAP_EDGES,
+  ticketLinks: [{ nodeId: "s-api", ticketId: "t-1", number: 1, title: "Write the plan", columnId: "c-backlog", ref: `${key}-1` }],
+  flows: MAP_FLOWS,
+  decisions: MAP_DECISIONS,
+  terms: MAP_TERMS,
+  flux: {
+    "s-auth": {
+      sessions: [{ id: "sess-1", by: "Claude — Ada's laptop", ticket: `${key}-9`, files: ["apps/api/src/auth.ts", "apps/api/src/session.ts"] }],
+      drafts: [{ id: "draft-1", authorKind: "agent", authorName: "Claude — Ada's laptop", confirm: false, patch: { purpose: "Checks passwords and sessions" } }],
+    },
+  },
+  askEnabled: true,
+  ...over,
+});
+
+export const activityEvent = (over: Partial<import("@wheelhouse/api-client").ActivityEvent2> = {}): import("@wheelhouse/api-client").ActivityEvent2 => ({
+  seq: 1,
+  actorKind: "human",
+  actorName: "Ada Lovelace",
+  type: "ticket.created",
+  entity: "ticket",
+  entityId: "t-1",
+  summary: 'created AA-1 "Write the plan" in Backlog',
+  data: { ref: "AA-1" },
+  createdAt: new Date().toISOString(),
+  ...over,
+});
