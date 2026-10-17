@@ -49,7 +49,7 @@ jobs:
         run: >-
           pnpm exec tsx --conditions=react-server --test --test-force-exit --test-concurrency=1
           packages/core/src/lib/queue.test.ts src/lib/invites.test.ts packages/core/src/lib/teams-admin.test.ts src/lib/isolation.test.ts
-          packages/core/src/lib/version-lock.test.ts
+          packages/core/src/lib/version-lock.test.ts packages/core/src/tools/db-copy.test.ts
       - name: Migrations are in sync with the schema
         run: |
           pnpm db:generate

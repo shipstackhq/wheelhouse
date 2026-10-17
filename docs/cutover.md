@@ -1,0 +1,97 @@
+# Moving the data and cutting over (WH-100)
+
+The schema is frozen (migrations 0000 to 0013), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
+transform. The tools below copy it exactly, prove they did, and never write to the original. They also move data between PGlite and Postgres in
+either direction, so the same procedure covers the local control plane (PGlite, port 3456) and a server (Postgres, `docs/deploy.md`).
+
+## The tools
+
+```bash
+pnpm db:export --from <PGlite directory | postgres://…> --out <folder>
+pnpm db:import --in <folder> --to <PGlite directory | postgres://…>
+pnpm db:verify --in <folder> --to <target>            # the target against what the export said the source held
+pnpm db:verify --from <source> --to <target>          # two databases directly
+```
+
+- **Export** reads every table (29, in dependency order) as one JSON line per row, as of one moment, plus a `manifest.json`: rows and a content checksum per
+  table, the sequences, the applied migrations. Rows are `to_jsonb(row)` text and are never parsed in JavaScript, so a bigint past 2^53, a double, a
+  microsecond timestamp or an emoji comes out as it went in. A PGlite source directory is **copied first and the copy is opened**: the original is
+  never opened, so nothing in it can change (a test checks this). Postgres is read in one read-only transaction.
+- **Import** goes into a database that has just been migrated by this code (the tool does that) and is **empty**. It refuses anything else: a target
+  with data in it, or at different migrations. It is one transaction, so a failure leaves the target empty and the import can simply be run again. Then
+  every sequence is set exactly where the source had it (so `events.seq`, which every agent cursor depends on, never reuses a number).
+- **Verify** recomputes the checksums on the target and compares them with the manifest (or with a second database), then checks things that must be true of
+  any Wheelhouse database: every one of the 47 foreign keys resolves, `events_seq_seq` is not behind the newest event, no agent or session cursor is ahead
+  of the newest event, every API key hash and session id is a sha256, and it reports the users, teams and memberships. Exit status 0 means
+  "everything agrees"; anything else is non-zero and names the table.
+
+Checksums are the md5 of a table's rows as JSON in byte order of that text, so they do not depend on collation or storage order. PGlite → Postgres → PGlite
+is tested to be the identity (`packages/core/src/tools/db-copy.test.ts`, with a real Postgres in CI).
+
+Scale: a table is read into memory at once, which is fine for Wheelhouse (about 3,200 rows and 6 MB exported for the real data). It would need batching for a database a thousand times larger.
+
+## Rehearsals
+
+`scripts/rehearse-data-move.sh <PGlite directory> [name]` is one full rehearsal on a copy, timed, in about a minute. It runs, and logs under `.work/rehearsal-<name>/`:
+
+1. export; 2. import into a fresh PGlite directory; 3. verify against the export **and** against the source directly;
+4. the same into a throwaway Postgres 18 (Docker) and back to PGlite, which must equal the source;
+5. **continuity**, with the new app started on the copy using the same `.env.local` as the old one: the person's real API key (from
+   `~/.config/wheelhouse/credentials.json`) authenticates; in every project the key resumes at exactly its cursor with exactly the number of changes waiting
+   that the data says (not a replay from zero); a pull_request webhook, signed with the real webhook secret, for the repository that is really connected,
+   naming an open ticket, is handled and matched to its project; the same process serves the React app;
+6. the **whole contract suite** (311 + 6) against the app on the imported copy (its fixtures are added to the copy).
+
+| | Source | Export | Import | Verify | Postgres and back | Continuity | Contract | Total | Result |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | snapshot of the real data, 2026-10-17 | 2s | 1s | 3s | 7s | 5s | 41s | 60s | passed, but see below |
+| 2 | same snapshot | 1s | 2s | 2s | 8s | 7s | 42s | 62s | passed |
+| 3 | a fresh snapshot | 2s | 1s | 3s | 8s | 5s | 39s | 58s | passed, no discrepancies |
+| 4 | another fresh snapshot (after the script gained the "serves the React app" check) | 1s | 2s | 2s | 8s | 5s | 39s | 57s | passed, no discrepancies |
+
+The source of these four is `wheelhouse-migration/.data/pglite`, the copy of the live data the migration has used since it began (3,186 rows in 29 tables, newest
+event 2421, four agent cursors, six API keys, two teams). **None of them used the live directory** (`wheelhouse/.data/pglite`, owned by the running
+control plane on 3456), which was not touched. A rehearsal on a fresh copy of the live data is the first step of the real cutover below.
+
+Problems found, all in the rehearsal script, none in the data tools:
+- The cursor check in run 1 passed without checking anything: it read `changes` at the top of the response, but `/api/v1` wraps results in `data`, so it always saw
+  zero changes. Found by strengthening the check (compare the server's `cursor` and `total` with what the data says); it then failed for the same reason until fixed,
+  and run 2 passed with the real check (for example WH: cursor 2352, 12 changes waiting, as the data says).
+- `list_projects` also answers in `data`; the printout was wrong, not the check.
+- Runs 1 and 2 used one snapshot; runs 3 and 4 each used a fresh one.
+
+## Cutover runbook: the local control plane (PGlite, port 3456)
+
+Owners: **O** the person who owns Wheelhouse (does the steps that stop and start things), **C** Claude (runs the tools and the checks when asked). Times are from the
+rehearsals plus time to read each answer; the whole thing is about 15 minutes, and nothing can be lost because the old directory is never written to.
+
+Before the day (**O**, **C**): the last rehearsal on a fresh copy passed (`scripts/rehearse-data-move.sh`); `main` has what you will run (WH-102, removing the Next app, is
+held until the new app has been live and trusted); the old app is still at `wheelhouse-old` (tag `pre-migration`).
+
+| When | Owner | Step |
+|---|---|---|
+| T-30 min | O | Tell anyone sharing it that the board stops for about 15 minutes. Finish or commit agent work in flight. |
+| T-10 | O | Stop agents and sessions: close Claude Code sessions that use the board (their changes are in `events`; their cursors move with the data). |
+| T-5 | O | `lsof -ti :3456 -sTCP:LISTEN \| xargs kill` (SIGTERM, so PGlite flushes). Wait until the port is free. **Never `pkill -f next-server`.** |
+| T+0 | O | A safety copy that nothing will ever touch: `cp -R wheelhouse/.data/pglite ~/wheelhouse-pglite-before-cutover-$(date +%Y%m%d)`. |
+| T+1 | C | **Rehearse once more on that copy** (about a minute): `scripts/rehearse-data-move.sh ~/wheelhouse-pglite-before-cutover-… final`. Must say `PASSED`. |
+| T+3 | C | Final export: `pnpm db:export --from wheelhouse/.data/pglite --out ~/cutover/export` (copies first; the original is not opened). |
+| T+3 | C | Import into a **new** directory: `pnpm db:import --in ~/cutover/export --to ~/cutover/pglite`. |
+| T+4 | C | `pnpm db:verify --in ~/cutover/export --to ~/cutover/pglite` and `pnpm db:verify --from wheelhouse/.data/pglite --to ~/cutover/pglite`. Both must say `RESULT: everything agrees`. **Stop here if either does not.** |
+| T+5 | O/C | Build the React app and start the new app on the same port, with the same `.env.local`: `pnpm --filter @wheelhouse/web build && PGLITE_DIR=~/cutover/pglite PORT=3456 pnpm --filter @wheelhouse/api start`. |
+| T+6 | O/C | Smoke test: the URL is the same (`http://localhost:3456`), so the plugin, the CLI and the credentials file need no change. Run `get_briefing` from a Claude Code session; the key must work and the queue must continue where it was (the rehearsal's continuity check). Sign in in the browser as yourself; open the board, the map and the docs; create and move a ticket; link a node. |
+| T+10 | O | If the GitHub App is reachable (it is not on localhost): open a pull request naming a ticket and watch it move. |
+| T+15 | O | Announce it is back. Keep `~/wheelhouse-pglite-before-cutover-…` and `wheelhouse-old` untouched for as long as you want the option below. |
+
+**Rollback** (any time, no matter how far you got): stop the new app (`lsof -ti :3456 -sTCP:LISTEN | xargs kill`), then start the old app on the **original, never-written** directory,
+as `docs/migration.md` describes: `cd wheelhouse-old && PGLITE_DIR=<wheelhouse/.data/pglite> pnpm exec next dev -p 3456`. Nothing about the old directory changed. To keep what was written on the
+new side before rolling back, export the new directory and import it into a **fresh** directory, then start the old app on that one (same schema, so the old app takes it):
+`pnpm db:export --from ~/cutover/pglite --out ~/cutover/export-back && pnpm db:import --in ~/cutover/export-back --to ~/cutover/pglite-back`.
+
+After the cutover (**C**, a day later): compare the row counts the verify step printed at T+4 (tickets, comments, ADRs, docs, map nodes) with what the board, the map and the docs show now,
+and check the plugin's queue. The new directory has been written to since, so counts can only have grown. Only then is it reasonable to consider WH-102 (removing the Next app).
+
+## The same on a server (Postgres)
+
+`docs/deploy.md` covers the server. To move data into its Postgres: create the database and role as in *One-time server setup*, then `pnpm db:import --in <export> --to "postgres://wheelhouse:…@host/wheelhouse"` before the first
+deploy (the tool migrates the empty database itself, and the app finds the migrations already applied), `pnpm db:verify` it, and deploy. The Postgres path was rehearsed on every run above (step 4).
