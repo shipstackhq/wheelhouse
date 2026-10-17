@@ -15,6 +15,18 @@
  */
 
 import type {
+  ActivityEvent2,
+  AskAnswer,
+  Decision,
+  DecisionInput,
+  Flow,
+  FlowInput,
+  GraphView,
+  MapEdge,
+  MapNode,
+  NodePatch,
+  NodePosition,
+  Term,
   AcceptInviteInput,
   AdminTeam,
   AdminTeamDetail,
@@ -203,6 +215,36 @@ export function createApiClient(options: ApiClientOptions = {}) {
       comment: async (ref: string, body: string) => (await request<{ comment: TicketComment }>("POST", `/api/app/tickets/${encodeURIComponent(ref)}/comments`, { body })).comment,
       link: (ref: string, nodeId: string) => request<{ ok: true }>("PUT", `/api/app/tickets/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
       unlink: (ref: string, nodeId: string) => request<{ ok: true }>("DELETE", `/api/app/tickets/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
+    },
+
+    map: {
+      /** The whole map in one read; also what the decisions and glossary pages draw. */
+      graph: (projectKey: string) => request<GraphView>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/graph`),
+      /** Create (no `id`) or change (`id`) a node. With `version`, a stale change rejects with an ApiError whose `current` is the node now. */
+      upsertNode: async (projectKey: string, patch: NodePatch) =>
+        (await request<{ node: MapNode }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/nodes`, patch)).node,
+      deleteNode: (projectKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/nodes/${encodeURIComponent(id)}`),
+      markFresh: async (projectKey: string, id: string) =>
+        (await request<{ node: MapNode }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/nodes/${encodeURIComponent(id)}/fresh`, {})).node,
+      saveLayout: (projectKey: string, positions: NodePosition[], opts: { placed?: boolean } = {}) =>
+        request<{ ok: true }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/layout`, { positions, ...opts }),
+      connect: async (projectKey: string, input: { from: string; to: string; label?: string; kind?: "depends" | "implements" }) =>
+        (await request<{ edge: MapEdge }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/edges`, input)).edge,
+      deleteEdge: (projectKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/edges/${encodeURIComponent(id)}`),
+      upsertFlow: async (projectKey: string, input: FlowInput) => (await request<{ flow: Flow }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/flows`, input)).flow,
+      deleteFlow: (projectKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/flows/${encodeURIComponent(id)}`),
+      upsertDecision: async (projectKey: string, input: DecisionInput) =>
+        (await request<{ decision: Decision }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/decisions`, input)).decision,
+      upsertTerm: async (projectKey: string, term: string, input: { definition: string; node?: string | null }) =>
+        (await request<{ term: Term }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/terms/${encodeURIComponent(term)}`, input)).term,
+      deleteTerm: (projectKey: string, term: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/terms/${encodeURIComponent(term)}`),
+      resolveDraft: (projectKey: string, id: string, action: "publish" | "discard") =>
+        request<{ ok: true }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/drafts/${encodeURIComponent(id)}/resolve`, { action }),
+      /** Answered by Claude on the server, from the map. */
+      ask: (projectKey: string, question: string, focus?: string) =>
+        request<AskAnswer>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/ask`, { question, ...(focus ? { focus } : {}) }),
+      activity: async (projectKey: string, who?: "agent" | "human") =>
+        (await request<{ events: ActivityEvent2[] }>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/activity${who ? `?who=${who}` : ""}`)).events,
     },
 
     /** Change your own password. */

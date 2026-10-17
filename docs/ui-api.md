@@ -202,3 +202,29 @@ The first real use of the optimistic-lock pattern described under "Optimistic lo
 ### Live updates
 
 A change made by an agent over MCP or `/api/v1`, or by anyone through these endpoints, is one write path: it publishes an event on the project's stream (`/api/projects/:key/stream`) after it commits. A test holds a stream open, moves a ticket as an agent, and requires the `change` event within a second.
+
+## Built by WH-97
+
+The map, decisions, glossary and activity pages. Everything needs a session. A project, node, edge, flow, decision, term or draft of another team is a 404.
+
+| Endpoint | What it is |
+|---|---|
+| `GET /api/app/projects/:key/graph` | the whole map in one read: `nodes`, `edges`, `ticketLinks`, `flows`, `decisions`, `terms`, `flux` (nodes whose code is being changed right now, with the map updates waiting for it) and `askEnabled`. The decisions and glossary pages read the same endpoint |
+| `PUT /api/app/projects/:key/nodes` | create (no `id`) or change (`id`) a node; `{ name, layer, kind, status, parent, summary, purpose, responsibilities, interfaces, gotchas, details, anchors, columns, indexes, version }` |
+| `PUT /api/app/projects/:key/layout` | `{ positions: [{ id, x, y, width?, height? }], placed? }`: a drag, a resize or a Tidy. `placed: false` is a whole-lens Tidy |
+| `POST /api/app/projects/:key/edges` | `{ from, to, label?, kind? }`; `depends` (default) or `implements`. Answers 200 with the edge, new or existing. References between tables are made with a column's `references` |
+| `PUT /api/app/projects/:key/flows` | `{ id?, name, description?, steps?: [{ node, title, detail? }], version? }`; steps are replaced wholesale |
+| `PUT /api/app/projects/:key/decisions` | without `number` a new ADR; with it, that ADR is changed |
+| `PUT/DELETE /api/app/projects/:key/terms/:term` | the term is named in the path (URL-encode it); `PUT` takes `{ definition, node? }`; `DELETE` takes the term's name or id |
+| `POST /api/app/projects/:key/nodes/:id/fresh` | "still accurate": clears the stale flag without changing what the node says |
+| `POST /api/app/projects/:key/drafts/:id/resolve` | `{ action: "publish" \| "discard" }` |
+| `POST /api/app/projects/:key/ask` | `{ question, focus? }` → `{ answer, truncated }` |
+| `GET /api/app/projects/:key/activity?who=agent\|human` | the last 200 events, newest first; `data` is only `ref`, `number` and `body` (cut at 500 characters) |
+
+**Locks on nodes, flows and decisions.** These carry a `version` but nothing checked it before: not the old app, and not the agents' MCP tools (only tickets and docs had a lock). The web endpoints take `version` and use the same pattern as tickets: a change made since is a `409 conflict`, nothing is overwritten, and `details.current` is the entity as it is now (`ApiError.current`). The check is an optional `expectedVersion` on the service functions; the MCP tools never pass it, so agents behave exactly as before. Two edits from the same version give exactly one 200 and one 409.
+
+**Ask the map spends money and calls out**, so: the project is resolved first (another team's is a 404 before anything is counted or called), then at most 20 questions per person per 10 minutes (`429` with `Retry-After`), then the server calls Claude with its own key. The key is read from the server's environment and is in no response, header or cookie (the contract suite checks that, including when Claude fails). Claude's own errors become plain reasons ("Claude is rate limited, try again in a moment", "ANTHROPIC_API_KEY is invalid", "Claude API error (500)"), never the upstream body. The contract suite runs Ask against a fake Claude server (`tests/contract/lib/fake-github.ts`) that answers from what it was sent.
+
+**In flux and drafts.** When an agent's session is changing a node's files and the agent edits that node, the edit is stored as a draft and published when the code lands. `flux` in the graph lists those sessions and drafts per node; `resolve` publishes or discards one by hand.
+
+**Renaming a term** is a delete of the old name and a define of the new one, as before (terms are keyed by name), so it is two calls.

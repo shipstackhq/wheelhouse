@@ -18,11 +18,12 @@ import { KeysController } from "./web/keys.controller";
 import { TeamController } from "./web/team.controller";
 import { TicketsController } from "./web/tickets.controller";
 import { CsrfGuard, SessionGuard } from "./web/endpoints";
+import { MapController } from "./web/map.controller";
 import { MeController } from "./web/me.controller";
 import { ProjectsController } from "./web/projects.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ProjectsController, AdminController, DashboardController, InvitesController, KeysController, TeamController, BoardController, TicketsController],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ProjectsController, AdminController, DashboardController, InvitesController, KeysController, TeamController, BoardController, TicketsController, MapController],
   providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard],
 })
 export class AppModule {}

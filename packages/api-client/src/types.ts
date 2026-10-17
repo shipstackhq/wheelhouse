@@ -251,3 +251,131 @@ export type MoveTicket = { column: string; index?: number; version?: number };
 export type BotSession = SessionView;
 /** An agent key and its queue in one project. */
 export type Bot = { id: string; name: string; pending: number; lastUsedAt: string | null; sessions: BotSession[] };
+
+// ───────── the map, decisions, glossary and activity ─────────
+
+export type LayerId = "concept" | "system" | "data" | "code";
+export type NodeStatus = "planned" | "building" | "live" | "deprecated";
+
+export type MapColumn = {
+  name: string;
+  type: string;
+  nullable?: boolean;
+  pk?: boolean;
+  unique?: boolean;
+  default?: string;
+  references?: string;
+  onDelete?: string;
+  note?: string;
+};
+export type MapIndex = { name?: string; columns: string[]; unique?: boolean };
+
+export type MapNode = {
+  id: string;
+  parentId: string | null;
+  layer: LayerId;
+  kind: string;
+  name: string;
+  summary: string;
+  purpose: string;
+  responsibilities: string;
+  interfaces: string;
+  gotchas: string;
+  details: string;
+  anchors: string[];
+  columns: MapColumn[];
+  indexes: MapIndex[];
+  describedSha: string | null;
+  describedAt: string | null;
+  stale: boolean;
+  staleReason: string | null;
+  status: NodeStatus;
+  x: number;
+  y: number;
+  width: number | null;
+  height: number | null;
+  placed: boolean;
+  version: number;
+};
+
+export type MapEdgeMeta = { fromColumn?: string; toColumn?: string; cardinality?: "1-1" | "n-1" | "1-n" | "n-m"; onDelete?: string; derived?: boolean };
+export type MapEdge = { id: string; kind: string; fromNodeId: string; toNodeId: string; label: string; meta: MapEdgeMeta };
+export type FlowStep = { nodeId: string; title: string; detail: string };
+export type Flow = { id: string; name: string; description: string; steps: FlowStep[]; version: number };
+export type DecisionStatus = "proposed" | "accepted" | "superseded" | "rejected";
+export type Decision = {
+  id: string;
+  number: number;
+  title: string;
+  status: DecisionStatus;
+  context: string;
+  decision: string;
+  consequences: string;
+  nodeIds: string[];
+  authorKind: "human" | "agent";
+  authorName: string;
+  version: number;
+  updatedAt: string;
+};
+export type Term = { id: string; term: string; definition: string; nodeId: string | null };
+
+export type FluxEntry = {
+  sessions: { id: string; by: string; ticket: string | null; files: string[] }[];
+  drafts: { id: string; authorKind: "human" | "agent"; authorName: string; confirm: boolean; patch: Record<string, unknown> }[];
+};
+
+export type GraphView = {
+  project: { id: string; key: string; name: string; description: string };
+  nodes: MapNode[];
+  edges: MapEdge[];
+  ticketLinks: { nodeId: string; ticketId: string; number: number; title: string; columnId: string; ref: string }[];
+  flows: Flow[];
+  decisions: Decision[];
+  terms: Term[];
+  flux: Record<string, FluxEntry>;
+  askEnabled: boolean;
+};
+
+/** The fields of a node a person can change. `version` is the lock: a change made since is a 409 whose `current` is the node now. */
+export type NodePatch = {
+  id?: string;
+  name?: string;
+  layer?: LayerId;
+  kind?: string;
+  status?: NodeStatus;
+  parent?: string | null;
+  summary?: string;
+  purpose?: string;
+  responsibilities?: string;
+  interfaces?: string;
+  gotchas?: string;
+  details?: string;
+  anchors?: string[];
+  columns?: MapColumn[];
+  indexes?: MapIndex[];
+  version?: number;
+};
+export type NodePosition = { id: string; x: number; y: number; width?: number; height?: number };
+export type FlowInput = { id?: string; name: string; description?: string; steps?: { node: string; title: string; detail?: string }[]; version?: number };
+export type DecisionInput = {
+  number?: number;
+  title?: string;
+  status?: DecisionStatus;
+  context?: string;
+  decision?: string;
+  consequences?: string;
+  nodes?: string[];
+  version?: number;
+};
+export type AskAnswer = { answer: string; truncated: boolean };
+export type ActivityEvent2 = {
+  seq: number;
+  actorKind: "human" | "agent";
+  actorName: string;
+  type: string;
+  entity: string;
+  entityId: string | null;
+  summary: string;
+  data: { ref?: string; number?: number; body?: string };
+  createdAt: string;
+};

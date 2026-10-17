@@ -51,7 +51,7 @@ describe("the server action inventory", () => {
     const built = rows.filter((r) => r.owner === "WH-93");
     assert.deepEqual(built.map((r) => r.action).sort(), ["login", "logout", "signup"]);
     const served = servedRoutes();
-    for (const r of rows.filter((x) => x.owner === "WH-93" || x.owner === "WH-95" || x.owner === "WH-96")) {
+    for (const r of rows.filter((x) => x.owner === "WH-93" || x.owner === "WH-95" || x.owner === "WH-96" || x.owner === "WH-97")) {
       const route = r.endpoint.replace(/`/g, "");
       assert.ok(served.includes(route), `${r.action}: ${route} is not served by any controller`);
     }

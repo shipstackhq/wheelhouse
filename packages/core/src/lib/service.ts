@@ -602,6 +602,8 @@ export type NodeInput = {
   columns?: schema.Column[]; // data layer only
   indexes?: schema.Index[]; // data layer only
   forcePublish?: boolean; // skip the in-flux draft check (landing, human publish)
+  /** Optimistic lock: the node version the caller last read. A different current version is a 409 and nothing changes. The web app sends it; agents' tools do not. */
+  expectedVersion?: number;
   describedHashes?: Record<string, string>; // content hashes the explanation was written against
   x?: number;
   y?: number;
@@ -657,6 +659,9 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
       existing = rows[0];
     }
 
+    if (existing && input.expectedVersion !== undefined && input.expectedVersion !== existing.version) {
+      throw new ServiceError("conflict", `"${existing.name}" was changed (version ${existing.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: existing });
+    }
     const layer: Layer = existing?.layer ?? input.layer ?? "system";
     if (existing && input.layer && input.layer !== existing.layer)
       throw new ServiceError("invalid", `Can't move "${existing.name}" between layers; create a new node and link it with implements`);
@@ -1111,6 +1116,8 @@ export type FlowInput = {
   name: string;
   description?: string;
   steps?: { node: string; title: string; detail?: string }[];
+  /** Optimistic lock, as on nodes: the flow version the caller last read. */
+  expectedVersion?: number;
 };
 
 /** Create or replace a flow (matched by id, else by name). Steps are replaced wholesale. */
@@ -1138,6 +1145,9 @@ export async function upsertFlow(actor: Actor, projectRef: string, input: FlowIn
         ),
       );
     if (existing) {
+      if (input.expectedVersion !== undefined && input.expectedVersion !== existing.version) {
+        throw new ServiceError("conflict", `Flow "${existing.name}" was changed (version ${existing.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: existing });
+      }
       const [f] = await tx
         .update(flows)
         .set({
@@ -1488,6 +1498,8 @@ export type DecisionInput = {
   decision?: string;
   consequences?: string;
   nodes?: string[];
+  /** Optimistic lock, as on nodes: the decision version the caller last read (updates only). */
+  expectedVersion?: number;
 };
 
 export async function listDecisions(actor: Actor, projectRef: string) {
@@ -1505,6 +1517,9 @@ export async function upsertDecision(actor: Actor, projectRef: string, input: De
     if (input.number !== undefined) {
       const [d] = await tx.select().from(decisions).where(and(eq(decisions.projectId, project.id), eq(decisions.number, input.number)));
       if (!d) throw new ServiceError("not_found", `Decision ADR-${input.number} not found`);
+      if (input.expectedVersion !== undefined && input.expectedVersion !== d.version) {
+        throw new ServiceError("conflict", `ADR-${d.number} was changed (version ${d.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: d });
+      }
       const patch = {
         title: input.title,
         status: input.status,
