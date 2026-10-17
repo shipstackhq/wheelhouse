@@ -28,7 +28,9 @@ describe("GET /api/github/install", () => {
     const { r, state, nonce } = await start(fx.a);
     assert.equal(r.status, 307);
     const to = new URL(location(r));
-    assert.equal(`${to.origin}${to.pathname}`, `${gh.webUrl}/apps/${gh.appSlug}/installations/new`);
+    // The address the server was told to send people to. Where the server runs in a container it reaches the fake GitHub by another
+    // name than this process does (deploy/contract-in-docker.sh sets CONTRACT_GITHUB_WEB_URL to it).
+    assert.equal(`${to.origin}${to.pathname}`, `${process.env.CONTRACT_GITHUB_WEB_URL ?? gh.webUrl}/apps/${gh.appSlug}/installations/new`);
     assert.ok(state.includes("."), "state is body.signature");
     assert.ok(nonce.length >= 16);
     const set = cookieOf(r, "wh_gh_state")!;

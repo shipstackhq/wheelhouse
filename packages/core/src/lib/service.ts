@@ -36,6 +36,16 @@ export const DEFAULT_COLUMNS = DEFAULT_COLUMN_DEFS.map((c) => c.name);
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 export type Q = DB | Tx;
 
+/**
+ * Lock a row for the rest of the transaction and read it as it is NOW. A version check that reads, compares and writes is only
+ * safe if two edits from the same version cannot both read it before either writes; on Postgres (not on the single-connection
+ * embedded database the tests use) they can. The second one waits here for the first to commit, then sees its version.
+ */
+async function lockRow<T extends { id: string }>(tx: Tx, table: typeof tickets | typeof nodes | typeof docs, row: T): Promise<T> {
+  const [fresh] = await tx.select().from(table).where(eq(table.id, row.id)).for("update");
+  return (fresh as unknown as T | undefined) ?? row;
+}
+
 export async function emit(
   q: Q,
   actor: Actor,
@@ -356,7 +366,9 @@ export async function updateTicket(actor: Actor, ref: string, patch: TicketInput
 async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx);
+    const resolved = await resolveTicket(actor, ref, tx);
+    const { project, ref: r } = resolved;
+    const ticket = await lockRow(tx, tickets, resolved.ticket);
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
       throw new ServiceError("conflict", `${r} was changed (version ${ticket.version}, you had ${expectedVersion}). Re-read and retry.`, {
         current: ticket,
@@ -390,7 +402,9 @@ export async function moveTicket(actor: Actor, ref: string, column: string, inde
 async function moveTicketTx(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx);
+    const resolved = await resolveTicket(actor, ref, tx);
+    const { project, ref: r } = resolved;
+    const ticket = await lockRow(tx, tickets, resolved.ticket);
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
       throw new ServiceError("conflict", `${r} was changed since you read it`, { current: ticket });
     }
@@ -659,6 +673,7 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
       existing = rows[0];
     }
 
+    if (existing) existing = await lockRow(tx, nodes, existing);
     if (existing && input.expectedVersion !== undefined && input.expectedVersion !== existing.version) {
       throw new ServiceError("conflict", `"${existing.name}" was changed (version ${existing.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: existing });
     }
@@ -1143,7 +1158,8 @@ export async function upsertFlow(actor: Actor, projectRef: string, input: FlowIn
           eq(flows.projectId, project.id),
           input.id && isUuid(input.id) ? eq(flows.id, input.id) : eq(sql`lower(${flows.name})`, (input.id ?? input.name).trim().toLowerCase()),
         ),
-      );
+      )
+      .for("update"); // a second edit from the same version waits here, then sees the first one's version and is refused
     if (existing) {
       if (input.expectedVersion !== undefined && input.expectedVersion !== existing.version) {
         throw new ServiceError("conflict", `Flow "${existing.name}" was changed (version ${existing.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: existing });
@@ -1515,7 +1531,7 @@ export async function upsertDecision(actor: Actor, projectRef: string, input: De
   return db.transaction(async (tx) => {
     const nodeIds = input.nodes ? await Promise.all(input.nodes.map(async (r) => (await resolveNode(tx, project.id, r)).id)) : undefined;
     if (input.number !== undefined) {
-      const [d] = await tx.select().from(decisions).where(and(eq(decisions.projectId, project.id), eq(decisions.number, input.number)));
+      const [d] = await tx.select().from(decisions).where(and(eq(decisions.projectId, project.id), eq(decisions.number, input.number))).for("update");
       if (!d) throw new ServiceError("not_found", `Decision ADR-${input.number} not found`);
       if (input.expectedVersion !== undefined && input.expectedVersion !== d.version) {
         throw new ServiceError("conflict", `ADR-${d.number} was changed (version ${d.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: d });
@@ -2329,7 +2345,7 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
   }
 
   return db.transaction(async (tx) => {
-    const d = await resolveDoc(tx, project.id, ref);
+    const d = await lockRow(tx, docs, await resolveDoc(tx, project.id, ref));
     if (expectedVersion !== undefined && expectedVersion !== d.version) {
       throw new ServiceError("conflict", `Doc "${d.title}" was changed (version ${d.version}, you had ${expectedVersion}). Re-read and retry.`, { current: d });
     }
@@ -2383,7 +2399,7 @@ export async function moveDoc(actor: Actor, projectRef: string, ref: string, opt
   const project = await getProject(actor, projectRef);
   await assertDocsWritable(actor, db);
   return db.transaction(async (tx) => {
-    const d = await resolveDoc(tx, project.id, ref);
+    const d = await lockRow(tx, docs, await resolveDoc(tx, project.id, ref));
     if (expectedVersion !== undefined && expectedVersion !== d.version) {
       throw new ServiceError("conflict", `Doc "${d.title}" was changed since you read it`, { current: d });
     }

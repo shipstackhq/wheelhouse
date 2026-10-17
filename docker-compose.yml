@@ -1,7 +1,9 @@
 # Wheelhouse app only. Postgres and the reverse proxy (Caddy) already run on the host:
 #  - the app joins the existing Postgres container's Docker network (POSTGRES_NETWORK)
 #  - the app listens on 127.0.0.1:${WHEELHOUSE_PORT} for the host's Caddy to proxy to
+# One image holds the API and the React app (the API serves it), so there is one container and one port.
 # Migrations run on app boot, so never run more than one replica.
+# For a machine with nothing on it (Postgres and Caddy included) use docker-compose.standalone.yml.
 services:
   app:
     image: ${WHEELHOUSE_IMAGE:-ghcr.io/shipstackhq/wheelhouse:latest}
@@ -12,6 +14,7 @@ services:
       - "127.0.0.1:${WHEELHOUSE_PORT:-3000}:3000"
     networks: [db]
     mem_limit: 1g
+    stop_grace_period: 20s
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "5" }

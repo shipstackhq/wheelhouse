@@ -1,7 +1,19 @@
 # Deploying Wheelhouse on a VPS
 
-Wheelhouse ships as one container (`ghcr.io/shipstackhq/wheelhouse`). It uses a Postgres and a Caddy that
-already run on the server, so there is no database or proxy container in `docker-compose.yml`.
+Wheelhouse ships as one container (`ghcr.io/shipstackhq/wheelhouse`). The NestJS API and the React app are the
+same process: the image holds the API and the built web app, and the API serves both on one port (`/api`, `/mcp` and
+the webhook are the API; every other address is a page of the app). One container means one origin, so there is no CORS to
+configure and the session cookie and the CSRF check see the same host.
+
+There are two ways to run it:
+
+- **On a VPS that already has Postgres and Caddy** (what the rest of this guide describes): `docker-compose.yml` holds only
+  the app. It uses the Postgres and the Caddy already on the server.
+- **On a machine with nothing on it**: `docker-compose.standalone.yml` adds Postgres and Caddy. See
+  *A machine with nothing on it* below.
+
+The public paths, environment variables and health check (`GET /api/health`) are the same as before the move to
+NestJS and React, so the Claude Code plugin, the CLI, the GitHub App and existing API keys need no change.
 
 ```
 browser / Claude Code ──https──▶ host Caddy ──▶ 127.0.0.1:3000  wheelhouse app (container)
@@ -20,6 +32,29 @@ not healthy**. It cannot undo a migration, which is why it dumps first.
 **The workflow uploads nothing.** `docker-compose.yml`, the `deploy/*.sh` scripts and `.env` live on the server
 (root-owned, in `/opt/apps/wheelhouse` here), so a change to compose or a script reaches the server only when you
 copy it (see *Updating the compose file or scripts*). Deploys only change the image tag.
+
+## A machine with nothing on it
+
+For a trial, a home server, or any host without a Postgres and a proxy. Docker with the Compose plugin is all it needs.
+
+```bash
+git clone https://github.com/shipstackhq/wheelhouse && cd wheelhouse
+cp .env.standalone.example .env     # set POSTGRES_PASSWORD, APP_URL and SITE_ADDRESS (see the file)
+docker compose -f docker-compose.standalone.yml up -d --build
+```
+
+`--build` builds the image from the checkout (a few minutes the first time). Once an image of this version is published to GHCR
+you can leave it out and Compose pulls it instead.
+
+Open `APP_URL` and create the first account straight away (see *First deploy*). With `SITE_ADDRESS` set to a domain name that
+points at the machine (ports 80 and 443 reachable), Caddy gets a certificate for it by itself; with `:80` it speaks plain HTTP,
+which is fine for a trial on one machine (`APP_URL=http://localhost`). The other settings in `.env.example`
+(`ALLOW_SIGNUP`, `ADMIN_EMAILS`, the seat and invite limits, `ANTHROPIC_API_KEY`, the GitHub App) go in the same `.env`.
+
+To update, `git pull` and run the `up -d --build` command again (or `pull` and `up -d` with a published image). Postgres lives in the `pgdata` volume, so
+`down` keeps the data and `down -v` deletes it. Back it up with `deploy/backup.sh`: copy `backup.sh` and `restore.sh` into a
+folder with a `.env` that names the Postgres container (`PG_CONTAINER=wheelhouse-postgres-1`, `PG_DUMP_USER=wheelhouse`,
+`PG_DB=wheelhouse`). The image is built from this repository's `Dockerfile` (`docker compose ... build app`), or pulled from GHCR.
 
 ## One-time server setup
 
@@ -85,18 +120,30 @@ The token only lives for the workflow run and is removed on exit, so no registry
 
 `chmod 600 .env`. `WHEELHOUSE_IMAGE` is written by the deploy script.
 
-**4. Caddy**: add a site block to the existing Caddyfile and reload (`sudo systemctl reload caddy`):
+**4. Caddy**: add a site block to the existing Caddyfile and reload (`sudo systemctl reload caddy`). `deploy/Caddyfile` in the
+repository is the tested version of this (the standalone stack uses it as it is):
 
 ```
 wheelhouse.example.com {
-    reverse_proxy 127.0.0.1:3000 {
-        flush_interval -1     # stream responses straight through (needed once SSE live updates land, WH-1)
+    # Live updates are server-sent events: straight through, never buffered or compressed.
+    @streams path /api/stream /api/projects/*/stream
+    handle @streams {
+        reverse_proxy 127.0.0.1:3000 {
+            flush_interval -1
+        }
+    }
+    handle {
+        encode zstd gzip
+        reverse_proxy 127.0.0.1:3000 {
+            flush_interval -1
+        }
     }
 }
 ```
 
-Caddy sets `X-Forwarded-For` itself; the app's rate limits use it, so do not turn that off. If Caddy runs in
-Docker instead of on the host, join the app to Caddy's network and use `reverse_proxy wheelhouse-app:3000`.
+Caddy sets `X-Forwarded-For` itself; the app's rate limits use it, so do not turn that off and do not put another proxy that
+adds its own entries behind it (see *Rate limits and the proxy*). If Caddy runs in Docker instead of on the host, join the app
+to Caddy's network and use `reverse_proxy wheelhouse-app:3000`.
 
 ## GitHub configuration
 
@@ -244,11 +291,53 @@ the dashboard), instead of polling. It needs nothing beyond what is above, with 
 - **Cloudflare** (or any proxy in front): streaming works as long as the response is not cached or buffered; the app sends
   `Cache-Control: no-cache, no-transform` and a heartbeat every 25 seconds, well inside the proxy's idle timeout.
 
+The smoke test (see *Testing the package*) checks this through Caddy: it opens a stream, sees `ready` while the connection is
+still open, makes a change, and sees the `change` event arrive on the same open stream.
+
 The stream is fed by an in-process event bus, so it works on one app container, which is also the only supported
 setup (migrations run at boot). It needs a long-running server like this one: serverless hosts that end a request after
 a few seconds cannot hold the connection, and pages would fall back to slower polling. A person can have 12 streams open
 at once (a project tab plus the dashboard each use one). If the stream cannot connect, pages poll every 10 seconds and
 keep retrying it with backoff.
+
+## Rate limits and the proxy
+
+Sign-in is limited per client address (30 attempts per 15 minutes) and per email (8 per 15 minutes), sign-up per address (10 per
+hour), invites per person, and the live streams to 12 per person. The client address is the **last** entry of `X-Forwarded-For`,
+the one Caddy adds for the connection it received, so a client that sends its own header only puts entries in front of it
+and cannot pick the address it is counted under. That holds only while Caddy is the proxy the internet reaches. If something
+else (Cloudflare, a load balancer) sits in front of Caddy, every request arrives from that one address: configure Caddy's
+`trusted_proxies` for it and keep the app reachable only through Caddy. The smoke test sends 35 sign-in attempts, each
+claiming a different address, through the shipped Caddyfile and requires the limit to apply.
+
+Sign-up is closed unless `ALLOW_SIGNUP=true` (only the very first account is accepted on a fresh database; see *First deploy*).
+
+## Testing the package
+
+Everything below needs only Docker and a checkout, and removes what it starts. The CI workflow runs all of it.
+
+```bash
+deploy/smoke-test.sh            # builds the image, starts Postgres + app + Caddy, then checks, through Caddy:
+                                # the app shell and its assets (and their cache headers), the API, sign-up, a live stream,
+                                # that forged X-Forwarded-For does not dodge the sign-in limit, backup.sh and restore.sh,
+                                # and that the app stops within seconds on SIGTERM
+deploy/contract-in-docker.sh    # the whole contract suite (/mcp, /api/v1, webhooks, GitHub connect, streams, /api/app)
+                                # against the image on a real Postgres, behind Caddy, with a fake GitHub on the host
+IMAGE=ghcr.io/shipstackhq/wheelhouse:<sha> deploy/smoke-test.sh    # the same, on a published image
+```
+
+The deploy workflow has a **dry run**: *Actions → Deploy → Run workflow* with *Dry run* ticked builds the image without
+pushing it, never logs in to the registry or opens an SSH connection, and reports what it would deploy and whether the four
+`DEPLOY_*` secrets are set.
+
+## What the image is
+
+A multi-stage `Dockerfile`: the React app is built (Vite), the API's production dependencies are installed
+(`pnpm deploy`), and the final image holds those, the API and `@wheelhouse/core` as TypeScript source (run with `tsx`), and
+the web build. It runs as a non-root user, `node` is PID 1 (so SIGTERM reaches the shutdown hook that closes the database; it
+stops in about two seconds, longer only if requests are still open), `HEALTHCHECK` asks `/api/health`, and migrations run when
+it boots. While the old Next.js app is still in the repository its dependencies are installed into the image as well and make it
+larger than it needs to be; removing the Next app removes them.
 
 ## Limits to know about
 

@@ -1,34 +1,43 @@
 # syntax=docker/dockerfile:1
+# One image for the two-app layout (ADR-16): the NestJS API serves the React build itself, so there is one container, one
+# port and one origin, and the proxy in front only has to forward. Same environment variables, paths and health check as before.
 FROM node:24-alpine AS base
 RUN corepack enable
 WORKDIR /app
 
-FROM base AS deps
-# A workspace install needs every package.json present, not just the root one.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# The manifests alone, so the install layer is cached until a dependency changes. A workspace install needs every package.json.
+FROM base AS manifests
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/core/package.json packages/core/package.json
 COPY packages/api-client/package.json packages/api-client/package.json
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 
-FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
-COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build
+# Build the React app (needs the dev dependencies of web, api-client and core).
+FROM manifests AS build
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile --filter @wheelhouse/web...
+COPY packages packages
+COPY apps/web apps/web
+RUN pnpm --filter @wheelhouse/web build
+
+# Only what the API needs at run time, as a standalone folder: its production dependencies, with @wheelhouse/core copied in
+# (it is TypeScript source, run with tsx, which is therefore a production dependency).
+FROM manifests AS api
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile --filter @wheelhouse/api...
+COPY packages/core packages/core
+COPY apps/api apps/api
+RUN pnpm --filter @wheelhouse/api deploy --legacy --prod /out
 
 FROM node:24-alpine AS run
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 \
+    WHEELHOUSE_MIGRATIONS_DIR=/app/node_modules/@wheelhouse/core/drizzle WEB_DIST=/app/web
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=build --chown=app:app /app/.next/standalone ./
-COPY --from=build --chown=app:app /app/.next/static ./.next/static
-COPY --from=build --chown=app:app /app/public ./public
-COPY --from=build --chown=app:app /app/packages/core/drizzle ./drizzle
+COPY --from=api --chown=app:app /out /app
+COPY --from=build --chown=app:app /app/apps/web/dist /app/web
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
-CMD ["node", "server.js"]
+# node itself is PID 1 (not pnpm, not a shell), so SIGTERM reaches the shutdown hook that closes the database cleanly.
+CMD ["node", "--import", "tsx", "src/main.ts"]

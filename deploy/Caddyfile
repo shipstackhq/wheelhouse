@@ -1,0 +1,22 @@
+# The reverse proxy in front of the app, for a Caddy that runs in Docker (docker-compose.standalone.yml) and as the model for
+# the host's Caddy on a VPS (docs/deploy.md). The React app and the API are one process on one port, so there is one upstream.
+#
+#   SITE_ADDRESS  the public address: `wheelhouse.example.com` (Caddy gets a certificate for it) or `:80` for plain HTTP
+{$SITE_ADDRESS::80} {
+	# Live updates are long-lived server-sent events: pass them straight through (no buffering, no compression), and never
+	# time them out here. The app sends a heartbeat every 25 seconds, so an idle timeout in front must be longer than that.
+	@streams path /api/stream /api/projects/*/stream
+	handle @streams {
+		reverse_proxy {$UPSTREAM:app:3000} {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		encode zstd gzip
+		# Caddy sets X-Forwarded-For (and -Proto, -Host) itself: the app's rate limits rely on it, so do not turn it off.
+		reverse_proxy {$UPSTREAM:app:3000} {
+			flush_interval -1
+		}
+	}
+}

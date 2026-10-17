@@ -8,3 +8,10 @@
 *.tsbuildinfo
 Dockerfile
 docker-compose*.yml
+tests/contract/.work
+**/dist
+src
+public
+deploy
+docs
+.github
