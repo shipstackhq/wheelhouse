@@ -25,6 +25,32 @@ pnpm db:verify --from <source> --to <target>          # two databases directly
   of the newest event, every API key hash and session id is a sha256, and it reports the users, teams and memberships. Exit status 0 means
   "everything agrees"; anything else is non-zero and names the table.
 
+### The map and the docs after the move (WH-101)
+
+Map nodes and docs carry **anchors** (paths and globs such as `src/lib/service.ts`, `src/db/**`, `src/db/schema.ts#docs`) and the content hashes of the code when they were described. Moving files to `packages/core`,
+`apps/api` and `apps/web` would leave anchors pointing at nothing, and a baseline that is not carried over would flag nodes as stale for files that did not change. Two tools fix that, on the **imported data**:
+
+```bash
+pnpm map:reanchor --db <target> --from pre-migration --to HEAD --rules docs/reanchor-rules.json            # dry run: reports, writes nothing
+pnpm map:reanchor --db <target> --from pre-migration --to HEAD --rules docs/reanchor-rules.json --apply    # rewrites anchors and baselines
+pnpm map:after-migration --db <target>                                                                     # what the map SAYS (descriptions, structure, ADRs)
+```
+
+- `map:reanchor` takes what git says moved between the two refs (renames, even with edits) and `docs/reanchor-rules.json` for what git cannot know (a Next page rewritten as a React page is a new file, not a rename). An anchor is **kept**,
+  **rewritten** (a `#symbol` suffix and a `repo:` qualifier survive; one anchor may become several), or reported as **unmapped** or **dangling** and left alone; the exit status is non-zero if any is. A baseline follows the files that moved
+  (so a file that really changed still shows as changed at the next landing); a row whose anchors were rewritten by a rule starts with none, so the next landing records one instead of flagging every new file. Paths in a stale reason move with the
+  files, never twice. It only touches the project named in the rules file (other projects' anchors name other repositories), and also rewrites the anchors in drafts waiting to be published. Running it again plans nothing.
+  **It is also the check for "no anchor points at a path that no longer exists"**: a dry run exits 0 only if every anchor matches a file in the tree you name. Run it again after the Next app is removed (WH-102), with `--to HEAD` of that commit.
+- `map:after-migration` is the part that is about meaning, through the service layer (so each change is an event and a node edited here is baselined at the next landing): `web` becomes the React app; new `API` (NestJS) and `core` services, and the API's
+  modules (Web app API, GitHub webhook and connect, Live streams); `MCP server` moves inside `API` and `Service layer` inside `core`; the connections follow (web → API → core → Postgres, the UI components → Web app API, GitHub → the webhook module);
+  notes and one flow that said "server action" are corrected; ADR-16 is recorded as implemented and the packaging sentence in the API's ADR is settled; two new ADRs record why one process serves both apps and why versioned edits lock the row; two glossary terms are added.
+  It never overwrites a sentence someone has since edited by hand (it reports it), and a second run changes nothing. It does not need a git repository.
+
+When the new layout reaches `main` and lands (the plugin's hooks on a merge, or the webhook), the first landing records the baselines the re-described nodes do not have yet, and flags only files that really changed since a node was described.
+
+Both are rehearsed on every run of the rehearsal script below. They are applied on the **cutover day to the imported copy, not to the running control plane**: until the cutover the live map must keep describing `main`, which is still the Next app, and a
+landing only counts on `main`. The map events they create (about 35 for the real data) will appear in each agent's queue as changes by the owner, which is right: agents should hear that the architecture description changed.
+
 Checksums are the md5 of a table's rows as JSON in byte order of that text, so they do not depend on collation or storage order. PGlite → Postgres → PGlite
 is tested to be the identity (`packages/core/src/tools/db-copy.test.ts`, with a real Postgres in CI).
 
@@ -48,6 +74,7 @@ Scale: a table is read into memory at once, which is fine for Wheelhouse (about 
 | 2 | same snapshot | 1s | 2s | 2s | 8s | 7s | 42s | 62s | passed |
 | 3 | a fresh snapshot | 2s | 1s | 3s | 8s | 5s | 39s | 58s | passed, no discrepancies |
 | 4 | another fresh snapshot (after the script gained the "serves the React app" check) | 1s | 2s | 2s | 8s | 5s | 39s | 57s | passed, no discrepancies |
+| 5 | the same snapshot as 4, with the map re-anchored and re-described on the copy before the app starts (WH-101) | 2s | 1s | 2s | 10s | 13s | 39s | 68s | passed: 25 nodes and docs re-anchored, 32 changes to the map, integrity holds, the key resumes at its cursor (WH: 46 changes waiting, the 34 new ones are the map update), contract suite 311 + 6 |
 
 The source of these four is `wheelhouse-migration/.data/pglite`, the copy of the live data the migration has used since it began (3,186 rows in 29 tables, newest
 event 2421, four agent cursors, six API keys, two teams). **None of them used the live directory** (`wheelhouse/.data/pglite`, owned by the running
@@ -63,7 +90,7 @@ Problems found, all in the rehearsal script, none in the data tools:
 ## Cutover runbook: the local control plane (PGlite, port 3456)
 
 Owners: **O** the person who owns Wheelhouse (does the steps that stop and start things), **C** Claude (runs the tools and the checks when asked). Times are from the
-rehearsals plus time to read each answer; the whole thing is about 15 minutes, and nothing can be lost because the old directory is never written to.
+rehearsals plus time to read each answer; the whole thing is about 20 minutes, and nothing can be lost because the old directory is never written to.
 
 Before the day (**O**, **C**): the last rehearsal on a fresh copy passed (`scripts/rehearse-data-move.sh`); `main` has what you will run (WH-102, removing the Next app, is
 held until the new app has been live and trusted); the old app is still at `wheelhouse-old` (tag `pre-migration`).
@@ -78,10 +105,11 @@ held until the new app has been live and trusted); the old app is still at `whee
 | T+3 | C | Final export: `pnpm db:export --from wheelhouse/.data/pglite --out ~/cutover/export` (copies first; the original is not opened). |
 | T+3 | C | Import into a **new** directory: `pnpm db:import --in ~/cutover/export --to ~/cutover/pglite`. |
 | T+4 | C | `pnpm db:verify --in ~/cutover/export --to ~/cutover/pglite` and `pnpm db:verify --from wheelhouse/.data/pglite --to ~/cutover/pglite`. Both must say `RESULT: everything agrees`. **Stop here if either does not.** |
-| T+5 | O/C | Build the React app and start the new app on the same port, with the same `.env.local`: `pnpm --filter @wheelhouse/web build && PGLITE_DIR=~/cutover/pglite PORT=3456 pnpm --filter @wheelhouse/api start`. |
-| T+6 | O/C | Smoke test: the URL is the same (`http://localhost:3456`), so the plugin, the CLI and the credentials file need no change. Run `get_briefing` from a Claude Code session; the key must work and the queue must continue where it was (the rehearsal's continuity check). Sign in in the browser as yourself; open the board, the map and the docs; create and move a ticket; link a node. |
-| T+10 | O | If the GitHub App is reachable (it is not on localhost): open a pull request naming a ticket and watch it move. |
-| T+15 | O | Announce it is back. Keep `~/wheelhouse-pglite-before-cutover-…` and `wheelhouse-old` untouched for as long as you want the option below. |
+| T+5 | C | **The map:** `pnpm map:reanchor --db ~/cutover/pglite --from pre-migration --to HEAD --rules docs/reanchor-rules.json --apply` (must exit 0: no unresolved anchor), then `pnpm map:after-migration --db ~/cutover/pglite`, then `pnpm db:verify --to ~/cutover/pglite --integrity-only`. Read the list it prints. (Skip this row to cut over with the map as it was; do it before the new app first starts, never after.) |
+| T+6 | O/C | Build the React app and start the new app on the same port, with the same `.env.local`: `pnpm --filter @wheelhouse/web build && PGLITE_DIR=~/cutover/pglite PORT=3456 pnpm --filter @wheelhouse/api start`. |
+| T+7 | O/C | Smoke test: the URL is the same (`http://localhost:3456`), so the plugin, the CLI and the credentials file need no change. Run `get_briefing` from a Claude Code session; the key must work and the queue must continue where it was (the rehearsal's continuity check). Sign in in the browser as yourself; open the board, the map and the docs; create and move a ticket; link a node. |
+| T+11 | O | If the GitHub App is reachable (it is not on localhost): open a pull request naming a ticket and watch it move. |
+| T+16 | O | Announce it is back. Keep `~/wheelhouse-pglite-before-cutover-…` and `wheelhouse-old` untouched for as long as you want the option below. |
 
 **Rollback** (any time, no matter how far you got): stop the new app (`lsof -ti :3456 -sTCP:LISTEN | xargs kill`), then start the old app on the **original, never-written** directory,
 as `docs/migration.md` describes: `cd wheelhouse-old && PGLITE_DIR=<wheelhouse/.data/pglite> pnpm exec next dev -p 3456`. Nothing about the old directory changed. To keep what was written on the

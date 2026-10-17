@@ -646,6 +646,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/teams-admin.ts": "instance admin only; metadata only (tested)",
   "packages/core/src/lib/board-app.ts": "the board's reads: the project is resolved through getProject(actor) (the service layer, scoped by team), and the map nodes and members are selected by that project's id and the actor's team id (tested over HTTP with two teams)",
   "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own team; everything else goes through the service layer, which resolves the project with getProject(actor) and finds docs, nodes and repositories inside it (tested)",
+  "packages/core/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one project by key and the owner of that project's own team, and everything it changes goes through the service layer as that owner, so it can only reach that team's map (tested on a throwaway database)",
   "packages/core/src/lib/team-app.ts": "the web app's team, key and invite functions: every statement is scoped by the signed-in person's team id (members, keys, pending invites), a user or key id from another team matches nothing and reads as not found (tested)",
 };
 

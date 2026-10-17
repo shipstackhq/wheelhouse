@@ -7,6 +7,7 @@ import { compare, copyDirToTemp, exportData, importData, integrity, openConn, sn
  * pnpm db:import --in <folder> --to <PGlite directory | postgres://…>      (the target is migrated first and must then be empty)
  * pnpm db:verify --in <folder> --to <target>                               (the target against what the export said)
  * pnpm db:verify --from <source> --to <target>                             (two live databases; a PGlite source is copied first)
+ * pnpm db:verify --to <target> --integrity-only                            (only what must be true of any Wheelhouse database)
  *
  * Exit status 0 means everything agreed. Nothing here writes to a source, and an import is all or nothing. The runbook is docs/cutover.md.
  */
@@ -71,6 +72,18 @@ async function main() {
       await conn.close();
     }
     return 0;
+  }
+
+  if (command === "verify" && flag("integrity-only")) {
+    const conn = await openConn(need("to"));
+    try {
+      log(`checking ${conn.label} (integrity only)`);
+      const failed = report(await integrity(conn.query), flag("json"));
+      log(failed ? "RESULT: PROBLEMS FOUND" : "RESULT: integrity holds");
+      return failed ? 1 : 0;
+    } finally {
+      await conn.close();
+    }
   }
 
   if (command === "verify") {
