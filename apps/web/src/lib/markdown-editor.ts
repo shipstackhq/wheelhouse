@@ -13,9 +13,10 @@ import { AutoLinkNode, LinkNode } from "@lexical/link";
 import { ListItemNode, ListNode } from "@lexical/list";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
+import { IMAGE_TRANSFORMER, ImageNode } from "./image-node";
 
-export const EDITOR_NODES = [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, CodeHighlightNode, LinkNode, AutoLinkNode, TableNode, TableRowNode, TableCellNode];
-export const MD_TRANSFORMERS = TRANSFORMERS;
+export const EDITOR_NODES = [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, CodeHighlightNode, LinkNode, AutoLinkNode, TableNode, TableRowNode, TableCellNode, ImageNode];
+export const MD_TRANSFORMERS = [IMAGE_TRANSFORMER, ...TRANSFORMERS];
 
 /** Run inside `editor.update`: replace the editor's content with this Markdown. */
 export const $markdownToEditor = (md: string) => $convertFromMarkdownString(md, MD_TRANSFORMERS, undefined, false);

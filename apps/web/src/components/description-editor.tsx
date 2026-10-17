@@ -64,6 +64,8 @@ export function DescriptionEditor({
           <RichMarkdownEditor
             value={seed}
             onChange={onChange}
+            onShowMarkdown={() => switchTo("markdown")}
+            contentClassName={size === "full" ? "px-6 py-5 text-[15px] leading-7 sm:px-8" : undefined}
             minHeight={size === "full" ? "min-h-[60vh]" : "min-h-48"}
             maxHeight={size === "full" ? "max-h-[70vh]" : "max-h-[50vh]"}
           />
