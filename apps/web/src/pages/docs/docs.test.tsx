@@ -104,14 +104,29 @@ describe("the doc tree sheet", () => {
     expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/p/AA/docs/d-plan");
   });
 
-  test("reading shows the doc beside an 'About this doc' column; editing gives the doc the whole width", async () => {
+  test("the 'About this doc' column sits beside the doc while reading and while editing", async () => {
     open();
     await heading("Plan");
     expect(screen.getByRole("complementary", { name: "About this doc" })).toBeTruthy();
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /Edit/ }));
     await screen.findByLabelText("Title");
-    expect(screen.queryByRole("complementary", { name: "About this doc" })).toBeNull();
+    expect(screen.getByRole("complementary", { name: "About this doc" })).toBeTruthy();
+  });
+
+  test("a label added while editing does not make the doc look changed by someone else, and Save still goes through", async () => {
+    let current = doc();
+    const { server } = open(DOC, (s) => {
+      s.on(`GET ${url("docs/d-plan")}`, () => docDetail(current));
+      s.on(`PATCH ${url("docs/d-plan")}`, () => ((current = doc({ version: 2, labels: ["ops"] })), { doc: current }));
+    });
+    const user = userEvent.setup();
+    await heading("Plan");
+    await user.click(screen.getByRole("button", { name: /Edit/ }));
+    await user.type(within(screen.getByRole("complementary", { name: "About this doc" })).getByLabelText("Add a label"), "ops{Enter}");
+    await waitFor(() => expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(1));
+    await within(screen.getByRole("complementary", { name: "About this doc" })).findByText("ops");
+    expect(screen.queryByText(/This doc changed while you were editing/)).toBeNull();
   });
 });
 

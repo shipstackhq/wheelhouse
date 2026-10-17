@@ -211,7 +211,9 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
     if (!d) return false;
     setBusy(true);
     try {
-      await api.docs.update(projectKey, d.id, { labels, version: d.version });
+      const saved = await api.docs.update(projectKey, d.id, { labels, version: d.version });
+      // Mid-edit, a label change is not someone else's edit: carry the editor's base version forward so Save is not refused.
+      if (editing && bodyBase === d.version) setBodyBase(saved.version);
       setError(null);
       return true;
     } catch (e) {
@@ -443,7 +445,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
             {!d ? (
               <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">{error ?? loadError ?? (detailQuery.isPending ? "Loading…" : "Select a doc, or create one.")}</p>
             ) : (
-              <div className={clsx("mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-8 lg:px-12 lg:py-10", !editing && "md:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_17rem]")}>
+              <div className="grid w-full gap-8 px-4 py-8 sm:px-8 md:grid-cols-[minmax(0,1fr)_16rem] lg:px-12 lg:py-10">
                 <div className="min-w-0 space-y-5">
             {error && <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -726,8 +728,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                                   </div>
                   )}
                 </div>
-                {!editing && (
-                  <aside aria-label="About this doc" className="space-y-5 self-start text-sm md:sticky md:top-6">
+                                  <aside aria-label="About this doc" className="space-y-5 self-start text-sm md:sticky md:top-6">
                     <section>
                       <span className="label">Owner</span>
                       <PersonRow person={detail!.owner} />
@@ -773,7 +774,6 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                       </div>
                     </section>
                   </aside>
-                )}
               </div>
             )}
           </section>
