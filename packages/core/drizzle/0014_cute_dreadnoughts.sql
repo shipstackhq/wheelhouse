@@ -1,0 +1,1 @@
+ALTER TABLE "docs" ADD COLUMN "labels" jsonb DEFAULT '[]'::jsonb NOT NULL;

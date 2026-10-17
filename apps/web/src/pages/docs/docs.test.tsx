@@ -548,3 +548,66 @@ describe("live", () => {
     expect(await screen.findByText(/not found|can.t find|doesn.t exist/i)).toBeTruthy();
   });
 });
+
+describe("owner, contributors and labels", () => {
+  const people = { owner: { kind: "human" as const, id: "u1", name: "Ada Lovelace" }, contributors: [{ kind: "agent" as const, id: "k1", name: "Claude on Ada's laptop" }, { kind: "human" as const, id: "u2", name: "Grace Hopper" }] };
+  const aside = () => screen.findByRole("complementary", { name: "About this doc" });
+
+  test("the right column names the owner and each contributor, agents included", async () => {
+    open(DOC, (s) => s.on(`GET ${url("docs/d-plan")}`, docDetail(DOCS[0], [], people)));
+    const col = await aside();
+    expect(within(col).getByText("Owner").nextElementSibling?.textContent).toContain("Ada Lovelace");
+    expect(within(col).getByText("Claude on Ada's laptop")).toBeTruthy();
+    expect(within(col).getByText("Grace Hopper")).toBeTruthy();
+  });
+
+  test("with no one else, it says so", async () => {
+    open();
+    expect(within(await aside()).getByText("No one else yet.")).toBeTruthy();
+  });
+
+  test("the doc's labels are listed", async () => {
+    open(DOC, (s) => s.on(`GET ${url("docs/d-plan")}`, docDetail(doc({ labels: ["runbook", "ops"] }))));
+    const col = await aside();
+    expect(within(col).getByText("runbook")).toBeTruthy();
+    expect(within(col).getByText("ops")).toBeTruthy();
+  });
+
+  test("adding a label saves it at once, with the version; the input empties", async () => {
+    const { server } = open(DOC, (s) => s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2, labels: ["ops"] }) }));
+    const user = userEvent.setup();
+    const box = within(await aside()).getByLabelText("Add a label");
+    await user.type(box, "ops{Enter}");
+    await waitFor(() => expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(1));
+    expect(server.sent(`PATCH ${url("docs/d-plan")}`)[0].body).toEqual({ labels: ["ops"], version: 1 });
+    await waitFor(() => expect((box as HTMLInputElement).value).toBe(""));
+  });
+
+  test("removing a label sends the rest", async () => {
+    const { server } = open(DOC, (s) => {
+      s.on(`GET ${url("docs/d-plan")}`, docDetail(doc({ labels: ["runbook", "ops"] })));
+      s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2, labels: ["ops"] }) });
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Remove label runbook" }));
+    await waitFor(() => expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(1));
+    expect(server.sent(`PATCH ${url("docs/d-plan")}`)[0].body).toEqual({ labels: ["ops"], version: 1 });
+  });
+
+  test("a refused label is shown and the typed text stays", async () => {
+    open(DOC, (s) => s.on(`PATCH ${url("docs/d-plan")}`, apiError(400, "invalid", "A doc has at most 20 labels")));
+    const user = userEvent.setup();
+    const box = within(await aside()).getByLabelText("Add a label");
+    await user.type(box, "one more{Enter}");
+    expect(await screen.findByText("A doc has at most 20 labels")).toBeTruthy();
+    expect((box as HTMLInputElement).value).toBe("one more");
+  });
+
+  test("the attached files, Move and Architecture now sit under the doc, not in the right column", async () => {
+    open();
+    const col = await aside();
+    expect(within(col).queryByText("Move")).toBeNull();
+    expect(screen.getByText("Move")).toBeTruthy();
+    expect(screen.getByText("Architecture")).toBeTruthy();
+  });
+});

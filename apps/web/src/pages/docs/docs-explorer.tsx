@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
 import { Dialog } from "radix-ui";
-import { ApiError, type DocDetail, type DocsIndex, type DocTemplateId } from "@wheelhouse/api-client";
+import { ApiError, type DocDetail, type DocPerson, type DocsIndex, type DocTemplateId } from "@wheelhouse/api-client";
 import { DOC_TEMPLATES, extractActionItems } from "@wheelhouse/core/lib/doc-templates";
 import { DescriptionEditor } from "../../components/description-editor";
 import { Select, useDialogs } from "../../components/ui";
@@ -16,6 +16,18 @@ import { useServices } from "../../lib/services";
 import { buildFileTree, containsMatch, readTime, sectionOf, sortedChildren, type FileTreeNode } from "./file-tree";
 
 type TreeDoc = DocsIndex["docs"][number];
+
+/** A person (or agent) with a round initial, for the owner and contributors. */
+function PersonRow({ person }: { person: DocPerson }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent" aria-hidden>
+        {person.kind === "agent" ? "🤖" : (person.name[0] ?? "?").toUpperCase()}
+      </span>
+      <span className="truncate">{person.name}</span>
+    </span>
+  );
+}
 
 /**
  * `/p/:key/docs`: a tree on the left (parent/child via `parentId`, same pattern as the map), a rich-text or Markdown editor on the
@@ -49,6 +61,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   const [showTemplatePicker, setShowTemplatePicker] = useState<{ parentId: string | null } | null>(null);
   const [actionItemBusy, setActionItemBusy] = useState<number | null>(null);
   const [treeFilter, setTreeFilter] = useState("");
+  const [newLabel, setNewLabel] = useState("");
   const [showBrowseRepo, setShowBrowseRepo] = useState(false);
   const [browseRepoId, setBrowseRepoId] = useState<string>("");
   const [browseFiles, setBrowseFiles] = useState<string[] | null>(null);
@@ -189,6 +202,23 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
       await refresh();
       return true;
     } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Labels save as soon as they change (no Save button), against the version that was read; a refusal is shown and the doc reloaded. */
+  const saveLabels = async (labels: string[]) => {
+    if (!d) return false;
+    setBusy(true);
+    try {
+      await api.docs.update(projectKey, d.id, { labels, version: d.version });
+      setError(null);
+      return true;
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message || "Failed" : describeFailure(e));
+      return false;
+    } finally {
+      await refresh();
       setBusy(false);
     }
   };
@@ -573,9 +603,8 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
               </div>
             ) : null}
 
-                </div>
-                {!editing && (
-                  <aside aria-label="About this doc" className="space-y-4 self-start rounded-lg border border-line/70 bg-panel/30 p-4 lg:sticky lg:top-6">
+                  {!editing && (
+                    <div className="space-y-4 rounded-lg border border-line/70 bg-panel/30 p-4">
                 {actionItems.length > 0 && (
                   <section>
                     <span className="label">Action items</span>
@@ -694,7 +723,56 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                     )}
                   </div>
                 </section>
-              </aside>
+                                  </div>
+                  )}
+                </div>
+                {!editing && (
+                  <aside aria-label="About this doc" className="space-y-5 self-start text-sm lg:sticky lg:top-6">
+                    <section>
+                      <span className="label">Owner</span>
+                      <PersonRow person={detail!.owner} />
+                    </section>
+                    <section>
+                      <span className="label">Contributors</span>
+                      {detail!.contributors.length ? (
+                        <ul className="space-y-1.5">
+                          {detail!.contributors.map((c) => (
+                            <li key={`${c.kind}:${c.id ?? c.name}`}>
+                              <PersonRow person={c} />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-muted">No one else yet.</p>
+                      )}
+                    </section>
+                    <section>
+                      <span className="label">Labels</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {d.labels.map((l) => (
+                          <span key={l} className="chip gap-1 bg-panel-2 py-1 text-xs text-fg">
+                            {l}
+                            <button className="text-muted hover:text-fg" aria-label={`Remove label ${l}`} disabled={busy} onClick={() => void saveLabels(d.labels.filter((x) => x !== l))}>
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          className="input !w-28 !py-0.5 text-xs"
+                          aria-label="Add a label"
+                          placeholder="+ label"
+                          value={newLabel}
+                          disabled={busy}
+                          onChange={(e) => setNewLabel(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter" || !newLabel.trim()) return;
+                            e.preventDefault();
+                            void saveLabels([...d.labels, newLabel]).then((ok) => ok && setNewLabel(""));
+                          }}
+                        />
+                      </div>
+                    </section>
+                  </aside>
                 )}
               </div>
             )}

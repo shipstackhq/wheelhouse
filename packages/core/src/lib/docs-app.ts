@@ -26,6 +26,7 @@ export type DocTreeItem = { id: string; parentId: string | null; slug: string; t
 export type DocView = DocTreeItem & {
   body: string;
   anchors: string[];
+  labels: string[];
   staleReason: string | null;
   updatedByKind: "human" | "agent";
   updatedById: string | null;
@@ -43,6 +44,7 @@ export const docView = (d: typeof schema.docs.$inferSelect): DocView => ({
   stale: d.stale,
   body: d.body,
   anchors: d.anchors,
+  labels: d.labels,
   staleReason: d.staleReason,
   updatedByKind: d.updatedByKind,
   updatedById: d.updatedById,
@@ -80,8 +82,8 @@ export async function docsIndex(h: Human, projectKey: string) {
 }
 
 export async function getDocAs(actor: Actor, projectKey: string, ref: string) {
-  const { doc, nodes } = await svc.getDoc(actor, projectKey, ref);
-  return { doc: docView(doc), nodes };
+  const { doc, nodes, owner, contributors } = await svc.getDoc(actor, projectKey, ref);
+  return { doc: docView(doc), nodes, owner, contributors };
 }
 
 export async function createDocAs(actor: Actor, projectKey: string, b: Body): Promise<DocView> {
@@ -102,6 +104,7 @@ export async function updateDocAs(actor: Actor, projectKey: string, ref: string,
     title: text(b, "title", { max: 300 }),
     body: text(b, "body"),
     anchors: anchors?.map((a) => a.trim()).filter(Boolean),
+    labels: textList(b, "labels"),
   };
   if (patch.title !== undefined && !patch.title.trim()) bad("title", "title is required");
   return docView(await withCurrent(() => svc.updateDoc(actor, projectKey, ref, patch, whole(b, "version"))));

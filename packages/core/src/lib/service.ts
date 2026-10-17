@@ -13,7 +13,7 @@ import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./do
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys } = schema;
+const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users } = schema;
 
 export class ServiceError extends Error {
   constructor(
@@ -2240,7 +2240,25 @@ export async function getDoc(actor: Actor, projectRef: string, ref: string) {
     .from(docNodes)
     .innerJoin(nodes, eq(nodes.id, docNodes.nodeId))
     .where(eq(docNodes.docId, d.id));
-  return { doc: d, nodes: linked };
+  // Who wrote it (WH-103): the owner is whoever created the doc; contributors are everyone else who changed it, from the event log
+  // (which keeps the name they had at the time, so an agent or a person who has left still has one).
+  const touched = await db
+    .select({ type: events.type, actorKind: events.actorKind, actorId: events.actorId, actorName: events.actorName })
+    .from(events)
+    .where(and(eq(events.teamId, project.teamId), eq(events.entity, "doc"), eq(events.entityId, d.id), inArray(events.type, ["doc.created", "doc.updated"])))
+    .orderBy(asc(events.seq));
+  const created = touched.find((e) => e.type === "doc.created");
+  const [owner] = d.createdByKind === "human" && d.createdById ? await db.select({ name: users.name }).from(users).where(eq(users.id, d.createdById)) : [];
+  const ownerName = owner?.name ?? created?.actorName ?? (d.createdByKind === "agent" ? "Agent" : "Someone");
+  const seenPeople = new Set([`${d.createdByKind}:${d.createdById}`]);
+  const contributors: { kind: "human" | "agent"; id: string | null; name: string }[] = [];
+  for (const e of touched) {
+    const k = `${e.actorKind}:${e.actorId}`;
+    if (seenPeople.has(k)) continue;
+    seenPeople.add(k);
+    contributors.push({ kind: e.actorKind, id: e.actorId, name: e.actorName });
+  }
+  return { doc: d, nodes: linked, owner: { kind: d.createdByKind, id: d.createdById, name: ownerName }, contributors };
 }
 
 export async function createDoc(actor: Actor, projectRef: string, input: DocInput & { title: string }) {
@@ -2297,6 +2315,7 @@ export async function createDoc(actor: Actor, projectRef: string, input: DocInpu
 }
 
 export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "describedSha" | "markFresh"> & {
+  labels?: string[]; // WH-103: free-text tags; they never affect freshness
   forcePublish?: boolean; // skip the in-flux draft check (used when publishing a draft on land)
   describedHashes?: Record<string, string>; // content hashes the edit/confirmation was made against
 };
@@ -2310,6 +2329,21 @@ export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "desc
  * doc_drafts row instead of applied directly — published when land() processes
  * those files (WH-64 scope E).
  */
+/** Labels as stored: trimmed, no empties or repeats (case-insensitively, first spelling wins), at most 20 of at most 40 characters. */
+export function cleanDocLabels(labels: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of labels) {
+    const l = raw.trim().replace(/\s+/g, " ");
+    if (!l || seen.has(l.toLowerCase())) continue;
+    if (l.length > 40) throw new ServiceError("invalid", `A label is at most 40 characters ("${l.slice(0, 20)}…")`);
+    seen.add(l.toLowerCase());
+    out.push(l);
+  }
+  if (out.length > 20) throw new ServiceError("invalid", "A doc has at most 20 labels");
+  return out;
+}
+
 export async function updateDoc(actor: Actor, projectRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number) {
   const db = await getDb();
   const project = await getProject(actor, projectRef);
@@ -2337,6 +2371,7 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
     if (patch.title !== undefined) clean.title = patch.title.trim();
     if (patch.body !== undefined) clean.body = patch.body;
     if (patch.anchors !== undefined) clean.anchors = patch.anchors;
+    if (patch.labels !== undefined) clean.labels = cleanDocLabels(patch.labels);
     const changes = diff(d as unknown as Record<string, unknown>, clean);
     // Editing title/body/anchors, or an explicit confirm (mark_doc_fresh-equivalent), clears staleness —
     // same rule as upsertNode's EXPLAINER_FIELDS/anchors/markFresh check.

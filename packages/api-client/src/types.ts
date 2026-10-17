@@ -386,6 +386,7 @@ export type DocTreeItem = { id: string; parentId: string | null; slug: string; t
 export type Doc = DocTreeItem & {
   body: string;
   anchors: string[];
+  labels: string[];
   staleReason: string | null;
   updatedByKind: "human" | "agent";
   updatedById: string | null;
@@ -397,10 +398,12 @@ export type DocsIndex = {
   decisions: { id: string; number: number; title: string }[];
   members: { id: string; name: string }[];
 };
-export type DocDetail = { doc: Doc; nodes: { id: string; name: string; kind: string; layer: LayerId }[] };
+export type DocPerson = { kind: "human" | "agent"; id: string | null; name: string };
+/** `owner` created the doc; `contributors` are everyone else who changed it. */
+export type DocDetail = { doc: Doc; nodes: { id: string; name: string; kind: string; layer: LayerId }[]; owner: DocPerson; contributors: DocPerson[] };
 export type DocTemplateId = "spec" | "decision-record" | "runbook" | "meeting-notes" | "onboarding";
 export type NewDoc = { title: string; body?: string; parent?: string | null; template?: DocTemplateId };
-export type DocPatch = { title?: string; body?: string; anchors?: string[]; version?: number };
+export type DocPatch = { title?: string; body?: string; anchors?: string[]; labels?: string[]; version?: number };
 
 export type RepoLifecycle = "live" | "being_replaced" | "planned" | "retired";
 export type Repository = {
