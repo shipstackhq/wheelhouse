@@ -1,0 +1,27 @@
+/*
+ * Tables, pictures and dividers inside rendered or edited Markdown (.md). Kept apart from app.css, which is held byte for byte
+ * the same as the Next app's until cutover (a test checks it), so this uses plain CSS and the same colour variables.
+ */
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.md th {
+  background: var(--panel-2);
+  font-weight: 600;
+}
+.md td p,
+.md th p {
+  margin: 0;
+}
+.md img {
+  max-width: 100%;
+  margin-block: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+}
+.md hr {
+  margin-block: 1.5rem;
+  border: 0;
+  border-top: 1px solid var(--border);
+}

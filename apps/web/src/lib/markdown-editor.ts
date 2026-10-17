@@ -14,9 +14,11 @@ import { ListItemNode, ListNode } from "@lexical/list";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { TableCellNode, TableNode, TableRowNode } from "@lexical/table";
 import { IMAGE_TRANSFORMER, ImageNode } from "./image-node";
+import { DIVIDER_TRANSFORMER, DividerNode, TABLE_TRANSFORMER } from "./md-blocks";
 
-export const EDITOR_NODES = [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, CodeHighlightNode, LinkNode, AutoLinkNode, TableNode, TableRowNode, TableCellNode, ImageNode];
-export const MD_TRANSFORMERS = [IMAGE_TRANSFORMER, ...TRANSFORMERS];
+export const EDITOR_NODES = [HeadingNode, QuoteNode, ListNode, ListItemNode, CodeNode, CodeHighlightNode, LinkNode, AutoLinkNode, TableNode, TableRowNode, TableCellNode, ImageNode, DividerNode];
+// Order matters: the divider and the table are tried before the built-in blocks, and the image before the link (whose pattern would match its `[alt](src)` part).
+export const MD_TRANSFORMERS = [TABLE_TRANSFORMER, DIVIDER_TRANSFORMER, IMAGE_TRANSFORMER, ...TRANSFORMERS];
 
 /** Run inside `editor.update`: replace the editor's content with this Markdown. */
 export const $markdownToEditor = (md: string) => $convertFromMarkdownString(md, MD_TRANSFORMERS, undefined, false);

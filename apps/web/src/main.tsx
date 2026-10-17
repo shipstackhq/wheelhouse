@@ -4,6 +4,7 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import "./fonts.css";
 import "./app.css";
+import "./content.css";
 import { createServices, ServicesProvider } from "./lib/services";
 import { buildRoutes } from "./routes/router";
 

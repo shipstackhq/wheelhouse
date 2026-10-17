@@ -11,7 +11,7 @@ test("the rich editor is a labelled text box with a labelled formatting toolbar"
 
 test("the toolbar offers the formatting people reach for, each labelled for screen readers", () => {
   const html = renderToStaticMarkup(<RichMarkdownEditor value="" onChange={() => {}} />);
-  for (const label of ["Bold", "Italic", "Strikethrough", "Inline code", "Text style", "Numbered list", "Bulleted list", "Task list", "Decrease indent", "Increase indent", "Link", "Image", "Clear formatting", "Undo", "Redo", "Full screen"])
+  for (const label of ["Bold", "Italic", "Strikethrough", "Inline code", "Text style", "Numbered list", "Bulleted list", "Task list", "Decrease indent", "Increase indent", "Link", "Image", "Table", "Divider", "Clear formatting", "Undo", "Redo", "Full screen"])
     assert.ok(html.includes(`aria-label="${label}"`), `${label} button`);
 });
 

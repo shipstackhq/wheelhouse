@@ -12,6 +12,7 @@ import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPl
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { AutoFocusPlugin } from "@lexical/react/LexicalAutoFocusPlugin";
 import { TabIndentationPlugin } from "@lexical/react/LexicalTabIndentationPlugin";
+import { TablePlugin } from "@lexical/react/LexicalTablePlugin";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $createHeadingNode, $createQuoteNode, $isHeadingNode, $isQuoteNode } from "@lexical/rich-text";
@@ -37,9 +38,11 @@ import {
   type ElementNode,
   type TextFormatType,
 } from "lexical";
-import { $getNearestNodeOfType, mergeRegister } from "@lexical/utils";
+import { $createTableNodeWithDimensions } from "@lexical/table";
+import { $getNearestNodeOfType, $insertNodeToNearestRoot, mergeRegister } from "@lexical/utils";
 import { $editorToMarkdown, $markdownToEditor, EDITOR_NODES, MD_TRANSFORMERS } from "../lib/markdown-editor";
 import { $createImageNode } from "../lib/image-node";
+import { $createDividerNode } from "../lib/md-blocks";
 
 type Block = "paragraph" | "h1" | "h2" | "h3" | "quote" | "code" | "bullet" | "number" | "check";
 type ListKind = "bullet" | "number" | "check";
@@ -88,7 +91,13 @@ export function RichMarkdownEditor({
         nodes: EDITOR_NODES,
         editorState: () => $markdownToEditor(value),
         onError: (e) => console.error("[rich editor]", e),
-        theme: { text: { code: "rounded bg-bg px-1 py-0.5 font-mono text-[12px]" }, link: "text-accent underline" },
+        theme: {
+          text: { code: "rounded bg-bg px-1 py-0.5 font-mono text-[12px]" },
+          link: "text-accent underline",
+          table: "my-3 w-full border-collapse text-sm",
+          tableCell: "min-w-16 border border-line px-2 py-1 align-top",
+          tableCellHeader: "bg-panel-2 font-semibold",
+        },
       }}
     >
       <div
@@ -120,6 +129,7 @@ export function RichMarkdownEditor({
       <CheckListPlugin />
       <LinkPlugin />
       <TabIndentationPlugin />
+      <TablePlugin />
       <MarkdownShortcutPlugin transformers={MD_TRANSFORMERS} />
       {autoFocus && <AutoFocusPlugin />}
       <OnChangePlugin
@@ -199,6 +209,15 @@ function Toolbar({ fullScreen, onToggleFullScreen, onShowMarkdown }: { fullScree
       $insertNodes([$createImageNode(src, alt)]);
     });
 
+  const insertTable = () =>
+    editor.update(() => {
+      $insertNodeToNearestRoot($createTableNodeWithDimensions(3, 3, true));
+    });
+  const insertDivider = () =>
+    editor.update(() => {
+      $insertNodeToNearestRoot($createDividerNode());
+    });
+
   const inList = block === "bullet" || block === "number" || block === "check";
   const blockLabel = inList ? "Paragraph" : BLOCK_LABELS[block as keyof typeof BLOCK_LABELS];
 
@@ -265,6 +284,8 @@ function Toolbar({ fullScreen, onToggleFullScreen, onShowMarkdown }: { fullScree
         onSubmit={({ url }) => editor.dispatchCommand(TOGGLE_LINK_COMMAND, url)}
       />
       <UrlPopover label="Image" icon={I.image} fields={["url", "alt"]} submitLabel="Insert" onSubmit={({ url, alt }) => insertImage(url, alt)} />
+      <ToolButton label="Table" onClick={insertTable} icon={I.table} />
+      <ToolButton label="Divider" onClick={insertDivider} icon={I.divider} />
       <Divider />
       <ToolButton label="Clear formatting" onClick={clearFormatting} icon={I.clear} />
       <ToolButton label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} icon={I.undo} />
@@ -465,6 +486,13 @@ const I = {
       <path d="m21 16-4.5-4.5L7 20" />
     </>
   ),
+  table: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 10h18M3 15h18M9 4v16M15 4v16" />
+    </>
+  ),
+  divider: <path d="M4 12h16M8 7l4-3 4 3M8 17l4 3 4-3" />,
   clear: <path d="M5 6V5h13v1M11.5 5 8.5 19M6.5 19h4M15 14l5 5M20 14l-5 5" />,
   undo: <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
   redo: <path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />,
