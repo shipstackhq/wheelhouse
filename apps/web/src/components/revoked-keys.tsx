@@ -2,6 +2,7 @@ import { useState } from "react";
 import { timeAgo } from "@wheelhouse/core/lib/time";
 import { List } from "./list";
 import type { KeyRow } from "./active-keys";
+import { AgentIcon } from "./icons";
 
 /**
  * Revoked keys, kept out of the way: nothing but a button until it is pressed, and nothing at all when there are none.
@@ -19,7 +20,7 @@ export function RevokedKeys({ keys, defaultOpen = false }: { keys: KeyRow[]; def
         <List inset="card" className="mt-3 text-sm">
           {keys.map((k) => (
             <li key={k.id} className="flex items-center gap-3">
-              <span className="text-muted line-through">🤖 {k.name}</span>
+              <span className="text-muted line-through"><AgentIcon /> {k.name}</span>
               <code className="font-mono text-xs text-muted">{k.prefix}…</code>
               <span className="ml-auto text-xs text-muted">{k.revokedAt ? `revoked ${timeAgo(k.revokedAt)}` : "revoked"}</span>
             </li>

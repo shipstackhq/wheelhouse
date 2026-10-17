@@ -24,6 +24,7 @@ import { dragOver, drop, findCol, group, type Items } from "./board-state";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Ticket } from "./shared";
 import { TicketDialog } from "./ticket-dialog";
+import { AgentIcon, CloseIcon, CommentIcon, NodeIcon } from "../../components/icons";
 
 /**
  * The kanban board. What is on screen is a local copy of the server's tickets, so a drag can move cards at once. The server's
@@ -153,7 +154,7 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
         {error && (
           <div role="alert" className="mx-5 mt-3 flex items-center justify-between rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
             {error}
-            <button onClick={() => setError(null)} aria-label="Dismiss">✕</button>
+            <button onClick={() => setError(null)} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
         {notice && (
@@ -335,7 +336,7 @@ function Card({ t, nodes, selected, overlay }: { t: Ticket; nodes: NodeLite[]; s
       <div className="flex items-start justify-between gap-2">
         <span className="font-mono text-[11px] text-muted">{t.ref}</span>
         <div className="flex gap-1">
-          {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent">🤖</span>}
+          {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent"><AgentIcon /></span>}
           {t.priority !== "medium" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
         </div>
       </div>
@@ -346,14 +347,14 @@ function Card({ t, nodes, selected, overlay }: { t: Ticket; nodes: NodeLite[]; s
             <span key={l} className="chip bg-bg text-muted">{l}</span>
           ))}
           {linked.map((n) => (
-            <span key={n.id} className="chip bg-accent/10 text-accent/90" title={`Touches ${n.kind} ${n.name}`}>◇ {n.name}</span>
+            <span key={n.id} className="chip bg-accent/10 text-accent/90" title={`Touches ${n.kind} ${n.name}`}><NodeIcon /> {n.name}</span>
           ))}
           {t.agentClaimable && (
             <span className="chip bg-agent/10 text-agent" title={t.claimedByKeyId ? "Claimed by an agent" : "Agents may pick this up"}>
               {t.claimedByKeyId ? "agent working" : "AI-ready"}
             </span>
           )}
-          {t.commentCount > 0 && <span className="ml-auto text-[11px] text-muted">💬 {t.commentCount}</span>}
+          {t.commentCount > 0 && <span className="ml-auto text-[11px] text-muted"><CommentIcon /> {t.commentCount}</span>}
         </div>
       )}
     </div>

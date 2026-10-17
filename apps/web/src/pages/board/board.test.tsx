@@ -35,7 +35,7 @@ describe("the board", () => {
     expect(within(build).getByText("AI-ready")).toBeTruthy();
     const crash = screen.getByText("Fix the crash").closest("[data-ticket]") as HTMLElement;
     expect(within(crash).getByTitle("Created by an agent")).toBeTruthy();
-    expect(within(crash).getByText("💬 2")).toBeTruthy();
+    expect(within(crash).getByText("2")).toBeTruthy();
   });
 
   test("a claimed ticket says an agent is working on it, and a linked one names its map node", async () => {
@@ -44,7 +44,7 @@ describe("the board", () => {
     );
     const card = (await screen.findByText("Claimed")).closest("[data-ticket]") as HTMLElement;
     expect(within(card).getByText("agent working")).toBeTruthy();
-    expect(within(card).getByText("◇ API")).toBeTruthy();
+    expect(within(card).getByText("API")).toBeTruthy();
   });
 
   test("the setup checklist is above it: a one-line pill when everything is set up", async () => {

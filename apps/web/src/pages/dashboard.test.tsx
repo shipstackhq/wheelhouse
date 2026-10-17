@@ -43,7 +43,7 @@ describe("the dashboard", () => {
     expect(within(await tile("In progress")).getByText("2 waiting for review")).toBeTruthy();
     const completed = await tile("Completed, last 7 days");
     expect(within(completed).getByText("5")).toBeTruthy();
-    expect(completed.textContent).toContain("▲ +2");
+    expect(completed.textContent).toContain("+2");
     expect(completed.textContent).toContain("vs prior 7 days");
     expect(within(await tile("Agent share of changes")).getByText("40%")).toBeTruthy();
   });
@@ -59,10 +59,10 @@ describe("the dashboard", () => {
     expect(await within(card).findByText("40%")).toBeTruthy();
     expect(within(card).getByText(/done · 4\/10/)).toBeTruthy();
     expect(within(card).getByRole("link", { name: /Alpha/ }).getAttribute("href")).toBe("/p/AA");
-    expect(within(card).getByText("▲ 2 high/urgent")).toBeTruthy();
-    expect(within(card).getByText("🤖 1 AI-ready")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "⚠ 1 stale" }).getAttribute("href")).toBe("/p/AA/map");
-    expect(within(card).getByRole("link", { name: "⚠ 1 stale doc" }).getAttribute("href")).toBe("/p/AA/docs");
+    expect(within(card).getByText("2 high/urgent")).toBeTruthy();
+    expect(within(card).getByText("1 AI-ready")).toBeTruthy();
+    expect(within(card).getByRole("link", { name: "1 stale" }).getAttribute("href")).toBe("/p/AA/map");
+    expect(within(card).getByRole("link", { name: "1 stale doc" }).getAttribute("href")).toBe("/p/AA/docs");
     for (const stage of ["Backlog", "Todo", "In Progress", "Review", "Done"]) expect(within(card).getAllByText(stage).length).toBeGreaterThan(0);
   });
 
@@ -85,24 +85,24 @@ describe("the dashboard", () => {
 
   test("when nothing needs attention it says so", async () => {
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), attention: { review: [], urgent: [], stale: [], staleDocs: [] } }));
-    expect(await within(await widget("Needs attention")).findByText("Nothing waiting on you. 🎉")).toBeTruthy();
+    expect(await within(await widget("Needs attention")).findByText("Nothing waiting on you.")).toBeTruthy();
   });
 
   test("agents: who has changes queued, and who is in sync", async () => {
     renderApp("/");
     const card = await widget("Agents");
-    const busy = ((await within(card).findByText("🤖 Claude — Ada's laptop")).closest("li")) as HTMLElement;
+    const busy = ((await within(card).findByText("Claude — Ada's laptop")).closest("li")) as HTMLElement;
     expect(within(busy).getByText("3 queued")).toBeTruthy();
     expect(within(busy).getByRole("button", { name: "mark all seen" })).toBeTruthy();
-    const quiet = (within(card).getByText("🤖 CI bot").closest("li")) as HTMLElement;
+    const quiet = (within(card).getByText("CI bot").closest("li")) as HTMLElement;
     expect(within(quiet).getByText("in sync")).toBeTruthy();
     expect(within(quiet).getByText("never connected")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "Manage →" }).getAttribute("href")).toBe("/agents");
+    expect(within(card).getByRole("link", { name: "Manage" }).getAttribute("href")).toBe("/agents");
   });
 
   test("mark all seen resets that agent's queue and reads the dashboard again", async () => {
     const { server } = renderApp("/", (s) => s.on("POST /api/app/agents/mark-all-seen", { ok: true }));
-    const busy = (await within(await widget("Agents")).findByText("🤖 Claude — Ada's laptop")).closest("li") as HTMLElement;
+    const busy = (await within(await widget("Agents")).findByText("Claude — Ada's laptop")).closest("li") as HTMLElement;
     await userEvent.setup().click(within(busy).getByRole("button", { name: "mark all seen" }));
     await waitFor(() => expect(server.sent("POST /api/app/agents/mark-all-seen")).toHaveLength(1));
     expect(server.sent("POST /api/app/agents/mark-all-seen")[0].body).toEqual({ keyId: "k1" });
@@ -149,7 +149,7 @@ describe("the dashboard", () => {
 
   test("agent events are marked with the robot", async () => {
     renderApp("/");
-    expect(await within(await widget("Recent activity")).findByText("🤖 Claude — Ada's laptop · just now")).toBeTruthy();
+    expect(await within(await widget("Recent activity")).findByText("Claude — Ada's laptop · just now")).toBeTruthy();
   });
 });
 

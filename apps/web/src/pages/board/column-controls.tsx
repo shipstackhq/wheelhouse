@@ -1,6 +1,7 @@
 import { DropdownMenu } from "radix-ui";
 import clsx from "clsx";
 import type { BoardMember as Member, BoardTicket } from "@wheelhouse/api-client";
+import { CheckIcon, CloseIcon } from "../../components/icons";
 
 type Ticket = BoardTicket;
 
@@ -114,7 +115,7 @@ const MENU = "z-50 min-w-52 rounded-lg border border-line bg-panel p-1 text-sm t
 const ITEM = "flex cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 outline-none data-[highlighted]:bg-panel-2";
 const HEAD = "px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted";
 
-/** Trigger that is hover/focus-only while inactive and stays put, with its label and an ✕, while active. */
+/** Trigger that is hover/focus-only while inactive and stays put, with its label and a clear button, while active. */
 function Trigger({ active, label, name, onClear }: { active: boolean; label: string; name: string; onClear: () => void }) {
   return (
     <span className={clsx("inline-flex items-center", !active && "opacity-0 transition-opacity group-focus-within/head:opacity-100 group-hover/head:opacity-100 has-[[data-state=open]]:opacity-100")}>
@@ -133,7 +134,7 @@ function Trigger({ active, label, name, onClear }: { active: boolean; label: str
           aria-label={`Clear ${name.toLowerCase()}`}
           onClick={onClear}
         >
-          ✕
+          <CloseIcon />
         </button>
       )}
     </span>
@@ -155,7 +156,7 @@ function Check({ checked, children, onSelect }: { checked: boolean; children: Re
         onSelect();
       }}
     >
-      <span className="w-3 text-accent">{checked ? "✓" : ""}</span>
+      <span className="w-3 text-accent">{checked ? <CheckIcon /> : null}</span>
       {children}
     </DropdownMenu.CheckboxItem>
   );
@@ -231,11 +232,11 @@ export function ColumnControls(props: {
               onValueChange={(k) => set({ sort: k === "manual" ? null : { key: k as SortKey, dir: view.sort?.dir ?? (k === "title" || k === "number" ? "asc" : "desc") } })}
             >
               <DropdownMenu.RadioItem value="manual" className={ITEM}>
-                <span className="w-3 text-accent">{!view.sort ? "✓" : ""}</span>Manual (drag order)
+                <span className="w-3 text-accent">{!view.sort ? <CheckIcon /> : null}</span>Manual (drag order)
               </DropdownMenu.RadioItem>
               {SORTS.map((s) => (
                 <DropdownMenu.RadioItem key={s.value} value={s.value} className={ITEM}>
-                  <span className="w-3 text-accent">{view.sort?.key === s.value ? "✓" : ""}</span>
+                  <span className="w-3 text-accent">{view.sort?.key === s.value ? <CheckIcon /> : null}</span>
                   {s.label}
                 </DropdownMenu.RadioItem>
               ))}

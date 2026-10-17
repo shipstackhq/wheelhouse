@@ -14,6 +14,7 @@ import { docQuery, useRepos } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { buildFileTree, containsMatch, readTime, sectionOf, sortedChildren, type FileTreeNode } from "./file-tree";
+import { AgentIcon, ArrowLeftIcon, ArrowRightIcon, BookIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, FileIcon, FolderIcon, NodeIcon, SearchIcon, WarningIcon } from "../../components/icons";
 
 type TreeDoc = DocsIndex["docs"][number];
 
@@ -22,7 +23,7 @@ function PersonRow({ person }: { person: DocPerson }) {
   return (
     <span className="flex items-center gap-2">
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent" aria-hidden>
-        {person.kind === "agent" ? "🤖" : (person.name[0] ?? "?").toUpperCase()}
+        {person.kind === "agent" ? <AgentIcon /> : (person.name[0] ?? "?").toUpperCase()}
       </span>
       <span className="truncate">{person.name}</span>
     </span>
@@ -282,7 +283,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
             title={child.path}
             onClick={() => addAnchorFromBrowse(child.path)}
           >
-            <span aria-hidden>{anchors.includes(child.path) ? "✓" : "📄"}</span>
+            {anchors.includes(child.path) ? <CheckIcon /> : <FileIcon />}
             <span className="truncate">{child.name}</span>
           </button>
         );
@@ -298,8 +299,8 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
             style={{ paddingLeft: `${depth * 1.1 + 0.5}rem` }}
             onClick={() => toggleDir(child.path)}
           >
-            <span aria-hidden className="w-3 shrink-0 text-[10px]">{expanded ? "▾" : "▸"}</span>
-            <span aria-hidden>📁</span>
+            {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            <FolderIcon />
             <span className="truncate">{child.name}</span>
           </button>
           {expanded && renderFileTreeNode(child, depth + 1, filter)}
@@ -346,7 +347,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
           )}
           title={k.title}
         >
-          {k.stale && <span className="text-warn" title="Possibly out of date">⚠</span>}
+          {k.stale && <span className="text-warn" title="Possibly out of date"><WarningIcon /></span>}
           <span className="truncate">{k.title}</span>
         </button>
         {home && <span className="hidden shrink-0 px-2 text-xs text-muted sm:inline">Updated {new Date(k.updatedAt).toLocaleDateString()}</span>}
@@ -374,7 +375,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
             value={treeFilter}
             onChange={(e) => setTreeFilter(e.target.value)}
           />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted">⌕</span>
+          <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
         </div>
       )}
       {tree.length === 0 ? (
@@ -403,7 +404,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   })();
 
   const authorName = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? "Agent" : (members.find((m) => m.id === id)?.name ?? "Someone"));
-  const authorInitial = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? "🤖" : (authorName(kind, id)[0] ?? "?").toUpperCase());
+  const authorInitial = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? <AgentIcon /> : (authorName(kind, id)[0] ?? "?").toUpperCase());
   const loadError = selectedId && detailQuery.isError ? (detailQuery.error instanceof ApiError ? detailQuery.error.message : "Could not load this doc.") : null;
 
   return (
@@ -425,7 +426,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
         <>
           <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">
             <Link to={`/p/${projectKey}/docs`} className="shrink-0 text-muted hover:text-fg">
-              ← Docs
+              <ArrowLeftIcon /> Docs
             </Link>
             {ancestors.map((a) => (
               <span key={a.id} className="flex min-w-0 items-center gap-2 text-muted">
@@ -436,7 +437,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
               </span>
             ))}
             <button type="button" aria-label="Search docs" className="btn btn-ghost ml-auto flex shrink-0 items-center gap-1.5 px-2 py-1 text-xs" onClick={() => setSheetOpen(true)}>
-              <span aria-hidden className="text-sm">⌕</span>
+              <SearchIcon className="text-sm" />
               Search
             </button>
           </nav>
@@ -451,7 +452,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
 
             {d.stale && (
               <p role="status" className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
-                ⚠ Possibly out of date{d.staleReason ? `: ${d.staleReason}` : ""}. Edit the content to refresh it, or confirm it&apos;s still accurate.
+                <WarningIcon /> Possibly out of date{d.staleReason ? `: ${d.staleReason}` : ""}. Edit the content to refresh it, or confirm it&apos;s still accurate.
                 <button className="ml-2 underline" disabled={busy} onClick={confirmAccurate}>
                   Confirm accurate
                 </button>
@@ -469,7 +470,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
               <div className="flex shrink-0 gap-2">
                 {!editing ? (
                   <button className="btn btn-primary" onClick={() => startEditing(d)}>
-                    ✎ Edit
+                    <EditIcon /> Edit
                   </button>
                 ) : null}
                 <button
@@ -507,7 +508,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                 <span className="h-2 w-2 rounded-full bg-current" aria-hidden />
                 {d.stale ? "Possibly out of date" : "Up to date"}
               </span>
-              <span>📖 {readTime(d.body)} min read</span>
+              <span><BookIcon /> {readTime(d.body)} min read</span>
               <span>{d.body.trim() ? d.body.trim().split(/\s+/).length : 0} words</span>
               <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={copyForAgent}>
                 {copyLabel}
@@ -532,7 +533,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                     <div className="flex items-center gap-3">
                       {githubRepos.length > 0 && (
                         <button type="button" className="btn btn-ghost flex items-center gap-1.5 px-2 py-1 text-xs" onClick={() => void openBrowseRepo()}>
-                          <span className="text-sm" aria-hidden>⌕</span>
+                          <SearchIcon className="text-sm" />
                           Browse repo…
                         </button>
                       )}
@@ -547,7 +548,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                       <span key={a} className="chip gap-1 bg-panel-2 py-1 font-mono text-xs">
                         {a}
                         <button className="text-muted hover:text-fg" aria-label={`Remove anchor ${a}`} onClick={() => setAnchors(anchors.filter((x) => x !== a))}>
-                          ✕
+                          <CloseIcon />
                         </button>
                       </span>
                     ))}
@@ -643,7 +644,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                         + Create ADR from this doc
                       </button>
                       <Link to={`/p/${projectKey}/decisions`} className="text-xs text-accent hover:underline">
-                        View all decisions →
+                        View all decisions <ArrowRightIcon />
                       </Link>
                     </div>
                   </section>
@@ -687,7 +688,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                   <div className="flex flex-wrap gap-1.5">
                     {(detail?.nodes ?? []).map((n) => (
                       <span key={n.id} className="chip gap-1 bg-accent/10 py-1 text-accent">
-                        ◇ {n.layer}:{n.name}
+                        <NodeIcon /> {n.layer}:{n.name}
                         <button
                           className="text-accent/60 hover:text-accent"
                           aria-label={`Unlink ${n.name}`}
@@ -700,7 +701,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                             await refresh();
                           }}
                         >
-                          ✕
+                          <CloseIcon />
                         </button>
                       </span>
                     ))}
@@ -754,7 +755,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                           <span key={l} className="chip gap-1 bg-panel-2 py-1 text-xs text-fg">
                             {l}
                             <button className="text-muted hover:text-fg" aria-label={`Remove label ${l}`} disabled={busy} onClick={() => void saveLabels(d.labels.filter((x) => x !== l))}>
-                              ✕
+                              <CloseIcon />
                             </button>
                           </span>
                         ))}
@@ -794,7 +795,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                   + Create
                 </button>
                 <Dialog.Close className="rounded px-2 py-1 text-muted hover:bg-panel-2 hover:text-fg" aria-label="Close">
-                  ✕
+                  <CloseIcon />
                 </Dialog.Close>
               </div>
             </div>

@@ -9,6 +9,7 @@ import { SubmitButton } from "../../components/submit-button";
 import { failure, field, type FormState } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
+import { ArrowRightIcon } from "../../components/icons";
 
 type CodeLocation = "github" | "local" | "none" | "skip" | null;
 
@@ -56,7 +57,7 @@ export function OnboardingWizard({
               <span className="font-medium">{projectName}</span>
             </div>
             <button className="text-sm text-muted hover:text-fg" onClick={finish}>
-              Skip to board →
+              Skip to board <ArrowRightIcon />
             </button>
           </div>
           <ol className="mt-4 flex flex-wrap gap-2 text-xs">

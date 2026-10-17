@@ -4,6 +4,7 @@ import { Dialog } from "radix-ui";
 import { LAYER_ORDER } from "@wheelhouse/core/lib/map-shared";
 import { Select } from "../../components/ui";
 import type { Graph } from "./knowledge-map";
+import { ArrowDownIcon, ArrowUpIcon, CloseIcon } from "../../components/icons";
 
 type Step = { nodeId: string; title: string; detail: string };
 export type FlowDraft = { id?: string; /** The version being edited: sent back so a change made since is refused. */ version?: number; name: string; description: string; steps: Step[] };
@@ -55,9 +56,9 @@ export function FlowEditor(props: {
                   <div className="min-w-0 flex-1">
                     <Select value={s.nodeId} placeholder="Where it happens…" options={options} onValueChange={(v) => setStep(i, { nodeId: v })} />
                   </div>
-                  <button className="btn btn-ghost px-1.5 py-1 text-xs" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
-                  <button className="btn btn-ghost px-1.5 py-1 text-xs" onClick={() => move(i, 1)} disabled={i === f.steps.length - 1} aria-label="Move down">↓</button>
-                  <button className="btn btn-ghost px-1.5 py-1 text-xs hover:text-danger" onClick={() => setF({ ...f, steps: f.steps.filter((_, j) => j !== i) })} aria-label="Remove">✕</button>
+                  <button className="btn btn-ghost px-1.5 py-1 text-xs" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up"><ArrowUpIcon /></button>
+                  <button className="btn btn-ghost px-1.5 py-1 text-xs" onClick={() => move(i, 1)} disabled={i === f.steps.length - 1} aria-label="Move down"><ArrowDownIcon /></button>
+                  <button className="btn btn-ghost px-1.5 py-1 text-xs hover:text-danger" onClick={() => setF({ ...f, steps: f.steps.filter((_, j) => j !== i) })} aria-label="Remove"><CloseIcon /></button>
                 </div>
                 <input className="input" placeholder="What happens (short)" value={s.title} onChange={(e) => setStep(i, { title: e.target.value })} />
                 <textarea className="input" rows={2} placeholder="Detail (optional)" value={s.detail} onChange={(e) => setStep(i, { detail: e.target.value })} />

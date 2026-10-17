@@ -2,6 +2,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/core/lib/time";
 import { groupHistory, type HistoryGroup } from "../lib/history-groups";
+import { AgentIcon } from "./icons";
 
 export type HistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date | string };
 
@@ -41,7 +42,7 @@ export function HistoryList({ items, defaultExpanded = false }: { items: History
           <li key={g.items[0].seq}>
             <div className="flex items-baseline gap-2">
               <span className={clsx("min-w-0 truncate font-medium", agent ? "text-agent" : "text-fg")} title={g.actorName}>
-                {agent ? "🤖 " : ""}
+                {agent && <AgentIcon />}{agent && " "}
                 {g.actorName}
               </span>
               {g.items.length > 1 && (

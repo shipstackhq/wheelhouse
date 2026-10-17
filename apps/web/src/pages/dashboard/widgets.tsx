@@ -17,6 +17,7 @@ import { Tip } from "../../components/tip";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { useWidget } from "../../lib/queries";
+import { AgentIcon, ArrowRightIcon, TrendUpIcon, WarningIcon } from "../../components/icons";
 
 /**
  * Dashboard widgets. Each one reads its own data (GET /api/app/dashboard/:widget) and draws itself inside <Widget>, so a slow
@@ -87,13 +88,13 @@ export function ProjectProgress() {
                   <b>{Math.round(p.pct * 100)}%</b> <span className="text-muted">done · {p.done}/{p.total}</span>
                 </span>
                 <span className="ml-auto flex flex-wrap gap-3 text-xs text-muted">
-                  {p.urgent > 0 && <span className="text-danger">▲ {p.urgent} high/urgent</span>}
-                  {p.agentReady > 0 && <span className="text-agent">🤖 {p.agentReady} AI-ready</span>}
+                  {p.urgent > 0 && <span className="text-danger"><TrendUpIcon /> {p.urgent} high/urgent</span>}
+                  {p.agentReady > 0 && <span className="text-agent"><AgentIcon /> {p.agentReady} AI-ready</span>}
                   {p.staleNodes > 0 && (
-                    <Link to={`/p/${p.key}/map`} className="text-warn hover:underline">⚠ {p.staleNodes} stale</Link>
+                    <Link to={`/p/${p.key}/map`} className="text-warn hover:underline"><WarningIcon /> {p.staleNodes} stale</Link>
                   )}
                   {p.staleDocs > 0 && (
-                    <Link to={`/p/${p.key}/docs`} className="text-warn hover:underline">⚠ {p.staleDocs} stale doc{p.staleDocs === 1 ? "" : "s"}</Link>
+                    <Link to={`/p/${p.key}/docs`} className="text-warn hover:underline"><WarningIcon /> {p.staleDocs} stale doc{p.staleDocs === 1 ? "" : "s"}</Link>
                   )}
                   <span>{p.lastActivity ? `active ${timeAgo(p.lastActivity)}` : "no activity in 4 weeks"}</span>
                 </span>
@@ -151,7 +152,7 @@ export function AgentQueues() {
   if (q.isError) return <Failed title="Agents" query={q} />;
   const agents = q.data;
   return (
-    <Widget title="Agents" subtitle="Changes each agent hasn't picked up yet" action={<Link to="/agents" className="text-xs text-muted hover:text-fg">Manage →</Link>}>
+    <Widget title="Agents" subtitle="Changes each agent hasn't picked up yet" action={<Link to="/agents" className="text-xs text-muted hover:text-fg">Manage <ArrowRightIcon /></Link>}>
       {agents.length === 0 ? (
         <Empty>
           No agents connected. <Link className="text-accent" to="/agents">Create an API key</Link>.
@@ -162,7 +163,7 @@ export function AgentQueues() {
             <li key={a.id} className="flex items-start gap-3">
               <span className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", a.pending ? "bg-agent" : "bg-ok")} aria-hidden />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">🤖 {a.name}</div>
+                <div className="truncate font-medium"><AgentIcon /> {a.name}</div>
                 <Tip
                   content={
                     <div className="space-y-0.5">
@@ -245,7 +246,7 @@ export function NeedsAttention() {
   return (
     <Widget title="Needs attention" subtitle="Where a human is the bottleneck">
       {empty ? (
-        <Empty>Nothing waiting on you. 🎉</Empty>
+        <Empty>Nothing waiting on you.</Empty>
       ) : (
         <div className="space-y-4">
           <AttentionSection title="Waiting for review" count={a.review.length}>
@@ -254,7 +255,7 @@ export function NeedsAttention() {
                 <Link to={`/p/${t.projectKey}?t=${t.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
                   <span className="shrink-0 font-mono text-xs text-muted">{t.ref}</span>
                   <span className="truncate">{t.title}</span>
-                  {t.byAgent && <span className="ml-auto shrink-0 text-xs text-agent" title="Agent work">🤖</span>}
+                  {t.byAgent && <span className="ml-auto shrink-0 text-xs text-agent" title="Agent work"><AgentIcon /></span>}
                 </Link>
               </li>
             ))}
@@ -274,7 +275,7 @@ export function NeedsAttention() {
             {a.stale.map((n) => (
               <li key={n.id}>
                 <Link to={`/p/${n.projectKey}/map?node=${n.id}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={n.reason ?? undefined}>
-                  <span className="shrink-0 text-xs text-warn">⚠</span>
+                  <span className="shrink-0 text-xs text-warn"><WarningIcon /></span>
                   <span className="truncate">{n.name}</span>
                   <span className="ml-auto shrink-0 text-xs uppercase text-muted">
                     {n.projectKey} · {n.layer}
@@ -287,7 +288,7 @@ export function NeedsAttention() {
             {a.staleDocs.map((d) => (
               <li key={d.id}>
                 <Link to={`/p/${d.projectKey}/docs?doc=${d.id}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={d.reason ?? undefined}>
-                  <span className="shrink-0 text-xs text-warn">⚠</span>
+                  <span className="shrink-0 text-xs text-warn"><WarningIcon /></span>
                   <span className="truncate">{d.title}</span>
                   <span className="ml-auto shrink-0 text-xs uppercase text-muted">{d.projectKey}</span>
                 </Link>
@@ -365,7 +366,11 @@ export function SyncHealth() {
                 href={`/p/${x.projectKey}?t=${x.ref}`}
                 lead={x.ref}
                 title={x.title}
-                meta={`🤖 ${x.agent} · ${timeAgo(x.lastAt)}`}
+                meta={
+                  <>
+                    <AgentIcon /> {x.agent} · {timeAgo(x.lastAt)}
+                  </>
+                }
                 tip={
                   <div className="space-y-0.5">
                     <div className="font-medium">

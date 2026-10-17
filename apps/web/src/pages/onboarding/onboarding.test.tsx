@@ -19,7 +19,7 @@ describe("the onboarding wizard", () => {
 
   test("Skip to board is always there, and goes to the board", async () => {
     const { at } = open();
-    await userEvent.setup().click(await screen.findByRole("button", { name: "Skip to board →" }));
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Skip to board" }));
     await waitFor(() => expect(at()).toBe("/p/AA"));
   });
 

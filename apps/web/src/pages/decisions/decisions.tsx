@@ -10,6 +10,7 @@ import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
+import { AgentIcon, CloseIcon, NodeIcon } from "../../components/icons";
 
 type NodeLite = { id: string; name: string; layer: string };
 /** `version` is the version being edited: sent back so a change made since is refused, not overwritten. */
@@ -145,12 +146,12 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
                     const n = byId.get(id);
                     return n ? (
                       <Link key={id} to={`/p/${props.projectKey}/map?node=${id}`} className="chip bg-accent/10 py-1 text-accent hover:bg-accent/20">
-                        ◇ {n.name} <span className="ml-1 opacity-60">{n.layer}</span>
+                        <NodeIcon /> {n.name} <span className="ml-1 opacity-60">{n.layer}</span>
                       </Link>
                     ) : null;
                   })}
                   <span className="ml-auto">
-                    {d.authorKind === "agent" ? "🤖 " : ""}
+                    {d.authorKind === "agent" && <AgentIcon />}{d.authorKind === "agent" && " "}
                     {d.authorName} · {timeAgo(d.updatedAt)}
                   </span>
                 </footer>
@@ -197,7 +198,7 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
                       {draft.nodeIds.map((id) => (
                         <span key={id} className="chip gap-1 bg-accent/10 py-1 text-accent">
                           {byId.get(id)?.name ?? "?"}
-                          <button onClick={() => setDraft({ ...draft, nodeIds: draft.nodeIds.filter((x) => x !== id) })}>✕</button>
+                          <button onClick={() => setDraft({ ...draft, nodeIds: draft.nodeIds.filter((x) => x !== id) })}><CloseIcon /></button>
                         </span>
                       ))}
                       <Select

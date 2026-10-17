@@ -9,6 +9,7 @@ import { timeAgo } from "@wheelhouse/core/lib/time";
 import type { Graph, GNode } from "./knowledge-map";
 import { ColumnsEditor, ColumnsTable } from "./columns";
 import type { MapColumn as Column } from "@wheelhouse/api-client";
+import { AgentIcon, AskIcon, CloseIcon, EditIcon, ExpandIcon, PlayIcon, WarningIcon } from "../../components/icons";
 
 type Patch = Partial<{
   name: string;
@@ -122,15 +123,15 @@ export function NodePanel(props: {
         <span className="chip bg-panel-2 uppercase text-muted">{LAYER_META[layer].label}</span>
         <span className="text-muted">v{n.version}{n.describedAt ? ` · described ${timeAgo(n.describedAt)}` : ""}{n.describedSha ? ` @ ${n.describedSha.slice(0, 7)}` : ""}</span>
         <div className="ml-auto flex gap-1">
-          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={props.onAsk} title="Ask Claude about this node">✨ Ask</button>
-          <button className="btn btn-ghost px-2 py-1" onClick={props.onClose} aria-label="Close">✕</button>
+          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={props.onAsk} title="Ask Claude about this node"><AskIcon /> Ask</button>
+          <button className="btn btn-ghost px-2 py-1" onClick={props.onClose} aria-label="Close"><CloseIcon /></button>
         </div>
       </div>
 
       <div className="wrap-panel min-w-0 flex-1 space-y-5 overflow-y-auto overflow-x-hidden px-5 py-4 text-sm">
         {g.flux[n.id] && (
           <div className="rounded-md border border-agent/40 bg-agent/5 p-3">
-            <div className="font-medium text-agent">✎ In flux</div>
+            <div className="font-medium text-agent"><EditIcon /> In flux</div>
             {g.flux[n.id].sessions.map((s) => (
               <div key={s.id} className="mt-1 text-xs text-muted">
                 {s.by}
@@ -141,7 +142,7 @@ export function NodePanel(props: {
             {g.flux[n.id].drafts.map((d) => (
               <div key={d.id} className="mt-2 rounded border border-line bg-panel p-2 text-xs">
                 <div className="mb-1 text-muted">
-                  {d.authorKind === "agent" ? "🤖 " : ""}
+                  {d.authorKind === "agent" && <AgentIcon />}{d.authorKind === "agent" && " "}
                   {d.authorName} {d.confirm ? "confirmed the explanation is still accurate" : `drafted: ${Object.keys(d.patch).join(", ")}`}. Publishes when the code lands.
                 </div>
                 {Object.entries(d.patch)
@@ -164,7 +165,7 @@ export function NodePanel(props: {
 
         {n.stale && (
           <div className="rounded-md border border-warn/40 bg-warn/10 p-3">
-            <div className="font-medium text-warn">⚠ Possibly out of date</div>
+            <div className="font-medium text-warn"><WarningIcon /> Possibly out of date</div>
             {n.staleReason && <div className="mt-1 text-xs text-muted">{n.staleReason}</div>}
             <div className="mt-2 flex gap-2">
               <button className="btn py-1 text-xs" onClick={props.onMarkFresh}>Still accurate — mark fresh</button>
@@ -368,7 +369,7 @@ export function NodePanel(props: {
           <div className="mb-1 flex items-center justify-between">
             <span className="label mb-0">Contains ({children.length})</span>
             <div className="flex gap-3 text-xs">
-              {children.length > 0 && <button className="text-muted hover:text-fg" onClick={props.onFocus}>Drill in ⤢</button>}
+              {children.length > 0 && <button className="text-muted hover:text-fg" onClick={props.onFocus}>Drill in <ExpandIcon /></button>}
               <button className="text-accent" onClick={props.onAddChild}>+ Add</button>
             </div>
           </div>
@@ -382,7 +383,7 @@ export function NodePanel(props: {
               const step = f.steps.findIndex((s) => s.nodeId === n.id);
               return (
                 <button key={f.id} className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left hover:bg-panel-2" onClick={() => props.onPlayFlow(f.id, step)}>
-                  <span className="text-accent">▶</span>
+                  <PlayIcon className="text-accent" />
                   <span>{f.name}</span>
                   <span className="ml-auto text-xs text-muted">step {step + 1}/{f.steps.length}</span>
                 </button>
@@ -437,7 +438,7 @@ export function NodePanel(props: {
         {p.edges.map((e) => (
           <div key={e.id} className="group flex items-center">
             <div className="min-w-0 flex-1">{p.NodeChip({ id: p.otherId(e) })}</div>
-            <button className="px-1 text-xs text-muted opacity-0 hover:text-danger group-hover:opacity-100" onClick={() => p.onUnlink(e.id)} title="Unlink">✕</button>
+            <button className="px-1 text-xs text-muted opacity-0 hover:text-danger group-hover:opacity-100" onClick={() => p.onUnlink(e.id)} title="Unlink" aria-label="Unlink"><CloseIcon /></button>
           </div>
         ))}
         {p.options.length > 0 && (

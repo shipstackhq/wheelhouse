@@ -43,6 +43,7 @@ import { $getNearestNodeOfType, $insertNodeToNearestRoot, mergeRegister } from "
 import { $editorToMarkdown, $markdownToEditor, EDITOR_NODES, MD_TRANSFORMERS } from "../lib/markdown-editor";
 import { $createImageNode } from "../lib/image-node";
 import { $createDividerNode } from "../lib/md-blocks";
+import { BoldIcon, BulletListIcon, ChevronDownIcon, ClearFormattingIcon, CodeBlockIcon, DividerIcon, ExitFullscreenIcon, FullscreenIcon, Heading1Icon, Heading2Icon, Heading3Icon, ImageIcon, IndentIcon, InlineCodeIcon, ItalicIcon, LinkIcon, MarkdownIcon, NumberedListIcon, OutdentIcon, ParagraphIcon, QuoteIcon, RedoIcon, StrikethroughIcon, TableIcon, TaskListIcon, UndoIcon } from "./icons";
 
 type Block = "paragraph" | "h1" | "h2" | "h3" | "quote" | "code" | "bullet" | "number" | "check";
 type ListKind = "bullet" | "number" | "check";
@@ -227,10 +228,10 @@ function Toolbar({ fullScreen, onToggleFullScreen, onShowMarkdown }: { fullScree
       aria-label="Formatting"
       className="sticky top-0 z-10 flex flex-wrap items-center gap-x-0.5 gap-y-1 border-b border-line bg-panel-2/70 px-2 py-1.5 backdrop-blur-sm"
     >
-      <ToolButton label="Bold" shortcut="⌘B" active={!!marks.bold} onClick={() => format("bold")} icon={I.bold} />
-      <ToolButton label="Italic" shortcut="⌘I" active={!!marks.italic} onClick={() => format("italic")} icon={I.italic} />
-      <ToolButton label="Strikethrough" active={!!marks.strikethrough} onClick={() => format("strikethrough")} icon={I.strike} />
-      <ToolButton label="Inline code" active={!!marks.code} onClick={() => format("code")} icon={I.code} />
+      <ToolButton label="Bold" shortcut="⌘B" active={!!marks.bold} onClick={() => format("bold")} icon={<BoldIcon />} />
+      <ToolButton label="Italic" shortcut="⌘I" active={!!marks.italic} onClick={() => format("italic")} icon={<ItalicIcon />} />
+      <ToolButton label="Strikethrough" active={!!marks.strikethrough} onClick={() => format("strikethrough")} icon={<StrikethroughIcon />} />
+      <ToolButton label="Inline code" active={!!marks.code} onClick={() => format("code")} icon={<InlineCodeIcon />} />
       <Divider />
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger
@@ -239,9 +240,7 @@ function Toolbar({ fullScreen, onToggleFullScreen, onShowMarkdown }: { fullScree
           className="group inline-flex h-8 w-[7.5rem] items-center justify-between gap-1 rounded-md px-2 text-[13px] text-fg transition-colors hover:bg-fg/[0.07] data-[state=open]:bg-fg/75 data-[state=open]:text-panel"
         >
           <span className="truncate">{blockLabel}</span>
-          <Svg className="h-3.5 w-3.5 shrink-0 opacity-70" fill>
-            {I.caret}
-          </Svg>
+          <ChevronDownIcon className="shrink-0 opacity-70" />
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content
@@ -267,32 +266,32 @@ function Toolbar({ fullScreen, onToggleFullScreen, onShowMarkdown }: { fullScree
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       <Divider />
-      <ToolButton label="Numbered list" active={block === "number"} onClick={() => toggleList("number")} icon={I.listOrdered} />
-      <ToolButton label="Bulleted list" active={block === "bullet"} onClick={() => toggleList("bullet")} icon={I.listBullet} />
-      <ToolButton label="Task list" active={block === "check"} onClick={() => toggleList("check")} icon={I.listCheck} />
-      <ToolButton label="Decrease indent" disabled={!inList} onClick={() => editor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined)} icon={I.outdent} />
-      <ToolButton label="Increase indent" disabled={!inList} onClick={() => editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined)} icon={I.indent} />
+      <ToolButton label="Numbered list" active={block === "number"} onClick={() => toggleList("number")} icon={<NumberedListIcon />} />
+      <ToolButton label="Bulleted list" active={block === "bullet"} onClick={() => toggleList("bullet")} icon={<BulletListIcon />} />
+      <ToolButton label="Task list" active={block === "check"} onClick={() => toggleList("check")} icon={<TaskListIcon />} />
+      <ToolButton label="Decrease indent" disabled={!inList} onClick={() => editor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined)} icon={<OutdentIcon />} />
+      <ToolButton label="Increase indent" disabled={!inList} onClick={() => editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined)} icon={<IndentIcon />} />
       <Divider />
       <UrlPopover
         label="Link"
         active={inLink}
-        icon={I.link}
+        icon={<LinkIcon />}
         fields={["url"]}
         submitLabel="Apply"
         removeLabel={inLink ? "Remove link" : undefined}
         onRemove={() => editor.dispatchCommand(TOGGLE_LINK_COMMAND, null)}
         onSubmit={({ url }) => editor.dispatchCommand(TOGGLE_LINK_COMMAND, url)}
       />
-      <UrlPopover label="Image" icon={I.image} fields={["url", "alt"]} submitLabel="Insert" onSubmit={({ url, alt }) => insertImage(url, alt)} />
-      <ToolButton label="Table" onClick={insertTable} icon={I.table} />
-      <ToolButton label="Divider" onClick={insertDivider} icon={I.divider} />
+      <UrlPopover label="Image" icon={<ImageIcon />} fields={["url", "alt"]} submitLabel="Insert" onSubmit={({ url, alt }) => insertImage(url, alt)} />
+      <ToolButton label="Table" onClick={insertTable} icon={<TableIcon />} />
+      <ToolButton label="Divider" onClick={insertDivider} icon={<DividerIcon />} />
       <Divider />
-      <ToolButton label="Clear formatting" onClick={clearFormatting} icon={I.clear} />
-      <ToolButton label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} icon={I.undo} />
-      <ToolButton label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)} icon={I.redo} />
+      <ToolButton label="Clear formatting" onClick={clearFormatting} icon={<ClearFormattingIcon />} />
+      <ToolButton label="Undo" shortcut="⌘Z" disabled={!canUndo} onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)} icon={<UndoIcon />} />
+      <ToolButton label="Redo" shortcut="⇧⌘Z" disabled={!canRedo} onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)} icon={<RedoIcon />} />
       <span className="ml-auto flex items-center gap-0.5">
-        {onShowMarkdown && <ToolButton label="Markdown view" onClick={onShowMarkdown} icon={I.source} />}
-        <ToolButton label={fullScreen ? "Exit full screen" : "Full screen"} active={fullScreen} onClick={onToggleFullScreen} icon={fullScreen ? I.minimize : I.maximize} />
+        {onShowMarkdown && <ToolButton label="Markdown view" onClick={onShowMarkdown} icon={<MarkdownIcon />} />}
+        <ToolButton label={fullScreen ? "Exit full screen" : "Full screen"} active={fullScreen} onClick={onToggleFullScreen} icon={fullScreen ? <ExitFullscreenIcon /> : <FullscreenIcon />} />
       </span>
     </div>
   );
@@ -326,9 +325,9 @@ function ToolButton({
       // keep the selection in the editor when a toolbar button is pressed
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={clsx(btnClass, active && "bg-fg/[0.1] text-fg")}
+      className={clsx(btnClass, "text-lg", active && "bg-fg/[0.1] text-fg")}
     >
-      <Svg>{icon}</Svg>
+      {icon}
     </button>
   );
 }
@@ -372,9 +371,9 @@ function UrlPopover({
         aria-label={label}
         aria-pressed={active}
         onMouseDown={(e) => e.preventDefault()}
-        className={clsx(btnClass, (active || open) && "bg-fg/[0.1] text-fg")}
+        className={clsx(btnClass, "text-lg", (active || open) && "bg-fg/[0.1] text-fg")}
       >
-        <Svg>{icon}</Svg>
+        {icon}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
@@ -426,30 +425,14 @@ function UrlPopover({
 
 const Divider = () => <span className="mx-1 h-5 w-px bg-line" aria-hidden />;
 
-function Svg({ children, className = "h-[18px] w-[18px]", fill = false }: { children: ReactNode; className?: string; fill?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill={fill ? "currentColor" : "none"}
-      stroke={fill ? "none" : "currentColor"}
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      {children}
-    </svg>
-  );
-}
 
 const BLOCK_GLYPHS: Record<keyof typeof BLOCK_LABELS, ReactNode> = {
-  paragraph: <span className="text-sm">¶</span>,
-  h1: <span className="text-[11px] font-bold">H1</span>,
-  h2: <span className="text-[11px] font-bold">H2</span>,
-  h3: <span className="text-[11px] font-bold">H3</span>,
-  quote: <span className="text-base leading-none">❝</span>,
-  code: <span className="font-mono text-[11px]">{"{ }"}</span>,
+  paragraph: <ParagraphIcon />,
+  h1: <Heading1Icon />,
+  h2: <Heading2Icon />,
+  h3: <Heading3Icon />,
+  quote: <QuoteIcon />,
+  code: <CodeBlockIcon />,
 };
 const BLOCK_PREVIEW: Record<keyof typeof BLOCK_LABELS, string> = {
   paragraph: "",
@@ -458,45 +441,4 @@ const BLOCK_PREVIEW: Record<keyof typeof BLOCK_LABELS, string> = {
   h3: "font-semibold",
   quote: "italic",
   code: "font-mono text-[13px]",
-};
-
-const I = {
-  bold: <path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z" strokeWidth={2.25} />,
-  italic: <path d="M18 5h-8M14 19H6M14.5 5 9.5 19" />,
-  strike: <path d="M16 6.5C15.3 5.6 14 5 12.3 5 9.9 5 8 6.2 8 8.2c0 1.4.9 2.3 2.6 2.8M4 12h16M15.6 13.5c.3.5.4 1 .4 1.5 0 2.3-2 4-4.6 4-2 0-3.6-.8-4.4-2" />,
-  code: <path d="m16 17 5-5-5-5M8 7l-5 5 5 5" />,
-  caret: <path d="M7 10l5 5 5-5z" />,
-  listOrdered: <path d="M10 6h10M10 12h10M10 18h10M4 5h1v4M4 9h2M6 19H4c0-1 2-1.6 2-2.8 0-.7-.5-1.2-1.2-1.2-.4 0-.8.2-1 .5" />,
-  listBullet: (
-    <>
-      <path d="M9 6h11M9 12h11M9 18h11" />
-      <circle cx="4.5" cy="6" r="1" fill="currentColor" />
-      <circle cx="4.5" cy="12" r="1" fill="currentColor" />
-      <circle cx="4.5" cy="18" r="1" fill="currentColor" />
-    </>
-  ),
-  listCheck: <path d="m3 7 2 2 3.5-3.5M3 17l2 2 3.5-3.5M12 7h8M12 12h8M12 17h8" />,
-  outdent: <path d="M4 6h16M11 10h9M11 14h9M4 18h16M8 9.5 5.5 12 8 14.5" />,
-  indent: <path d="M4 6h16M11 10h9M11 14h9M4 18h16M4.5 9.5 7 12l-2.5 2.5" />,
-  link: <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />,
-  image: (
-    <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <circle cx="9" cy="10" r="1.75" />
-      <path d="m21 16-4.5-4.5L7 20" />
-    </>
-  ),
-  table: (
-    <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M3 10h18M3 15h18M9 4v16M15 4v16" />
-    </>
-  ),
-  divider: <path d="M4 12h16M8 7l4-3 4 3M8 17l4 3 4-3" />,
-  clear: <path d="M5 6V5h13v1M11.5 5 8.5 19M6.5 19h4M15 14l5 5M20 14l-5 5" />,
-  undo: <path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
-  redo: <path d="m15 14 5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />,
-  source: <path d="M9.5 8 5.5 12l4 4M14.5 8l4 4-4 4" />,
-  maximize: <path d="M15 4h5v5M9 20H4v-5M20 4l-6 6M4 20l6-6" />,
-  minimize: <path d="M4 14h6v6M20 10h-6V4M14 10l6-6M4 20l6-6" />,
 };

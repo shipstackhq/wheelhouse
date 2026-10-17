@@ -8,6 +8,7 @@ import { SuspendTeamForm } from "../components/suspend-team-form";
 import { useAdminTeam, useAdminTeams, useInvites } from "../lib/queries";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
+import { ArrowLeftIcon } from "../components/icons";
 
 const day = (d: string | null) => (d ? d.slice(0, 10) : "never");
 
@@ -62,7 +63,7 @@ export function AdminTeamPage() {
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
             <div>
-              <Link to="/admin/teams" className="text-sm text-muted hover:text-fg">← All teams</Link>
+              <Link to="/admin/teams" className="text-sm text-muted hover:text-fg"><ArrowLeftIcon /> All teams</Link>
               <h1 className="mt-2 text-xl font-semibold">
                 {t.name}
                 {t.suspendedAt && <span className="chip ml-3 bg-danger/15 align-middle text-danger">suspended</span>}

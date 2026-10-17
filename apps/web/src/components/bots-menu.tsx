@@ -6,6 +6,7 @@ import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { BotsList, type Bot } from "./bots-list";
 import { SessionRemoveButton } from "./session-remove-button";
+import { AgentIcon, ArrowRightIcon } from "./icons";
 
 export type { Bot } from "./bots-list";
 
@@ -26,7 +27,7 @@ export function BotsMenu({ projectKey, bots }: { projectKey: string; bots: Bot[]
           className={clsx("h-2 w-2 rounded-full", state === "queued" ? "bg-agent" : state === "synced" ? "bg-ok" : "bg-muted/50")}
           aria-hidden
         />
-        🤖 Bots
+        <AgentIcon /> Bots
         <span className={clsx("tabular-nums", state === "queued" ? "text-agent" : "text-muted")}>
           {state === "none" ? "0" : state === "queued" ? `${total} queued` : bots.length}
         </span>
@@ -57,7 +58,7 @@ export function BotsMenu({ projectKey, bots }: { projectKey: string; bots: Bot[]
           )}
           <div className="border-t border-line px-4 py-2.5 text-xs">
             <Link to="/agents" className="text-muted hover:text-fg">
-              {bots.length ? "Manage agents & API keys →" : "Create an API key →"}
+              {bots.length ? "Manage agents & API keys" : "Create an API key"} <ArrowRightIcon />
             </Link>
           </div>
         </Popover.Content>

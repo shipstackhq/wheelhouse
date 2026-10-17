@@ -2,6 +2,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import type { MapColumn as Column } from "@wheelhouse/api-client";
+import { ArrowDownIcon, ArrowRightIcon, ArrowUpIcon, CloseIcon } from "../../components/icons";
 
 /** Read-only column list for a table/view/enum, with clickable FK targets. */
 export function ColumnsTable(props: { columns: Column[]; isEnum: boolean; onTarget: (table: string) => void; highlight?: string | null }) {
@@ -20,7 +21,7 @@ export function ColumnsTable(props: { columns: Column[]; isEnum: boolean; onTarg
                 {c.note && <div className="mt-0.5 text-muted">{c.note}</div>}
                 {c.references && (
                   <button className="mt-0.5 font-mono text-accent hover:underline" onClick={() => props.onTarget(c.references!.split(".")[0])}>
-                    → {c.references}
+                    <ArrowRightIcon /> {c.references}
                     {c.onDelete ? <span className="text-muted"> · on delete {c.onDelete}</span> : null}
                   </button>
                 )}
@@ -70,9 +71,9 @@ export function ColumnsEditor(props: { initial: Column[]; isEnum: boolean; table
             {!props.isEnum && (
               <input className="input w-28 shrink-0 py-1 font-mono text-xs" placeholder="type" value={c.type} onChange={(e) => set(i, { type: e.target.value })} />
             )}
-            <button className="btn btn-ghost px-1 py-0.5 text-xs" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up">↑</button>
-            <button className="btn btn-ghost px-1 py-0.5 text-xs" onClick={() => move(i, 1)} disabled={i === cols.length - 1} aria-label="Move down">↓</button>
-            <button className="btn btn-ghost px-1 py-0.5 text-xs hover:text-danger" onClick={() => setCols(cols.filter((_, j) => j !== i))} aria-label="Remove column">✕</button>
+            <button className="btn btn-ghost px-1 py-0.5 text-xs" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move up"><ArrowUpIcon /></button>
+            <button className="btn btn-ghost px-1 py-0.5 text-xs" onClick={() => move(i, 1)} disabled={i === cols.length - 1} aria-label="Move down"><ArrowDownIcon /></button>
+            <button className="btn btn-ghost px-1 py-0.5 text-xs hover:text-danger" onClick={() => setCols(cols.filter((_, j) => j !== i))} aria-label="Remove column"><CloseIcon /></button>
           </div>
           {!props.isEnum && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">

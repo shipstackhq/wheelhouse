@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { AlertDialog, Dialog, Select as RSelect } from "radix-ui";
 import clsx from "clsx";
+import { ChevronDownIcon } from "./icons";
 
 // ───────── Select ─────────
 // Radix Select forbids empty-string item values, so "" is mapped to a sentinel.
@@ -41,7 +42,7 @@ export function Select(props: {
         <span className="min-w-0 truncate">
           <RSelect.Value placeholder={props.placeholder} />
         </span>
-        <RSelect.Icon className="text-muted">▾</RSelect.Icon>
+        <RSelect.Icon className="text-muted"><ChevronDownIcon /></RSelect.Icon>
       </RSelect.Trigger>
       <RSelect.Portal>
         <RSelect.Content

@@ -13,7 +13,7 @@ describe("the glossary", () => {
     open();
     const invoice = await card("Invoice");
     expect(within(invoice).getByText("A bill we send")).toBeTruthy();
-    expect(within(invoice).getByRole("link", { name: "✦ Billing" }).getAttribute("href")).toBe("/p/AA/map?node=c-bill");
+    expect(within(invoice).getByRole("link", { name: "Billing" }).getAttribute("href")).toBe("/p/AA/map?node=c-bill");
     const tenant = await card("Tenant");
     expect(within(tenant).queryByRole("link")).toBeNull();
   });

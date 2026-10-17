@@ -11,7 +11,7 @@ afterEach(() => localStorage.clear());
 const HOME = "/p/AA/docs";
 const DOC = `${HOME}/d-plan`;
 const open = (path = DOC, setup: (s: FakeServer) => unknown = () => {}) => renderApp(path, setup);
-const row = async (title: string) => screen.findByRole("button", { name: new RegExp(`^(⚠)?${title}$`) });
+const row = async (title: string) => screen.findByRole("button", { name: new RegExp(`^${title}$`) });
 /** The doc's own title (the page's h1; the text can have an h1 of its own too). */
 const heading = (title: string) => waitFor(() => expect(document.querySelector("h1.text-3xl")?.textContent).toBe(title));
 const url = (path: string) => `/api/app/projects/AA/${path}`;
@@ -41,7 +41,7 @@ describe("the docs home", () => {
     await user.click(await row("Phase 1"));
     await heading("Phase 1");
     expect(await screen.findByText("Phase one.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "← Docs" }).getAttribute("href")).toBe("/p/AA/docs");
+    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/p/AA/docs");
   });
 
   test("with no docs it says so, and offers to create one", async () => {
@@ -138,7 +138,7 @@ describe("reading a doc", () => {
     expect(within(content).getByText("soon").tagName).toBe("STRONG");
     expect(screen.getByText("By Ada Lovelace")).toBeTruthy();
     expect(screen.getByText("Up to date")).toBeTruthy();
-    expect(screen.getByText("📖 1 min read")).toBeTruthy();
+    expect(screen.getByText("1 min read")).toBeTruthy();
     expect(screen.getByText("5 words")).toBeTruthy();
     expect(screen.getByText("plan · v1")).toBeTruthy();
   });
@@ -244,7 +244,7 @@ describe("editing", () => {
   test("Edit shows the title and body; Save sends only what changed, with the version the doc was read at", async () => {
     const { server } = open(DOC, (s) => s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2 }) }));
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     const title = screen.getByLabelText("Title") as HTMLInputElement;
     expect(title.value).toBe("Plan");
     await user.click(screen.getByRole("button", { name: "Markdown" }));
@@ -260,7 +260,7 @@ describe("editing", () => {
   test("editing the text sends the body", async () => {
     const { server } = open(DOC, (s) => s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2 }) }));
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Markdown" }));
     await user.clear(bodyBox());
     await user.type(bodyBox(), "Shipped.");
@@ -272,7 +272,7 @@ describe("editing", () => {
   test("Save with nothing changed sends nothing", async () => {
     const { server } = open();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
     expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(0);
@@ -281,7 +281,7 @@ describe("editing", () => {
   test("Cancel leaves the doc as it was", async () => {
     const { server } = open();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.type(screen.getByLabelText("Title"), " changed");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     await heading("Plan");
@@ -301,7 +301,7 @@ describe("editing", () => {
       s.on(`PATCH ${url("docs/d-plan")}`, conflict);
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Markdown" }));
     await user.type(bodyBox(), " mine");
     served = doc({ version: 2, body: "Theirs" });
@@ -319,7 +319,7 @@ describe("attached files (anchors)", () => {
   test("in the editor: type a path and press Enter, remove one, and Save sends the list", async () => {
     const { server } = open(DOC, (s) => s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2 }) }));
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.type(screen.getByPlaceholderText("src/lib/x.ts"), "src/a.ts{Enter}src/b.ts{Enter}");
     expect(screen.getByRole("button", { name: "Remove anchor src/a.ts" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Remove anchor src/a.ts" }));
@@ -332,7 +332,7 @@ describe("attached files (anchors)", () => {
   test("Suggest offers paths from the text and the linked nodes; clicking one adds it", async () => {
     open(DOC, (s) => s.on(`GET ${url("docs/d-plan/anchor-suggestions")}`, { anchors: ["src/lib/service.ts", "apps/api/**"] }));
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(screen.getByRole("button", { name: "Suggest" }));
     await user.click(await screen.findByRole("button", { name: "+ src/lib/service.ts" }));
     expect(screen.getByRole("button", { name: "Remove anchor src/lib/service.ts" })).toBeTruthy();
@@ -346,7 +346,7 @@ describe("attached files (anchors)", () => {
       s.on(`GET ${url("repositories/r-gh/tree")}`, { files: ["README.md", "src/lib/a.ts", "src/lib/b.ts", "docs/guide.md"], truncated: false });
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(await screen.findByRole("button", { name: /Browse repo/ }));
     const dialog = await screen.findByRole("dialog", { name: "Browse repo" });
     expect(await within(dialog).findByText("README.md")).toBeTruthy();
@@ -360,7 +360,7 @@ describe("attached files (anchors)", () => {
 
   test("Browse repo is offered only when a GitHub repository is connected; a failure and an empty repository are said plainly", async () => {
     const { unmount } = open();
-    await userEvent.setup().click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Edit" }));
     expect(screen.queryByRole("button", { name: /Browse repo/ })).toBeNull();
     unmount();
     open(DOC, (s) => {
@@ -368,7 +368,7 @@ describe("attached files (anchors)", () => {
       s.on(`GET ${url("repositories/r-gh/tree")}`, apiError(400, "invalid", "GitHub is not set up on this server"));
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(await screen.findByRole("button", { name: /Browse repo/ }));
     expect(await screen.findByText("GitHub is not set up on this server")).toBeTruthy();
   });
@@ -382,7 +382,7 @@ describe("attached files (anchors)", () => {
       s.on(`GET ${url("repositories/r2/tree")}`, { files: ["api.txt"], truncated: false });
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "✎ Edit" }));
+    await user.click(await screen.findByRole("button", { name: "Edit" }));
     await user.click(await screen.findByRole("button", { name: /Browse repo/ }));
     const dialog = await screen.findByRole("dialog", { name: "Browse repo" });
     expect(await within(dialog).findByText("web.txt")).toBeTruthy();
@@ -447,7 +447,7 @@ describe("decision records", () => {
     const user = userEvent.setup();
     await createRecord(user);
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
-    expect(within(section).getByRole("link", { name: "View all decisions →" }).getAttribute("href")).toBe("/p/AA/decisions");
+    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/p/AA/decisions");
     await user.click(within(section).getByRole("button", { name: "+ Create ADR from this doc" }));
     await waitFor(() => expect(server.sent(`PUT ${url("decisions")}`)).toHaveLength(1));
     expect(server.sent(`PUT ${url("decisions")}`)[0].body).toEqual({
@@ -508,7 +508,7 @@ describe("moving, linking and deleting", () => {
       s.on(`PUT ${url("docs/d-plan/nodes/c-bill")}`, { ok: true });
     });
     const user = userEvent.setup();
-    expect(await screen.findByText("◇ system:API")).toBeTruthy();
+    expect(await screen.findByText("system:API")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Unlink API" }));
     await waitFor(() => expect(server.sent(`DELETE ${url("docs/d-plan/nodes/s-api")}`)).toHaveLength(1));
     const section = (await screen.findByText("Architecture", { selector: "span.label" })).closest("section") as HTMLElement;
