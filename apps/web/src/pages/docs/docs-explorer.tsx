@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -22,15 +22,19 @@ type TreeDoc = DocsIndex["docs"][number];
  * right. Version conflicts surface the way the ticket dialog does: a banner when the doc changed under you, and a refused save that
  * never overwrites a concurrent edit.
  */
-export function DocsExplorer({ projectKey, index }: { projectKey: string; index: DocsIndex }) {
+export function DocsExplorer({ projectKey, index, docId }: { projectKey: string; index: DocsIndex; docId?: string }) {
   const { nodes, decisions, members } = index;
   const tree = index.docs;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
-  const [selectedId, setSelectedId] = useState<string | null>(tree[0]?.id ?? null);
+  const selectedId = docId ?? null;
+  const docPath = (id: string) => `/p/${projectKey}/docs/${encodeURIComponent(id)}`;
   const detailQuery = useQuery({ ...docQuery(api, projectKey, selectedId ?? ""), enabled: !!selectedId });
   const detail: DocDetail | undefined = selectedId ? detailQuery.data : undefined;
-  const [editing, setEditing] = useState(false);
+  // The doc being edited, not a flag: moving to another doc (the sheet, the browser's back button) leaves edit mode by itself.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = selectedId !== null && editingId === selectedId;
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [bodyBase, setBodyBase] = useState(0);
@@ -63,11 +67,12 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
   const d = detail?.doc;
   const refresh = () => refreshAll(queryClient);
 
-  const selectDoc = useCallback((id: string | null) => {
+  const selectDoc = (id: string) => {
     setDocTemplateId(null); // the template is only known right after creating a doc in this session
     setError(null);
-    setSelectedId(id);
-  }, []);
+    setSheetOpen(false);
+    void navigate(docPath(id));
+  };
 
   const startEditing = (doc: NonNullable<typeof d>) => {
     setTitle(doc.title);
@@ -75,7 +80,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
     setBodyBase(doc.version);
     setAnchors(doc.anchors);
     setSuggestions([]);
-    setEditing(true);
+    setEditingId(doc.id);
   };
 
   // An empty doc goes straight into edit mode — there's nothing to preview, so showing the editor directly
@@ -104,8 +109,9 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
     setBusy(true);
     try {
       const created = await api.docs.create(projectKey, { title: t ? t.name : "Untitled doc", parent: parentId, template: templateId ?? undefined });
-      setSelectedId(created.id);
+      void navigate(docPath(created.id));
       setShowTemplatePicker(null);
+      setSheetOpen(false);
       setDocTemplateId(templateId);
       setError(null);
       startEditing(created); // still just an editable draft — nothing further is "saved" until Save is clicked
@@ -169,7 +175,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
       if (body !== d.body) patch.body = body;
       if (JSON.stringify(anchors) !== JSON.stringify(d.anchors)) patch.anchors = anchors;
       if (!Object.keys(patch).length) {
-        setEditing(false);
+        setEditingId(null);
         return true;
       }
       try {
@@ -294,76 +300,121 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
   // nesting, and still surfaces nested matches); with none, the nested tree renders.
   const filteredFlat = filterTerm ? tree.filter((t) => t.title.toLowerCase().includes(filterTerm)).sort((a, b) => a.title.localeCompare(b.title)) : null;
 
-  const docRow = (k: TreeDoc, depth: number) => (
+  /** One doc in the list. `home`: the roomier rows of the docs home screen, with the date it was last changed; otherwise the compact rows of the sheet. */
+  const docRow = (k: TreeDoc, depth: number, home: boolean) => (
     <li key={k.id} className="group/doc">
       <div className="flex items-center gap-0.5">
         <button
           onClick={() => selectDoc(k.id)}
           aria-current={selectedId === k.id ? "true" : undefined}
           className={clsx(
-            "flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-            selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg",
+            "flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 text-left transition-colors",
+            home ? "py-2.5 text-[15px] text-fg hover:bg-panel-2/70" : "py-1.5 text-sm",
+            !home && (selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg"),
           )}
           title={k.title}
         >
           {k.stale && <span className="text-warn" title="Possibly out of date">⚠</span>}
           <span className="truncate">{k.title}</span>
         </button>
+        {home && <span className="hidden shrink-0 px-2 text-xs text-muted sm:inline">Updated {new Date(k.updatedAt).toLocaleDateString()}</span>}
       </div>
-      {!filterTerm && renderNode(k.id, depth + 1)}
+      {!filterTerm && renderNode(k.id, depth + 1, home)}
     </li>
   );
 
-  const renderNode = (parentId: string | null, depth: number): React.ReactNode => {
+  const renderNode = (parentId: string | null, depth: number, home: boolean): React.ReactNode => {
     const kids = byParent.get(parentId) ?? [];
     if (!kids.length) return null;
-    return <ul className={depth === 0 ? "space-y-0.5" : "ml-3 space-y-0.5 border-l border-line pl-2"}>{kids.map((k) => docRow(k, depth))}</ul>;
+    return <ul className={depth === 0 ? "space-y-0.5" : "ml-3 space-y-0.5 border-l border-line pl-2"}>{kids.map((k) => docRow(k, depth, home))}</ul>;
   };
+
+  /** Search box plus the nested tree (or the flat list of matches while searching): the body of both the home screen and the sheet. */
+  const docList = (home: boolean) => (
+    <>
+      {tree.length > 0 && (
+        <div className="relative mb-3">
+          <input
+            type="search"
+            className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
+            placeholder="Search docs…"
+            aria-label="Filter docs by title"
+            value={treeFilter}
+            onChange={(e) => setTreeFilter(e.target.value)}
+          />
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted">⌕</span>
+        </div>
+      )}
+      {tree.length === 0 ? (
+        <p className="px-2 py-4 text-sm text-muted">No docs yet. Create one to get started.</p>
+      ) : filteredFlat ? (
+        filteredFlat.length === 0 ? (
+          <p className="px-2 py-4 text-sm text-muted">No docs match &quot;{treeFilter}&quot;.</p>
+        ) : (
+          <ul className="space-y-0.5">{filteredFlat.map((k) => docRow(k, 0, home))}</ul>
+        )
+      ) : (
+        renderNode(null, 0, home)
+      )}
+    </>
+  );
+
+  /** Parents of the open doc, outermost first, for the breadcrumb. */
+  const ancestors = (() => {
+    const chain: TreeDoc[] = [];
+    let cur = d ? tree.find((t) => t.id === d.parentId) : undefined;
+    while (cur && chain.length < 12) {
+      chain.unshift(cur);
+      cur = tree.find((t) => t.id === cur!.parentId);
+    }
+    return chain;
+  })();
 
   const authorName = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? "Agent" : (members.find((m) => m.id === id)?.name ?? "Someone"));
   const authorInitial = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? "🤖" : (authorName(kind, id)[0] ?? "?").toUpperCase());
   const loadError = selectedId && detailQuery.isError ? (detailQuery.error instanceof ApiError ? detailQuery.error.message : "Could not load this doc.") : null;
 
   return (
-    <div className="confluence-docs grid h-full grid-cols-[18rem_1fr] overflow-hidden bg-bg">
-      <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-line/70 bg-panel/40 px-3 py-4">
-        <div className="mb-3 flex items-center justify-between px-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Docs</span>
-          <button className="rounded px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
-            + Create
-          </button>
-        </div>
-        {tree.length > 0 && (
-          <div className="relative mb-2 px-0.5">
-            <input
-              type="search"
-              className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-xs focus:!border-accent"
-              placeholder="Search docs…"
-              aria-label="Filter docs by title"
-              value={treeFilter}
-              onChange={(e) => setTreeFilter(e.target.value)}
-            />
-            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-base text-muted">⌕</span>
+    <div className="confluence-docs flex h-full flex-col overflow-hidden bg-bg">
+      {selectedId === null ? (
+        <section className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-8 lg:py-12">
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">Docs</h1>
+              <button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
+                + Create
+              </button>
+            </div>
+            {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+            {docList(true)}
           </div>
-        )}
-        {tree.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-muted">No docs yet. Create one to get started.</p>
-        ) : filteredFlat ? (
-          filteredFlat.length === 0 ? (
-            <p className="px-2 py-4 text-sm text-muted">No docs match &quot;{treeFilter}&quot;.</p>
-          ) : (
-            <ul className="space-y-0.5">{filteredFlat.map((k) => docRow(k, 0))}</ul>
-          )
-        ) : (
-          renderNode(null, 0)
-        )}
-      </aside>
+        </section>
+      ) : (
+        <>
+          <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">
+            <Link to={`/p/${projectKey}/docs`} className="shrink-0 text-muted hover:text-fg">
+              ← Docs
+            </Link>
+            {ancestors.map((a) => (
+              <span key={a.id} className="flex min-w-0 items-center gap-2 text-muted">
+                <span aria-hidden>/</span>
+                <Link to={docPath(a.id)} className="truncate hover:text-fg">
+                  {a.title}
+                </Link>
+              </span>
+            ))}
+            <button type="button" aria-label="Search docs" className="btn btn-ghost ml-auto flex shrink-0 items-center gap-1.5 px-2 py-1 text-xs" onClick={() => setSheetOpen(true)}>
+              <span aria-hidden className="text-sm">⌕</span>
+              Search
+            </button>
+          </nav>
 
-      <section className="min-h-0 overflow-y-auto">
-        {!d ? (
-          <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">{error ?? loadError ?? (selectedId && detailQuery.isPending ? "Loading…" : "Select a doc, or create one.")}</p>
-        ) : (
-          <div className="mx-auto w-full max-w-5xl space-y-5 px-4 py-8 sm:px-8 lg:px-12 lg:py-10">
+          <section className="min-h-0 flex-1 overflow-y-auto">
+            {!d ? (
+              <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">{error ?? loadError ?? (detailQuery.isPending ? "Loading…" : "Select a doc, or create one.")}</p>
+            ) : (
+              <div className={clsx("mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-8 lg:px-12 lg:py-10", !editing && "lg:grid-cols-[minmax(0,1fr)_17rem]")}>
+                <div className="min-w-0 space-y-5">
             {error && <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
             {d.stale && (
@@ -397,8 +448,8 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     setBusy(true);
                     try {
                       await api.docs.delete(projectKey, d.id);
-                      setSelectedId(null);
-                      setEditing(false);
+                      setEditingId(null);
+                      void navigate(`/p/${projectKey}/docs`);
                       await refresh();
                     } catch (e) {
                       setError(describeFailure(e));
@@ -504,12 +555,12 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     className="btn btn-primary"
                     disabled={busy}
                     onClick={async () => {
-                      if (await save()) setEditing(false);
+                      if (await save()) setEditingId(null);
                     }}
                   >
                     Save
                   </button>
-                  <button className="btn" onClick={() => setEditing(false)}>
+                  <button className="btn" onClick={() => setEditingId(null)}>
                     Cancel
                   </button>
                 </div>
@@ -522,8 +573,9 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
               </div>
             ) : null}
 
-            {!editing && (
-              <div className="space-y-4 rounded-lg border border-line/70 bg-panel/30 p-4">
+                </div>
+                {!editing && (
+                  <aside aria-label="About this doc" className="space-y-4 self-start rounded-lg border border-line/70 bg-panel/30 p-4 lg:sticky lg:top-6">
                 {actionItems.length > 0 && (
                   <section>
                     <span className="label">Action items</span>
@@ -642,11 +694,36 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     )}
                   </div>
                 </section>
+              </aside>
+                )}
               </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
+        </>
+      )}
+
+      <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className="fixed inset-y-0 left-0 z-50 flex w-[min(88vw,22rem)] flex-col border-r border-line bg-panel p-4 text-fg shadow-2xl"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <Dialog.Title className="text-xs font-semibold uppercase tracking-wide text-muted">Docs</Dialog.Title>
+              <div className="flex items-center gap-1">
+                <button className="rounded px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
+                  + Create
+                </button>
+                <Dialog.Close className="rounded px-2 py-1 text-muted hover:bg-panel-2 hover:text-fg" aria-label="Close">
+                  ✕
+                </Dialog.Close>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">{docList(false)}</div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Dialog.Root
         open={showBrowseRepo}
