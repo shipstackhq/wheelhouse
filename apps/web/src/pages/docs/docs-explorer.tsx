@@ -443,7 +443,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
             {!d ? (
               <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">{error ?? loadError ?? (detailQuery.isPending ? "Loading…" : "Select a doc, or create one.")}</p>
             ) : (
-              <div className={clsx("mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-8 lg:px-12 lg:py-10", !editing && "lg:grid-cols-[minmax(0,1fr)_17rem]")}>
+              <div className={clsx("mx-auto grid w-full max-w-6xl gap-8 px-4 py-8 sm:px-8 lg:px-12 lg:py-10", !editing && "md:grid-cols-[minmax(0,1fr)_15rem] lg:grid-cols-[minmax(0,1fr)_17rem]")}>
                 <div className="min-w-0 space-y-5">
             {error && <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -727,7 +727,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                   )}
                 </div>
                 {!editing && (
-                  <aside aria-label="About this doc" className="space-y-5 self-start text-sm lg:sticky lg:top-6">
+                  <aside aria-label="About this doc" className="space-y-5 self-start text-sm md:sticky md:top-6">
                     <section>
                       <span className="label">Owner</span>
                       <PersonRow person={detail!.owner} />
