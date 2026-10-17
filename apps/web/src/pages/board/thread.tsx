@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/core/lib/time";
 import { Avatar } from "../../components/profile-menu";
+import { AgentIcon, MoreIcon } from "../../components/icons";
 
 export type ThreadComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date | string };
 
@@ -42,7 +43,7 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
             <div className={clsx("min-w-0 flex-1", !last && "pb-2.5")}>
               <div className="flex flex-wrap items-center gap-x-2 text-xs leading-none">
                 <span className={clsx("font-medium", agent ? "text-agent" : "text-muted")}>{c.authorName}</span>
-                {agent && <span className="chip bg-agent/15 text-[10px] text-agent">🤖 agent</span>}
+                {agent && <span className="chip bg-agent/15 text-[10px] text-agent"><AgentIcon /> agent</span>}
                 <span className="text-muted/70" title={new Date(c.createdAt).toLocaleString()}>
                   {timeAgo(c.createdAt)}
                 </span>
@@ -67,7 +68,7 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
             setExpanded(true);
           }}
         >
-          <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-line">⋯</span>
+          <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-line"><MoreIcon /></span>
           Show {hidden} earlier {hidden === 1 ? "message" : "messages"}
         </button>
       )}

@@ -1,6 +1,7 @@
 import { timeAgo } from "@wheelhouse/core/lib/time";
 import { List } from "./list";
 import { SubmitButton } from "./submit-button";
+import { AgentIcon } from "./icons";
 
 /** What the keys lists need. Dates are ISO strings so the revoked list can cross into a client component. */
 export type KeyRow = { id: string; name: string; prefix: string; lastUsedAt: string | null; revokedAt: string | null; canWriteDocs?: boolean };
@@ -33,7 +34,7 @@ export function ActiveKeys({
     <List inset="card" className="mt-5 text-sm">
       {keys.map((k) => (
         <li key={k.id} className="flex items-center gap-3">
-          <span className="text-agent">🤖 {k.name}</span>
+          <span className="text-agent"><AgentIcon /> {k.name}</span>
           <code className="font-mono text-xs text-muted">{k.prefix}…</code>
           {setDocsWrite && (
             <label className="ml-3 flex items-center gap-1.5 text-xs text-muted" title='Lets this key create/edit/delete docs via upsert_doc and delete_doc. Off by default (read-only).'>

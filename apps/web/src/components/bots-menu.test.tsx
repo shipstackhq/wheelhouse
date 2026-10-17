@@ -14,7 +14,7 @@ describe("the Bots menu in the project header", () => {
     expect(within(t).getByText("0")).toBeTruthy();
     await userEvent.setup().click(t);
     expect(await screen.findByText("No agents connected yet.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Create an API key →" }).getAttribute("href")).toBe("/agents");
+    expect(screen.getByRole("link", { name: "Create an API key" }).getAttribute("href")).toBe("/agents");
   });
 
   test("with a queue it shows the total, and in the menu who is behind", async () => {
@@ -27,7 +27,7 @@ describe("the Bots menu in the project header", () => {
     const list = screen.getByText("Ada's agent").closest("li") as HTMLElement;
     expect(within(list).getByText("3 queued")).toBeTruthy();
     expect((screen.getByText("CI bot").closest("li") as HTMLElement).textContent).toContain("in sync");
-    expect(screen.getByRole("link", { name: "Manage agents & API keys →" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Manage agents & API keys" })).toBeTruthy();
   });
 
   test("when everyone is caught up it says all in sync", async () => {

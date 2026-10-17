@@ -28,13 +28,13 @@ describe("the decisions page", () => {
     expect(within(two).getByText("decision")).toBeTruthy();
     expect(within(two).getByText("Drop GraphQL").className).toContain("line-through");
     expect(within(two).getByText("rejected")).toBeTruthy();
-    expect(two.textContent).toContain("🤖 Claude");
+    expect(two.textContent).toContain("Claude");
   });
 
   test("the nodes a decision applies to link to the map", async () => {
     open();
     const one = await adr(1);
-    const link = within(one).getByRole("link", { name: /◇ API/ });
+    const link = within(one).getByRole("link", { name: /API/ });
     expect(link.getAttribute("href")).toBe("/p/AA/map?node=s-api");
     expect(link.textContent).toContain("system");
   });
@@ -150,7 +150,7 @@ describe("the decisions page", () => {
       expect(within(dialog).queryByText("API")).toBeNull();
       await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(within(await adr(1)).getByRole("link", { name: /◇ API/ })).toBeTruthy(); // nothing was saved
+      expect(within(await adr(1)).getByRole("link", { name: /API/ })).toBeTruthy(); // nothing was saved
     });
 
     test("a decision changed by an agent shows over the live stream", async () => {

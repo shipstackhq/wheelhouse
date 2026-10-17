@@ -27,7 +27,7 @@ test("an event is two lines: project and what happened, then who and when", () =
 
 test("an agent is marked with the robot, and a long name sits on the second line, truncated rather than squeezing the summary", () => {
   const html = renderToStaticMarkup(<ActivityRow e={ev({ actorKind: "agent", actorName: "Claude Atharva's Macbook Pro" })} />);
-  assert.equal(visible(html), "|WH|moved WH-47 from In Progress → Review|🤖 Claude Atharva's Macbook Pro · just now|");
+  assert.equal(visible(html), "|WH|moved WH-47 from In Progress → Review| Claude Atharva's Macbook Pro · just now|");
   assert.ok(html.includes("truncate"));
 });
 

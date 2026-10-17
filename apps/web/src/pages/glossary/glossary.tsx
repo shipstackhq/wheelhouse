@@ -6,6 +6,7 @@ import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
+import { TermIcon } from "../../components/icons";
 
 export function Glossary(props: { projectKey: string; terms: Term[]; nodes: { id: string; name: string }[] }) {
   const { api, queryClient } = useServices();
@@ -87,7 +88,7 @@ export function Glossary(props: { projectKey: string; terms: Term[]; nodes: { id
                     <span className="font-semibold">{t.term}</span>
                     {t.nodeId && nodeName.has(t.nodeId) && (
                       <Link to={`/p/${props.projectKey}/map?node=${t.nodeId}`} className="chip bg-accent/10 text-accent hover:bg-accent/20">
-                        ✦ {nodeName.get(t.nodeId)}
+                        <TermIcon /> {nodeName.get(t.nodeId)}
                       </Link>
                     )}
                   </div>

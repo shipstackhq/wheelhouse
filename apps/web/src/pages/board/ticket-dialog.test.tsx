@@ -62,7 +62,7 @@ describe("opening a ticket", () => {
     expect((within(d).getByRole("textbox", { name: "Title" }) as HTMLTextAreaElement).value).toBe("Build the board");
     expect(within(d).getByText("bold").tagName).toBe("STRONG");
     expect(within(d).getByText("CI bot")).toBeTruthy();
-    expect(within(d).getByText("🤖 agent")).toBeTruthy();
+    expect(within(d).getByText("agent")).toBeTruthy();
     expect(within(d).getByText("Discussion")).toBeTruthy();
     expect(within(d).getByText(/created AA-2/)).toBeTruthy();
     expect(within(d).getByText("Status")).toBeTruthy();
@@ -71,7 +71,7 @@ describe("opening a ticket", () => {
 
   test("an agent-made ticket says so", async () => {
     const { d } = await open(() => {}, "/p/AA?t=AA-3");
-    expect(within(d).getByText("🤖 created by agent")).toBeTruthy();
+    expect(within(d).getByText("created by agent")).toBeTruthy();
   });
 
   test("a ticket that cannot be loaded says why instead of staying blank", async () => {
@@ -274,7 +274,7 @@ describe("the architecture links", () => {
       s.on("PUT /api/app/tickets/AA-2/nodes/n-board", { ok: true });
     });
     const user = userEvent.setup();
-    const link = within(d).getByRole("link", { name: "◇ system: API" });
+    const link = within(d).getByRole("link", { name: "system: API" });
     expect(link.getAttribute("href")).toBe("/p/AA/map?node=n-api");
     await user.click(within(d).getByRole("button", { name: "Unlink API" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/tickets/AA-2/nodes/n-api")).toHaveLength(1));

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { Logo } from "./logo";
 import { NavLink } from "./nav-link";
+import { CloseIcon, MenuIcon } from "./icons";
 
 type ProjectItem = { key: string; name: string };
 
@@ -134,7 +135,7 @@ export function Sidebar({
         onClick={() => setOpen(true)}
         className="fixed left-2 top-2 z-30 rounded-md border border-line bg-panel px-2 py-1 text-sm md:hidden"
       >
-        ☰
+        <MenuIcon className="text-lg" />
       </button>
       {open && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setOpen(false)} />}
       <aside
@@ -148,7 +149,7 @@ export function Sidebar({
             <Logo className="text-sm" compact />
           </Link>
           <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="text-muted md:hidden">
-            ✕
+            <CloseIcon className="text-lg" />
           </button>
         </div>
         <div className="px-4 pb-2 text-xs text-muted">{teamName}</div>

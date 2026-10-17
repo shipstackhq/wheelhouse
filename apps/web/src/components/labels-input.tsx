@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { applyKey, applyText, formatLabels, parseLabels, settle } from "../lib/labels";
+import { CloseIcon } from "./icons";
 
 const SAVE_DELAY_MS = 600;
 
@@ -94,7 +95,7 @@ export function LabelsInput({
               change({ labels: state.labels.filter((x) => x !== l), text: state.text });
             }}
           >
-            ×
+            <CloseIcon />
           </button>
         </span>
       ))}

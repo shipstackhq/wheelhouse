@@ -17,6 +17,7 @@ import { useServices } from "../../lib/services";
 import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/ticket-nav";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite } from "./shared";
 import { DiscussionThread } from "./thread";
+import { AgentIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, NodeIcon } from "../../components/icons";
 
 /**
  * A ticket opens in a large dialog: description and discussion on the left, properties and history on the right (stacked on
@@ -179,24 +180,24 @@ export function TicketDialog(props: {
             <div className="flex min-w-0 items-center gap-2 text-xs text-muted">
               <span className="font-mono">{t?.ref ?? ticketRef}</span>
               {t && <span>v{t.version}</span>}
-              {t?.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent">🤖 created by agent</span>}
+              {t?.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent"><AgentIcon /> created by agent</span>}
             </div>
             <div className="flex items-center gap-1">
               {nav.total > 1 && nav.index >= 0 && (
                 <div className="flex items-center gap-1 text-xs text-muted">
                   <button className="btn btn-ghost px-2 py-1" disabled={!nav.prev} onClick={() => go(nav.prev)} aria-label="Previous ticket in this column" title="Previous (←)">
-                    ‹
+                    <ChevronLeftIcon />
                   </button>
                   <span className="tabular-nums" aria-live="polite">
                     {nav.index + 1} / {nav.total}
                   </span>
                   <button className="btn btn-ghost px-2 py-1" disabled={!nav.next} onClick={() => go(nav.next)} aria-label="Next ticket in this column" title="Next (→)">
-                    ›
+                    <ChevronRightIcon />
                   </button>
                 </div>
               )}
               <button className="btn btn-ghost px-2 py-1" onClick={() => void requestClose()} aria-label="Close ticket">
-                ✕
+                <CloseIcon />
               </button>
             </div>
           </header>
@@ -347,10 +348,10 @@ export function TicketDialog(props: {
                     {data!.nodes.map((n) => (
                       <span key={n.id} className="chip gap-1 bg-accent/10 py-1 text-accent">
                         <Link className="hover:underline" to={`/p/${props.projectKey}/map?node=${n.id}`}>
-                          ◇ {nodeLabel(nodes.find((x) => x.id === n.id) ?? { ...n, layer: "" })}
+                          <NodeIcon /> {nodeLabel(nodes.find((x) => x.id === n.id) ?? { ...n, layer: "" })}
                         </Link>
                         <button className="text-accent/60 hover:text-accent" aria-label={`Unlink ${n.name}`} onClick={() => void mutate(() => api.tickets.unlink(t.ref, n.id))}>
-                          ✕
+                          <CloseIcon />
                         </button>
                       </span>
                     ))}

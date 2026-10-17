@@ -66,6 +66,7 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "activity", Component: ActivityPage },
                 { path: "map", Component: MapPage },
                 { path: "docs", Component: DocsPage },
+                { path: "docs/:docId", Component: DocsPage },
                 { path: "decisions", Component: DecisionsPage },
                 { path: "glossary", Component: GlossaryPage },
                 { path: "repos", Component: ReposPage },

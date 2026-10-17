@@ -47,6 +47,7 @@ import { NodePanel } from "./node-panel";
 import { FlowEditor, type FlowDraft } from "./flow-editor";
 import { dagreLayout, treeLayout, elkLayout, violatesLeftToRight, breakCycles, type Direction } from "../../lib/map-layout";
 import { collapseKey, seenKey, loadCollapsed, saveCollapsed, remapCollapsedEdges } from "../../lib/map-collapse";
+import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, AskIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, ExpandIcon, MapIcon, PlayIcon, TicketIcon, TidyIcon, WarningIcon } from "../../components/icons";
 
 export type Graph = GraphView;
 export type GNode = MapNode;
@@ -90,7 +91,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
         : "";
   const stale = (
     <>
-      {n.stale && <span className="chip bg-warn/15 text-[9px] text-warn" title={n.staleReason ?? "Code changed"}>⚠ stale</span>}
+      {n.stale && <span className="chip bg-warn/15 text-[9px] text-warn" title={n.staleReason ?? "Code changed"}><WarningIcon /> stale</span>}
       {data.flux && <FluxBadge flux={data.flux} />}
     </>
   );
@@ -119,18 +120,18 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
             {n.summary && <div className="truncate text-[11px] text-muted">{n.summary}</div>}
           </div>
           {data.collapsed && (data.hiddenCount ?? 0) > 0 && (
-            <span className="chip bg-bg text-muted" title={`${data.hiddenCount} hidden module(s) — click ▸ to expand`}>
+            <span className="chip bg-bg text-muted" title={`${data.hiddenCount} hidden module(s) — use the arrow to expand`}>
               +{data.hiddenCount} modules
             </span>
           )}
-          {tickets > 0 && <span className="chip bg-bg text-muted">{tickets} 🎫</span>}
+          {tickets > 0 && <span className="chip bg-bg text-muted">{tickets} <TicketIcon /></span>}
           {data.onToggleCollapse && (
             <button
               className="nodrag rounded px-1 text-[11px] text-muted hover:bg-panel-2 hover:text-fg"
               title={data.collapsed ? "Expand" : "Collapse"}
               onClick={(e) => (e.stopPropagation(), data.onToggleCollapse!(n.id))}
             >
-              {data.collapsed ? "▸" : "▾"}
+              {data.collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
             </button>
           )}
           <button
@@ -138,7 +139,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
             title="Drill in"
             onClick={(e) => (e.stopPropagation(), data.onFocus(n.id))}
           >
-            ⤢
+            <ExpandIcon />
           </button>
         </div>
         <Handle type="source" position={Position.Right} />
@@ -162,7 +163,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
       <div className="flex items-center gap-1.5">
         <span className="text-xs" style={{ color: k.color }}>{k.icon}</span>
         <span className={clsx("truncate text-[13px] font-medium", n.layer === "code" && "font-mono text-[12px]")}>{n.name}</span>
-        {tickets > 0 && <span className="ml-auto text-[10px] text-muted">{tickets}🎫</span>}
+        {tickets > 0 && <span className="ml-auto text-[10px] text-muted">{tickets}<TicketIcon /></span>}
       </div>
       {n.summary && <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{n.summary}</div>}
       <div className="mt-1 flex items-center gap-1.5">
@@ -196,7 +197,7 @@ const TableNode = memo(function TableNode({ data, selected }: NodeProps<Node<Nod
         <span className="text-xs" style={{ color: k.color }}>{k.icon}</span>
         <span className="truncate font-mono text-[13px] font-semibold">{n.name}</span>
         {n.kind !== "table" && <span className="chip bg-bg text-[9px] uppercase text-muted">{n.kind}</span>}
-        {n.stale && <span className="chip bg-warn/15 text-[9px] text-warn" title={n.staleReason ?? "Schema changed"}>⚠ stale</span>}
+        {n.stale && <span className="chip bg-warn/15 text-[9px] text-warn" title={n.staleReason ?? "Schema changed"}><WarningIcon /> stale</span>}
         {data.flux && <FluxBadge flux={data.flux} />}
       </div>
       <div className="py-1">
@@ -243,7 +244,7 @@ function FluxBadge({ flux }: { flux: NonNullable<NodeData["flux"]> }) {
       className="chip bg-agent/15 text-[9px] text-agent"
       title={`Being changed by ${flux.by}${flux.ticket ? ` (${flux.ticket})` : ""}; not landed yet${flux.drafts ? ` · ${flux.drafts} pending map update(s)` : ""}`}
     >
-      ✎ in flux
+      <EditIcon /> in flux
     </span>
   );
 }
@@ -1083,7 +1084,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
               <button className="text-muted hover:text-fg" onClick={() => setFocusId(null)}>All</button>
               {crumbs.map((c) => (
                 <span key={c.id} className="flex items-center gap-1">
-                  <span className="text-muted">›</span>
+                  <ChevronRightIcon className="text-muted" />
                   <button className={c.id === focusId ? "text-fg" : "text-muted hover:text-fg"} onClick={() => setFocusId(c.id)}>{c.name}</button>
                 </span>
               ))}
@@ -1091,11 +1092,11 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
           )}
           <button className="btn btn-primary py-1" onClick={() => addNode(focusId)}>+ Add</button>
           <button className={clsx("btn py-1", flowsOpen && "border-accent")} onClick={() => setFlowsOpen((o) => !o)}>
-            ▶ Flows <span className="text-muted">{graph.flows.length}</span>
+            <PlayIcon /> Flows <span className="text-muted">{graph.flows.length}</span>
           </button>
           {lens === "data" && counts.data > 1 && (
             <button className="btn py-1" onClick={tidyLayout} title="Arrange tables along their foreign keys">
-              ⇆ Tidy
+              <TidyIcon /> Tidy
             </button>
           )}
           {lens !== "data" && counts[lens] > 1 && (
@@ -1106,29 +1107,29 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
                 onClick={() => runAutoLayout(lens, layoutDir, false)}
                 title="Auto-arrange this layer"
               >
-                ⇆ Tidy
+                <TidyIcon /> Tidy
               </button>
               <button
                 className="btn px-1.5 py-1 text-[11px]"
                 title={layoutDir === "LR" ? "Switch to top-to-bottom" : "Switch to left-to-right"}
                 onClick={() => setLayoutDir((d) => (d === "LR" ? "TB" : "LR"))}
               >
-                {layoutDir === "LR" ? "→" : "↓"}
+                {layoutDir === "LR" ? <ArrowRightIcon /> : <ArrowDownIcon />}
               </button>
             </div>
           )}
           {staleCounts[lens] > 0 && (
             <button className={clsx("btn py-1", staleOnly && "border-warn text-warn")} onClick={() => (setStaleOnly((s) => !s), setPlay(null))}>
-              ⚠ {staleCounts[lens]} stale
+              <WarningIcon /> {staleCounts[lens]} stale
             </button>
           )}
-          <button className="btn py-1" onClick={() => (setAskFocus(null), setAskOpen(true))}>✨ Ask</button>
+          <button className="btn py-1" onClick={() => (setAskFocus(null), setAskOpen(true))}><AskIcon /> Ask</button>
         </div>
 
         {banner && (
           <div className="absolute left-1/2 top-14 z-10 flex max-w-[90%] -translate-x-1/2 items-center gap-2 rounded-md border border-agent/40 bg-panel px-3 py-1.5 text-xs text-agent shadow">
             {banner}
-            <button className="text-muted hover:text-fg" onClick={() => (staleOnly ? setStaleOnly(false) : setSelectedId(null))}>✕</button>
+            <button className="text-muted hover:text-fg" aria-label="Clear" onClick={() => (staleOnly ? setStaleOnly(false) : setSelectedId(null))}><CloseIcon /></button>
           </div>
         )}
         {selectedEdge && (
@@ -1155,12 +1156,12 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
             <button className="font-medium text-accent hover:underline" onClick={() => (undo.revert(), setUndo(null))}>
               Undo <span className="text-xs text-muted">⌘Z</span>
             </button>
-            <button className="text-muted hover:text-fg" onClick={() => setUndo(null)} aria-label="Dismiss">✕</button>
+            <button className="text-muted hover:text-fg" onClick={() => setUndo(null)} aria-label="Dismiss"><CloseIcon /></button>
           </div>
         )}
         {error && (
           <div className="absolute right-3 top-14 z-10 flex items-center gap-2 rounded-md border border-danger/40 bg-panel px-3 py-1.5 text-sm text-danger">
-            {error} <button onClick={() => setError(null)}>✕</button>
+            {error} <button aria-label="Dismiss" onClick={() => setError(null)}><CloseIcon /></button>
           </div>
         )}
 
@@ -1304,7 +1305,7 @@ function EdgeBar(props: { from: string; to: string; label: string; detail?: stri
   return (
     <div className="absolute bottom-4 left-1/2 z-20 flex w-[min(92%,520px)] -translate-x-1/2 items-center gap-2 rounded-md border border-accent/40 bg-panel px-3 py-2 text-sm shadow-xl">
       <span className="shrink-0 truncate font-medium">
-        {props.from} <span className="text-muted">→</span> {props.to}
+        {props.from} <ArrowRightIcon className="text-muted" /> {props.to}
       </span>
       {props.detail !== undefined ? (
         <span className="min-w-0 flex-1 truncate text-xs text-muted">{props.detail || "foreign key"}</span>
@@ -1321,7 +1322,7 @@ function EdgeBar(props: { from: string; to: string; label: string; detail?: stri
       <button className="btn btn-danger shrink-0 py-1" onClick={props.onDelete} title="Delete connection (Backspace)">
         Delete
       </button>
-      <button className="shrink-0 text-muted hover:text-fg" onClick={props.onClose} aria-label="Close">✕</button>
+      <button className="shrink-0 text-muted hover:text-fg" onClick={props.onClose} aria-label="Close"><CloseIcon /></button>
     </div>
   );
 }
@@ -1340,7 +1341,7 @@ function FlowsSidebar(props: {
     <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <span className="text-sm font-medium">Flows</span>
-        <button className="btn btn-ghost px-2 py-0.5" onClick={props.onClose} aria-label="Close flows">✕</button>
+        <button className="btn btn-ghost px-2 py-0.5" onClick={props.onClose} aria-label="Close flows"><CloseIcon /></button>
       </div>
       <div className="flex-1 space-y-1 overflow-y-auto p-2 text-sm">
         {props.graph.flows.length === 0 && (
@@ -1355,7 +1356,7 @@ function FlowsSidebar(props: {
             className={clsx("group rounded-md border px-2.5 py-2", props.activeId === f.id ? "border-accent bg-accent/5" : "border-transparent hover:bg-panel-2")}
           >
             <button className="flex w-full items-center gap-2 text-left" onClick={() => props.onPlay(f.id)} disabled={!f.steps.length}>
-              <span className="text-accent">▶</span>
+              <PlayIcon className="text-accent" />
               <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
               <span className="text-[11px] text-muted">{f.steps.length}</span>
             </button>
@@ -1399,11 +1400,11 @@ function FlowPlayer(props: {
   return (
     <div className="absolute bottom-4 left-1/2 z-10 w-[min(92%,560px)] -translate-x-1/2 rounded-lg border border-accent/40 bg-panel p-4 shadow-2xl">
       <div className="flex items-center gap-2 text-xs text-muted">
-        <span className="font-medium text-accent">▶ {flow.name}</span>
+        <span className="font-medium text-accent"><PlayIcon /> {flow.name}</span>
         <span>
           step {index + 1} of {flow.steps.length}
         </span>
-        <button className="ml-auto hover:text-fg" onClick={props.onClose} aria-label="Stop flow">✕</button>
+        <button className="ml-auto hover:text-fg" onClick={props.onClose} aria-label="Stop flow"><CloseIcon /></button>
       </div>
       <div className="mt-2 flex gap-1">
         {flow.steps.map((_, i) => (
@@ -1421,11 +1422,11 @@ function FlowPlayer(props: {
       </div>
       {s.detail && <Markdown className="md mt-2 text-sm" onLink={props.onLink}>{s.detail}</Markdown>}
       <div className="mt-3 flex justify-between">
-        <button className="btn py-1" disabled={index === 0} onClick={() => props.onStep(index - 1)}>← Back</button>
+        <button className="btn py-1" disabled={index === 0} onClick={() => props.onStep(index - 1)}><ArrowLeftIcon /> Back</button>
         {last ? (
           <button className="btn btn-primary py-1" onClick={props.onClose}>Done</button>
         ) : (
-          <button className="btn btn-primary py-1" onClick={() => props.onStep(index + 1)}>Next →</button>
+          <button className="btn btn-primary py-1" onClick={() => props.onStep(index + 1)}>Next <ArrowRightIcon /></button>
         )}
       </div>
     </div>
@@ -1438,7 +1439,7 @@ function EmptyMap({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex h-full items-center justify-center px-6">
       <div className="max-w-lg text-center">
-        <div className="text-4xl">🗺️</div>
+        <MapIcon className="mx-auto text-4xl text-muted" />
         <h2 className="mt-3 font-semibold">No knowledge map yet</h2>
         <p className="mt-2 text-sm text-muted">
           In Claude Code (with the Wheelhouse MCP server connected), run <span className="font-mono text-fg">/mcp__wheelhouse__map_codebase</span>. It

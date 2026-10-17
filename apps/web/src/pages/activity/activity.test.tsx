@@ -17,9 +17,9 @@ describe("the activity page", () => {
     );
     expect((await row("moved AA-2")).textContent).toContain("#9");
     const agent = await row("added a node");
-    expect(within(agent).getByText("🤖 CI bot")).toBeTruthy();
+    expect(within(agent).getByText("CI bot")).toBeTruthy();
     expect(within(agent).getByText("just now")).toBeTruthy();
-    for (const name of ["Everything", "🤖 Agents", "Team"]) expect(screen.getByRole("link", { name })).toBeTruthy();
+    for (const name of ["Everything", "Agents", "Team"]) expect(screen.getByRole("link", { name })).toBeTruthy();
   });
 
   test("with nothing yet it says so", async () => {
@@ -66,7 +66,7 @@ describe("the activity page", () => {
     const { server, router } = open();
     const user = userEvent.setup();
     await screen.findByText(/created AA-1/);
-    await user.click(screen.getByRole("link", { name: "🤖 Agents" }));
+    await user.click(screen.getByRole("link", { name: "Agents" }));
     await waitFor(() => expect(server.sent("GET /api/app/projects/AA/activity").some((c) => c.url.endsWith("?who=agent"))).toBe(true));
     expect(router.state.location.search).toBe("?who=agent");
     await user.click(screen.getByRole("link", { name: "Team" }));
@@ -77,7 +77,7 @@ describe("the activity page", () => {
 
   test("the current tab is marked, and an unknown ?who= means everyone", async () => {
     open(() => {}, "/p/AA/activity?who=agent");
-    expect((await screen.findByRole("link", { name: "🤖 Agents" })).classList.contains("bg-panel-2")).toBe(true);
+    expect((await screen.findByRole("link", { name: "Agents" })).classList.contains("bg-panel-2")).toBe(true);
     expect(screen.getByRole("link", { name: "Everything" }).classList.contains("bg-panel-2")).toBe(false);
   });
 

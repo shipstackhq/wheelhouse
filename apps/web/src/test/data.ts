@@ -344,6 +344,7 @@ export const doc = (over: Partial<Doc> = {}): Doc => ({
   stale: false,
   body: "# Plan\n\nWe ship **soon**.",
   anchors: [],
+  labels: [],
   staleReason: null,
   updatedByKind: "human",
   updatedById: "u1",
@@ -370,7 +371,13 @@ export const docsIndex = (docs: Doc[] = DOCS, over: Partial<DocsIndex> = {}): Do
   ...over,
 });
 
-export const docDetail = (d: Doc, nodes: DocDetail["nodes"] = []): DocDetail => ({ doc: d, nodes });
+export const docDetail = (d: Doc, nodes: DocDetail["nodes"] = [], people: Partial<Pick<DocDetail, "owner" | "contributors">> = {}): DocDetail => ({
+  doc: d,
+  nodes,
+  owner: { kind: "human", id: "u1", name: "Ada Lovelace" },
+  contributors: [],
+  ...people,
+});
 
 export const repo = (over: Partial<Repository> = {}): Repository => ({
   id: "r1",

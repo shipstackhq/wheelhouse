@@ -542,6 +542,8 @@ export const docs = pgTable(
     // Content hashes of anchored files when the doc was last confirmed accurate, and landed paths that now differ.
     describedHashes: jsonb("described_hashes").$type<Record<string, string>>().notNull().default({}),
     driftPaths: jsonb("drift_paths").$type<string[]>().notNull().default([]),
+    // Free-text tags (WH-103), like tickets.labels. Not part of the freshness rules: tagging a doc never marks it fresh.
+    labels: jsonb("labels").$type<string[]>().notNull().default([]),
   },
   (t) => [
     index("docs_project_idx").on(t.projectId),

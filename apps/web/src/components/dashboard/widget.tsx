@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { Link } from "react-router";
+import { TrendDownIcon, TrendFlatIcon, TrendUpIcon } from "../icons";
 
 /** Card frame every dashboard widget renders inside. */
 export function Widget(props: { title: string; subtitle?: string; action?: React.ReactNode; className?: string; children: React.ReactNode }) {
@@ -46,7 +47,7 @@ export function StatTile(props: {
       <div className="mt-1 text-2xl font-semibold">{props.value}</div>
       {d ? (
         <div className={clsx("mt-1 text-xs", good === null ? "text-muted" : good ? "text-ok" : "text-danger")}>
-          {d.value > 0 ? "▲" : d.value < 0 ? "▼" : "–"} {d.value > 0 ? "+" : ""}
+          {d.value > 0 ? <TrendUpIcon /> : d.value < 0 ? <TrendDownIcon /> : <TrendFlatIcon />} {d.value > 0 ? "+" : ""}
           {d.value} <span className="text-muted">vs {d.period}</span>
         </div>
       ) : (

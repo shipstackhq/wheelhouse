@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import clsx from "clsx";
 import type { ChecklistItem, ChecklistState } from "@wheelhouse/core/lib/setup-checklist";
+import { ArrowRightIcon, CheckIcon, PendingIcon } from "./icons";
 
 const ACTION_LABEL: Record<ChecklistItem["id"], string> = {
   repos: "Connect a repository",
@@ -26,7 +27,7 @@ export function SetupChecklist({ state }: { state: ChecklistState }) {
         onClick={() => setExpanded(true)}
         className="mb-4 flex w-full items-center gap-2 rounded-full border border-ok/30 bg-ok/10 px-4 py-1.5 text-left text-sm text-ok transition-colors hover:bg-ok/15"
       >
-        <span aria-hidden>✓</span>
+        <CheckIcon />
         <span className="font-medium">Setup complete</span>
         <span className="ml-auto text-xs text-ok/70">show details</span>
       </button>
@@ -72,14 +73,14 @@ export function SetupChecklist({ state }: { state: ChecklistState }) {
           >
             <div className="flex items-center gap-1.5">
               <span className={clsx("flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px]", item.done ? "bg-ok/20 text-ok" : "bg-panel-2 text-muted")} aria-hidden>
-                {item.done ? "✓" : "○"}
+                {item.done ? <CheckIcon /> : <PendingIcon />}
               </span>
               <span className={clsx("truncate", item.done ? "text-muted" : "font-medium")}>{item.label}</span>
             </div>
             <div className="text-xs leading-snug text-muted">{item.status}</div>
             {!item.done && (
               <Link to={item.href} className="mt-0.5 text-xs font-medium text-accent hover:underline">
-                {ACTION_LABEL[item.id]} →
+                {ACTION_LABEL[item.id]} <ArrowRightIcon />
               </Link>
             )}
           </li>

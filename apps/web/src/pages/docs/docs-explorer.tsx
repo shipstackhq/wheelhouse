@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
 import { Dialog } from "radix-ui";
-import { ApiError, type DocDetail, type DocsIndex, type DocTemplateId } from "@wheelhouse/api-client";
+import { ApiError, type DocDetail, type DocPerson, type DocsIndex, type DocTemplateId } from "@wheelhouse/api-client";
 import { DOC_TEMPLATES, extractActionItems } from "@wheelhouse/core/lib/doc-templates";
 import { DescriptionEditor } from "../../components/description-editor";
 import { Select, useDialogs } from "../../components/ui";
@@ -14,23 +14,40 @@ import { docQuery, useRepos } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { buildFileTree, containsMatch, readTime, sectionOf, sortedChildren, type FileTreeNode } from "./file-tree";
+import { AgentIcon, ArrowLeftIcon, ArrowRightIcon, BookIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, FileIcon, FolderIcon, NodeIcon, SearchIcon, WarningIcon } from "../../components/icons";
 
 type TreeDoc = DocsIndex["docs"][number];
+
+/** A person (or agent) with a round initial, for the owner and contributors. */
+function PersonRow({ person }: { person: DocPerson }) {
+  return (
+    <span className="flex items-center gap-2">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent" aria-hidden>
+        {person.kind === "agent" ? <AgentIcon /> : (person.name[0] ?? "?").toUpperCase()}
+      </span>
+      <span className="truncate">{person.name}</span>
+    </span>
+  );
+}
 
 /**
  * `/p/:key/docs`: a tree on the left (parent/child via `parentId`, same pattern as the map), a rich-text or Markdown editor on the
  * right. Version conflicts surface the way the ticket dialog does: a banner when the doc changed under you, and a refused save that
  * never overwrites a concurrent edit.
  */
-export function DocsExplorer({ projectKey, index }: { projectKey: string; index: DocsIndex }) {
+export function DocsExplorer({ projectKey, index, docId }: { projectKey: string; index: DocsIndex; docId?: string }) {
   const { nodes, decisions, members } = index;
   const tree = index.docs;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
-  const [selectedId, setSelectedId] = useState<string | null>(tree[0]?.id ?? null);
+  const selectedId = docId ?? null;
+  const docPath = (id: string) => `/p/${projectKey}/docs/${encodeURIComponent(id)}`;
   const detailQuery = useQuery({ ...docQuery(api, projectKey, selectedId ?? ""), enabled: !!selectedId });
   const detail: DocDetail | undefined = selectedId ? detailQuery.data : undefined;
-  const [editing, setEditing] = useState(false);
+  // The doc being edited, not a flag: moving to another doc (the sheet, the browser's back button) leaves edit mode by itself.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = selectedId !== null && editingId === selectedId;
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [bodyBase, setBodyBase] = useState(0);
@@ -45,6 +62,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
   const [showTemplatePicker, setShowTemplatePicker] = useState<{ parentId: string | null } | null>(null);
   const [actionItemBusy, setActionItemBusy] = useState<number | null>(null);
   const [treeFilter, setTreeFilter] = useState("");
+  const [newLabel, setNewLabel] = useState("");
   const [showBrowseRepo, setShowBrowseRepo] = useState(false);
   const [browseRepoId, setBrowseRepoId] = useState<string>("");
   const [browseFiles, setBrowseFiles] = useState<string[] | null>(null);
@@ -63,11 +81,12 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
   const d = detail?.doc;
   const refresh = () => refreshAll(queryClient);
 
-  const selectDoc = useCallback((id: string | null) => {
+  const selectDoc = (id: string) => {
     setDocTemplateId(null); // the template is only known right after creating a doc in this session
     setError(null);
-    setSelectedId(id);
-  }, []);
+    setSheetOpen(false);
+    void navigate(docPath(id));
+  };
 
   const startEditing = (doc: NonNullable<typeof d>) => {
     setTitle(doc.title);
@@ -75,7 +94,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
     setBodyBase(doc.version);
     setAnchors(doc.anchors);
     setSuggestions([]);
-    setEditing(true);
+    setEditingId(doc.id);
   };
 
   // An empty doc goes straight into edit mode — there's nothing to preview, so showing the editor directly
@@ -104,8 +123,9 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
     setBusy(true);
     try {
       const created = await api.docs.create(projectKey, { title: t ? t.name : "Untitled doc", parent: parentId, template: templateId ?? undefined });
-      setSelectedId(created.id);
+      void navigate(docPath(created.id));
       setShowTemplatePicker(null);
+      setSheetOpen(false);
       setDocTemplateId(templateId);
       setError(null);
       startEditing(created); // still just an editable draft — nothing further is "saved" until Save is clicked
@@ -169,7 +189,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
       if (body !== d.body) patch.body = body;
       if (JSON.stringify(anchors) !== JSON.stringify(d.anchors)) patch.anchors = anchors;
       if (!Object.keys(patch).length) {
-        setEditing(false);
+        setEditingId(null);
         return true;
       }
       try {
@@ -183,6 +203,25 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
       await refresh();
       return true;
     } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Labels save as soon as they change (no Save button), against the version that was read; a refusal is shown and the doc reloaded. */
+  const saveLabels = async (labels: string[]) => {
+    if (!d) return false;
+    setBusy(true);
+    try {
+      const saved = await api.docs.update(projectKey, d.id, { labels, version: d.version });
+      // Mid-edit, a label change is not someone else's edit: carry the editor's base version forward so Save is not refused.
+      if (editing && bodyBase === d.version) setBodyBase(saved.version);
+      setError(null);
+      return true;
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message || "Failed" : describeFailure(e));
+      return false;
+    } finally {
+      await refresh();
       setBusy(false);
     }
   };
@@ -244,7 +283,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
             title={child.path}
             onClick={() => addAnchorFromBrowse(child.path)}
           >
-            <span aria-hidden>{anchors.includes(child.path) ? "✓" : "📄"}</span>
+            {anchors.includes(child.path) ? <CheckIcon /> : <FileIcon />}
             <span className="truncate">{child.name}</span>
           </button>
         );
@@ -260,8 +299,8 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
             style={{ paddingLeft: `${depth * 1.1 + 0.5}rem` }}
             onClick={() => toggleDir(child.path)}
           >
-            <span aria-hidden className="w-3 shrink-0 text-[10px]">{expanded ? "▾" : "▸"}</span>
-            <span aria-hidden>📁</span>
+            {expanded ? <ChevronDownIcon /> : <ChevronRightIcon />}
+            <FolderIcon />
             <span className="truncate">{child.name}</span>
           </button>
           {expanded && renderFileTreeNode(child, depth + 1, filter)}
@@ -294,81 +333,126 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
   // nesting, and still surfaces nested matches); with none, the nested tree renders.
   const filteredFlat = filterTerm ? tree.filter((t) => t.title.toLowerCase().includes(filterTerm)).sort((a, b) => a.title.localeCompare(b.title)) : null;
 
-  const docRow = (k: TreeDoc, depth: number) => (
+  /** One doc in the list. `home`: the roomier rows of the docs home screen, with the date it was last changed; otherwise the compact rows of the sheet. */
+  const docRow = (k: TreeDoc, depth: number, home: boolean) => (
     <li key={k.id} className="group/doc">
       <div className="flex items-center gap-0.5">
         <button
           onClick={() => selectDoc(k.id)}
           aria-current={selectedId === k.id ? "true" : undefined}
           className={clsx(
-            "flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-            selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg",
+            "flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 text-left transition-colors",
+            home ? "py-2.5 text-[15px] text-fg hover:bg-panel-2/70" : "py-1.5 text-sm",
+            !home && (selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg"),
           )}
           title={k.title}
         >
-          {k.stale && <span className="text-warn" title="Possibly out of date">⚠</span>}
+          {k.stale && <span className="text-warn" title="Possibly out of date"><WarningIcon /></span>}
           <span className="truncate">{k.title}</span>
         </button>
+        {home && <span className="hidden shrink-0 px-2 text-xs text-muted sm:inline">Updated {new Date(k.updatedAt).toLocaleDateString()}</span>}
       </div>
-      {!filterTerm && renderNode(k.id, depth + 1)}
+      {!filterTerm && renderNode(k.id, depth + 1, home)}
     </li>
   );
 
-  const renderNode = (parentId: string | null, depth: number): React.ReactNode => {
+  const renderNode = (parentId: string | null, depth: number, home: boolean): React.ReactNode => {
     const kids = byParent.get(parentId) ?? [];
     if (!kids.length) return null;
-    return <ul className={depth === 0 ? "space-y-0.5" : "ml-3 space-y-0.5 border-l border-line pl-2"}>{kids.map((k) => docRow(k, depth))}</ul>;
+    return <ul className={depth === 0 ? "space-y-0.5" : "ml-3 space-y-0.5 border-l border-line pl-2"}>{kids.map((k) => docRow(k, depth, home))}</ul>;
   };
 
+  /** Search box plus the nested tree (or the flat list of matches while searching): the body of both the home screen and the sheet. */
+  const docList = (home: boolean) => (
+    <>
+      {tree.length > 0 && (
+        <div className="relative mb-3">
+          <input
+            type="search"
+            className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
+            placeholder="Search docs…"
+            aria-label="Filter docs by title"
+            value={treeFilter}
+            onChange={(e) => setTreeFilter(e.target.value)}
+          />
+          <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
+        </div>
+      )}
+      {tree.length === 0 ? (
+        <p className="px-2 py-4 text-sm text-muted">No docs yet. Create one to get started.</p>
+      ) : filteredFlat ? (
+        filteredFlat.length === 0 ? (
+          <p className="px-2 py-4 text-sm text-muted">No docs match &quot;{treeFilter}&quot;.</p>
+        ) : (
+          <ul className="space-y-0.5">{filteredFlat.map((k) => docRow(k, 0, home))}</ul>
+        )
+      ) : (
+        renderNode(null, 0, home)
+      )}
+    </>
+  );
+
+  /** Parents of the open doc, outermost first, for the breadcrumb. */
+  const ancestors = (() => {
+    const chain: TreeDoc[] = [];
+    let cur = d ? tree.find((t) => t.id === d.parentId) : undefined;
+    while (cur && chain.length < 12) {
+      chain.unshift(cur);
+      cur = tree.find((t) => t.id === cur!.parentId);
+    }
+    return chain;
+  })();
+
   const authorName = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? "Agent" : (members.find((m) => m.id === id)?.name ?? "Someone"));
-  const authorInitial = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? "🤖" : (authorName(kind, id)[0] ?? "?").toUpperCase());
+  const authorInitial = (kind: "human" | "agent", id: string | null) => (kind === "agent" ? <AgentIcon /> : (authorName(kind, id)[0] ?? "?").toUpperCase());
   const loadError = selectedId && detailQuery.isError ? (detailQuery.error instanceof ApiError ? detailQuery.error.message : "Could not load this doc.") : null;
 
   return (
-    <div className="confluence-docs grid h-full grid-cols-[18rem_1fr] overflow-hidden bg-bg">
-      <aside className="flex min-h-0 flex-col overflow-y-auto border-r border-line/70 bg-panel/40 px-3 py-4">
-        <div className="mb-3 flex items-center justify-between px-1">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted">Docs</span>
-          <button className="rounded px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
-            + Create
-          </button>
-        </div>
-        {tree.length > 0 && (
-          <div className="relative mb-2 px-0.5">
-            <input
-              type="search"
-              className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-xs focus:!border-accent"
-              placeholder="Search docs…"
-              aria-label="Filter docs by title"
-              value={treeFilter}
-              onChange={(e) => setTreeFilter(e.target.value)}
-            />
-            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-base text-muted">⌕</span>
+    <div className="confluence-docs flex h-full flex-col overflow-hidden bg-bg">
+      {selectedId === null ? (
+        <section className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-8 lg:py-12">
+            <div className="mb-6 flex items-center justify-between gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">Docs</h1>
+              <button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
+                + Create
+              </button>
+            </div>
+            {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
+            {docList(true)}
           </div>
-        )}
-        {tree.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-muted">No docs yet. Create one to get started.</p>
-        ) : filteredFlat ? (
-          filteredFlat.length === 0 ? (
-            <p className="px-2 py-4 text-sm text-muted">No docs match &quot;{treeFilter}&quot;.</p>
-          ) : (
-            <ul className="space-y-0.5">{filteredFlat.map((k) => docRow(k, 0))}</ul>
-          )
-        ) : (
-          renderNode(null, 0)
-        )}
-      </aside>
+        </section>
+      ) : (
+        <>
+          <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">
+            <Link to={`/p/${projectKey}/docs`} className="shrink-0 text-muted hover:text-fg">
+              <ArrowLeftIcon /> Docs
+            </Link>
+            {ancestors.map((a) => (
+              <span key={a.id} className="flex min-w-0 items-center gap-2 text-muted">
+                <span aria-hidden>/</span>
+                <Link to={docPath(a.id)} className="truncate hover:text-fg">
+                  {a.title}
+                </Link>
+              </span>
+            ))}
+            <button type="button" aria-label="Search docs" className="btn btn-ghost ml-auto flex shrink-0 items-center gap-1.5 px-2 py-1 text-xs" onClick={() => setSheetOpen(true)}>
+              <SearchIcon className="text-sm" />
+              Search
+            </button>
+          </nav>
 
-      <section className="min-h-0 overflow-y-auto">
-        {!d ? (
-          <p className="p-6 text-sm text-muted">{error ?? loadError ?? (selectedId && detailQuery.isPending ? "Loading…" : "Select a doc, or create one.")}</p>
-        ) : (
-          <div className="w-full space-y-5 py-10">
+          <section className="min-h-0 flex-1 overflow-y-auto">
+            {!d ? (
+              <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">{error ?? loadError ?? (detailQuery.isPending ? "Loading…" : "Select a doc, or create one.")}</p>
+            ) : (
+              <div className="grid w-full gap-8 px-4 py-8 sm:px-8 md:grid-cols-[minmax(0,1fr)_16rem] lg:px-12 lg:py-10">
+                <div className="min-w-0 space-y-5">
             {error && <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
             {d.stale && (
               <p role="status" className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
-                ⚠ Possibly out of date{d.staleReason ? `: ${d.staleReason}` : ""}. Edit the content to refresh it, or confirm it&apos;s still accurate.
+                <WarningIcon /> Possibly out of date{d.staleReason ? `: ${d.staleReason}` : ""}. Edit the content to refresh it, or confirm it&apos;s still accurate.
                 <button className="ml-2 underline" disabled={busy} onClick={confirmAccurate}>
                   Confirm accurate
                 </button>
@@ -386,7 +470,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
               <div className="flex shrink-0 gap-2">
                 {!editing ? (
                   <button className="btn btn-primary" onClick={() => startEditing(d)}>
-                    ✎ Edit
+                    <EditIcon /> Edit
                   </button>
                 ) : null}
                 <button
@@ -397,8 +481,8 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     setBusy(true);
                     try {
                       await api.docs.delete(projectKey, d.id);
-                      setSelectedId(null);
-                      setEditing(false);
+                      setEditingId(null);
+                      void navigate(`/p/${projectKey}/docs`);
                       await refresh();
                     } catch (e) {
                       setError(describeFailure(e));
@@ -424,7 +508,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                 <span className="h-2 w-2 rounded-full bg-current" aria-hidden />
                 {d.stale ? "Possibly out of date" : "Up to date"}
               </span>
-              <span>📖 {readTime(d.body)} min read</span>
+              <span><BookIcon /> {readTime(d.body)} min read</span>
               <span>{d.body.trim() ? d.body.trim().split(/\s+/).length : 0} words</span>
               <button type="button" className="ml-auto text-xs text-accent hover:underline" onClick={copyForAgent}>
                 {copyLabel}
@@ -449,7 +533,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     <div className="flex items-center gap-3">
                       {githubRepos.length > 0 && (
                         <button type="button" className="btn btn-ghost flex items-center gap-1.5 px-2 py-1 text-xs" onClick={() => void openBrowseRepo()}>
-                          <span className="text-sm" aria-hidden>⌕</span>
+                          <SearchIcon className="text-sm" />
                           Browse repo…
                         </button>
                       )}
@@ -464,7 +548,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                       <span key={a} className="chip gap-1 bg-panel-2 py-1 font-mono text-xs">
                         {a}
                         <button className="text-muted hover:text-fg" aria-label={`Remove anchor ${a}`} onClick={() => setAnchors(anchors.filter((x) => x !== a))}>
-                          ✕
+                          <CloseIcon />
                         </button>
                       </span>
                     ))}
@@ -504,12 +588,12 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     className="btn btn-primary"
                     disabled={busy}
                     onClick={async () => {
-                      if (await save()) setEditing(false);
+                      if (await save()) setEditingId(null);
                     }}
                   >
                     Save
                   </button>
-                  <button className="btn" onClick={() => setEditing(false)}>
+                  <button className="btn" onClick={() => setEditingId(null)}>
                     Cancel
                   </button>
                 </div>
@@ -522,8 +606,8 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
               </div>
             ) : null}
 
-            {!editing && (
-              <div className="space-y-4 rounded-lg border border-line/70 bg-panel/30 p-4">
+                  {!editing && (
+                    <div className="space-y-4 rounded-lg border border-line/70 bg-panel/30 p-4">
                 {actionItems.length > 0 && (
                   <section>
                     <span className="label">Action items</span>
@@ -560,7 +644,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                         + Create ADR from this doc
                       </button>
                       <Link to={`/p/${projectKey}/decisions`} className="text-xs text-accent hover:underline">
-                        View all decisions →
+                        View all decisions <ArrowRightIcon />
                       </Link>
                     </div>
                   </section>
@@ -604,7 +688,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                   <div className="flex flex-wrap gap-1.5">
                     {(detail?.nodes ?? []).map((n) => (
                       <span key={n.id} className="chip gap-1 bg-accent/10 py-1 text-accent">
-                        ◇ {n.layer}:{n.name}
+                        <NodeIcon /> {n.layer}:{n.name}
                         <button
                           className="text-accent/60 hover:text-accent"
                           aria-label={`Unlink ${n.name}`}
@@ -617,7 +701,7 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                             await refresh();
                           }}
                         >
-                          ✕
+                          <CloseIcon />
                         </button>
                       </span>
                     ))}
@@ -642,11 +726,83 @@ export function DocsExplorer({ projectKey, index }: { projectKey: string; index:
                     )}
                   </div>
                 </section>
+                                  </div>
+                  )}
+                </div>
+                                  <aside aria-label="About this doc" className="space-y-5 self-start text-sm md:sticky md:top-6">
+                    <section>
+                      <span className="label">Owner</span>
+                      <PersonRow person={detail!.owner} />
+                    </section>
+                    <section>
+                      <span className="label">Contributors</span>
+                      {detail!.contributors.length ? (
+                        <ul className="space-y-1.5">
+                          {detail!.contributors.map((c) => (
+                            <li key={`${c.kind}:${c.id ?? c.name}`}>
+                              <PersonRow person={c} />
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-muted">No one else yet.</p>
+                      )}
+                    </section>
+                    <section>
+                      <span className="label">Labels</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {d.labels.map((l) => (
+                          <span key={l} className="chip gap-1 bg-panel-2 py-1 text-xs text-fg">
+                            {l}
+                            <button className="text-muted hover:text-fg" aria-label={`Remove label ${l}`} disabled={busy} onClick={() => void saveLabels(d.labels.filter((x) => x !== l))}>
+                              <CloseIcon />
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          className="input !w-28 !py-0.5 text-xs"
+                          aria-label="Add a label"
+                          placeholder="+ label"
+                          value={newLabel}
+                          disabled={busy}
+                          onChange={(e) => setNewLabel(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Enter" || !newLabel.trim()) return;
+                            e.preventDefault();
+                            void saveLabels([...d.labels, newLabel]).then((ok) => ok && setNewLabel(""));
+                          }}
+                        />
+                      </div>
+                    </section>
+                  </aside>
               </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
+        </>
+      )}
+
+      <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className="fixed inset-y-0 left-0 z-50 flex w-[min(88vw,22rem)] flex-col border-r border-line bg-panel p-4 text-fg shadow-2xl"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <Dialog.Title className="text-xs font-semibold uppercase tracking-wide text-muted">Docs</Dialog.Title>
+              <div className="flex items-center gap-1">
+                <button className="rounded px-2 py-1 text-xs font-medium text-accent hover:bg-accent/10" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
+                  + Create
+                </button>
+                <Dialog.Close className="rounded px-2 py-1 text-muted hover:bg-panel-2 hover:text-fg" aria-label="Close">
+                  <CloseIcon />
+                </Dialog.Close>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">{docList(false)}</div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Dialog.Root
         open={showBrowseRepo}

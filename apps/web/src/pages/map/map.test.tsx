@@ -83,7 +83,7 @@ describe("containers and collapsing", () => {
     await waitFor(() => expect(nodeEl("API")).toBeTruthy());
     const api = nodeEl("API")!;
     expect(within(api).getByText("+2 modules")).toBeTruthy();
-    expect(within(api).getByText("1 🎫")).toBeTruthy();
+    expect(within(api).getByText("1")).toBeTruthy();
     expect(nodeEl("Auth")).toBeUndefined();
   });
 
@@ -106,9 +106,9 @@ describe("containers and collapsing", () => {
     await expand(user, "API");
     await waitFor(() => expect(nodeEl("Payments")).toBeTruthy());
     const pay = nodeEl("Payments")!;
-    expect(within(pay).getByText("⚠ stale").getAttribute("title")).toBe("src/pay/charge.ts changed in abc1234");
+    expect(within(pay).getByText("stale").getAttribute("title")).toBe("src/pay/charge.ts changed in abc1234");
     const auth = nodeEl("Auth")!;
-    const flux = within(auth).getByText("✎ in flux");
+    const flux = within(auth).getByText("in flux");
     expect(flux.getAttribute("title")).toBe("Being changed by Claude — Ada's laptop (AA-9); not landed yet · 1 pending map update(s)");
   });
 });
@@ -157,7 +157,7 @@ describe("the node panel", () => {
   test("a stale node says why, and 'still accurate' clears it", async () => {
     const { server } = open("/p/AA/map?node=s-pay", (s) => s.on("POST /api/app/projects/AA/nodes/s-pay/fresh", { node: mapNode({ id: "s-pay", name: "Payments", layer: "system" }) }));
     const p = await panel();
-    expect(within(p).getByText("⚠ Possibly out of date")).toBeTruthy();
+    expect(within(p).getByText("Possibly out of date")).toBeTruthy();
     expect(within(p).getByText("src/pay/charge.ts changed in abc1234")).toBeTruthy();
     await userEvent.setup().click(within(p).getByRole("button", { name: "Still accurate — mark fresh" }));
     await waitFor(() => expect(server.sent("POST /api/app/projects/AA/nodes/s-pay/fresh")).toHaveLength(1));
@@ -166,7 +166,7 @@ describe("the node panel", () => {
   test("an in-flux node shows who is changing which files and the map update waiting for that code; Publish now and Discard resolve it", async () => {
     const { server } = open("/p/AA/map?node=s-auth", (s) => s.on("POST /api/app/projects/AA/drafts/draft-1/resolve", { ok: true }));
     const p = await panel();
-    expect(within(p).getByText("✎ In flux")).toBeTruthy();
+    expect(within(p).getByText("In flux")).toBeTruthy();
     expect(within(p).getByText(/Claude — Ada's laptop on AA-9 is changing apps\/api\/src\/auth\.ts, apps\/api\/src\/session\.ts/)).toBeTruthy();
     expect(within(p).getByText(/drafted: purpose\. Publishes when the code lands\./)).toBeTruthy();
     expect(within(p).getByText("Checks passwords and sessions")).toBeTruthy();
@@ -326,7 +326,7 @@ describe("flows", () => {
     open("/p/AA/map?flow=f1");
     const user = userEvent.setup();
     expect(await screen.findByText("step 1 of 2")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
     expect(await screen.findByText("step 2 of 2")).toBeTruthy();
     await waitFor(() => expect(within(sideOf()!).getByRole("heading", { level: 2, name: "Auth" })).toBeTruthy());
     await user.keyboard("{ArrowLeft}");
@@ -392,7 +392,7 @@ describe("flows", () => {
 
 describe("Ask the map", () => {
   const ask = async (user: ReturnType<typeof userEvent.setup>, question: string) => {
-    await user.click(await screen.findByRole("button", { name: "✨ Ask" }));
+    await user.click(await screen.findByRole("button", { name: "Ask" }));
     const dialog = await screen.findByRole("dialog");
     await user.type(within(dialog).getByPlaceholderText("Ask about the system…"), question);
     await user.click(within(dialog).getByRole("button", { name: "Ask" }));
@@ -440,7 +440,7 @@ describe("Ask the map", () => {
 
   test("when Ask is off on this server it says how to turn it on and does not let you ask", async () => {
     open("/p/AA/map", (s) => s.on("GET /api/app/projects/AA/graph", graph("AA", { askEnabled: false })));
-    await userEvent.setup().click(await screen.findByRole("button", { name: "✨ Ask" }));
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Ask" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/Ask is off\. Set/)).toBeTruthy();
     expect((within(dialog).getByPlaceholderText("Ask about the system…") as HTMLInputElement).disabled).toBe(true);
@@ -452,9 +452,9 @@ describe("stale and live", () => {
   test("the stale button filters to stale nodes and says how many", async () => {
     open();
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "⚠ 1 stale" }));
+    await user.click(await screen.findByRole("button", { name: "1 stale" }));
     expect(await screen.findByText("Showing 1 stale node(s): their code changed since they were described")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "⚠ 1 stale" }));
+    await user.click(screen.getByRole("button", { name: "1 stale" }));
     await waitFor(() => expect(screen.queryByText(/Showing 1 stale/)).toBeNull());
   });
 
@@ -482,7 +482,7 @@ describe("stale and live", () => {
 
   test("the Tidy button on the data layer arranges the tables and saves them as not placed by hand", async () => {
     const { server } = open("/p/AA/map?lens=data", (s) => s.on("PUT /api/app/projects/AA/layout", { ok: true }));
-    await userEvent.setup().click(await screen.findByRole("button", { name: "⇆ Tidy" }));
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Tidy" }));
     await waitFor(() => expect(server.sent("PUT /api/app/projects/AA/layout")).toHaveLength(1));
     const body = server.sent("PUT /api/app/projects/AA/layout")[0].body as { positions: { id: string; x: number; y: number }[]; placed: boolean };
     expect(body.placed).toBe(false);

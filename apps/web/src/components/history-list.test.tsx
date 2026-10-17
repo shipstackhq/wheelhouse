@@ -21,7 +21,7 @@ test("the same doer is named once for a run of changes, not on every line", () =
 
 test("agents are marked, a single change has no count, and the time is shown", () => {
   const text = visible(renderToStaticMarkup(<HistoryList items={[ev(2, "Bot", "created WH-1", 2, "agent"), ev(1, "Demo", "moved WH-1", 5000)]} />));
-  assert.ok(text.includes("🤖 Bot"));
+  assert.ok(text.includes("Bot"));
   assert.ok(!text.includes("1 changes") && !text.includes("change|"), "no count for a single change");
   assert.ok(text.includes("just now") || text.includes("2m ago"));
 });

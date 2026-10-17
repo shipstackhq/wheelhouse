@@ -419,3 +419,34 @@ describe("drafts (WH-64): an agent session editing a doc for unlanded code gets 
     assert.equal(after.status, "discarded");
   });
 });
+
+describe("owner, contributors and labels (WH-103)", () => {
+  test("the owner is who created the doc; contributors are the others who changed it, once each, in order", async () => {
+    const d = await svc.createDoc(human, projectKey, { title: "People doc", body: "v1" });
+    await svc.updateDoc(human, projectKey, d.id, { body: "v2" });
+    await svc.updateDoc(writerAgent, projectKey, d.id, { body: "v3", forcePublish: true });
+    await svc.updateDoc(writerAgent, projectKey, d.id, { body: "v4", forcePublish: true });
+    const got = await svc.getDoc(human, projectKey, d.id);
+    assert.deepEqual(got.owner, { kind: "human", id: human.id, name: "Docs owner" });
+    assert.deepEqual(got.contributors, [{ kind: "agent", id: writerAgent.id, name: writerAgent.name }]);
+  });
+
+  test("a doc nobody else touched has no contributors", async () => {
+    const d = await svc.createDoc(human, projectKey, { title: "Solo doc" });
+    assert.deepEqual((await svc.getDoc(human, projectKey, d.id)).contributors, []);
+  });
+
+  test("labels are trimmed and de-duplicated, saved with the version, and never mark a doc fresh or change its body", async () => {
+    const d = await svc.createDoc(human, projectKey, { title: "Labelled doc", body: "text" });
+    const updated = await svc.updateDoc(human, projectKey, d.id, { labels: ["  runbook ", "Ops", "ops", ""] }, d.version);
+    assert.deepEqual(updated.labels, ["runbook", "Ops"]);
+    assert.equal(updated.body, "text");
+    await assert.rejects(() => svc.updateDoc(human, projectKey, d.id, { labels: ["x"] }, d.version), /was changed/);
+  });
+
+  test("a label over 40 characters, or more than 20 labels, is refused", async () => {
+    const d = await svc.createDoc(human, projectKey, { title: "Too many labels" });
+    await assert.rejects(() => svc.updateDoc(human, projectKey, d.id, { labels: ["x".repeat(41)] }), /at most 40/);
+    await assert.rejects(() => svc.updateDoc(human, projectKey, d.id, { labels: Array.from({ length: 21 }, (_, i) => `l${i}`) }), /at most 20/);
+  });
+});

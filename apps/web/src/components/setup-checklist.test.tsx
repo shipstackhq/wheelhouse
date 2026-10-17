@@ -15,10 +15,10 @@ describe("the setup checklist on the project page", () => {
     renderIn(<SetupChecklist state={state(false)} />, "/p/AA");
     expect(screen.getByText("2/5")).toBeTruthy();
     expect(screen.getByRole("img", { name: "2 of 5 setup steps done" })).toBeTruthy();
-    const agents = screen.getByRole("link", { name: "Create an API key →" });
+    const agents = screen.getByRole("link", { name: "Create an API key" });
     expect(agents.getAttribute("href")).toBe("/agents");
-    expect(screen.getByRole("link", { name: "Build the map →" }).getAttribute("href")).toBe("/p/AA/map");
-    expect(screen.queryByRole("link", { name: "Connect a repository →" })).toBeNull(); // done steps have no action
+    expect(screen.getByRole("link", { name: "Build the map" }).getAttribute("href")).toBe("/p/AA/map");
+    expect(screen.queryByRole("link", { name: "Connect a repository" })).toBeNull(); // done steps have no action
   });
 
   test("once everything is done it is a one-line pill, which opens to the details and collapses again", async () => {

@@ -5,6 +5,7 @@ import { timeAgo } from "@wheelhouse/core/lib/time";
 import { Loaded } from "../../components/query-state";
 import { activityQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
+import { AgentIcon } from "../../components/icons";
 
 /** What happened in the project, newest first: everything, only agents, or only the team. Each line links to the thing it is about. */
 export function ActivityPage() {
@@ -14,7 +15,7 @@ export function ActivityPage() {
   const who = search.get("who");
   const actorKind = who === "agent" || who === "human" ? who : undefined;
   const query = useQuery(activityQuery(api, key, actorKind));
-  const tab = (v: "agent" | "human" | undefined, label: string) => (
+  const tab = (v: "agent" | "human" | undefined, label: React.ReactNode) => (
     <Link to={v ? `?who=${v}` : { search: "" }} className={clsx("rounded-md px-3 py-1 text-sm", actorKind === v ? "bg-panel-2 text-fg" : "text-muted hover:text-fg")}>
       {label}
     </Link>
@@ -24,7 +25,7 @@ export function ActivityPage() {
       <div className="mx-auto max-w-3xl px-6 py-6">
         <div className="mb-4 flex gap-1">
           {tab(undefined, "Everything")}
-          {tab("agent", "🤖 Agents")}
+          {tab("agent", <><AgentIcon /> Agents</>)}
           {tab("human", "Team")}
         </div>
         <Loaded query={query} label="Loading the activity">
@@ -38,7 +39,7 @@ export function ActivityPage() {
                     <li key={e.seq} className="flex items-baseline gap-3 py-2.5 text-sm">
                       <span className="w-14 shrink-0 font-mono text-[11px] text-muted/70">#{e.seq}</span>
                       <span className={clsx("shrink-0 font-medium", e.actorKind === "agent" && "text-agent")}>
-                        {e.actorKind === "agent" ? "🤖 " : ""}
+                        {e.actorKind === "agent" && <AgentIcon />}{e.actorKind === "agent" && " "}
                         {e.actorName}
                       </span>
                       <span className="min-w-0 flex-1 text-muted">

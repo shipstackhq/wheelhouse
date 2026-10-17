@@ -47,7 +47,7 @@ describe("admin: one team", () => {
     expect(screen.getByText("pending")).toBeTruthy();
     expect(screen.getByText("wh_zzzzzzz…")).toBeTruthy();
     expect(screen.getByText("Tickets, comments and the map of this team are not shown here.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "← All teams" }).getAttribute("href")).toBe("/admin/teams");
+    expect(screen.getByRole("link", { name: "All teams" }).getAttribute("href")).toBe("/admin/teams");
   });
 
   test("suspending needs the team's exact name; on success it says how many sign-ins ended and reads the team again", async () => {
