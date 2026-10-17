@@ -70,6 +70,13 @@ BASE="http://127.0.0.1:$PORT_APP"
 step "5. continuity: the new app on the copy, with the same environment as the old one"
 CRED_URL="$(node -e 'const c=JSON.parse(require("fs").readFileSync(process.env.HOME+"/.config/wheelhouse/credentials.json","utf8")); console.log(Object.keys(c)[0])')"
 cp -R "$W/pglite" "$W/pglite-app"
+# The map is brought up to date with the new layout on the copy BEFORE the app starts, exactly as the runbook does it on the cutover day.
+pnpm --silent map:reanchor --db "$W/pglite-app" --from pre-migration --to HEAD --rules docs/reanchor-rules.json --apply > "$W/reanchor.log" 2>&1 && ok "map:reanchor --apply: $(grep -c '^node\|^doc' "$W/reanchor.log") node(s) and doc(s) re-anchored, every anchor resolved" || { bad "map:reanchor left anchors unresolved"; tail -6 "$W/reanchor.log"; }
+pnpm --silent map:reanchor --db "$W/pglite-app" --from pre-migration --to HEAD --rules docs/reanchor-rules.json > "$W/reanchor2.log" 2>&1 && ! grep -q '^node\|^doc' "$W/reanchor2.log" && ok "a second map:reanchor plans nothing" || bad "map:reanchor is not idempotent"
+pnpm --silent map:after-migration --db "$W/pglite-app" > "$W/after-migration.log" 2>&1 && ok "map:after-migration: $(grep -c '^  done' "$W/after-migration.log") change(s) to what the map says" || { bad "map:after-migration failed"; tail -5 "$W/after-migration.log"; }
+pnpm --silent map:after-migration --db "$W/pglite-app" 2>&1 | grep -q "nothing to change" && ok "and a second run changes nothing" || bad "map:after-migration is not idempotent"
+db verify --to "$W/pglite-app" --integrity-only | tail -1 | grep -q "integrity holds" && ok "integrity still holds after the map was updated" || bad "integrity after the map update"
+cp -R "$W/pglite-app" "$W/pglite-mapped"
 # What the data says before the app touches it: the real key's cursor, the newest event, a connected repository, an open ticket.
 FACTS="$(node scripts/rehearsal/facts.mjs "$W/pglite-app")"
 echo "    data: $FACTS"
@@ -97,9 +104,9 @@ node --input-type=module -e '
 stop_app
 done_step
 
-step "6. the contract suite against the app on the imported copy (its fixtures are added to the copy)"
+step "6. the contract suite against the app on the imported and re-mapped copy (its fixtures are added to the copy)"
 rm -rf "$W/contract" && mkdir -p "$W/contract"
-cp -R "$W/pglite" "$W/contract/db"
+cp -R "$W/pglite-mapped" "$W/contract/db"
 pnpm --silent test:contract prepare --dir "$W/contract" --fake-port "$PORT_FAKE" > "$W/prepare.log" 2>&1 || { bad "could not add the contract fixtures to the copy"; tail -5 "$W/prepare.log"; }
 ( set -a; . "$W/contract/server.env"; set +a; PORT="$PORT_APP" HOST=127.0.0.1 exec pnpm --silent --filter @wheelhouse/api exec tsx src/main.ts ) > "$W/app2.log" 2>&1 &
 APP_PID=$!

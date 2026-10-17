@@ -14,7 +14,9 @@
     "typecheck": "tsc --noEmit && pnpm --filter @wheelhouse/core typecheck && pnpm --filter @wheelhouse/api typecheck && pnpm --filter @wheelhouse/api-client typecheck && pnpm --filter @wheelhouse/web typecheck",
     "db:export": "tsx packages/core/src/tools/db-cli.ts export",
     "db:import": "tsx packages/core/src/tools/db-cli.ts import",
-    "db:verify": "tsx packages/core/src/tools/db-cli.ts verify"
+    "db:verify": "tsx packages/core/src/tools/db-cli.ts verify",
+    "map:reanchor": "tsx packages/core/src/tools/reanchor-cli.ts",
+    "map:after-migration": "tsx packages/core/src/tools/post-migration-map-cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
