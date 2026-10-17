@@ -7,7 +7,7 @@ import { SubmitButton } from "./submit-button";
 import { Select } from "./ui";
 
 /** Create an invite link. `kind` decides what the link does; the server decides who may create it. */
-export function InviteForm({ kind, disabled = false }: { kind: "join_team" | "new_team"; disabled?: boolean }) {
+export function InviteForm({ kind, disabled = false, className = "mt-4" }: { kind: "join_team" | "new_team"; disabled?: boolean; /** Spacing around the form (the default sits it below a heading). */ className?: string }) {
   const { api, queryClient } = useServices();
   const [state, action] = useActionState<FormState, FormData>(async (_prev, fd) => {
     try {
@@ -28,7 +28,7 @@ export function InviteForm({ kind, disabled = false }: { kind: "join_team" | "ne
     }
   }, undefined);
   return (
-    <form action={action} className="mt-4 grid gap-3 sm:grid-cols-2">
+    <form action={action} className={`grid gap-3 sm:grid-cols-2 ${className}`}>
       <input type="hidden" name="kind" value={kind} />
       <input className="input sm:col-span-2" name="email" type="email" placeholder="Their email" required disabled={disabled} />
       {kind === "join_team" ? (

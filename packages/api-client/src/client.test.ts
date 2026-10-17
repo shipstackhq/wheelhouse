@@ -297,3 +297,52 @@ describe("the map endpoints (WH-97)", () => {
     assert.deepEqual([e.isConflict, e.current], [true, { id: "n1", version: 2 }]);
   });
 });
+
+describe("the docs, repositories and onboarding endpoints (WH-98)", () => {
+  const sent = async (run: (api: ReturnType<typeof createApiClient>) => Promise<unknown>, reply: { status?: number; json?: unknown } = { json: { ok: true } }) => {
+    const s = script([{ json: me("tok") }, reply]);
+    const api = createApiClient({ fetch: s.f });
+    await api.me();
+    await run(api);
+    const { method, url, body } = s.calls[1];
+    return { method, url, body };
+  };
+
+  test("docs: each call goes to its address with the ref escaped, and the doc comes out of its envelope", async () => {
+    assert.deepEqual(await sent((a) => a.docs.index("WH"), { json: { docs: [] } }), { method: "GET", url: "/api/app/projects/WH/docs", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.get("WH", "a b"), { json: { doc: {}, nodes: [] } }), { method: "GET", url: "/api/app/projects/WH/docs/a%20b", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.create("WH", { title: "T", template: "spec", parent: null }), { json: { doc: {} } }), { method: "POST", url: "/api/app/projects/WH/docs", body: { title: "T", template: "spec", parent: null } });
+    assert.deepEqual(await sent((a) => a.docs.update("WH", "d1", { body: "x", version: 3 }), { json: { doc: {} } }), { method: "PATCH", url: "/api/app/projects/WH/docs/d1", body: { body: "x", version: 3 } });
+    assert.deepEqual(await sent((a) => a.docs.markFresh("WH", "d1"), { json: { doc: {} } }), { method: "POST", url: "/api/app/projects/WH/docs/d1/fresh", body: {} });
+    assert.deepEqual(await sent((a) => a.docs.move("WH", "d1", { parent: null, version: 2 }), { json: { doc: {} } }), { method: "POST", url: "/api/app/projects/WH/docs/d1/move", body: { parent: null, version: 2 } });
+    assert.deepEqual(await sent((a) => a.docs.delete("WH", "d1")), { method: "DELETE", url: "/api/app/projects/WH/docs/d1", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.linkNode("WH", "d1", "n/1")), { method: "PUT", url: "/api/app/projects/WH/docs/d1/nodes/n%2F1", body: {} });
+    assert.deepEqual(await sent((a) => a.docs.unlinkNode("WH", "d1", "n1")), { method: "DELETE", url: "/api/app/projects/WH/docs/d1/nodes/n1", body: undefined });
+    const s = script([{ json: { anchors: ["src/a.ts"] } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).docs.anchorSuggestions("WH", "d1"), ["src/a.ts"]);
+  });
+
+  test("a stale save of a doc rejects with the doc as it is now", async () => {
+    const s = script([{ json: me("tok") }, { status: 409, json: { error: { code: "conflict", message: 'Doc "Plan" was changed (version 3, you had 2). Re-read and retry.', details: { current: { id: "d1", version: 3 } } } } }]);
+    const api = createApiClient({ fetch: s.f });
+    await api.me();
+    const e = await failure(api.docs.update("WH", "d1", { body: "mine", version: 2 }));
+    assert.deepEqual([e.isConflict, e.current], [true, { id: "d1", version: 3 }]);
+  });
+
+  test("repositories: list and retire unwrap; GitHub connect sends the repository's GitHub id as repoId", async () => {
+    const s = script([{ json: { repositories: [{ id: "r1" }] } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).repos.list("WH"), [{ id: "r1" }]);
+    assert.deepEqual(await sent((a) => a.repos.create("WH", { displayName: "API", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/projects/WH/repositories", body: { displayName: "API", role: "backend" } });
+    assert.deepEqual(await sent((a) => a.repos.update("WH", "r1", { pathLimit: null }), { json: { repository: {} } }), { method: "PATCH", url: "/api/app/projects/WH/repositories/r1", body: { pathLimit: null } });
+    assert.deepEqual(await sent((a) => a.repos.retire("WH", "r1"), { json: { repository: {} } }), { method: "POST", url: "/api/app/projects/WH/repositories/r1/retire", body: {} });
+    assert.deepEqual(await sent((a) => a.repos.tree("WH", "r1"), { json: { files: [], truncated: false } }), { method: "GET", url: "/api/app/projects/WH/repositories/r1/tree", body: undefined });
+    assert.deepEqual(await sent((a) => a.repos.github("WH"), { json: { configured: false } }), { method: "GET", url: "/api/app/projects/WH/repositories/github", body: undefined });
+    assert.deepEqual(await sent((a) => a.repos.connectGithub("WH", { installationId: "1", repoId: "5", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/projects/WH/repositories/github", body: { installationId: "1", repoId: "5", role: "backend" } });
+  });
+
+  test("onboarding: the page is a read, and the description goes in the body", async () => {
+    assert.deepEqual(await sent((a) => a.onboarding.page("WH"), { json: {} }), { method: "GET", url: "/api/app/projects/WH/onboarding", body: undefined });
+    assert.deepEqual(await sent((a) => a.onboarding.startMap("WH", "A tool")), { method: "POST", url: "/api/app/projects/WH/onboarding/concept", body: { description: "A tool" } });
+  });
+});

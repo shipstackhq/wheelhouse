@@ -1,4 +1,4 @@
-import type { AdminTeam, AdminTeamDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, SetupCommands, TeamOverview } from "@wheelhouse/api-client";
+import type { Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminTeam, AdminTeamDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, SetupCommands, TeamOverview } from "@wheelhouse/api-client";
 
 /** Believable answers from the page endpoints, for tests to start from and bend. */
 
@@ -328,5 +328,76 @@ export const activityEvent = (over: Partial<import("@wheelhouse/api-client").Act
   summary: 'created AA-1 "Write the plan" in Backlog',
   data: { ref: "AA-1" },
   createdAt: new Date().toISOString(),
+  ...over,
+});
+
+// ───────── docs, repositories, onboarding (WH-98) ─────────
+
+export const doc = (over: Partial<Doc> = {}): Doc => ({
+  id: "d-plan",
+  parentId: null,
+  slug: "plan",
+  title: "Plan",
+  version: 1,
+  position: 1,
+  updatedAt: "2026-10-16T00:00:00.000Z",
+  stale: false,
+  body: "# Plan\n\nWe ship **soon**.",
+  anchors: [],
+  staleReason: null,
+  updatedByKind: "human",
+  updatedById: "u1",
+  createdAt: "2026-10-10T00:00:00.000Z",
+  ...over,
+});
+
+const treeItem = ({ id, parentId, slug, title, version, position, updatedAt, stale }: Doc) => ({ id, parentId, slug, title, version, position, updatedAt, stale });
+
+export const DOCS: Doc[] = [
+  doc(),
+  doc({ id: "d-api", slug: "api", title: "API notes", position: 2, body: "Talks to `src/lib/service.ts`.", anchors: ["src/lib/**"], stale: true, staleReason: "src/lib/service.ts changed in abc1234" }),
+  doc({ id: "d-sub", parentId: "d-plan", slug: "plan/phase-1", title: "Phase 1", position: 1, body: "Phase one." }),
+];
+
+export const docsIndex = (docs: Doc[] = DOCS, over: Partial<DocsIndex> = {}): DocsIndex => ({
+  docs: docs.map(treeItem),
+  nodes: [
+    { id: "s-api", name: "API", layer: "system", parentId: null },
+    { id: "c-bill", name: "Billing", layer: "concept", parentId: null },
+  ],
+  decisions: [{ id: "dec1", number: 1, title: "Use REST" }],
+  members: [{ id: "u1", name: "Ada Lovelace" }],
+  ...over,
+});
+
+export const docDetail = (d: Doc, nodes: DocDetail["nodes"] = []): DocDetail => ({ doc: d, nodes });
+
+export const repo = (over: Partial<Repository> = {}): Repository => ({
+  id: "r1",
+  displayName: "Backend",
+  role: "backend",
+  provider: "local",
+  slug: "backend",
+  githubFullName: null,
+  defaultBranch: "main",
+  pathLimit: null,
+  lifecycle: "live",
+  lastEventAt: null,
+  browsable: false,
+  ...over,
+});
+
+export const githubStatus = (over: Partial<GithubStatus> = {}): GithubStatus => ({
+  configured: true,
+  missing: [],
+  isOwner: true,
+  installations: [{ installationId: "1001", account: "acme", failed: false, repositories: [{ id: "5001", fullName: "acme/web", private: false }, { id: "5002", fullName: "acme/api", private: true }] }],
+  ...over,
+});
+
+export const onboardingPage = (key = "AA", over: Partial<OnboardingPage> = {}): OnboardingPage => ({
+  project: { key, name: key === "AA" ? "Alpha" : "Beta" },
+  hasRepos: false,
+  setup: { ...SETUP, projectKey: key, linkRepo: `/wheelhouse:setup ${key}`, buildMap: `/wheelhouse:map-codebase ${key}\n/wheelhouse:map-schema ${key}` },
   ...over,
 });

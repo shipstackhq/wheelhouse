@@ -12,18 +12,15 @@ const PORTED_PAGES: [path: string, heading: RegExp][] = [
   ["/agents", /^Agents & API keys$/],
   ["/p/AA", /^Alpha$/],
 ];
-/** Project pages ported in WH-97, with something only that page shows. */
+/** Project pages ported in WH-97 and WH-98, with something only that page shows. */
 const PROJECT_PAGES: [path: string, find: () => Promise<unknown>][] = [
   ["/p/AA/activity", () => screen.findByRole("link", { name: "Everything" })],
   ["/p/AA/map", () => screen.findByRole("tab", { name: /System/ })],
   ["/p/AA/decisions", () => screen.findByRole("heading", { level: 2, name: "Decisions" })],
   ["/p/AA/glossary", () => screen.findByRole("heading", { level: 2, name: "Glossary" })],
-];
-/** Still stubs: the rest of the project pages (WH-98). */
-const STUB_PAGES: [path: string, owner: string][] = [
-  ["/p/AA/docs", "WH-98"],
-  ["/p/AA/repos", "WH-98"],
-  ["/p/AA/onboarding", "WH-98"],
+  ["/p/AA/docs", () => screen.findByRole("button", { name: "Plan" })],
+  ["/p/AA/repos", () => screen.findByRole("heading", { level: 2, name: "Repositories" })],
+  ["/p/AA/onboarding", () => screen.findByRole("heading", { level: 2, name: "Where does your code live?" })],
 ];
 const ADMIN_PAGES: [path: string, heading: RegExp][] = [
   ["/admin/teams", /^Teams on this server$/],
@@ -35,7 +32,7 @@ const PUBLIC_PAGES: [path: string, button: RegExp | null, text?: string][] = [
   ["/signup", /^Create account$/],
   ["/invite", null, "This page needs the full invite link you were sent."],
 ];
-const ALL_APP_PATHS = [...PORTED_PAGES.map(([p]) => p), ...PROJECT_PAGES.map(([p]) => p), ...STUB_PAGES.map(([p]) => p)];
+const ALL_APP_PATHS = [...PORTED_PAGES.map(([p]) => p), ...PROJECT_PAGES.map(([p]) => p)];
 
 const inShell = () => {
   const sidebar = screen.getByRole("navigation");
@@ -62,17 +59,9 @@ describe("signed in: every page is in the shell", () => {
     inShell();
   });
 
-  test.each(STUB_PAGES)("%s is still a stub owned by %s, in the shell", async (path, owner) => {
-    const { at } = renderApp(path);
-    const body = await screen.findByTestId("page-stub");
-    expect(body.dataset.owner).toBe(owner);
-    expect(at()).toBe(path);
-    inShell();
-  });
-
   test("a project page has the project's header and its sections in the sidebar", async () => {
     renderApp("/p/BB/docs");
-    await screen.findByTestId("page-stub");
+    await screen.findByRole("button", { name: "Plan" });
     expect(screen.getAllByText("BB").length).toBeGreaterThan(0);
     const sidebar = screen.getByRole("navigation");
     for (const name of ["Board", "Activity", "Map", "Docs", "Decisions", "Glossary", "Repos"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
@@ -155,7 +144,7 @@ describe("signed out: the gate", () => {
 describe("the session ends while the page is open", () => {
   test("the next request that learns it goes to /login and forgets the person", async () => {
     const { at, server, services } = renderApp("/p/AA/docs");
-    await screen.findByTestId("page-stub");
+    await screen.findByRole("button", { name: "Plan" });
     server.me = null; // signed out in another tab
     await services.queryClient.invalidateQueries({ queryKey: ["projects"] });
     await waitFor(() => expect(at()).toBe("/login"));
@@ -176,7 +165,7 @@ describe("loading and failing", () => {
     expect(screen.getByText("Loading Wheelhouse…")).toBeTruthy();
     expect(screen.queryByRole("navigation")).toBeNull();
     release();
-    await screen.findByTestId("page-stub");
+    await screen.findByRole("button", { name: "Plan" });
     expect(screen.queryByText("Loading Wheelhouse…")).toBeNull();
   });
 
@@ -207,7 +196,7 @@ describe("loading and failing", () => {
 describe("live updates", () => {
   test("a project page listens to that project's stream; the dashboard listens to the team's; other pages to neither", async () => {
     const { unmount } = renderApp("/p/AA/docs");
-    await screen.findByTestId("page-stub");
+    await screen.findByRole("button", { name: "Plan" });
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/projects/AA/stream"]));
     unmount();
     FakeEventSource.reset();

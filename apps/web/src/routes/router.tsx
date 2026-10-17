@@ -5,7 +5,10 @@ import { AgentsPage } from "../pages/agents";
 import { ActivityPage } from "../pages/activity/activity";
 import { BoardPage } from "../pages/board";
 import { DecisionsPage } from "../pages/decisions";
+import { DocsPage } from "../pages/docs";
 import { GlossaryPage } from "../pages/glossary";
+import { OnboardingPage } from "../pages/onboarding";
+import { ReposPage } from "../pages/repos";
 import { MapPage } from "../pages/map";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
@@ -16,9 +19,7 @@ import { NotFound, RouteError } from "./errors";
 import { redirectIfSignedIn, requireSignedIn } from "./guards";
 import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, ProjectLayout, RequireAdmin, RootLayout } from "./layouts";
 import { OfflinePage } from "./offline";
-import { stub } from "./stub";
 
-/** The pages still to be ported (WH-98: docs, repositories, onboarding) are stubs; that ticket replaces its own. */
 /**
  * Every address the Next app serves, at the same address, so links, bookmarks and the links the plugin prints keep working.
  * The auth gate is a loader: it runs before anything renders.
@@ -64,11 +65,11 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { index: true, Component: BoardPage },
                 { path: "activity", Component: ActivityPage },
                 { path: "map", Component: MapPage },
-                { path: "docs", Component: stub("Docs", "WH-98") },
+                { path: "docs", Component: DocsPage },
                 { path: "decisions", Component: DecisionsPage },
                 { path: "glossary", Component: GlossaryPage },
-                { path: "repos", Component: stub("Repositories", "WH-98") },
-                { path: "onboarding", Component: stub("Set up this project", "WH-98") },
+                { path: "repos", Component: ReposPage },
+                { path: "onboarding", Component: OnboardingPage },
               ],
             },
             { path: "*", Component: NotFound },

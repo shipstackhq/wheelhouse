@@ -82,7 +82,7 @@ Everything in Todo and Backlog outside the migration is untouched. WH-20 (GitHub
 ```
 packages/core     @wheelhouse/core: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries
 apps/api          the NestJS API: /mcp, /api/v1, /api/health (WH-91); GitHub webhook, connect flow and live streams (WH-92)
-apps/web          the React app (WH-94 shell; WH-95 dashboard, team, agents, admin, new project, sign-in and invite pages; WH-96 board and ticket dialog; WH-97 map, decisions, glossary and activity)
+apps/web          the React app (WH-94 shell; WH-95 dashboard, team, agents, admin, new project, sign-in and invite pages; WH-96 board and ticket dialog; WH-97 map, decisions, glossary and activity; WH-98 docs, repositories and onboarding: every page is ported)
 packages/api-client  @wheelhouse/api-client: the typed client the React app uses for /api/app (WH-93)
 src/              still the Next.js app (pages, server actions, components) until the cutover
 ```
