@@ -12,13 +12,16 @@ const PORTED_PAGES: [path: string, heading: RegExp][] = [
   ["/agents", /^Agents & API keys$/],
   ["/p/AA", /^Alpha$/],
 ];
-/** Still stubs: the rest of the project pages (WH-97, WH-98). */
+/** Project pages ported in WH-97, with something only that page shows. */
+const PROJECT_PAGES: [path: string, find: () => Promise<unknown>][] = [
+  ["/p/AA/activity", () => screen.findByRole("link", { name: "Everything" })],
+  ["/p/AA/map", () => screen.findByRole("tab", { name: /System/ })],
+  ["/p/AA/decisions", () => screen.findByRole("heading", { level: 2, name: "Decisions" })],
+  ["/p/AA/glossary", () => screen.findByRole("heading", { level: 2, name: "Glossary" })],
+];
+/** Still stubs: the rest of the project pages (WH-98). */
 const STUB_PAGES: [path: string, owner: string][] = [
-  ["/p/AA/activity", "WH-97"],
-  ["/p/AA/map", "WH-97"],
   ["/p/AA/docs", "WH-98"],
-  ["/p/AA/decisions", "WH-97"],
-  ["/p/AA/glossary", "WH-97"],
   ["/p/AA/repos", "WH-98"],
   ["/p/AA/onboarding", "WH-98"],
 ];
@@ -32,7 +35,7 @@ const PUBLIC_PAGES: [path: string, button: RegExp | null, text?: string][] = [
   ["/signup", /^Create account$/],
   ["/invite", null, "This page needs the full invite link you were sent."],
 ];
-const ALL_APP_PATHS = [...PORTED_PAGES.map(([p]) => p), ...STUB_PAGES.map(([p]) => p)];
+const ALL_APP_PATHS = [...PORTED_PAGES.map(([p]) => p), ...PROJECT_PAGES.map(([p]) => p), ...STUB_PAGES.map(([p]) => p)];
 
 const inShell = () => {
   const sidebar = screen.getByRole("navigation");
@@ -46,6 +49,14 @@ describe("signed in: every page is in the shell", () => {
   test.each(PORTED_PAGES)("%s is the real page, with the sidebar, the project switcher and the account menu", async (path, heading) => {
     const { at } = renderApp(path);
     await screen.findByRole("heading", { level: 1, name: heading });
+    expect(at()).toBe(path);
+    expect(screen.queryByTestId("page-stub")).toBeNull();
+    inShell();
+  });
+
+  test.each(PROJECT_PAGES)("%s is the real page, in the shell", async (path, find) => {
+    const { at } = renderApp(path);
+    await find();
     expect(at()).toBe(path);
     expect(screen.queryByTestId("page-stub")).toBeNull();
     inShell();

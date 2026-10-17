@@ -154,6 +154,9 @@ async function main() {
   }
 
   serverEnv.ALLOW_SIGNUP = "true"; // the web-app API tests create accounts
+  // "Ask the map" calls Claude from the server: point it at the fake, with a key that is not real and must never reach a browser.
+  serverEnv.ANTHROPIC_API_KEY = "sk-ant-contract-key-not-real-7d1f";
+  serverEnv.ANTHROPIC_BASE_URL = `http://127.0.0.1:${fakePort}`;
   serverEnv.ADMIN_EMAILS = ADMIN_EMAIL;
   const fixtures: Fixtures = {
     a,

@@ -26,3 +26,11 @@ export const ticketQuery = (api: ApiClient, ref: string) => ({ queryKey: ["ticke
 export const queueQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["queue", projectKey] as const, queryFn: () => api.projects.queue(projectKey) });
 
 export const useBoard = (projectKey: string) => useQuery(boardQuery(useServices().api, projectKey));
+
+/** The map, and what is read from it (decisions, glossary); and the activity feed. */
+export const graphQuery = (api: ApiClient, projectKey: string) => ({ queryKey: ["graph", projectKey] as const, queryFn: () => api.map.graph(projectKey) });
+export const activityQuery = (api: ApiClient, projectKey: string, who?: "agent" | "human") => ({
+  queryKey: ["activity", projectKey, who ?? "all"] as const,
+  queryFn: () => api.map.activity(projectKey, who),
+});
+export const useGraph = (projectKey: string) => useQuery(graphQuery(useServices().api, projectKey));
