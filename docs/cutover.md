@@ -1,6 +1,11 @@
 # Moving the data and cutting over (WH-100)
 
-The schema is frozen (migrations 0000 to 0013), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
+> **Migration 0014 (WH-103, `docs.labels`) was added after the freeze, and `db:import` refuses a target whose migrations differ from the export's.**
+> Before exporting, bring the source database to 0014 with the new code's migrator (it is one additive column with a default, so the
+> old app keeps working on it), or rehearse and cut over with that in the plan. Otherwise the import stops with "the target's migrations (15)
+> are not the export's (14)".
+
+The schema is frozen (migrations 0000 to 0013, plus the additive 0014 above), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
 transform. The tools below copy it exactly, prove they did, and never write to the original. They also move data between PGlite and Postgres in
 either direction, so the same procedure covers the local control plane (PGlite, port 3456) and a server (Postgres, `docs/deploy.md`).
 
