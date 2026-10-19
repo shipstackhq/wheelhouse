@@ -3,15 +3,16 @@ import { Loaded } from "../../components/query-state";
 import { useGraph } from "../../lib/queries";
 import { Decisions } from "./decisions";
 
-/** `/p/:key/decisions`: the project's ADRs (read from the map: they hang off its nodes). */
+/** `/p/:key/decisions` (and `/decisions/:number` for one): the project's ADRs (read from the map: they hang off its nodes). */
 export function DecisionsPage() {
-  const { key = "" } = useParams();
+  const { key = "", number } = useParams();
   const query = useGraph(key);
   return (
     <Loaded query={query} label="Loading the decisions">
       {(g) => (
         <Decisions
           projectKey={g.project.key}
+          number={number === undefined ? undefined : Number(number)}
           decisions={g.decisions}
           nodes={g.nodes.map(({ id, name, layer }) => ({ id, name, layer }))}
           terms={g.terms.map(({ term, definition }) => ({ term, definition }))}

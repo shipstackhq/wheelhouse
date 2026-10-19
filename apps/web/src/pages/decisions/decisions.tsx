@@ -1,6 +1,6 @@
 
 import { useEffect, useState, useTransition } from "react";
-import { Link } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { Dialog } from "radix-ui";
 import clsx from "clsx";
 import type { Decision } from "@wheelhouse/api-client";
@@ -10,7 +10,7 @@ import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
-import { AgentIcon, CloseIcon, NodeIcon } from "../../components/icons";
+import { AgentIcon, ArrowLeftIcon, CloseIcon, EditIcon, NodeIcon, SearchIcon } from "../../components/icons";
 
 type NodeLite = { id: string; name: string; layer: string };
 /** `version` is the version being edited: sent back so a change made since is refused, not overwritten. */
@@ -23,27 +23,29 @@ const STATUS: Record<Decision["status"], string> = {
   rejected: "bg-danger/15 text-danger",
 };
 
-export function Decisions(props: { projectKey: string; decisions: Decision[]; nodes: NodeLite[]; terms: GlossaryTerm[] }) {
+/**
+ * `/p/:key/decisions` is the project's ADRs as a grid of cards, each showing only its title (the layout of the docs home);
+ * `/p/:key/decisions/:number` is one decision, with its three sections and the map nodes it applies to.
+ */
+export function Decisions(props: { projectKey: string; number?: number; decisions: Decision[]; nodes: NodeLite[]; terms: GlossaryTerm[] }) {
   const { api, queryClient } = useServices();
+  const navigate = useNavigate();
+  const { hash } = useLocation();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const [hash, setHash] = useState("");
   const [query, setQuery] = useState("");
   const byId = new Map(props.nodes.map((n) => [n.id, n]));
   const q = query.trim().toLowerCase();
   const shown = [...props.decisions].reverse().filter((d) => !q || d.title.toLowerCase().includes(q));
+  const base = `/p/${props.projectKey}/decisions`;
+  const selected = props.number === undefined ? undefined : props.decisions.find((d) => d.number === props.number);
 
+  // A link made when decisions were one long page (`#adr-4`, from the activity feed and the docs) opens that decision.
   useEffect(() => {
-    const read = () => setHash(window.location.hash.slice(1));
-    read();
-    window.addEventListener("hashchange", read);
-    return () => window.removeEventListener("hashchange", read);
-  }, []);
-
-  useEffect(() => {
-    if (hash) document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [hash]);
+    const m = /^#adr-(\d+)$/.exec(hash);
+    if (props.number === undefined && m) void navigate(`${base}/${m[1]}`, { replace: true });
+  }, [hash, props.number, base, navigate]);
 
   const save = (d: Draft) =>
     start(async () => {
@@ -68,97 +70,125 @@ export function Decisions(props: { projectKey: string; decisions: Decision[]; no
       await refreshAll(queryClient);
     });
 
+  const edit = (d: Decision) =>
+    setDraft({ number: d.number, version: d.version, title: d.title, status: d.status, context: d.context, decision: d.decision, consequences: d.consequences, nodeIds: d.nodeIds });
+  const struck = (d: Decision) => (d.status === "superseded" || d.status === "rejected") && "text-muted line-through";
+
   return (
     <GlossaryProvider terms={props.terms}>
-      <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-6 py-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold">Decisions</h2>
-              <p className="mt-1 text-sm text-muted">
-                The <i>why</i> behind non-obvious choices (ADRs), attached to the parts of the map they shape, so nobody
-                &ldquo;fixes&rdquo; something that was deliberate.
+      <div className="flex h-full flex-col overflow-hidden bg-bg">
+        {props.number === undefined ? (
+          <section className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8 lg:py-12">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h1 className="text-3xl font-bold tracking-tight">Decisions</h1>
+                <button className="btn btn-primary shrink-0" onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}>
+                  + Record decision
+                </button>
+              </div>
+              <p className="mb-6 text-sm text-muted">
+                The <i>why</i> behind non-obvious choices (ADRs), attached to the parts of the map they shape, so nobody &ldquo;fixes&rdquo; something that was deliberate.
               </p>
+
+              {props.decisions.length === 0 && (
+                <p className="rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">
+                  No decisions yet. Agents record them with <span className="font-mono">upsert_decision</span> when they make a choice a teammate might question.
+                </p>
+              )}
+
+              {props.decisions.length > 0 && (
+                <div className="relative mb-4">
+                  <input
+                    type="search"
+                    className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
+                    placeholder="Search decisions…"
+                    aria-label="Search decisions by title"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+                  />
+                  <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
+                </div>
+              )}
+
+              {props.decisions.length > 0 && shown.length === 0 && (
+                <p className="rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">No decisions match &ldquo;{query.trim()}&rdquo;.</p>
+              )}
+
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {shown.map((d) => (
+                  <li key={d.id}>
+                    <Link
+                      to={`${base}/${d.number}`}
+                      title={d.title}
+                      className="card flex h-full min-h-20 flex-col gap-3 rounded-xl px-4 py-4 transition-colors hover:border-accent hover:bg-panel-2/70"
+                    >
+                      <span className={clsx("line-clamp-3 text-[15px] font-medium leading-snug", struck(d))}>{d.title}</span>
+                      <span className="mt-auto flex flex-wrap gap-1.5">
+                        <span className={clsx("chip", STATUS[d.status])}>{d.status}</span>
+                        {d.nodeIds.slice(0, 3).map((id) => {
+                          const n = byId.get(id);
+                          return n ? <span key={id} className="chip bg-accent/10 text-accent">{n.name}</span> : null;
+                        })}
+                        {d.nodeIds.length > 3 && <span className="chip bg-panel-2 text-muted">+{d.nodeIds.length - 3}</span>}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <button
-              className="btn btn-primary shrink-0"
-              onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}
-            >
-              + Record decision
-            </button>
-          </div>
-
-          {props.decisions.length === 0 && (
-            <p className="mt-8 rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">
-              No decisions yet. Agents record them with <span className="font-mono">upsert_decision</span> when they make a choice a teammate might
-              question.
-            </p>
-          )}
-
-          {props.decisions.length > 0 && (
-            <input
-              type="search"
-              className="input mt-6"
-              placeholder="Search decisions by title"
-              aria-label="Search decisions by title"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            />
-          )}
-
-          {props.decisions.length > 0 && shown.length === 0 && (
-            <p className="mt-6 rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">
-              No decisions match &ldquo;{query.trim()}&rdquo;.
-            </p>
-          )}
-
-          <div className="mt-4 space-y-4">
-            {shown.map((d) => (
-              <article
-                key={d.id}
-                id={`adr-${d.number}`}
-                className={clsx("card scroll-mt-4 p-5", hash === `adr-${d.number}` && "border-accent")}
-              >
-                <header className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted">ADR-{d.number}</span>
-                  <h3 className={clsx("font-semibold", (d.status === "superseded" || d.status === "rejected") && "text-muted line-through")}>{d.title}</h3>
-                  <span className={clsx("chip", STATUS[d.status])}>{d.status}</span>
-                  <button
-                    className="ml-auto text-xs text-muted hover:text-fg"
-                    onClick={() => setDraft({ number: d.number, version: d.version, title: d.title, status: d.status, context: d.context, decision: d.decision, consequences: d.consequences, nodeIds: d.nodeIds })}
-                  >
-                    Edit
-                  </button>
-                </header>
-                {(["context", "decision", "consequences"] as const).map((k) =>
-                  d[k] ? (
-                    <section key={k} className="mt-3">
-                      <span className="label normal-case tracking-normal">{k}</span>
-                      <div className={clsx(k !== "decision" && "text-muted")}>
-                        <Markdown>{d[k]}</Markdown>
-                      </div>
-                    </section>
-                  ) : null,
-                )}
-                <footer className="mt-4 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                  {d.nodeIds.map((id) => {
-                    const n = byId.get(id);
-                    return n ? (
-                      <Link key={id} to={`/p/${props.projectKey}/map?node=${id}`} className="chip bg-accent/10 py-1 text-accent hover:bg-accent/20">
-                        <NodeIcon /> {n.name} <span className="ml-1 opacity-60">{n.layer}</span>
-                      </Link>
-                    ) : null;
-                  })}
-                  <span className="ml-auto">
-                    {d.authorKind === "agent" && <AgentIcon />}{d.authorKind === "agent" && " "}
-                    {d.authorName} · {timeAgo(d.updatedAt)}
-                  </span>
-                </footer>
-              </article>
-            ))}
-          </div>
-        </div>
+          </section>
+        ) : (
+          <>
+            <nav aria-label="Decision navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">
+              <Link to={base} className="shrink-0 text-muted hover:text-fg">
+                <ArrowLeftIcon /> Decisions
+              </Link>
+            </nav>
+            <section className="min-h-0 flex-1 overflow-y-auto">
+              {!selected ? (
+                <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">No decision ADR-{props.number} in this project.</p>
+              ) : (
+                <article className="mx-auto w-full max-w-3xl space-y-5 px-4 py-8 sm:px-8 lg:py-10">
+                  <div className="flex items-start justify-between gap-3">
+                    <h1 className={clsx("min-w-0 flex-1 text-3xl font-bold tracking-tight", struck(selected))}>{selected.title}</h1>
+                    <button className="btn btn-primary shrink-0" onClick={() => edit(selected)}>
+                      <EditIcon /> Edit
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-line/70 pb-4 text-xs text-muted">
+                    <span className="font-mono">ADR-{selected.number}</span>
+                    <span className={clsx("chip", STATUS[selected.status])}>{selected.status}</span>
+                    <span>
+                      {selected.authorKind === "agent" && <AgentIcon />}{selected.authorKind === "agent" && " "}
+                      {selected.authorName} · {timeAgo(selected.updatedAt)}
+                    </span>
+                  </div>
+                  {(["context", "decision", "consequences"] as const).map((k) =>
+                    selected[k] ? (
+                      <section key={k}>
+                        <span className="label normal-case tracking-normal">{k}</span>
+                        <div className={clsx(k !== "decision" && "text-muted")}>
+                          <Markdown>{selected[k]}</Markdown>
+                        </div>
+                      </section>
+                    ) : null,
+                  )}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                    {selected.nodeIds.map((id) => {
+                      const n = byId.get(id);
+                      return n ? (
+                        <Link key={id} to={`/p/${props.projectKey}/map?node=${id}`} className="chip bg-accent/10 py-1 text-accent hover:bg-accent/20">
+                          <NodeIcon /> {n.name} <span className="ml-1 opacity-60">{n.layer}</span>
+                        </Link>
+                      ) : null;
+                    })}
+                  </div>
+                </article>
+              )}
+            </section>
+          </>
+        )}
       </div>
 
       <Dialog.Root open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>

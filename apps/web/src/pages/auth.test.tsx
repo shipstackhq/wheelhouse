@@ -18,6 +18,37 @@ describe("sign in", () => {
     expect((await screen.findByRole("link", { name: "Sign up" })).getAttribute("href")).toBe("/signup");
   });
 
+  test("shows a Google button that is disabled, after the sign-in button, with no card around the page", async () => {
+    renderApp("/login", (s) => {
+      signedOut(s);
+      s.on("GET /api/app/auth/options", { signupOpen: true });
+    });
+    const google = (await screen.findByRole("button", { name: "Sign in with Google" })) as HTMLButtonElement;
+    expect(google.disabled).toBe(true);
+    expect(document.querySelectorAll(".card")).toHaveLength(0);
+    const page = google.closest("main")!;
+    expect(page.contains(screen.getByLabelText("Email"))).toBe(true);
+    expect(page.contains(screen.getByText("The board your team and your AI agents share."))).toBe(true);
+    expect(page.contains(screen.getByRole("heading", { name: "Log in to your account" }))).toBe(true);
+    // Google comes after the sign-in button, at the bottom.
+    const signIn = screen.getByRole("button", { name: "Sign in" });
+    expect(signIn.compareDocumentPosition(google) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test("the eye button shows and hides the password", async () => {
+    renderApp("/login", (s) => {
+      signedOut(s);
+      s.on("GET /api/app/auth/options", { signupOpen: true });
+    });
+    const user = userEvent.setup();
+    const password = (await screen.findByLabelText("Password")) as HTMLInputElement;
+    expect(password.type).toBe("password");
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password.type).toBe("text");
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password.type).toBe("password");
+  });
+
   test("on an invite-only server it says so instead of offering sign-up", async () => {
     renderApp("/login", (s) => {
       signedOut(s);

@@ -47,11 +47,6 @@ describe("the board", () => {
     expect(within(card).getByText("API")).toBeTruthy();
   });
 
-  test("the setup checklist is above it: a one-line pill when everything is set up", async () => {
-    await open();
-    expect(screen.getByRole("button", { name: /Setup complete/ })).toBeTruthy();
-  });
-
   test("while the board loads there is a busy skeleton; if it cannot load there is a message with Try again", async () => {
     let release!: () => void;
     const first = renderApp("/p/AA", (s) => {

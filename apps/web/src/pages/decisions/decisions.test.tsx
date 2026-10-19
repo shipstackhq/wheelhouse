@@ -6,48 +6,44 @@ import { graph, MAP_DECISIONS } from "../../test/data";
 
 afterEach(() => window.history.replaceState(null, "", "/"));
 const open = (setup: Parameters<typeof renderApp>[1] = () => {}, path = "/p/AA/decisions") => renderApp(path, setup);
-const adr = async (n: number) => (await screen.findByText(`ADR-${n}`)).closest("article") as HTMLElement;
+/** One decision's own page. */
+const detail = async (n: number, setup: Parameters<typeof renderApp>[1] = () => {}) => {
+  const app = open(setup, `/p/AA/decisions/${n}`);
+  await screen.findByText(`ADR-${n}`);
+  return app;
+};
+const cards = () => within(screen.getByRole("list")).getAllByRole("link");
 
-describe("the decisions page", () => {
-  test("lists the ADRs newest first, with number, title, status and the three sections that have text", async () => {
+describe("the decisions home", () => {
+  test("is a grid of cards, newest first, each a link to its decision showing the title and its labels", async () => {
     open();
-    const one = await adr(1);
-    const articles = screen.getAllByRole("article");
-    expect(articles.map((a) => a.id)).toEqual(["adr-2", "adr-1"]);
-    expect(within(one).getByText("Use REST")).toBeTruthy();
+    await screen.findByRole("heading", { name: "Decisions" });
+    const links = cards();
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/p/AA/decisions/2", "/p/AA/decisions/1"]);
+    expect(screen.getByRole("list").className).toContain("lg:grid-cols-3");
+    // The labels: the status, then the map nodes it applies to (as text: the card itself is the link).
+    const one = screen.getByRole("link", { name: /Use REST/ });
     expect(within(one).getByText("accepted")).toBeTruthy();
-    for (const text of ["We needed one protocol", "REST over HTTP", "No streaming"]) expect(within(one).getByText(text)).toBeTruthy();
-    expect(within(one).getByText(/^Ada Lovelace · \d+[dhm] ago$|^Ada Lovelace · just now$/)).toBeTruthy(); // who, and how long ago
+    expect(within(one).getByText("API")).toBeTruthy();
+    expect(within(screen.getByRole("link", { name: /Drop GraphQL/ })).getByText("rejected")).toBeTruthy();
+    // Not the body, the number or who wrote it.
+    expect(screen.queryByText("ADR-1")).toBeNull();
+    expect(screen.queryByText("We needed one protocol")).toBeNull();
   });
 
-  test("a section with no text is left out; a rejected decision is struck through; an agent's is marked", async () => {
+  test("a card shows at most three nodes and counts the rest", async () => {
+    const many = { ...MAP_DECISIONS[0], nodeIds: ["s-api", "s-api", "s-api", "s-api", "s-api"] };
+    open((s) => s.on("GET /api/app/projects/AA/graph", graph("AA", { decisions: [many] })));
+    await screen.findByRole("heading", { name: "Decisions" });
+    expect(within(cards()[0]).getAllByText("API")).toHaveLength(3);
+    expect(within(cards()[0]).getByText("+2")).toBeTruthy();
+  });
+
+  test("a rejected or superseded decision's title is struck through", async () => {
     open();
-    const two = await adr(2);
-    expect(within(two).queryByText("context")).toBeNull();
-    expect(within(two).queryByText("consequences")).toBeNull();
-    expect(within(two).getByText("decision")).toBeTruthy();
-    expect(within(two).getByText("Drop GraphQL").className).toContain("line-through");
-    expect(within(two).getByText("rejected")).toBeTruthy();
-    expect(two.textContent).toContain("Claude");
-  });
-
-  test("the nodes a decision applies to link to the map", async () => {
-    open();
-    const one = await adr(1);
-    const link = within(one).getByRole("link", { name: /API/ });
-    expect(link.getAttribute("href")).toBe("/p/AA/map?node=s-api");
-    expect(link.textContent).toContain("system");
-  });
-
-  test("glossary terms in a decision are underlined, and hovering shows the definition", async () => {
-    open((s) =>
-      s.on("GET /api/app/projects/AA/graph", graph("AA", { decisions: [{ ...MAP_DECISIONS[0], context: "Every Invoice goes through the API" }] })),
-    );
-    const one = await adr(1);
-    const term = within(one).getByText("Invoice");
-    expect(term.tagName).toBe("ABBR");
-    await userEvent.setup().hover(term);
-    expect(await screen.findByText("A bill we send")).toBeTruthy();
+    await screen.findByRole("heading", { name: "Decisions" });
+    expect(screen.getByText("Drop GraphQL").className).toContain("line-through");
+    expect(screen.getByText("Use REST").className).not.toContain("line-through");
   });
 
   test("with no decisions it explains how they get made; the search appears only when there are some", async () => {
@@ -61,31 +57,77 @@ describe("the decisions page", () => {
 
   test("the search narrows by title, Escape clears it, and it says when nothing matches", async () => {
     open();
-    await adr(1);
+    await screen.findByRole("heading", { name: "Decisions" });
     const box = screen.getByLabelText("Search decisions by title");
     const user = userEvent.setup();
     await user.type(box, "graph");
-    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(cards()).toHaveLength(1);
     expect(screen.getByText("Drop GraphQL")).toBeTruthy();
     await user.type(box, "zzz");
     expect(screen.getByText(/No decisions match/)).toBeTruthy();
     await user.keyboard("{Escape}");
-    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(cards()).toHaveLength(2);
   });
 
-  test("a link to #adr-N scrolls to that decision and highlights it", async () => {
-    const calls: string[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
-      calls.push((this as HTMLElement).id);
-    };
-    window.history.replaceState(null, "", "/p/AA/decisions#adr-1");
-    open(() => {}, "/p/AA/decisions#adr-1");
-    const one = await adr(1);
-    await waitFor(() => expect(calls).toContain("adr-1"));
-    expect(one.className).toContain("border-accent");
-    expect((await adr(2)).className).not.toContain("border-accent");
+  test("clicking a card opens that decision at its own address", async () => {
+    const { at } = open();
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("link", { name: /^Use REST/ }));
+    await waitFor(() => expect(at()).toBe("/p/AA/decisions/1"));
+    expect(await screen.findByText("ADR-1")).toBeTruthy();
   });
 
+  test("an old link to #adr-N opens that decision", async () => {
+    const { at } = open(() => {}, "/p/AA/decisions#adr-1");
+    await waitFor(() => expect(at()).toBe("/p/AA/decisions/1"));
+    expect(await screen.findByText("ADR-1")).toBeTruthy();
+  });
+});
+
+describe("one decision", () => {
+  test("shows the title, number, status, who and when, and the three sections that have text", async () => {
+    await detail(1);
+    expect(screen.getByRole("heading", { name: "Use REST" })).toBeTruthy();
+    expect(screen.getByText("accepted")).toBeTruthy();
+    for (const text of ["We needed one protocol", "REST over HTTP", "No streaming"]) expect(screen.getByText(text)).toBeTruthy();
+    expect(screen.getByText(/^Ada Lovelace · \d+[dhm] ago$|^Ada Lovelace · just now$/)).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Decision navigation" })).getByRole("link", { name: /Decisions/ }).getAttribute("href")).toBe("/p/AA/decisions");
+  });
+
+  test("a section with no text is left out; a rejected decision is struck through; an agent's is marked", async () => {
+    await detail(2);
+    expect(screen.queryByText("context")).toBeNull();
+    expect(screen.queryByText("consequences")).toBeNull();
+    expect(screen.getByText("decision")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Drop GraphQL" }).className).toContain("line-through");
+    expect(screen.getByText("rejected")).toBeTruthy();
+    expect(document.body.textContent).toContain("Claude");
+  });
+
+  test("the nodes a decision applies to link to the map", async () => {
+    await detail(1);
+    const link = within(screen.getByRole("article")).getByRole("link", { name: /API/ });
+    expect(link.getAttribute("href")).toBe("/p/AA/map?node=s-api");
+    expect(link.textContent).toContain("system");
+  });
+
+  test("glossary terms in a decision are underlined, and hovering shows the definition", async () => {
+    await detail(1, (s) =>
+      s.on("GET /api/app/projects/AA/graph", graph("AA", { decisions: [{ ...MAP_DECISIONS[0], context: "Every Invoice goes through the API" }] })),
+    );
+    const term = screen.getByText("Invoice");
+    expect(term.tagName).toBe("ABBR");
+    await userEvent.setup().hover(term);
+    expect(await screen.findByText("A bill we send")).toBeTruthy();
+  });
+
+  test("a number that is not a decision of this project says so", async () => {
+    open(() => {}, "/p/AA/decisions/99");
+    expect(await screen.findByText("No decision ADR-99 in this project.")).toBeTruthy();
+  });
+});
+
+describe("the decisions page", () => {
   describe("recording and editing", () => {
     test("+ Record decision needs a title, and saves a new ADR with the chosen nodes", async () => {
       const { server } = open((s) => s.on("PUT /api/app/projects/AA/decisions", { decision: { ...MAP_DECISIONS[0], number: 3 } }));
@@ -109,9 +151,9 @@ describe("the decisions page", () => {
     });
 
     test("Edit opens the ADR with its text, and saves against the version it was read at", async () => {
-      const { server } = open((s) => s.on("PUT /api/app/projects/AA/decisions", { decision: MAP_DECISIONS[1] }));
       const user = userEvent.setup();
-      await user.click(within(await adr(2)).getByRole("button", { name: "Edit" }));
+      const { server } = await detail(2, (s) => s.on("PUT /api/app/projects/AA/decisions", { decision: MAP_DECISIONS[1] }));
+      await user.click(screen.getByRole("button", { name: "Edit" }));
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText("Edit ADR-2")).toBeTruthy();
       expect((within(dialog).getByPlaceholderText(/Use 303 redirects/) as HTMLInputElement).value).toBe("Drop GraphQL");
@@ -124,12 +166,12 @@ describe("the decisions page", () => {
 
     test("a stale edit is refused with the server's message, the dialog stays open with the draft, and the page shows the ADR as it is now", async () => {
       let current = MAP_DECISIONS[1];
-      const { server } = open((s) => {
+      const user = userEvent.setup();
+      const { server } = await detail(2, (s) => {
         s.on("GET /api/app/projects/AA/graph", () => graph("AA", { decisions: [MAP_DECISIONS[0], current] }));
         s.on("PUT /api/app/projects/AA/decisions", apiError(409, "conflict", "ADR-2 was changed (version 4, you had 3). Re-read and retry.", { current: { ...MAP_DECISIONS[1], version: 4, title: "Changed meanwhile" } }));
       });
-      const user = userEvent.setup();
-      await user.click(within(await adr(2)).getByRole("button", { name: "Edit" }));
+      await user.click(screen.getByRole("button", { name: "Edit" }));
       const dialog = await screen.findByRole("dialog");
       await user.type(within(dialog).getByPlaceholderText(/Use 303 redirects/), " (mine)");
       current = { ...MAP_DECISIONS[1], version: 4, title: "Changed meanwhile" };
@@ -141,28 +183,28 @@ describe("the decisions page", () => {
     });
 
     test("a node can be taken off the list and another added; Cancel throws the edit away", async () => {
-      open();
       const user = userEvent.setup();
-      await user.click(within(await adr(1)).getByRole("button", { name: "Edit" }));
+      await detail(1);
+      await user.click(screen.getByRole("button", { name: "Edit" }));
       const dialog = await screen.findByRole("dialog");
       const chip = within(dialog).getByText("API").closest(".chip") as HTMLElement;
       await user.click(within(chip).getByRole("button"));
       expect(within(dialog).queryByText("API")).toBeNull();
       await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect(within(await adr(1)).getByRole("link", { name: /API/ })).toBeTruthy(); // nothing was saved
+      expect(within(screen.getByRole("article")).getByRole("link", { name: /API/ })).toBeTruthy(); // nothing was saved
     });
 
     test("a decision changed by an agent shows over the live stream", async () => {
       let decisions = [...MAP_DECISIONS];
       open((s) => s.on("GET /api/app/projects/AA/graph", () => graph("AA", { decisions })));
-      await adr(1);
+      await screen.findByRole("link", { name: /^Use REST/ });
       const { FakeEventSource } = await import("../../test/fake-event-source");
       await waitFor(() => expect(FakeEventSource.open.length).toBe(1));
       decisions = [...decisions, { ...MAP_DECISIONS[0], id: "dec3", number: 3, title: "Added by an agent" }];
       act(() => FakeEventSource.open[0].emit("change", { seq: 4 }));
-      await adr(3);
-      expect(screen.getAllByRole("article").map((a) => a.id)).toEqual(["adr-3", "adr-2", "adr-1"]);
+      await screen.findByRole("link", { name: /^Added by an agent/ });
+      expect(cards().map((a) => a.getAttribute("href"))).toEqual(["/p/AA/decisions/3", "/p/AA/decisions/2", "/p/AA/decisions/1"]);
     });
   });
 });

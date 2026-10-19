@@ -59,6 +59,10 @@ import {
   RiParagraph,
   RiRobot2Line,
   RiSearchLine,
+  RiMailLine,
+  RiLockLine,
+  RiEyeLine,
+  RiEyeOffLine,
   RiSeparator,
   RiSparklingLine,
   RiStrikethrough,
@@ -109,6 +113,10 @@ export const EditIcon = icon(RiEditLine);
 export const MenuIcon = icon(RiMenuLine);
 export const MoreIcon = icon(RiMoreLine);
 export const SearchIcon = icon(RiSearchLine);
+export const MailIcon = icon(RiMailLine);
+export const LockIcon = icon(RiLockLine);
+export const EyeIcon = icon(RiEyeLine);
+export const EyeOffIcon = icon(RiEyeOffLine);
 export const WarningIcon = icon(RiAlertLine);
 export const PendingIcon = icon(RiCircleLine);
 export const AskIcon = icon(RiSparklingLine);

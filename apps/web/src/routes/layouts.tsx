@@ -30,18 +30,16 @@ export function RootLayout() {
   );
 }
 
-/** Sign-in and sign-up: a centred card. */
+/** Sign-in and sign-up: the logo, the tagline and the form, centred on the page with no card around them. */
 export function AuthLayout() {
   return (
-    <main className="flex min-h-dvh items-center justify-center px-4">
+    <main className="flex min-h-dvh items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
+        <div className="mb-8">
           <Logo className="text-lg" />
           <p className="mt-2 text-sm text-muted">The board your team and your AI agents share.</p>
         </div>
-        <div className="card p-6">
-          <Outlet />
-        </div>
+        <Outlet />
       </div>
     </main>
   );

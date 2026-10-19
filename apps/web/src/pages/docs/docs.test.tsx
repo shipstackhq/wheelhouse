@@ -470,7 +470,7 @@ describe("decision records", () => {
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
     await user.click(within(section).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "ADR-1: Use REST" }));
-    await waitFor(() => expect(at()).toBe("/p/AA/decisions"));
+    await waitFor(() => expect(at()).toBe("/p/AA/decisions/1")); // the linked decision opens
   });
 
   test("an ordinary doc does not offer it", async () => {
