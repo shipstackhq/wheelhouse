@@ -3,7 +3,7 @@
  * team A owns. Seeds both teams with data in every table, then attacks with A's ids, names and keys as B's human
  * and B's agent. Runs against a throwaway in-memory PGlite (`pnpm test`), or a real Postgres with
  * TEST_DATABASE_URL=postgres://... and `--test-force-exit`; the guards at the bottom fail the build when a
- * tool, a server action or a database-touching file is added without an isolation entry.
+ * tool or a database-touching file is added without an isolation entry.
  */
 if (process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -463,7 +463,7 @@ describe("repositories (WH-68)", () => {
   });
 
   test("B cannot browse A's connected repo's tree by guessing A's repositoryId (WH-82)", async () => {
-    // browseRepoTreeAction (src/app/actions.ts) resolves the repository the same way: svc.listRepositories(actor, projectKey)
+    // The web API's repository browse resolves the repository the same way: svc.listRepositories(actor, projectKey)
     // then matches repositoryId against that list. A's repo never appears in B's list, so B's lookup fails
     // closed (not_found) before any GitHub API call would be made — mirrored here at the service layer.
     const bList = await svc.listRepositories(B.owner, B.projectKey);
@@ -560,77 +560,8 @@ describe("project keys are per team (continued)", () => {
 
 // ───────── guards: new entry points must be audited ─────────
 
-/** Every exported server action, and why it cannot cross teams. A new action must be added here. */
-const ACTION_AUDIT: Record<string, string> = {
-  signup: "creates a new team for the first account only",
-  login: "authenticates by email and password",
-  logout: "destroys the caller's own session",
-  createInviteAction: "invites.ts: issuer's team from the session; new-team invites admin only",
-  revokeInviteAction: "invites.ts: scoped to the issuer's team (or admin for new-team invites)",
-  lookupInviteAction: "token holder only; one generic answer",
-  acceptInviteAction: "token holder only; email, team and role come from the invite",
-  suspendTeamAction: "teams-admin.ts: instance admin only",
-  restoreTeamAction: "teams-admin.ts: instance admin only",
-  updateMember: "members.ts: every statement scoped by the caller's team id (tested)",
-  removeMember: "members.ts: every statement scoped by the caller's team id (tested)",
-  changePassword: "the caller's own user row",
-  createApiKey: "inserts with the caller's team id",
-  revokeApiKey: "members.ts: scoped by the caller's team id (tested)",
-  createProjectAction: "service.createProject with the caller's team",
-  createConceptFromDescriptionAction: "service.getProject + service.upsertNode (getProject)",
-  latestSeq: "service.getProject (team scoped) then events of that project",
-  moveTicketAction: "service.moveTicket (resolveTicket joins the team)",
-  createTicketAction: "service.createTicket (getProject)",
-  createTicketFromActionItemAction: "service.createTicket (getProject)",
-  listDocTemplatesAction: "static global metadata, no DB access, nothing team-scoped (WH-65)",
-  updateTicketAction: "service.updateTicket (resolveTicket; assignee checked)",
-  deleteTicketAction: "service.deleteTicket (resolveTicket)",
-  getTicketAction: "service.getTicket (resolveTicket)",
-  commentAction: "service.addComment (resolveTicket)",
-  linkNodeAction: "service.linkTicketNode (ticket and node in one team project)",
-  getGraphAction: "service.getGraph (getProject)",
-  upsertNodeAction: "service.upsertNode (getProject)",
-  deleteNodeAction: "service.deleteNode (getProject)",
-  saveLayout: "service.saveLayout (nodes filtered by the team's project)",
-  saveLayoutAction: "service.saveLayout (nodes filtered by the team's project)",
-  connectNodesAction: "service.upsertEdge (getProject)",
-  deleteEdgeAction: "service.deleteEdge (edge filtered by the team's project)",
-  markFreshAction: "service.markFresh (getProject)",
-  upsertFlowAction: "service.upsertFlow (getProject)",
-  deleteFlowAction: "service.deleteFlow (getProject)",
-  upsertDecisionAction: "service.upsertDecision (getProject)",
-  upsertTermAction: "service.upsertTerm (getProject)",
-  deleteTermAction: "service.deleteTerm (getProject)",
-  askAction: "ask.askMap (getGraph, getProject)",
-  markAllSeenAction: "service.markAllSeen (keys filtered by the caller's team)",
-  removeSessionAction: "service.removeSession (project and session filtered by team)",
-  resolveDraftAction: "sync.resolveDraft (draft filtered by the team's project)",
-  listRepositoriesAction: "service.listRepositories (getProject)",
-  createRepositoryAction: "service.createRepository (getProject; owner-only)",
-  updateRepositoryAction: "service.updateRepository (getProject + resolveRepository scoped to it; owner-only)",
-  connectGithubRepositoryAction: "github/service.ts: owner-only; the installation must be registered to the caller's team; name and branch read from GitHub (tested in github.test.ts)",
-  retireRepositoryAction: "service.retireRepository (getProject + resolveRepository scoped to it; owner-only)",
-  browseRepoTreeAction: "service.listRepositories (getProject); repositoryId matched only against that project's own rows, so another team's id returns not_found before any GitHub call is made (WH-82)",
-  setKeyDocsWriteAction: "actions.ts: key looked up and updated filtered by the caller's team id",
-  listDocsAction: "service.listDocs (getProject)",
-  getDocAction: "service.getDoc (getProject + resolveDoc scoped to it)",
-  createDocAction: "service.createDoc (getProject)",
-  updateDocAction: "service.updateDoc (getProject + resolveDoc scoped to it)",
-  moveDocAction: "service.moveDoc (getProject + resolveDoc scoped to it)",
-  deleteDocAction: "service.deleteDoc (getProject + resolveDoc scoped to it)",
-  linkDocNodeAction: "service.linkDocNode (getProject + resolveDoc/resolveNode scoped to it)",
-  markDocFreshAction: "service.markDocFresh -> updateDoc (getProject + resolveDoc scoped to it)",
-  suggestDocAnchorsAction: "service.suggestDocAnchors (getProject + resolveDoc scoped to it)",
-  resolveDocDraftAction: "sync.resolveDocDraft (draft filtered by the team's project)",
-};
-
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
 const DB_FILE_AUDIT: Record<string, string> = {
-  "src/app/(app)/agents/page.tsx": "api keys and projects filtered by the caller's team id",
-  "src/app/(app)/p/[key]/page.tsx": "members filtered by the caller's team id; the project via service",
-  "src/app/(app)/p/[key]/docs/page.tsx": "members filtered by the caller's team id, for the doc byline; the project/docs via service",
-  "src/app/(app)/team/page.tsx": "members filtered by the caller's team id; invites via invites.ts",
-  "src/app/actions.ts": "see ACTION_AUDIT",
   "apps/api/src/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
   "packages/core/src/db/index.ts": "the connection itself",
   "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
@@ -656,19 +587,10 @@ const walk = (dir: string): string[] =>
   fs.readdirSync(dir, { withFileTypes: true }).flatMap((d) => (d.isDirectory() ? walk(path.join(dir, d.name)) : [path.join(dir, d.name)]));
 
 describe("new entry points must be audited", () => {
-  test("every exported server action has an audit entry", () => {
-    const src = fs.readFileSync("src/app/actions.ts", "utf8");
-    const exported = [...src.matchAll(/^export async function (\w+)/gm)].map((m) => m[1]).sort();
-    const known = Object.keys(ACTION_AUDIT).filter((k) => exported.includes(k) || !["saveLayout"].includes(k)).sort();
-    const missing = exported.filter((e) => !(e in ACTION_AUDIT));
-    assert.deepEqual(missing, [], `server actions without an isolation audit entry: ${missing.join(", ")}`);
-    assert.ok(known.length > 0);
-  });
-
   test("every file that touches the database directly has an audit entry", () => {
-    // The Next app, the core package and the API: the service layer lives in packages/core and must stay covered.
+    // The core package and the API: the service layer lives in packages/core and must stay covered.
     // The API too: its controllers and guards must not touch the database, so none has an audit entry and any that does fails here.
-    const files = [...walk("src"), ...walk("packages/core/src"), ...walk("apps/api/src")]
+    const files = [...walk("packages/core/src"), ...walk("apps/api/src")]
       .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f))
       .filter((f) => /\bgetDb\(/.test(fs.readFileSync(f, "utf8")))
       .map((f) => f.split(path.sep).join("/"))

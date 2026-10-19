@@ -7,7 +7,8 @@
  *   pnpm test:contract
  *   pnpm test:contract --server-cmd "pnpm --filter api start"      # another server; {PORT} is replaced
  *   pnpm test:contract --database-url "postgres://u:p@host/wh_p{PASS}"   # a real Postgres: {PASS} becomes 1, then 2; both must exist and be empty
- *   pnpm test:contract --suite app --server-cmd "pnpm --filter @wheelhouse/api start"   # the web-app API (/api/app), which only the Nest app has
+ *   pnpm test:contract --suite app                                  # only the web-app API (/api/app)
+ *   pnpm test:contract --suite frozen                               # only the external contract
  *   pnpm test:contract --update-golden                              # accept a deliberate contract change
  *   pnpm test:contract --only mcp,v1                                # only files whose name contains one of these
  *
@@ -123,11 +124,11 @@ function runTests(base: string, fixtures: string, files: string[], extraEnv: Rec
 }
 
 /**
- * Two suites. "frozen" (the default) is the external contract that both the Next app and the Nest app must meet. "app" is the
- * web app's own API (/api/app, WH-93), which only the Nest app has: its files are named *.app.contract.test.ts.
+ * Two suites, and "all" (the default) runs both. "frozen" is the external contract the plugin, the CLI and the GitHub App depend
+ * on. "app" is the web app's own API (/api/app, WH-93): its files are named *.app.contract.test.ts.
  */
 const allTests = () => {
-  const suite = opt("suite") ?? "frozen";
+  const suite = opt("suite") ?? "all";
   return fs
     .readdirSync(import.meta.dirname)
     .filter((f) => f.endsWith(".contract.test.ts"))
@@ -167,7 +168,7 @@ async function main() {
     }
   }
 
-  const cmd = opt("server-cmd") ?? "pnpm exec next dev -p {PORT}";
+  const cmd = opt("server-cmd") ?? "pnpm --filter @wheelhouse/api start";
   fs.mkdirSync(WORK, { recursive: true });
   let status = 0;
 

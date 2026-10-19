@@ -13,14 +13,15 @@ any server that implements the contract.
 ```bash
 pnpm test:contract                                  # seeds a throwaway database, starts the app, runs everything, cleans up
 pnpm test:contract --only webhook,v1                # only test files whose name contains one of these
-pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"   # a different server; {PORT} is replaced
-pnpm test:contract --suite app --server-cmd "pnpm --filter @wheelhouse/api start"   # the web app's API (/api/app): only the Nest app has it
+pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"   # the default server command; pass another to test a different server ({PORT} is replaced)
+pnpm test:contract --suite app                      # only the web app's API (/api/app)
+pnpm test:contract --suite frozen                   # only the external contract
 pnpm test:contract --update-golden                  # accept a deliberate contract change (review the diff in golden/)
 pnpm test:contract --keep                           # keep tests/contract/.work (databases, server logs) for inspection
 ```
 
 It runs two passes: the server with the GitHub App pointed at a fake GitHub, then a server with no GitHub App at all
-(`github-unconfigured`). About 30 seconds with `next dev`.
+(`github-unconfigured`). About a minute: it starts the NestJS API on a throwaway database.
 
 ## Against a server you started yourself
 
@@ -50,7 +51,7 @@ The server must use the seeded database (`PGLITE_DIR` or `DATABASE_URL` from the
 | `web-api.app.contract.test.ts` | **suite `app`:** sign in, sign up, sign out, who am I, projects; cookie attributes; rate limits; error envelopes |
 | `client.app.contract.test.ts` | **suite `app`:** the typed client over real HTTP |
 
-The default suite (`frozen`) is the external contract that both the Next app and the Nest app must meet. Files named `*.app.contract.test.ts` are the web app's own API, which only the Nest app has; run them with `--suite app` (or everything with `--suite all`).
+The default is `--suite all`. `--suite frozen` runs only the external contract (`/mcp`, `/api/v1`, webhooks, GitHub connect, streams: what the plugin, the CLI and the GitHub App depend on). `--suite app` runs only the files named `*.app.contract.test.ts`, the web app's own API (`/api/app`). The Next app that used to meet the frozen contract is archived (tag `archive/next-app`).
 
 ## Golden files
 
@@ -61,7 +62,7 @@ reviewed.
 
 ## Deliberately not covered
 
-- **Login, signup and logout.** They are Next server actions, not HTTP routes, so they are not part of the external contract.
+- **Login, signup and logout.** In the Next app these were server actions, not HTTP routes, so they were never part of the frozen external contract; they are tested as `/api/app/auth/*` in suite `app`.
   The contract is the cookie they produce; the seed writes sessions directly. The new UI endpoints replacing them are WH-93.
 - **The web pages** themselves; that is the job of the page-port tickets.
 - **`/api/health` returning 503** when the database is down.

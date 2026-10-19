@@ -336,8 +336,7 @@ A multi-stage `Dockerfile`: the React app is built (Vite), the API's production 
 (`pnpm deploy`), and the final image holds those, the API and `@wheelhouse/core` as TypeScript source (run with `tsx`), and
 the web build. It runs as a non-root user, `node` is PID 1 (so SIGTERM reaches the shutdown hook that closes the database; it
 stops in about two seconds, longer only if requests are still open), `HEALTHCHECK` asks `/api/health`, and migrations run when
-it boots. While the old Next.js app is still in the repository its dependencies are installed into the image as well and make it
-larger than it needs to be; removing the Next app removes them.
+it boots.
 
 ## Limits to know about
 

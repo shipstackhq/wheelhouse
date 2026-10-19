@@ -1,6 +1,6 @@
 # The web app's API (`/api/app/*`)
 
-The React app talks to the NestJS API through this API. It replaces the Next app's 59 server actions (`src/app/actions.ts`) and
+The React app talks to the NestJS API through this API. It replaces the Next app's 59 server actions (`src/app/actions.ts`, now archived at tag `archive/next-app`) and
 the data its pages read on the server. It is **new surface, used only by the web app**: it is not part of the frozen external
 contract (`/mcp`, `/api/v1`, webhooks, streams), and the Next app does not have it. The typed client is
 `@wheelhouse/api-client`; the CSRF rules are in `apps/api/src/web/csrf.ts`.

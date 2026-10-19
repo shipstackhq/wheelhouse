@@ -17,7 +17,6 @@ process.env.ADMIN_EMAILS = ADMIN_EMAIL;
 delete process.env.MAX_TEAM_MEMBERS;
 delete process.env.INVITE_TTL_HOURS;
 
-import fs from "node:fs";
 import crypto from "node:crypto";
 import { beforeEach, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -406,13 +405,5 @@ describe("races", () => {
     assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
     const info = await seatInfo(teamId);
     assert.equal(info.used, 5);
-  });
-});
-
-describe("the old temporary-password flow is gone", () => {
-  test("addMember no longer exists and nothing hands out temporary passwords", () => {
-    const actions = fs.readFileSync("src/app/actions.ts", "utf8");
-    assert.ok(!/export async function addMember/.test(actions));
-    assert.ok(!/temporary password/i.test(actions));
   });
 });

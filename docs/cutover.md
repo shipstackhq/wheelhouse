@@ -123,7 +123,7 @@ new side before rolling back, export the new directory and import it into a **fr
 `pnpm db:export --from ~/cutover/pglite --out ~/cutover/export-back && pnpm db:import --in ~/cutover/export-back --to ~/cutover/pglite-back`.
 
 After the cutover (**C**, a day later): compare the row counts the verify step printed at T+4 (tickets, comments, ADRs, docs, map nodes) with what the board, the map and the docs show now,
-and check the plugin's queue. The new directory has been written to since, so counts can only have grown. Only then is it reasonable to consider WH-102 (removing the Next app).
+and check the plugin's queue. The new directory has been written to since, so counts can only have grown. Only then is it reasonable to consider WH-102 (taking the Next app out of the tree). It is **archived, not deleted**: the last commit that contains it is tagged `archive/next-app` (`pre-migration` marks the state before the migration), so the old app can always be checked out again (see `docs/migration.md`).
 
 ## The same on a server (Postgres)
 

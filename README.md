@@ -26,7 +26,15 @@ The `wheelhouse` CLI (`@shipstack/wheelhouse-cli`), the Claude Code plugin, and 
 ```bash
 pnpm install
 pnpm seed      # optional: demo@wheelhouse.local / wheelhouse-demo + prints an API key
-pnpm dev
+pnpm build     # builds the React app (apps/web/dist)
+pnpm start     # http://localhost:3000: the API, which serves the React app too
+```
+
+For development with hot reload, run the API and the Vite dev server side by side:
+
+```bash
+PORT=3460 pnpm dev                       # the NestJS API, restarts on change
+pnpm --filter @wheelhouse/web dev        # http://localhost:5173, forwards /api and /mcp to the API on 3460
 ```
 
 No database setup is needed locally. Without `DATABASE_URL`, the app uses embedded Postgres (PGlite) stored in `.data/`. Stop the app before running `pnpm seed`, because PGlite is single-process.
@@ -59,16 +67,21 @@ Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Po
 ## Layout
 
 ```
-src/db/schema.ts        Drizzle schema (users, teams, tickets, nodes, edges, events, agent_cursors…)
-src/lib/service.ts      single write path: team scoping, optimistic locking, event emission
-src/lib/tools.ts        tool registry → exposed via /mcp and /api/v1/<tool>
-src/app/mcp/route.ts    stateless MCP (Streamable HTTP, JSON responses)
-src/app/actions.ts      server actions for the UI
-src/app/(app)/p/[key]   board, ticket drawer, map, activity
+packages/core/src/db/schema.ts   Drizzle schema (users, teams, projects, tickets, nodes, edges, events, agent_cursors…)
+packages/core/drizzle/           migrations
+packages/core/src/lib/service.ts single write path: access checks, optimistic locking, event emission
+packages/core/src/lib/tools.ts   tool registry → exposed via /mcp and /api/v1/<tool>
+apps/api                         NestJS: /mcp, /api/v1, /api/app, the GitHub webhook and connect flow, live streams; serves the React build
+apps/web                         the React app (Vite): board, map, docs, decisions, glossary, team, agents
+packages/api-client              the typed client the React app uses for /api/app
+tests/                           the HTTP contract suite (tests/contract) and the database suites (isolation, invites)
+docs/                            deploy, cutover, isolation audit, the web app's API, migration history
 ```
 
-Schema change: edit `schema.ts`, run `pnpm db:generate`, then commit the new file in `drizzle/`.
+Schema change: edit `packages/core/src/db/schema.ts`, run `pnpm db:generate`, then commit the new file in `packages/core/drizzle/`.
 
-## MVP limits
+The app used to be a single Next.js app. It is archived at the git tag `archive/next-app` (see [docs/migration.md](docs/migration.md)).
 
-There are no invite emails or password reset: owners add members, who get a temporary password. Live updates use 3s polling. Each user belongs to one team.
+## Known limits
+
+No email is sent: an invite is a link the inviter shares. There is no password reset yet (WH-73). Live updates use server-sent events and need a single app process. A person can belong to several workspaces, and a project is visible only to its members.

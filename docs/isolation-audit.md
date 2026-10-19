@@ -46,14 +46,14 @@ No path was found by which one team can read or write another team's data.
 
 ## Keeping it true
 
-`src/lib/isolation.test.ts` fails the build when:
+`tests/isolation.test.ts` fails the build when:
 
 - a **tool** is added without an attack entry (compile-time `satisfies Record<ToolName, …>` plus a runtime comparison),
-- a **server action** is added without an entry in `ACTION_AUDIT`,
-- a **file that calls `getDb()`** is added without an entry in `DB_FILE_AUDIT`.
+- an **API route** (any `@Get`/`@Post`/… in `apps/api`) is added without an entry in `API_ROUTE_AUDIT`,
+- a **file that calls `getDb()`** (in `packages/core` or `apps/api`) is added without an entry in `DB_FILE_AUDIT`. A controller or guard must never appear there: only the service layer touches the database.
 
 Each attack must be refused with a clean error (not a validation error, not a crash), return none of team A's data, and leave a hash of everything team A owns unchanged. The suite was checked by deliberately removing the team filter from `getProject`, from `resolveTicket` and from `revokeApiKey`: it failed each time.
 
 CI runs the database suites (queue, invites, admin, isolation) against a real Postgres as well as the in-memory one.
 
-Not covered by tests: server actions' form handling and page rendering (they call the audited functions), and a future SSE stream (WH-1) which must authorize per project. Postgres row-level security would add a second wall and is a possible follow-up.
+Not covered by tests: page rendering in the React app (it only calls the audited API), and anything an operator runs by hand. Postgres row-level security would add a second wall and is a possible follow-up.

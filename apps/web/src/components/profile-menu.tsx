@@ -28,7 +28,6 @@ export function Avatar({ name, email, size = 32 }: { name: string; email: string
   const [failed, setFailed] = useState(false);
   if (!failed) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- remote SVG, no optimisation needed
       <img
         src={avatarUrl(name.trim() || email)}
         alt=""

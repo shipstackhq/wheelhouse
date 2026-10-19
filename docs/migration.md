@@ -1,96 +1,39 @@
-# Migration to NestJS + React
+# The move from Next.js to NestJS + React (history)
 
-Plan: epic WH-87. Reasoning: ADR-16. This file is the working rules while the migration runs; it is deleted or reduced to a history note when the migration finishes (WH-102).
+Epic WH-87, reasoning in ADR-16, finished in WH-102. This page is a short record of what happened and where the old app lives now. The working rules used while the migration ran (the freeze, the frozen schema and API contract, the worktree routine) are no longer in force.
 
-## The freeze
+## What changed
 
-Every ticket outside the migration (WH-87 to WH-102) is frozen until cutover. Board bookkeeping for migration work (comments, moves, map updates) continues. Do not start, claim or move non-migration tickets.
+| Before | After |
+|---|---|
+| One Next.js app: pages, server actions, `/mcp`, `/api/v1`, webhooks and streams in one process | `apps/api` (NestJS) serves `/mcp`, `/api/v1`, `/api/app`, the GitHub webhook and connect flow and the live streams, and also serves the React build |
+| UI in `src/app` and `src/components`, 59 server actions | `apps/web` (React, Vite, React Router, TanStack Query) talking to `/api/app` through `@wheelhouse/api-client` |
+| Schema, service layer and libraries in `src/` | `packages/core`: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries |
 
-## What must not change
+The data was moved by an exact export and import (`docs/cutover.md`), rehearsed on copies of the real data. The URLs, API key hashing, cookie names and environment variables did not change, so the plugin, the CLI, the GitHub App and existing keys needed no reconfiguration.
 
-1. **Database schema.** Drizzle schema and migrations 0000 to 0013 are ported unchanged. If a change is unavoidable it must be additive and agreed first, in a comment on WH-87.
-2. **External contract.** Paths `/mcp`, `/api/v1/*`, `/api/webhooks/github`, `/api/github/install`, `/api/github/callback`, `/api/stream`, `/api/projects/[key]/stream`, `/api/health`; tool names and response shapes; cookie names; API key hashing; environment variables. The plugin, CLI, GitHub App and existing API keys must keep working with no reconfiguration.
-3. **Behaviour.** The contract suite (WH-89) and the existing unit, isolation and database tests must keep passing.
+## The old app is archived, not deleted
 
-## Where things live
-
-Three checkouts of one repository (`/Users/atharvamalji/Projects/saas/`):
-
-| Folder | Branch | Purpose | Port | Data |
-|---|---|---|---|---|
-| `wheelhouse-old` | detached at tag `pre-migration` | The old Next.js app: the **control plane** the board, map and ADRs live in. Never edit. | 3456 | `wheelhouse/.data/pglite` (the live data) |
-| `wheelhouse-migration` | `migration/nest-react` | The integration branch. | 3460 (Nest), 5173 (Vite) | its own copy in `.data/pglite` |
-| `wheelhouse` | `main` | Left as it was at the baseline. Holds the live data directory. Do not edit or delete. | none | `.data/pglite` is the live data |
-
-Job worktrees are created off `migration/nest-react`, one per ticket:
+- Tag **`archive/next-app`** is the last commit that contains the Next app. Tag **`pre-migration`** (`e589073`) is the state just before the migration began.
+- To look at it or run it again:
 
 ```bash
-cd /Users/atharvamalji/Projects/saas/wheelhouse-migration
-git worktree add ../wh-job-WH-90 -b wh/WH-90-monorepo migration/nest-react
+git worktree add ../wheelhouse-old archive/next-app
+cd ../wheelhouse-old && pnpm install
+PGLITE_DIR=<a COPY of a data directory> pnpm exec next dev -p 3456
 ```
 
-PRs go into `migration/nest-react`, never `main`. Name the branch or PR title with the ticket ref (`WH-90`) so the GitHub App links it. A branch named just `migration` is not allowed: it would block `migration/...` names.
+  PGlite allows one process per data directory: never point the old app at a directory another process is using, and use a copy, not the live one. The old app takes a database made by the new one only if the schema is the same (`docs/cutover.md`, "Rollback").
+- Nothing in `main` imports it. It is not a workspace package, it is not built, and it is not tested in CI.
+- **Rollback window:** the old container image and the data copies taken at cutover are kept until the date the owner records on WH-87. After that date they can be removed; the archive tag stays.
 
-Every new worktree needs its own `pnpm install --offline` (falls back to `pnpm install` if the store lacks something) and a copy of `.env.local` (git-ignored). Give each running instance its own port and its own copy of the data directory.
+## What the migration left behind
 
-When a ticket is merged into `migration/nest-react`, remove its worktree (the branch stays as history):
-
-```bash
-git worktree remove ../wh-job-WH-90 && git worktree prune
-```
-
-A worktree is a full `node_modules` (about 750MB on disk, less where pnpm clones from the store), so do not leave merged ones around.
-
-## Running the old app
-
-```bash
-cd /Users/atharvamalji/Projects/saas/wheelhouse-old
-PGLITE_DIR=/Users/atharvamalji/Projects/saas/wheelhouse/.data/pglite pnpm exec next dev -p 3456
-```
-
-PGlite allows **one process per data directory**. Stop the old app before touching its data; never point two processes at the same directory. To restart after a migration of the old app (there should be none), stop it gracefully (SIGTERM) so PGlite flushes.
-
-## What never to touch
-
-- `wheelhouse-old` (the checkout) and `wheelhouse/.data/pglite` (the live data), except by running the old app as above.
-- The GitHub App settings and webhook URL. The new app must serve the same paths.
-- `main`, until the final merge in WH-102.
-
-## How the Wheelhouse plugin behaves in these worktrees
-
-Checked from `wheelhouse-migration` (WH-88):
-
-- `wheelhouse.json` is committed and points at `http://localhost:3456`, project `WH`, so every worktree talks to the old app. That is intended.
-- The git hooks are shared by all worktrees (`.git/hooks`), and the plugin finds the repo root with `git rev-parse --show-toplevel`, so each worktree is its own root.
-- `.wheelhouse/` (briefing, session state, hook log) is git-ignored and **per worktree**: a fresh worktree starts without it and gets one at the first session or `wheelhouse context`.
-- **Landing only counts on the default branch (`main`).** Commits on `migration/nest-react` and `wh/*` branches do not flag map nodes stale or publish drafts in the old app. This is intended; the map is re-anchored in WH-101.
-- The API key is shared (`~/.config/wheelhouse/credentials.json`), so all worktrees act as the same agent key.
-
-## Baseline and rollback
-
-- Tag `pre-migration` (commit `e589073`) is the last state before the freeze: all migrations up to 0013 are committed.
-- The old app plus an untouched copy of the live data is the rollback path until WH-102 ends the rollback window.
+- `tests/isolation.test.ts` and `tests/invites.test.ts` are the database suites that used to sit in `src/lib`. The isolation audit now walks `packages/core/src` and `apps/api/src`.
+- `tests/contract/` is the HTTP contract suite, run against the NestJS API by default (`pnpm test:contract`).
+- `docs/ui-api.md` keeps the inventory of the 59 server actions and the endpoint that replaced each, as a record.
+- `docs/reanchor-rules.json` records how Next paths map to the new layout; `pnpm map:reanchor` uses it to move map nodes and docs.
 
 ## Work parked at the freeze
 
-Tickets that were in Review when the freeze started, left as they were (not moved):
-WH-20, WH-21, WH-22, WH-23, WH-51, WH-64, WH-65, WH-69, WH-82, WH-83, WH-84, WH-86.
-Everything in Todo and Backlog outside the migration is untouched. WH-20 (GitHub App) has still not been run against real github.com.
-
-## Repository layout after WH-90
-
-```
-packages/core     @wheelhouse/core: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries
-apps/api          the NestJS API: /mcp, /api/v1, /api/health (WH-91); GitHub webhook, connect flow and live streams (WH-92)
-apps/web          the React app (WH-94 shell; WH-95 dashboard, team, agents, admin, new project, sign-in and invite pages; WH-96 board and ticket dialog; WH-97 map, decisions, glossary and activity; WH-98 docs, repositories and onboarding: every page is ported)
-packages/api-client  @wheelhouse/api-client: the typed client the React app uses for /api/app (WH-93)
-src/              still the Next.js app (pages, server actions, components) until the cutover
-```
-
-- Import core as `@wheelhouse/core/db`, `@wheelhouse/core/db/schema` and `@wheelhouse/core/lib/<module>` (including `lib/github/<module>`). Inside core, use relative imports. Core must not import `next/*`, `react`, `server-only`, `@/components` or `@/app`; the type check and `grep` in the WH-90 acceptance criteria enforce it.
-- Migrations live in `packages/core/drizzle` and are frozen (0000 to 0013). `pnpm db:generate` must report no changes. Set `WHEELHOUSE_MIGRATIONS_DIR` to point a process somewhere else; otherwise `./packages/core/drizzle` and `./drizzle` are tried from the working directory.
-- `pnpm test` runs core's tests, then the app's. `pnpm typecheck` checks the whole tree and then core on its own. `pnpm test:contract` is the HTTP contract suite (WH-89); it also takes `--database-url` to run against a real Postgres.
-- `src/lib` keeps only what belongs to the Next app: `auth.ts` (cookies and redirects), `stream-route.ts`, and UI helpers (labels, history groups, map layout and collapse, the markdown editor setup, navigation progress, ticket navigation, the browser side of the live stream). `isolation.test.ts` and `invites.test.ts` stay there because they audit the app's own files; the isolation audit walks `src` and `packages/core/src`.
-- Core has no per-request cache. The Next app registers React's `cache()` for the dashboard's shared query in `src/lib/core-host.ts`; the API does not need it.
-- Moving the data and the cutover runbook (WH-100) are in `docs/cutover.md` (`pnpm db:export`, `db:import`, `db:verify`, `scripts/rehearse-data-move.sh`). Packaging (WH-99): one image holds the API and the React build, and the API serves both (`apps/api/src/web-static.ts`); `deploy/smoke-test.sh` and `deploy/contract-in-docker.sh` test it behind Caddy. Run the API with `pnpm --filter @wheelhouse/api start` (port 3000 by default; use 3460 next to the old app). Check it with `pnpm test:contract --server-cmd "pnpm --filter @wheelhouse/api start"` (the whole contract suite). Authentication, the MCP protocol and the error shapes are in `@wheelhouse/core` and shared with the Next app; change them there, once.
-- The web app's own API is `/api/app/*` (WH-93): conventions, the CSRF rules and the inventory of the 59 server actions it replaces, with the ticket that owns each, are in `docs/ui-api.md`. Its tests are `tests/contract/*.app.contract.test.ts`, run with `--suite app`; the frozen contract is the default suite.
+Tickets that were in Review when the freeze started were left where they were: WH-20, WH-21, WH-22, WH-23, WH-51, WH-64, WH-65, WH-69, WH-82, WH-83, WH-84, WH-86. Everything in Todo and Backlog outside the migration was untouched. The GitHub App (WH-20) had not yet been run against real github.com.

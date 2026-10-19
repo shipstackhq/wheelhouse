@@ -1,28 +1,14 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import tsPlugin from "@typescript-eslint/eslint-plugin";
+import reactHooks from "eslint-plugin-react-hooks";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
-
-const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+// The repository is a pnpm workspace: apps/api (NestJS), apps/web (React, Vite), packages/core and packages/api-client.
+// TypeScript rules apply everywhere; the React hooks rules apply to the React app only.
+export default [
+  { ignores: ["**/node_modules/**", "**/dist/**", ".work/**", "tests/contract/.work/**", "**/*.tsbuildinfo"] },
+  ...tsPlugin.configs["flat/recommended"],
   {
-    ignores: [
-      "node_modules/**",
-      ".next/**",
-      "out/**",
-      "build/**",
-      "next-env.d.ts",
-      "**/dist/**",
-    ],
+    files: ["apps/web/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: reactHooks.configs.recommended.rules,
   },
-  // apps/web is a Vite app, not Next: plain <a> and the Next page rules do not apply there.
-  { files: ["apps/web/**"], rules: { "@next/next/no-html-link-for-pages": "off" } },
 ];
-
-export default eslintConfig;
