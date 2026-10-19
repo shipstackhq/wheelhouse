@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ApiError } from "@wheelhouse/api-client";
-import { ADA, renderApp, signedOut } from "../test/harness";
+import { ADA, project, renderApp, signedOut } from "../test/harness";
 import { FakeEventSource } from "../test/fake-event-source";
 
 /** The pages ported so far (WH-95, WH-96), by address, with something only that page shows. The addresses are the Next app's, unchanged. */
@@ -69,6 +70,46 @@ describe("signed in: every page is in the shell", () => {
     const sidebar = screen.getByRole("navigation");
     for (const name of ["Board", "Activity", "Map", "Docs", "Decisions", "Glossary", "Repos"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
     expect(within(sidebar).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true); // the current section is marked
+  });
+
+  describe("the header search offers to create a ticket when nothing matches", () => {
+    const search = async (text: string) => {
+      const u = userEvent.setup();
+      await u.click(await screen.findByRole("combobox"));
+      await u.type(screen.getByRole("combobox"), text);
+      return u;
+    };
+    const asRole = (role: "editor" | "viewer") => (s: Parameters<typeof renderApp>[1] extends ((s: infer S) => void) | undefined ? S : never) => {
+      s.projects = [{ ...project("AA", "Alpha"), role }, project("BB", "Beta")];
+      s.on("POST /api/app/projects/AA/tickets", { ticket: { id: "t9", ref: "AA-9", title: "fix the thing", column: "Backlog" } });
+    };
+
+    test("an editor creates it in Backlog and the new ticket opens", async () => {
+      localStorage.setItem("wh_search_mock", "empty");
+      try {
+        const { server, router } = renderApp("/p/AA", asRole("editor"));
+        const u = await search("fix the thing");
+        await u.click(await screen.findByRole("button", { name: "Create a ticket titled “fix the thing”" }));
+        await waitFor(() => expect(router.state.location.search).toBe("?t=AA-9"));
+        expect(router.state.location.pathname).toBe("/p/AA");
+        expect(server.sent("POST /api/app/projects/AA/tickets").map((c) => c.body)).toEqual([{ title: "fix the thing" }]);
+      } finally {
+        localStorage.removeItem("wh_search_mock");
+      }
+    });
+
+    test("a viewer is told there are no results and is not offered a ticket", async () => {
+      localStorage.setItem("wh_search_mock", "empty");
+      try {
+        const { server } = renderApp("/p/AA", asRole("viewer"));
+        await search("fix the thing");
+        expect(await screen.findByText("No results for “fix the thing”")).toBeTruthy();
+        expect(screen.queryByRole("button", { name: /Create a ticket/ })).toBeNull();
+        expect(server.sent("POST /api/app/projects/AA/tickets")).toHaveLength(0);
+      } finally {
+        localStorage.removeItem("wh_search_mock");
+      }
+    });
   });
 
   test("the administrator pages are not shown to people who are not administrators", async () => {

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Outlet, useParams } from "react-router";
+import { Navigate, Outlet, useNavigate, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
 import { HeaderSearch } from "../components/header-search";
@@ -10,6 +10,8 @@ import { PwaRegister } from "../components/pwa";
 import { ProjectLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
+import { useServices } from "../lib/services";
+import { refreshAll } from "../lib/refresh";
 import { useMe, useProjects } from "../lib/session";
 import { NotFound } from "./errors";
 
@@ -107,7 +109,16 @@ export function AppLayout() {
 export function ProjectLayout() {
   const { key = "" } = useParams();
   const project = useProjects().data?.find((p) => p.key === key);
+  const { api, queryClient } = useServices();
+  const navigate = useNavigate();
   if (!project) return <NotFound />;
+  // A viewer cannot add tickets, so the search does not offer to; anyone else gets the ticket in Backlog, opened to fill in.
+  const canCreate = project.role === "admin" || project.role === "editor";
+  const createTicket = async (title: string) => {
+    const ticket = await api.tickets.create(project.key, { title });
+    await refreshAll(queryClient);
+    navigate(`/p/${encodeURIComponent(project.key)}?t=${encodeURIComponent(ticket.ref)}`);
+  };
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
@@ -116,7 +127,7 @@ export function ProjectLayout() {
             <h1 className="truncate font-semibold">{project.name}</h1>
           </div>
         </div>
-        <HeaderSearch projectKey={project.key} />
+        <HeaderSearch projectKey={project.key} onCreateTicket={canCreate ? createTicket : undefined} />
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <NotificationsMenu />
           <ProjectQueueMenu projectKey={project.key} />

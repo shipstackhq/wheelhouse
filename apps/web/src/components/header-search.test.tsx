@@ -36,7 +36,7 @@ function fake(opts: { fail?: SearchKind[]; counts?: Partial<Record<SearchKind, n
   return { provider, asked, failing };
 }
 
-const setup = (provider: SearchProvider, extra: { onCreateTicket?: (t: string) => void } = {}) => {
+const setup = (provider: SearchProvider, extra: { onCreateTicket?: (t: string) => void | Promise<void> } = {}) => {
   const view = renderIn(<HeaderSearch projectKey="AA" provider={provider} {...extra} />, "/p/AA");
   const box = () => screen.getByRole("combobox");
   return { ...view, box };
@@ -317,10 +317,48 @@ describe("loading, failing and empty", () => {
     expect(screen.getByText(/Try All my projects/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Create a ticket/ })).toBeNull();
     unmount();
-    setup(fake({ counts }).provider, { onCreateTicket: (t) => created.push(t) });
+    setup(fake({ counts }).provider, { onCreateTicket: (t) => void created.push(t) });
     const u = await type("zzzz");
     await u.click(await screen.findByRole("button", { name: "Create a ticket titled “zzzz”" }));
     expect(created).toEqual(["zzzz"]);
+  });
+
+  test("creating a ticket waits for the ticket to be made, then closes the panel", async () => {
+    const counts = { ticket: 0, doc: 0, node: 0, decision: 0, term: 0 };
+    let finish: () => void = () => {};
+    const made: string[] = [];
+    setup(fake({ counts }).provider, {
+      onCreateTicket: (t) => {
+        made.push(t);
+        return new Promise<void>((resolve) => (finish = resolve));
+      },
+    });
+    const u = await type("zzzz");
+    await u.click(await screen.findByRole("button", { name: "Create a ticket titled “zzzz”" }));
+    const busy = await screen.findByRole("button", { name: "Creating…" });
+    expect((busy as HTMLButtonElement).disabled).toBe(true);
+    await u.click(busy); // a second click while it is being made does nothing
+    expect(made).toEqual(["zzzz"]);
+    finish();
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(screen.queryByText(/Couldn't create the ticket/)).toBeNull();
+  });
+
+  test("a ticket that could not be created says so, keeps the panel and the query, and can be tried again", async () => {
+    const counts = { ticket: 0, doc: 0, node: 0, decision: 0, term: 0 };
+    let attempts = 0;
+    setup(fake({ counts }).provider, {
+      onCreateTicket: async () => {
+        if (++attempts === 1) throw new Error("offline");
+      },
+    });
+    const u = await type("zzzz");
+    await u.click(await screen.findByRole("button", { name: "Create a ticket titled “zzzz”" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Couldn't create the ticket/);
+    expect((screen.getByRole("combobox") as HTMLInputElement).value).toBe("zzzz");
+    await u.click(screen.getByRole("button", { name: "Create a ticket titled “zzzz”" }));
+    await waitFor(() => expect(attempts).toBe(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
   test("while a new query loads the previous results stay on screen, dimmed", async () => {

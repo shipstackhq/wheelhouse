@@ -76,7 +76,7 @@ export function metaLine(h: SearchHit, withProject: boolean): string {
 
 type Row = { id: string; hit: SearchHit };
 
-export function HeaderSearch({ projectKey, provider, onCreateTicket }: { projectKey: string; provider?: SearchProvider; onCreateTicket?: (title: string) => void }) {
+export function HeaderSearch({ projectKey, provider, onCreateTicket }: { projectKey: string; provider?: SearchProvider; onCreateTicket?: (title: string) => void | Promise<void> }) {
   const uid = useId();
   const listId = `${uid}-list`;
   const reduced = useReducedMotion();
@@ -95,6 +95,7 @@ export function HeaderSearch({ projectKey, provider, onCreateTicket }: { project
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [recent, setRecent] = useState<string[]>(() => read<string>(RECENT_KEY));
   const [opened, setOpened] = useState<Opened[]>(() => read<Opened>(OPENED_KEY));
+  const [creating, setCreating] = useState<"idle" | "busy" | "failed">("idle");
 
   const search = useGlobalSearch(query, scope, projectKey, provider);
   const searching = worthSearching(query);
@@ -104,6 +105,18 @@ export function HeaderSearch({ projectKey, provider, onCreateTicket }: { project
     setSheet(false);
     if (focus) input.current?.focus();
   }, []);
+  // "Create a ticket titled …": the caller makes the ticket (and usually opens it); a failure stays here, with the query intact.
+  const createTicket = async (title: string) => {
+    if (!onCreateTicket || creating === "busy") return;
+    setCreating("busy");
+    try {
+      await onCreateTicket(title);
+      setCreating("idle");
+      close(false);
+    } catch {
+      setCreating("failed");
+    }
+  };
   const openPanel = useCallback(() => {
     setOpen((was) => {
       if (!was) {
@@ -345,9 +358,14 @@ export function HeaderSearch({ projectKey, provider, onCreateTicket }: { project
         {scope === "project" && "Try All my projects. "}Check the spelling or use fewer words.
       </p>
       {onCreateTicket && (
-        <button type="button" className="btn" onClick={() => onCreateTicket(query.trim())}>
-          Create a ticket titled “{query.trim()}”
+        <button type="button" className="btn" disabled={creating === "busy"} onClick={() => void createTicket(query.trim())}>
+          {creating === "busy" ? "Creating…" : `Create a ticket titled “${query.trim()}”`}
         </button>
+      )}
+      {creating === "failed" && (
+        <p role="alert" className="text-xs text-danger">
+          {"Couldn't create the ticket. Check your connection and try again."}
+        </p>
       )}
     </div>
   ) : (
