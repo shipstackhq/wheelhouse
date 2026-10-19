@@ -487,3 +487,24 @@ export type GithubStatus = {
   installations: { installationId: string; account: string; failed: boolean; repositories: { id: string; fullName: string; private: boolean }[] }[];
 };
 export type OnboardingPage = { project: { key: string; name: string }; hasRepos: boolean; setup: SetupCommands };
+
+/** The header search (WH-109): one result shape for every kind of thing it finds. */
+export type SearchKind = "ticket" | "doc" | "node" | "decision" | "term";
+export type SearchHit = {
+  kind: SearchKind;
+  id: string;
+  projectKey: string;
+  title: string;
+  /** Plain text, never HTML; `marks` says which ranges to highlight. */
+  snippet?: string;
+  /** Highlight ranges [start, end) in `title`. */
+  marks?: [start: number, end: number][];
+  /** Highlight ranges [start, end) in `snippet`. */
+  snippetMarks?: [start: number, end: number][];
+  /** ref, column, priority, layer, number, status, updatedAt... */
+  meta: Record<string, string | number | null>;
+  href: string;
+  score: number;
+};
+export type SearchGroup = { kind: SearchKind; total: number; hits: SearchHit[]; error?: string };
+export type SearchResponse = { query: string; took: number; groups: SearchGroup[]; best: SearchHit[] };

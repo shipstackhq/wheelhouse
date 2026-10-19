@@ -95,7 +95,8 @@ describe("the glossary home", () => {
     open();
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ Add term" }));
-    await user.click(screen.getByRole("combobox"));
+    // The header search is a combobox too; this one is the concept picker in the form.
+    await user.click(screen.getAllByRole("combobox").find((c) => c.tagName === "BUTTON")!);
     const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
     expect(options).toEqual(["No concept node", "Billing"]);
   });

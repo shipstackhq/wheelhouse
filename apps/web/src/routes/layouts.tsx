@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Outlet, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
-import { SearchIcon } from "../components/icons";
+import { HeaderSearch } from "../components/header-search";
 import { NotificationsMenu } from "../components/notifications-menu";
 import { ProfileMenu } from "../components/profile-menu";
 import { ProjectQueueMenu } from "../components/project-queue-menu";
@@ -116,16 +116,7 @@ export function ProjectLayout() {
             <h1 className="truncate font-semibold">{project.name}</h1>
           </div>
         </div>
-        {/* Dummy for now: the one search across tickets, docs and notes (WH-66) is not wired up yet. */}
-        <div className="relative mx-auto hidden w-full max-w-md sm:block">
-          <input
-            type="search"
-            className="input !rounded-full !border-line !bg-panel-2 !py-1.5 !pl-9 text-sm focus:!border-accent"
-            placeholder="Search docs, tickets, notes"
-            aria-label="Search docs, tickets, notes"
-          />
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted" />
-        </div>
+        <HeaderSearch projectKey={project.key} />
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <NotificationsMenu />
           <ProjectQueueMenu projectKey={project.key} />
