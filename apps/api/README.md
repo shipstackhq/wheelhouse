@@ -9,7 +9,7 @@ The NestJS API (WH-91, part of the Next.js to NestJS + React migration, WH-87 / 
 | `GET /api/health` | liveness and database check |
 | `POST /api/webhooks/github` | GitHub's webhook: signature over the raw body, then the delivery (WH-20) |
 | `GET /api/github/install`, `GET /api/github/callback` | connecting GitHub for a project: owners only, a signed state and a cookie (ADR-12) |
-| `GET /api/stream`, `GET /api/projects/:key/stream` | server-sent events for the signed-in team or one project (WH-1) |
+| `GET /api/stream`, `GET /api/projects/:key/stream` | server-sent events for the signed-in workspace or one project (WH-1) |
 
 | `GET /api/app/auth/options`, `POST /api/app/auth/login`, `/signup`, `/logout`, `GET /api/app/me`, `GET /api/app/projects` | the web app's own API (WH-93); the rest follows in WH-95 to WH-98 |
 

@@ -6,12 +6,12 @@ import { LANDED_FILE } from "./lib/fake-github";
 import { anon, app, newAccount, signIn, type Sess } from "./lib/app";
 
 /**
- * The docs, repositories, Connect GitHub and onboarding endpoints (WH-98). Everything that changes data does it in a team made for
- * the test, except the GitHub connection, which needs the installation the seed gave team A (a fake GitHub answers for it).
+ * The docs, repositories, Connect GitHub and onboarding endpoints (WH-98). Everything that changes data does it in a workspace made for
+ * the test, except the GitHub connection, which needs the installation the seed gave workspace A (a fake GitHub answers for it).
  */
 const gh = fx.github!;
 
-async function team(name = "Docs") {
+async function workspace(name = "Docs") {
   const owner = await newAccount(name);
   const project = (await app("POST", "/api/app/projects", owner.sess, { body: { name: `${name} project`, key: "DOC" } })).json.project;
   const key = (await app("POST", "/api/app/keys", owner.sess, { body: { name: "agent" } })).json.secret as string;
@@ -29,14 +29,14 @@ const patch = (s: Sess, id: string, body: Record<string, unknown>, key = "DOC") 
 describe("docs", () => {
   test("signed out is a 401, and a forged request is refused", async () => {
     assert.equal((await app("GET", "/api/app/projects/DOC/docs", anon())).status, 401);
-    const t = await team();
+    const t = await workspace();
     assert.equal((await app("POST", "/api/app/projects/DOC/docs", t.s, { body: { title: "x" }, origin: "https://evil.example" })).status, 403);
     assert.equal((await app("POST", "/api/app/projects/DOC/docs", t.s, { body: { title: "x" }, csrf: null })).status, 403);
     assert.equal((await docs(t.s)).json.docs.length, 0);
   });
 
   test("a new doc, blank or from each of the five templates; a template fills the body unless one is given", async () => {
-    const t = await team();
+    const t = await workspace();
     const blank = await create(t.s, { title: "Plain" });
     assert.deepEqual([blank.body, blank.version, blank.slug, blank.stale, blank.parentId], ["", 1, "plain", false, null]);
     assert.equal(DOC_TEMPLATES.length, 5);
@@ -49,7 +49,7 @@ describe("docs", () => {
   });
 
   test("problems arrive by field, and nothing is created", async () => {
-    const t = await team();
+    const t = await workspace();
     for (const [body, field] of [[{}, "title"], [{ title: "  " }, "title"], [{ title: 5 }, "title"], [{ title: "x", template: "nope" }, "template"], [{ title: "x", body: 5 }, "body"], [{ title: "x", parent: 5 }, "parent"]] as const) {
       const r = await app("POST", "/api/app/projects/DOC/docs", t.s, { body });
       assert.equal(r.status, 400, JSON.stringify(body));
@@ -58,8 +58,8 @@ describe("docs", () => {
     assert.equal((await docs(t.s)).json.docs.length, 0);
   });
 
-  test("the index is the tree and what the page's panels offer, all from this team", async () => {
-    const t = await team();
+  test("the index is the tree and what the page's panels offer, all from this workspace", async () => {
+    const t = await workspace();
     const parent = await create(t.s, { title: "Parent" });
     const child = await create(t.s, { title: "Child", parent: parent.id });
     assert.equal(child.parentId, parent.id);
@@ -74,7 +74,7 @@ describe("docs", () => {
   });
 
   test("one doc by id or slug, with the map nodes it is linked to and none of the internal columns", async () => {
-    const t = await team();
+    const t = await workspace();
     const d = await create(t.s, { title: "Arch", body: "Hello" });
     const r = await app("GET", `/api/app/projects/DOC/docs/${d.id}`, t.s);
     assert.equal(r.status, 200);
@@ -85,7 +85,7 @@ describe("docs", () => {
   });
 
   test("edit: only what is sent changes, the version moves on, and a stale version is a 409 that returns the doc as it is now and changes nothing", async () => {
-    const t = await team();
+    const t = await workspace();
     const d = await create(t.s, { title: "Plan", body: "v1" });
     const ok = await patch(t.s, d.id, { body: "v2", version: 1 });
     assert.equal(ok.status, 200);
@@ -102,14 +102,14 @@ describe("docs", () => {
   });
 
   test("two edits from the same version: exactly one wins", async () => {
-    const t = await team();
+    const t = await workspace();
     const d = await create(t.s, { title: "Race", body: "start" });
     const rs = await Promise.all([patch(t.s, d.id, { body: "A", version: 1 }), patch(t.s, d.id, { body: "B", version: 1 })]);
     assert.deepEqual(rs.map((r) => r.status).sort(), [200, 409]);
   });
 
   test("edit problems arrive by field", async () => {
-    const t = await team();
+    const t = await workspace();
     const d = await create(t.s, { title: "Strict" });
     for (const [body, field] of [[{ title: "" }, "title"], [{ title: 5 }, "title"], [{ body: 5 }, "body"], [{ anchors: "a" }, "anchors"], [{ anchors: [1] }, "anchors"], [{ version: "1" }, "version"]] as const) {
       const r = await patch(t.s, d.id, body);
@@ -122,7 +122,7 @@ describe("docs", () => {
   });
 
   test("anchors: saved trimmed; a change to anchored code flags the doc; editing or 'still accurate' clears it", async () => {
-    const t = await team();
+    const t = await workspace();
     const d = await create(t.s, { title: "Pay docs", body: "How `src/pay/charge.ts` works" });
     const saved = await patch(t.s, d.id, { anchors: [" src/pay/** ", "", "README.md"], version: 1 });
     assert.deepEqual(saved.json.doc.anchors, ["src/pay/**", "README.md"]);
@@ -141,7 +141,7 @@ describe("docs", () => {
   });
 
   test("suggested anchors: the paths the text mentions and the anchors of the nodes it is linked to", async () => {
-    const t = await team();
+    const t = await workspace();
     const node = (await app("PUT", "/api/app/projects/DOC/nodes", t.s, { body: { name: "Billing", layer: "system", anchors: ["apps/billing/**"] } })).json.node;
     const d = await create(t.s, { title: "Billing", body: "See `src/lib/pay.ts` and apps/web/index.html." });
     assert.equal((await app("PUT", `/api/app/projects/DOC/docs/${d.id}/nodes/${node.id}`, t.s, { body: {} })).status, 200);
@@ -151,7 +151,7 @@ describe("docs", () => {
   });
 
   test("move: under another doc and back to the top; a doc cannot go under itself or its own child; a stale version is a 409", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await create(t.s, { title: "A" });
     const b = await create(t.s, { title: "B" });
     const move = (id: string, body: Record<string, unknown>) => app("POST", `/api/app/projects/DOC/docs/${id}/move`, t.s, { body });
@@ -168,7 +168,7 @@ describe("docs", () => {
   });
 
   test("delete takes the nested docs with it", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await create(t.s, { title: "A" });
     const b = await create(t.s, { title: "B", parent: a.id });
     assert.equal((await app("DELETE", `/api/app/projects/DOC/docs/${a.id}`, t.s)).status, 200);
@@ -177,7 +177,7 @@ describe("docs", () => {
   });
 
   test("link a doc to map nodes and unlink it", async () => {
-    const t = await team();
+    const t = await workspace();
     const node = (await app("PUT", "/api/app/projects/DOC/nodes", t.s, { body: { name: "Gateway", layer: "system" } })).json.node;
     const d = await create(t.s, { title: "Gateway notes" });
     assert.equal((await app("PUT", `/api/app/projects/DOC/docs/${d.id}/nodes/${node.id}`, t.s, { body: {} })).status, 200);
@@ -188,15 +188,15 @@ describe("docs", () => {
   });
 
   test("an action item becomes a ticket through the ordinary ticket endpoint", async () => {
-    const t = await team();
+    const t = await workspace();
     const r = await app("POST", "/api/app/projects/DOC/tickets", t.s, { body: { title: "Write the runbook" } });
     assert.equal(r.status, 201);
     assert.equal(r.json.ticket.title, "Write the runbook");
   });
 
-  test("another team's projects, docs and nodes are a 404 on every route, and change nothing", async () => {
-    const mine = await team("Mine");
-    const theirs = await team("Theirs");
+  test("another workspace's projects, docs and nodes are a 404 on every route, and change nothing", async () => {
+    const mine = await workspace("Mine");
+    const theirs = await workspace("Theirs");
     const secret = await create(theirs.s, { title: "Their plan", body: "secret" });
     const node = (await app("PUT", "/api/app/projects/DOC/nodes", theirs.s, { body: { name: "Their node", layer: "system" } })).json.node;
     const own = await create(mine.s, { title: "Mine" });
@@ -224,7 +224,7 @@ describe("docs", () => {
   });
 
   test("an agent key without docs:write cannot write a doc, but the web person can", async () => {
-    const t = await team();
+    const t = await workspace();
     const denied = await fetchV1(t.key, "upsert_doc", { project: "DOC", title: "From agent" });
     assert.equal(denied, 403);
     assert.equal((await create(t.s, { title: "From a person" })).title, "From a person");
@@ -240,7 +240,7 @@ describe("repositories", () => {
   const repos = (s: Sess, key = "DOC") => app("GET", `/api/app/projects/${key}/repositories`, s);
 
   test("link one by hand, change it, retire it; the answer is a view without installation ids", async () => {
-    const t = await team();
+    const t = await workspace();
     const made = await app("POST", "/api/app/projects/DOC/repositories", t.s, { body: { displayName: "Backend", role: "backend", defaultBranch: "trunk", pathLimit: "packages/api/" } });
     assert.equal(made.status, 201, made.text);
     const r = made.json.repository;
@@ -255,14 +255,14 @@ describe("repositories", () => {
   });
 
   test("a repository adds a service node to the map", async () => {
-    const t = await team();
+    const t = await workspace();
     await app("POST", "/api/app/projects/DOC/repositories", t.s, { body: { displayName: "Mobile", role: "ios" } });
     const g = (await app("GET", "/api/app/projects/DOC/graph", t.s)).json;
     assert.ok(g.nodes.some((n: { name: string; layer: string }) => n.name === "Mobile" && n.layer === "system"));
   });
 
   test("problems arrive by field, and nothing is created", async () => {
-    const t = await team();
+    const t = await workspace();
     for (const [body, field] of [[{ role: "x" }, "displayName"], [{ displayName: "x" }, "role"], [{ displayName: " ", role: "x" }, "displayName"], [{ displayName: "x", role: "y", provider: "svn" }, "provider"], [{ displayName: "x", role: "y", lifecycle: "dead" }, "lifecycle"], [{ displayName: "x", role: "y", pathLimit: 5 }, "pathLimit"]] as const) {
       const r = await app("POST", "/api/app/projects/DOC/repositories", t.s, { body });
       assert.equal(r.status, 400, JSON.stringify(body));
@@ -271,9 +271,9 @@ describe("repositories", () => {
     assert.equal((await repos(t.s)).json.repositories.length, 0);
   });
 
-  test("another team's repositories are a 404 and are never listed", async () => {
-    const mine = await team("Mine");
-    const theirs = await team("Theirs");
+  test("another workspace's repositories are a 404 and are never listed", async () => {
+    const mine = await workspace("Mine");
+    const theirs = await workspace("Theirs");
     const r = (await app("POST", "/api/app/projects/DOC/repositories", theirs.s, { body: { displayName: "Secret", role: "x" } })).json.repository;
     for (const [method, path, body] of [
       ["PATCH", `/api/app/projects/DOC/repositories/${r.id}`, { role: "hijacked" }],
@@ -289,7 +289,7 @@ describe("repositories", () => {
 });
 
 describe("Connect GitHub", () => {
-  /** A project of the "connect" team, which owns one installation (with one repository only it can see) and no repositories yet. */
+  /** A project of the "connect" workspace, which owns one installation (with one repository only it can see) and no repositories yet. */
   async function fresh() {
     const owner = await signIn(fx.connect.email);
     const key = `G${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
@@ -301,15 +301,15 @@ describe("Connect GitHub", () => {
   const connect = (s: Sess, key: string, body: Record<string, unknown>) => app("POST", `/api/app/projects/${key}/repositories/github`, s, { body });
   const own = { installationId: gh.installationC, repoId: gh.connectRepoId };
 
-  test("an owner sees the team's installations and the repositories this project could still connect; a member sees nothing of them", async () => {
+  test("an owner sees the workspace's installations and the repositories this project could still connect; a member sees nothing of them", async () => {
     const { owner, key } = await fresh();
     const r = await status(owner, key);
     assert.equal(r.status, 200);
     assert.deepEqual([r.json.configured, r.json.isOwner, r.json.missing], [true, true, []]);
     assert.deepEqual(r.json.installations, [{ installationId: gh.installationC, account: "contract-connect", failed: false, repositories: [{ id: gh.connectRepoId, fullName: "ct/connect-app", private: true }] }]);
-    // A plain team member is in no project they did not create (ADR-23): an owner adds them to this one first.
-    const team = await app("GET", "/api/app/team", owner);
-    const memberId = team.json.members.find((m: { email: string }) => m.email === fx.connect.memberEmail).userId;
+    // A plain workspace member is in no project they did not create (ADR-23): an owner adds them to this one first.
+    const workspace = await app("GET", "/api/app/workspace", owner);
+    const memberId = workspace.json.members.find((m: { email: string }) => m.email === fx.connect.memberEmail).userId;
     assert.equal((await app("POST", `/api/app/projects/${key}/members`, owner, { body: { userId: memberId, role: "viewer" } })).status, 201);
     const member = await status(await signIn(fx.connect.memberEmail), key);
     assert.deepEqual([member.json.configured, member.json.isOwner, member.json.installations], [true, false, []]);
@@ -326,7 +326,7 @@ describe("Connect GitHub", () => {
     const again = await connect(owner, key, own);
     assert.equal(again.status, 409);
     assert.match(again.json.error.message, /already connected to this project/);
-    // Another project of the same team can still connect it.
+    // Another project of the same workspace can still connect it.
     const other = await fresh();
     assert.equal((await status(other.owner, other.key)).json.installations[0].repositories.length, 1);
   });
@@ -337,12 +337,12 @@ describe("Connect GitHub", () => {
     assert.deepEqual([r.json.repository.role, r.json.repository.pathLimit], ["code", "packages/api/"]);
   });
 
-  test("only owners connect; the installation must be the team's own; the repository must be one GitHub lists for it", async () => {
+  test("only owners connect; the installation must be the workspace's own; the repository must be one GitHub lists for it", async () => {
     const { owner, key } = await fresh();
     const asMember = await connect(await signIn(fx.connect.memberEmail), key, own);
     assert.equal(asMember.status, 403);
     assert.match(asMember.json.error.message, /Only workspace owners/);
-    // Team B's owner, on their own project, using the connect team's installation (or team A's).
+    // Workspace B's owner, on their own project, using the connect workspace's installation (or workspace A's).
     const b = await signIn(fx.b.email);
     const before = (await app("GET", `/api/app/projects/${fx.b.projectKey}/repositories`, b)).json.repositories.length;
     for (const installationId of [gh.installationC, gh.installationA]) {
@@ -357,17 +357,17 @@ describe("Connect GitHub", () => {
       assert.ok(r.json.error.details.fields[field]);
     }
     assert.equal((await app("GET", `/api/app/projects/${key}/repositories`, owner)).json.repositories.length, 0, "nothing was connected");
-    assert.equal((await app("GET", `/api/app/projects/${fx.b.projectKey}/repositories`, b)).json.repositories.length, before, "team B's project is as it was");
+    assert.equal((await app("GET", `/api/app/projects/${fx.b.projectKey}/repositories`, b)).json.repositories.length, before, "workspace B's project is as it was");
   });
 
-  test("another team's project is a 404", async () => {
+  test("another workspace's project is a 404", async () => {
     const { key } = await fresh();
     const b = await signIn(fx.b.email);
     assert.equal((await status(b, key)).status, 404);
     assert.equal((await connect(b, key, { installationId: gh.installationB, repoId: gh.repoId })).status, 404);
   });
 
-  test("the file tree of a connected repository, for the anchor picker; a local repository has none; another team cannot browse it", async () => {
+  test("the file tree of a connected repository, for the anchor picker; a local repository has none; another workspace cannot browse it", async () => {
     const { owner, key } = await fresh();
     const id = (await connect(owner, key, own)).json.repository.id;
     const r = await app("GET", `/api/app/projects/${key}/repositories/${id}/tree`, owner);
@@ -385,7 +385,7 @@ describe("Connect GitHub", () => {
 
 describe("onboarding", () => {
   test("the page: the project, whether it has a repository, and the commands with its key and this server's address, and no API key", async () => {
-    const t = await team();
+    const t = await workspace();
     const r = await app("GET", "/api/app/projects/DOC/onboarding", t.s);
     assert.equal(r.status, 200);
     assert.deepEqual([r.json.project, r.json.hasRepos], [{ key: "DOC", name: "Docs project" }, false]);
@@ -398,7 +398,7 @@ describe("onboarding", () => {
   });
 
   test("'no code yet': a few sentences become the map's first concept", async () => {
-    const t = await team();
+    const t = await workspace();
     const r = await app("POST", "/api/app/projects/DOC/onboarding/concept", t.s, { body: { description: "  A tool that imports vendor invoices.  " } });
     assert.deepEqual([r.status, r.json], [200, { ok: true }]);
     const node = (await app("GET", "/api/app/projects/DOC/graph", t.s)).json.nodes.find((n: { layer: string }) => n.layer === "concept");
@@ -406,7 +406,7 @@ describe("onboarding", () => {
   });
 
   test("an empty description is a 400 on that field, with the usual message; a long one is cut to a 200 character summary", async () => {
-    const t = await team();
+    const t = await workspace();
     for (const body of [{}, { description: "   " }]) {
       const r = await app("POST", "/api/app/projects/DOC/onboarding/concept", t.s, { body });
       assert.equal(r.status, 400);
@@ -418,9 +418,9 @@ describe("onboarding", () => {
     assert.deepEqual([node.summary.length, node.purpose.length], [200, 500]);
   });
 
-  test("signed out is a 401; another team's project is a 404 and nothing is written", async () => {
-    const mine = await team("Mine");
-    const theirs = await team("Theirs");
+  test("signed out is a 401; another workspace's project is a 404 and nothing is written", async () => {
+    const mine = await workspace("Mine");
+    const theirs = await workspace("Theirs");
     assert.equal((await app("GET", "/api/app/projects/DOC/onboarding", anon())).status, 401);
     assert.equal((await app("POST", "/api/app/projects/NOPE/onboarding/concept", mine.s, { body: { description: "x" } })).status, 404);
     const g = (await app("GET", "/api/app/projects/DOC/graph", theirs.s)).json;

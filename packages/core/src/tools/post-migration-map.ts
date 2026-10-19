@@ -20,11 +20,11 @@ export type Outcome = { did: string[]; skipped: string[] };
 const WEB = {
   summary: "React app: the whole UI, installable as a PWA; talks only to the API",
   purpose:
-    "The browser side of Wheelhouse: the board and ticket dialog, the map, docs, decisions, glossary and activity, repositories, onboarding, team, agents and admin pages. It holds no business rule and no data access: everything it shows or changes goes through the API's /api/app endpoints, so what a person can do in the UI is exactly what the API allows.",
+    "The browser side of Wheelhouse: the board and ticket dialog, the map, docs, decisions, glossary and activity, repositories, onboarding, workspace, agents and admin pages. It holds no business rule and no data access: everything it shows or changes goes through the API's /api/app endpoints, so what a person can do in the UI is exactly what the API allows.",
   responsibilities: [
     "- Pages at the same addresses the Next app had (/p/:key/map, /p/:key/docs, /agents, ...), so links, bookmarks and the links the plugin prints keep working.",
     "- Sign-in is a router guard: signed out goes to /login before anything renders.",
-    "- Reads with TanStack Query; every change reads again what may show it. Live updates: the project's and the team's SSE streams invalidate every query, so a change by an agent shows within about a second.",
+    "- Reads with TanStack Query; every change reads again what may show it. Live updates: the project's and the workspace's SSE streams invalidate every query, so a change by an agent shows within about a second.",
     "- Talks to the API only through `@wheelhouse/api-client`, which sends the CSRF token and turns a failed call into an ApiError with `fields` (what to fix) and `current` (the row as it is now, for an optimistic-lock conflict).",
   ].join("\n"),
   interfaces:
@@ -61,7 +61,7 @@ const CORE = {
 const MODULES: { name: string; summary: string; anchors: string[]; implements?: string }[] = [
   { name: "Web app API", summary: "/api/app: the JSON endpoints behind every page, with session auth and CSRF", anchors: ["apps/api/src/web/**"] },
   { name: "GitHub webhook and connect", summary: "The signed webhook, and the install and callback of the Connect GitHub flow", anchors: ["apps/api/src/github/**"], implements: "Repository connection" },
-  { name: "Live streams", summary: "Server-sent events for a project and for a team, with a heartbeat and a cap per person", anchors: ["apps/api/src/stream/**"] },
+  { name: "Live streams", summary: "Server-sent events for a project and for a workspace, with a heartbeat and a cap per person", anchors: ["apps/api/src/stream/**"] },
 ];
 
 const EDGES: { from: string; to: string; label?: string; kind?: "depends" | "implements"; remove?: boolean }[] = [
@@ -114,7 +114,7 @@ const NEW_ADRS = [
   },
 ];
 
-/** Run the whole update as `owner`'s team's human actor. */
+/** Run the whole update as `owner`'s workspace's human actor. */
 export async function postMigrationMap(): Promise<Outcome> {
   const out: Outcome = { did: [], skipped: [] };
   const db = await getDb();
@@ -124,11 +124,11 @@ export async function postMigrationMap(): Promise<Outcome> {
     .select({ id: schema.users.id, name: schema.users.name })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .where(and(eq(schema.memberships.teamId, project.teamId), eq(schema.memberships.role, "owner")))
+    .where(and(eq(schema.memberships.workspaceId, project.workspaceId), eq(schema.memberships.role, "owner")))
     .orderBy(asc(schema.memberships.createdAt))
     .limit(1);
-  if (!owner) throw new Error("the project's team has no owner to act as");
-  const actor: Actor = { kind: "human", id: owner.id, name: owner.name, teamId: project.teamId };
+  if (!owner) throw new Error("the project's workspace has no owner to act as");
+  const actor: Actor = { kind: "human", id: owner.id, name: owner.name, workspaceId: project.workspaceId };
 
   const node = async (name: string, layer?: schema.Layer) => (await svc.getGraph(actor, PROJECT)).nodes.find((n) => n.name === name && (!layer || n.layer === layer));
   const note = (did: string) => out.did.push(did);

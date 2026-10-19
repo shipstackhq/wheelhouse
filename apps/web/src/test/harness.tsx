@@ -3,12 +3,12 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { createApiClient, type Me, type Project } from "@wheelhouse/api-client";
 import { createServices, ServicesProvider } from "../lib/services";
-import { activityEvent, adminTeam, adminTeamDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, projectMembers, repo, serveWidgets, team } from "./data";
+import { activityEvent, adminWorkspace, adminWorkspaceDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, projectMembers, repo, serveWidgets, workspace } from "./data";
 import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
   user: { id: "u1", name: "Ada Lovelace", email: "ada@example.test" },
-  team: { id: "t1", name: "Analytical Engines" },
+  workspace: { id: "t1", name: "Analytical Engines" },
   role: "owner",
   tags: ["eng"],
   isInstanceAdmin: false,
@@ -36,7 +36,7 @@ export class FakeServer {
   hold: Promise<void> | null = null;
   /** Make a path fail: a Response, or "network" for a dropped connection. */
   fail: Record<string, Response | "network"> = {};
-  /** What the page endpoints answer: "GET /api/app/team" -> a Response, or any value (sent as the 200 JSON body). Matched with the query first, then without. */
+  /** What the page endpoints answer: "GET /api/app/workspace" -> a Response, or any value (sent as the 200 JSON body). Matched with the query first, then without. */
   handlers: Record<string, Handler> = {};
   /** Every request with its parsed JSON body, in order. */
   calls: Seen[] = [];
@@ -79,15 +79,15 @@ export class FakeServer {
 /** A server that answers every page endpoint with believable data; a test overrides what it cares about with `server.on(...)`. */
 export function serverWithData() {
   const server = new FakeServer();
-  server.on("GET /api/app/team", team());
+  server.on("GET /api/app/workspace", workspace());
   server.on("GET /api/app/agents", agentsPage());
   server.on("GET /api/app/invites", { invites: [] });
   server.on("GET /api/app/projects/AA/members", projectMembers());
   server.on("GET /api/app/me/workspaces", { workspaces: [{ id: "t1", name: "Analytical Engines", role: "owner", active: true }] });
   server.on("GET /api/app/access/projects", { projects: [] });
   server.on("GET /api/app/access/audit", { events: [] });
-  server.on("GET /api/app/admin/teams", { teams: [adminTeam()] });
-  server.on("GET /api/app/admin/teams/t2", { team: adminTeamDetail() });
+  server.on("GET /api/app/admin/workspaces", { workspaces: [adminWorkspace()] });
+  server.on("GET /api/app/admin/workspaces/t2", { workspace: adminWorkspaceDetail() });
   serveWidgets(server);
   for (const key of ["AA", "BB"]) {
     server.on(`GET /api/app/projects/${key}/board`, board(key));

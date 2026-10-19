@@ -8,7 +8,7 @@ import { FakeEventSource } from "../test/fake-event-source";
 const PORTED_PAGES: [path: string, heading: RegExp][] = [
   ["/", /^Good (morning|afternoon|evening), Ada$/],
   ["/projects/new", /^New project$/],
-  ["/team", /^Analytical Engines$/],
+  ["/workspace", /^Analytical Engines$/],
   ["/agents", /^Agents & API keys$/],
   ["/p/AA", /^Alpha$/],
 ];
@@ -26,8 +26,8 @@ const PROJECT_PAGES: [path: string, find: () => Promise<unknown>][] = [
   ["/p/AA/onboarding", () => screen.findByRole("heading", { level: 2, name: "Where does your code live?" })],
 ];
 const ADMIN_PAGES: [path: string, heading: RegExp][] = [
-  ["/admin/teams", /^Workspaces on this server$/],
-  ["/admin/teams/t2", /^Babbage & Co/],
+  ["/admin/workspaces", /^Workspaces on this server$/],
+  ["/admin/workspaces/t2", /^Babbage & Co/],
   ["/admin/invites", /^Invite a new workspace$/],
 ];
 const PUBLIC_PAGES: [path: string, button: RegExp | null, text?: string][] = [
@@ -95,7 +95,7 @@ describe("signed in: every page is in the shell", () => {
     expect(screen.getByRole("navigation")).toBeTruthy();
   });
 
-  test("a project that is not this team's is not found", async () => {
+  test("a project that is not this workspace's is not found", async () => {
     renderApp("/p/ZZ");
     await screen.findByTestId("not-found");
     expect(screen.queryByTestId("page-stub")).toBeNull();
@@ -120,7 +120,7 @@ describe("signed out: the gate", () => {
     await screen.findByRole("button", { name: "Sign in" });
     expect(screen.queryByRole("navigation")).toBeNull();
     expect(screen.queryByRole("button", { name: "Account menu" })).toBeNull();
-    expect(server.requests.filter((r) => r.includes("/team") || r.includes("/dashboard") || r.includes("/agents"))).toEqual([]); // no page data was asked for
+    expect(server.requests.filter((r) => r.includes("/workspace") || r.includes("/dashboard") || r.includes("/agents"))).toEqual([]); // no page data was asked for
   });
 
   test.each(PUBLIC_PAGES)("%s is open to anyone", async (path, button, text) => {
@@ -197,7 +197,7 @@ describe("loading and failing", () => {
 });
 
 describe("live updates", () => {
-  test("a project page listens to that project's stream; the dashboard listens to the team's; other pages to neither", async () => {
+  test("a project page listens to that project's stream; the dashboard listens to the workspace's; other pages to neither", async () => {
     const { unmount } = renderApp("/p/AA/docs");
     await screen.findByRole("button", { name: "Plan" });
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/projects/AA/stream"]));
@@ -210,7 +210,7 @@ describe("live updates", () => {
     dash.unmount();
     FakeEventSource.reset();
 
-    renderApp("/team");
+    renderApp("/workspace");
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     expect(FakeEventSource.open).toEqual([]);
   });

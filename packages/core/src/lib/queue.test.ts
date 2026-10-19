@@ -33,16 +33,16 @@ const seqs = (c: Changes) => c.changes.map((e) => e.seq);
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Test team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Test workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: `t-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Tess", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
   const mkKey = async (name: string) => {
-    const [k] = await db.insert(schema.apiKeys).values({ teamId: team.id, name, prefix: "wh_", keyHash: name }).returning();
-    return { kind: "agent", id: k.id, name, teamId: team.id } satisfies Actor;
+    const [k] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name, prefix: "wh_", keyHash: name }).returning();
+    return { kind: "agent", id: k.id, name, workspaceId: workspace.id } satisfies Actor;
   };
   key = await mkKey("laptop");
   otherKey = await mkKey("ci");
-  human = { kind: "human", id: user.id, name: "Tess", teamId: team.id };
+  human = { kind: "human", id: user.id, name: "Tess", workspaceId: workspace.id };
   await svc.createProject(human, { name: "Queue test", key: "QQ" });
   ticketRef = (await svc.createTicket(human, "QQ", { title: "Shared ticket" })).ref;
 });
@@ -51,7 +51,7 @@ describe("per-session queue cursors", () => {
   test("acking in one session doesn't hide the change from another session on the same key", async () => {
     const a = await changes(key, "sess-A");
     const b = await changes(key, "sess-B");
-    assert.ok(a.total > 0, "A sees the team's changes");
+    assert.ok(a.total > 0, "A sees the workspace's changes");
     assert.deepEqual(seqs(b), seqs(a), "B starts with the same queue");
 
     await as(key, "ack_changes", { session: "sess-A", seq: a.latestSeq });

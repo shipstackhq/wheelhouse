@@ -2,25 +2,26 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "../db";
-import { inviteTtlHours, isInstanceAdmin, maxTeamMembers, passwordProblem } from "./auth-policy";
+import { inviteTtlHours, isInstanceAdmin, maxWorkspaceMembers, passwordProblem } from "./auth-policy";
 import type { ProjectRole, WorkspaceRole } from "../db/schema";
 import { audit, canManagePeople, isWorkspaceRole } from "./project-access";
 import { getProject } from "./service";
+import { newWorkspaceSlug } from "./workspace-slug";
 
 /**
  * Invite-only signup (WH-49).
  *  - A link carries a 256-bit random token. Only its SHA-256 is stored.
- *  - An invite is bound to one email, one kind (new_team | join_team), one team and one role. The accept
+ *  - An invite is bound to one email, one kind (new_workspace | join_workspace), one workspace and one role. The accept
  *    path takes none of those from the client.
  *  - Acceptance claims the invite with one guarded UPDATE inside the transaction that creates the
- *    account, so two simultaneous accepts cannot both win. A join invite also locks its team row to
+ *    account, so two simultaneous accepts cannot both win. A join invite also locks its workspace row to
  *    check the seat limit, so concurrent accepts cannot overshoot it.
  *  - Failures at acceptance all look the same to the caller (INVITE_INVALID); `reason` is for tests and logs.
  */
 
 export const INVITE_INVALID = "This invite link is invalid or has expired.";
 
-export type InviteFailureReason = "invalid" | "team_full" | "account_exists";
+export type InviteFailureReason = "invalid" | "workspace_full" | "account_exists";
 
 /** Acceptance failure. `message` is always the generic text, whatever the reason. */
 export class InviteFailure extends Error {
@@ -32,7 +33,7 @@ export class InviteFailure extends Error {
 /** A problem the person issuing an invite can be told about (they are signed in and authorised). */
 export class InviteError extends Error {
   constructor(
-    public code: "invalid" | "forbidden" | "conflict" | "team_full" | "not_found" | "weak_password",
+    public code: "invalid" | "forbidden" | "conflict" | "workspace_full" | "not_found" | "weak_password",
     message: string,
   ) {
     super(message);
@@ -40,10 +41,10 @@ export class InviteError extends Error {
 }
 
 type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
-const { invites, users, teams, memberships } = schema;
+const { invites, users, workspaces, memberships } = schema;
 
-export type Issuer = { userId: string; email: string; teamId: string; role: WorkspaceRole };
-export type NewInvite = { id: string; token: string; email: string; kind: "new_team" | "join_team"; expiresAt: Date };
+export type Issuer = { userId: string; email: string; workspaceId: string; role: WorkspaceRole };
+export type NewInvite = { id: string; token: string; email: string; kind: "new_workspace" | "join_workspace"; expiresAt: Date };
 
 const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 const newToken = () => crypto.randomBytes(32).toString("base64url");
@@ -53,49 +54,49 @@ const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
 const pending = (now: Date) => and(isNull(invites.usedAt), isNull(invites.revokedAt), gt(invites.expiresAt, now));
 
-async function memberCount(tx: Tx | DB, teamId: string) {
-  const [r] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberships).where(eq(memberships.teamId, teamId));
+async function memberCount(tx: Tx | DB, workspaceId: string) {
+  const [r] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberships).where(eq(memberships.workspaceId, workspaceId));
   return r.n;
 }
 
-async function pendingJoinCount(tx: Tx | DB, teamId: string, now: Date) {
+async function pendingJoinCount(tx: Tx | DB, workspaceId: string, now: Date) {
   const [r] = await tx
     .select({ n: sql<number>`count(*)::int` })
     .from(invites)
-    .where(and(eq(invites.kind, "join_team"), eq(invites.teamId, teamId), pending(now)));
+    .where(and(eq(invites.kind, "join_workspace"), eq(invites.workspaceId, workspaceId), pending(now)));
   return r.n;
 }
 
-/** Seats of a team: members plus pending join invites, against the limit. */
-export async function seatInfo(teamId: string, now = new Date()) {
+/** Seats of a workspace: members plus pending join invites, against the limit. */
+export async function seatInfo(workspaceId: string, now = new Date()) {
   const db = await getDb();
-  const members = await memberCount(db, teamId);
-  const pendingInvites = await pendingJoinCount(db, teamId, now);
-  const max = maxTeamMembers();
+  const members = await memberCount(db, workspaceId);
+  const pendingInvites = await pendingJoinCount(db, workspaceId, now);
+  const max = maxWorkspaceMembers();
   return { members, pending: pendingInvites, used: members + pendingInvites, max, full: members + pendingInvites >= max };
 }
 
 /** Create an invite. Returns the plain token once; it cannot be recovered later. */
 export async function createInvite(
   issuer: Issuer,
-  input: { kind: "new_team" | "join_team"; email: string; role?: WorkspaceRole; tags?: string[]; teamName?: string; projects?: { project: string; role: ProjectRole }[] },
+  input: { kind: "new_workspace" | "join_workspace"; email: string; role?: WorkspaceRole; tags?: string[]; workspaceName?: string; projects?: { project: string; role: ProjectRole }[] },
   now = new Date(),
 ): Promise<NewInvite> {
   const email = normalizeEmail(input.email);
   if (!emailOk(email)) throw new InviteError("invalid", "Enter a valid email address");
-  if (input.kind === "new_team") {
+  if (input.kind === "new_workspace") {
     if (!isInstanceAdmin(issuer.email)) throw new InviteError("forbidden", "Only instance admins can invite someone to a new workspace");
   } else if (!canManagePeople(issuer.role)) {
     throw new InviteError("forbidden", "Only workspace owners and admins can invite members");
   }
   const wanted = input.role ?? "member";
   if (!isWorkspaceRole(wanted)) throw new InviteError("invalid", "Choose a role: owner, admin, member, viewer or guest");
-  if (input.kind === "join_team" && wanted === "owner" && issuer.role !== "owner") throw new InviteError("forbidden", "Only an owner can invite another owner");
+  if (input.kind === "join_workspace" && wanted === "owner" && issuer.role !== "owner") throw new InviteError("forbidden", "Only an owner can invite another owner");
   // Projects to put the person into on accept (ADR-23). The issuer must be an admin of each one: you cannot give away a project you do not run.
   const grants: { projectId: string; role: ProjectRole }[] = [];
-  if (input.kind === "join_team" && input.projects?.length) {
+  if (input.kind === "join_workspace" && input.projects?.length) {
     if (input.projects.length > 20) throw new InviteError("invalid", "An invite can add someone to at most 20 projects");
-    const who = { kind: "human" as const, id: issuer.userId, name: issuer.email, teamId: issuer.teamId };
+    const who = { kind: "human" as const, id: issuer.userId, name: issuer.email, workspaceId: issuer.workspaceId };
     for (const g of input.projects) {
       if (!(["admin", "editor", "viewer"] as const).includes(g.role)) throw new InviteError("invalid", "Choose a project role: admin, editor or viewer");
       let p;
@@ -107,15 +108,15 @@ export async function createInvite(
       if (!grants.some((x) => x.projectId === p.id)) grants.push({ projectId: p.id, role: g.role });
     }
   }
-  const teamName = input.kind === "new_team" ? (input.teamName ?? "").trim().slice(0, 100) || null : null;
-  const role = input.kind === "join_team" ? wanted : "member";
+  const workspaceName = input.kind === "new_workspace" ? (input.workspaceName ?? "").trim().slice(0, 100) || null : null;
+  const role = input.kind === "join_workspace" ? wanted : "member";
   const tags = (input.tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean).slice(0, 20);
 
   const db = await getDb();
-  // Only an instance admin may learn that an address already has an account. A team owner must not be able to
-  // probe which emails are registered on the server (possibly in other teams), so for them the invite is created
+  // Only an instance admin may learn that an address already has an account. A workspace owner must not be able to
+  // probe which emails are registered on the server (possibly in other workspaces), so for them the invite is created
   // either way; if the address already has an account, accepting the link simply fails like any invalid link.
-  if (input.kind === "new_team") {
+  if (input.kind === "new_workspace") {
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     if (existing) throw new InviteError("conflict", "An account with that email already exists");
   }
@@ -123,20 +124,20 @@ export async function createInvite(
   const token = newToken();
   const expiresAt = new Date(now.getTime() + inviteTtlHours() * 3_600_000);
   const row = await db.transaction(async (tx) => {
-    if (input.kind === "join_team") {
-      // Lock the team so two owners (or two tabs) cannot both take the last seat.
-      const [t] = await tx.select({ suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, issuer.teamId)).for("update");
-      if (t?.suspendedAt) throw new InviteError("forbidden", "This team has been suspended. Contact the administrator.");
-      const used = (await memberCount(tx, issuer.teamId)) + (await pendingJoinCount(tx, issuer.teamId, now));
-      const max = maxTeamMembers();
+    if (input.kind === "join_workspace") {
+      // Lock the workspace so two owners (or two tabs) cannot both take the last seat.
+      const [t] = await tx.select({ suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, issuer.workspaceId)).for("update");
+      if (t?.suspendedAt) throw new InviteError("forbidden", "This workspace has been suspended. Contact the administrator.");
+      const used = (await memberCount(tx, issuer.workspaceId)) + (await pendingJoinCount(tx, issuer.workspaceId, now));
+      const max = maxWorkspaceMembers();
       if (used >= max) {
         throw new InviteError(
-          "team_full",
+          "workspace_full",
           `Your workspace is full (${used} of ${max} seats used, counting pending invites). Revoke an invite or remove a member.`,
         );
       }
     }
-    const scope = input.kind === "join_team" ? eq(invites.teamId, issuer.teamId) : isNull(invites.teamId);
+    const scope = input.kind === "join_workspace" ? eq(invites.workspaceId, issuer.workspaceId) : isNull(invites.workspaceId);
     const [dup] = await tx
       .select({ id: invites.id })
       .from(invites)
@@ -148,8 +149,8 @@ export async function createInvite(
       .values({
         kind: input.kind,
         email,
-        teamId: input.kind === "join_team" ? issuer.teamId : null,
-        teamName,
+        workspaceId: input.kind === "join_workspace" ? issuer.workspaceId : null,
+        workspaceName,
         role,
         tags,
         projects: grants,
@@ -166,21 +167,21 @@ export async function createInvite(
 
 export type PendingInvite = {
   id: string;
-  kind: "new_team" | "join_team";
+  kind: "new_workspace" | "join_workspace";
   email: string;
   role: WorkspaceRole;
-  teamName: string | null;
+  workspaceName: string | null;
   /** The projects they join on accepting, by key. */
   projects: { key: string; name: string; role: ProjectRole }[];
   createdAt: Date;
   expiresAt: Date;
 };
 
-/** Pending invites the issuer may see: their team's join invites (owners) and new-team invites (admins). */
+/** Pending invites the issuer may see: their workspace's join invites (owners) and new-workspace invites (admins). */
 export async function listInvites(issuer: Issuer, now = new Date()): Promise<PendingInvite[]> {
   const scopes = [];
-  if (canManagePeople(issuer.role)) scopes.push(and(eq(invites.kind, "join_team"), eq(invites.teamId, issuer.teamId)));
-  if (isInstanceAdmin(issuer.email)) scopes.push(eq(invites.kind, "new_team"));
+  if (canManagePeople(issuer.role)) scopes.push(and(eq(invites.kind, "join_workspace"), eq(invites.workspaceId, issuer.workspaceId)));
+  if (isInstanceAdmin(issuer.email)) scopes.push(eq(invites.kind, "new_workspace"));
   if (!scopes.length) return [];
   const db = await getDb();
   return db
@@ -189,7 +190,7 @@ export async function listInvites(issuer: Issuer, now = new Date()): Promise<Pen
       kind: invites.kind,
       email: invites.email,
       role: invites.role,
-      teamName: invites.teamName,
+      workspaceName: invites.workspaceName,
       grants: invites.projects,
       createdAt: invites.createdAt,
       expiresAt: invites.expiresAt,
@@ -212,8 +213,8 @@ export async function listInvites(issuer: Issuer, now = new Date()): Promise<Pen
 
 export async function revokeInvite(issuer: Issuer, id: string, now = new Date()) {
   const scopes = [];
-  if (canManagePeople(issuer.role)) scopes.push(and(eq(invites.kind, "join_team"), eq(invites.teamId, issuer.teamId)));
-  if (isInstanceAdmin(issuer.email)) scopes.push(eq(invites.kind, "new_team"));
+  if (canManagePeople(issuer.role)) scopes.push(and(eq(invites.kind, "join_workspace"), eq(invites.workspaceId, issuer.workspaceId)));
+  if (isInstanceAdmin(issuer.email)) scopes.push(eq(invites.kind, "new_workspace"));
   if (!scopes.length) throw new InviteError("forbidden", "Only workspace owners and admins can revoke invites");
   const db = await getDb();
   const rows = await db
@@ -230,33 +231,33 @@ export async function peekInvite(token: string, now = new Date()) {
   if (!TOKEN_RE.test(token)) return null;
   const db = await getDb();
   const [row] = await db
-    .select({ email: invites.email, kind: invites.kind, teamName: invites.teamName, teamId: invites.teamId })
+    .select({ email: invites.email, kind: invites.kind, workspaceName: invites.workspaceName, workspaceId: invites.workspaceId })
     .from(invites)
     .where(and(eq(invites.tokenHash, sha256(token)), pending(now)));
   if (!row) return null;
   const [taken] = await db.select({ id: users.id }).from(users).where(eq(users.email, row.email));
   if (taken) return null;
-  let teamName = row.teamName;
-  if (row.kind === "join_team" && row.teamId) {
-    const [t] = await db.select({ name: teams.name, suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, row.teamId));
+  let workspaceName = row.workspaceName;
+  if (row.kind === "join_workspace" && row.workspaceId) {
+    const [t] = await db.select({ name: workspaces.name, suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, row.workspaceId));
     if (!t || t.suspendedAt) return null;
-    teamName = t.name;
+    workspaceName = t.name;
   }
-  return { email: row.email, kind: row.kind, teamName };
+  return { email: row.email, kind: row.kind, workspaceName };
 }
 
 /**
- * Put the person into the projects the inviter chose, as long as each still belongs to the team. One audit line each, in the
+ * Put the person into the projects the inviter chose, as long as each still belongs to the workspace. One audit line each, in the
  * inviter's name. Shared by a new account accepting and an existing account accepting.
  */
-async function grantInviteProjects(tx: Tx, inv: typeof invites.$inferSelect, userId: string, teamId: string) {
+async function grantInviteProjects(tx: Tx, inv: typeof invites.$inferSelect, userId: string, workspaceId: string) {
   if (!inv.projects.length) return;
   const [issuer] = inv.createdBy ? await tx.select({ name: users.name }).from(users).where(eq(users.id, inv.createdBy)) : [];
   for (const g of inv.projects) {
-    const [p] = await tx.select({ id: schema.projects.id }).from(schema.projects).where(and(eq(schema.projects.id, g.projectId), eq(schema.projects.teamId, teamId)));
+    const [p] = await tx.select({ id: schema.projects.id }).from(schema.projects).where(and(eq(schema.projects.id, g.projectId), eq(schema.projects.workspaceId, workspaceId)));
     if (!p) continue;
-    await tx.insert(schema.projectMembers).values({ projectId: p.id, userId, teamId, role: g.role, addedBy: inv.createdBy }).onConflictDoNothing();
-    await audit(tx, { kind: "human", id: inv.createdBy ?? userId, name: issuer?.name ?? "An invite", teamId }, { action: "project.member_added", targetType: "user", targetId: userId, projectId: p.id, after: { role: g.role, via: "invite" } });
+    await tx.insert(schema.projectMembers).values({ projectId: p.id, userId, workspaceId, role: g.role, addedBy: inv.createdBy }).onConflictDoNothing();
+    await audit(tx, { kind: "human", id: inv.createdBy ?? userId, name: issuer?.name ?? "An invite", workspaceId }, { action: "project.member_added", targetType: "user", targetId: userId, projectId: p.id, after: { role: g.role, via: "invite" } });
   }
 }
 
@@ -285,11 +286,11 @@ export async function acceptInvite(input: { token: string; name: string; passwor
       const [inv] = await tx.select().from(invites).where(and(eq(invites.tokenHash, tokenHash), pending(now)));
       if (!inv) throw new InviteFailure("invalid");
 
-      if (inv.kind === "join_team") {
-        if (!inv.teamId) throw new InviteFailure("invalid");
-        const [t] = await tx.select({ suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, inv.teamId)).for("update");
-        if (!t || t.suspendedAt) throw new InviteFailure("invalid"); // a suspended team's invites are inert
-        if ((await memberCount(tx, inv.teamId)) >= maxTeamMembers()) throw new InviteFailure("team_full");
+      if (inv.kind === "join_workspace") {
+        if (!inv.workspaceId) throw new InviteFailure("invalid");
+        const [t] = await tx.select({ suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, inv.workspaceId)).for("update");
+        if (!t || t.suspendedAt) throw new InviteFailure("invalid"); // a suspended workspace's invites are inert
+        if ((await memberCount(tx, inv.workspaceId)) >= maxWorkspaceMembers()) throw new InviteFailure("workspace_full");
       }
 
       // The claim: succeeds for exactly one caller, whatever the concurrency.
@@ -304,18 +305,19 @@ export async function acceptInvite(input: { token: string; name: string; passwor
       if (taken) throw new InviteFailure("account_exists");
       const [u] = await tx.insert(users).values({ email: inv.email, name, passwordHash }).returning({ id: users.id });
 
-      let teamId = inv.teamId;
-      if (inv.kind === "new_team") {
-        const [t] = await tx.insert(teams).values({ name: inv.teamName || `${name}'s team` }).returning({ id: teams.id });
-        teamId = t.id;
-        await tx.insert(memberships).values({ userId: u.id, teamId, role: "owner" });
+      let workspaceId = inv.workspaceId;
+      if (inv.kind === "new_workspace") {
+        const workspaceName = inv.workspaceName || `${name}'s workspace`;
+        const [t] = await tx.insert(workspaces).values({ name: workspaceName, slug: await newWorkspaceSlug(tx, workspaceName) }).returning({ id: workspaces.id });
+        workspaceId = t.id;
+        await tx.insert(memberships).values({ userId: u.id, workspaceId, role: "owner" });
       } else {
-        await tx.insert(memberships).values({ userId: u.id, teamId: teamId!, role: inv.role, tags: inv.tags });
+        await tx.insert(memberships).values({ userId: u.id, workspaceId: workspaceId!, role: inv.role, tags: inv.tags });
       }
-      if (inv.kind === "join_team") await grantInviteProjects(tx, inv, u.id, teamId!);
+      if (inv.kind === "join_workspace") await grantInviteProjects(tx, inv, u.id, workspaceId!);
       await tx.update(invites).set({ usedBy: u.id }).where(eq(invites.id, inv.id));
       console.info(`[invite] accepted ${inv.id} kind=${inv.kind}`);
-      return { userId: u.id, teamId: teamId!, kind: inv.kind };
+      return { userId: u.id, workspaceId: workspaceId!, kind: inv.kind };
     });
   } catch (e) {
     if (e instanceof InviteFailure || e instanceof InviteError) throw e;
@@ -333,15 +335,15 @@ export async function peekInviteAsMember(user: { email: string }, token: string,
   if (!TOKEN_RE.test(token)) return null;
   const db = await getDb();
   const [row] = await db.select().from(invites).where(and(eq(invites.tokenHash, sha256(token)), pending(now)));
-  if (!row || row.kind !== "join_team" || !row.teamId || row.email !== normalizeEmail(user.email)) return null;
-  const [t] = await db.select({ name: teams.name, suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, row.teamId));
+  if (!row || row.kind !== "join_workspace" || !row.workspaceId || row.email !== normalizeEmail(user.email)) return null;
+  const [t] = await db.select({ name: workspaces.name, suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, row.workspaceId));
   if (!t || t.suspendedAt) return null;
   const named = row.projects.length
     ? await db.select({ id: schema.projects.id, key: schema.projects.key, name: schema.projects.name }).from(schema.projects).where(inArray(schema.projects.id, row.projects.map((g) => g.projectId)))
     : [];
   return {
     email: row.email,
-    teamName: t.name,
+    workspaceName: t.name,
     role: row.role,
     projects: row.projects.flatMap((g) => {
       const p = named.find((n) => n.id === g.projectId);
@@ -360,17 +362,17 @@ export async function acceptInviteAsMember(user: { id: string; email: string }, 
   const db = await getDb();
   return db.transaction(async (tx) => {
     const [inv] = await tx.select().from(invites).where(and(eq(invites.tokenHash, sha256(token)), pending(now)));
-    if (!inv || inv.kind !== "join_team" || !inv.teamId || inv.email !== normalizeEmail(user.email)) throw new InviteFailure("invalid");
-    const [t] = await tx.select({ suspendedAt: teams.suspendedAt }).from(teams).where(eq(teams.id, inv.teamId)).for("update");
+    if (!inv || inv.kind !== "join_workspace" || !inv.workspaceId || inv.email !== normalizeEmail(user.email)) throw new InviteFailure("invalid");
+    const [t] = await tx.select({ suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, inv.workspaceId)).for("update");
     if (!t || t.suspendedAt) throw new InviteFailure("invalid");
-    const [already] = await tx.select({ userId: memberships.userId }).from(memberships).where(and(eq(memberships.teamId, inv.teamId), eq(memberships.userId, user.id)));
+    const [already] = await tx.select({ userId: memberships.userId }).from(memberships).where(and(eq(memberships.workspaceId, inv.workspaceId), eq(memberships.userId, user.id)));
     if (already) throw new InviteError("conflict", "You are already in this workspace");
-    if ((await memberCount(tx, inv.teamId)) >= maxTeamMembers()) throw new InviteFailure("team_full");
+    if ((await memberCount(tx, inv.workspaceId)) >= maxWorkspaceMembers()) throw new InviteFailure("workspace_full");
     const claimed = await tx.update(invites).set({ usedAt: now, usedBy: user.id }).where(and(eq(invites.id, inv.id), pending(now))).returning({ id: invites.id });
     if (!claimed.length) throw new InviteFailure("invalid");
-    await tx.insert(memberships).values({ userId: user.id, teamId: inv.teamId, role: inv.role, tags: inv.tags });
-    await grantInviteProjects(tx, inv, user.id, inv.teamId);
-    console.info(`[invite] accepted ${inv.id} kind=join_team by an existing account`);
-    return { teamId: inv.teamId };
+    await tx.insert(memberships).values({ userId: user.id, workspaceId: inv.workspaceId, role: inv.role, tags: inv.tags });
+    await grantInviteProjects(tx, inv, user.id, inv.workspaceId);
+    console.info(`[invite] accepted ${inv.id} kind=join_workspace by an existing account`);
+    return { workspaceId: inv.workspaceId };
   });
 }

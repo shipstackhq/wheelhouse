@@ -11,7 +11,7 @@ export function errorText(error: unknown) {
 }
 
 /**
- * A page that reads one thing: a skeleton while it loads, "not found" for a 404 (a team or record that is not here or is not yours,
+ * A page that reads one thing: a skeleton while it loads, "not found" for a 404 (a workspace or record that is not here or is not yours,
  * which look the same), a message with Try again for any other failure, and the page when the data is there.
  */
 export function Loaded<T>({ query, label, rows, children }: { query: UseQueryResult<T>; label: string; rows?: number; children: (data: T) => React.ReactNode }) {

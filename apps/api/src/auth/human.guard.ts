@@ -16,7 +16,7 @@ export class SignedOutFilter implements ExceptionFilter {
   }
 }
 
-/** A person with a session cookie (not an API key): their user, team and membership. For routes a browser visits. */
+/** A person with a session cookie (not an API key): their user, workspace and membership. For routes a browser visits. */
 @Injectable()
 export class HumanGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {

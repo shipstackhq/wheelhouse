@@ -5,7 +5,7 @@ import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-/** A ticket is addressed by its ref (WH-12), which already names its project. A ticket of another team is a 404. */
+/** A ticket is addressed by its ref (WH-12), which already names its project. A ticket of another workspace is a 404. */
 @Controller("api/app/tickets")
 @AppEndpoints()
 @UseGuards(SessionGuard)

@@ -259,9 +259,9 @@ describe("the properties", () => {
   });
 
   test("a refused property change says why, and the ticket on screen is the real one", async () => {
-    const { d } = await open((s) => s.on("PATCH /api/app/tickets/AA-2", apiError(400, "invalid", "Assignee must be a member of your team", { fields: { assigneeId: "x" } })));
+    const { d } = await open((s) => s.on("PATCH /api/app/tickets/AA-2", apiError(400, "invalid", "Assignee must be a member of your workspace", { fields: { assigneeId: "x" } })));
     await pick(userEvent.setup(), d, "Assignee", "Grace Hopper");
-    expect((await within(d).findByRole("alert")).textContent).toBe("Assignee must be a member of your team");
+    expect((await within(d).findByRole("alert")).textContent).toBe("Assignee must be a member of your workspace");
   });
 });
 

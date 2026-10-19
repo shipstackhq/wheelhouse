@@ -9,7 +9,7 @@ import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class BoardController {
-  /** The project page in one read: columns, tickets, the map nodes a ticket can link to, the team's members and the setup checklist. */
+  /** The project page in one read: columns, tickets, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
   @Get(":key/board")
   board(@Req() req: SessionRequest, @Param("key") key: string) {
     return boardView(req.human.actor, key);

@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { markAllSeen } from "@wheelhouse/core/lib/service";
-import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs } from "@wheelhouse/core/lib/team-app";
+import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs } from "@wheelhouse/core/lib/workspace-app";
 import { ServiceError } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
@@ -11,7 +11,7 @@ import { requestOrigin } from "./origin";
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class KeysController {
-  /** The Agents page: the team's keys (never the key values) and the commands to connect an agent. */
+  /** The Agents page: the workspace's keys (never the key values) and the commands to connect an agent. */
   @Get("agents")
   agents(@Req() req: SessionRequest) {
     return agentsPage(req.human, requestOrigin(req));

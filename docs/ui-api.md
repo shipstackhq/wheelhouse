@@ -20,8 +20,8 @@ anything.
 or upserts at a known address, `DELETE` removes. A mutation returns the resource as it is now; a delete or an action with
 nothing to return answers `{ "ok": true }`. There is no 204: every success has a JSON body.
 
-**Requests.** A JSON object. A missing, unparseable or non-object body is a 400 `invalid`. The team is **never** taken from
-the request: not from a path, a query or a header. It is the signed-in person's team, read from their session.
+**Requests.** A JSON object. A missing, unparseable or non-object body is a 400 `invalid`. The workspace is **never** taken from
+the request: not from a path, a query or a header. It is the signed-in person's workspace, read from their session.
 
 **Errors.** One shape everywhere: `{ "error": { "code": "...", "message": "...", "details": ... } }`.
 
@@ -31,9 +31,9 @@ the request: not from a path, a query or a header. It is the signed-in person's 
 | 401 | `unauthorized` | not signed in (a JSON 401, never a redirect), or a wrong email or password |
 | 403 | `csrf_failed` | the CSRF check failed (see below) |
 | 403 | `forbidden` | signed in but not allowed (for example, owners only) |
-| 403 | `team_suspended` | the team is suspended |
+| 403 | `team_suspended` | the workspace is suspended |
 | 403 | `signup_closed` | sign-up is not open on this server |
-| 404 | `not_found` | not there, **or belongs to another team** (the two look the same) |
+| 404 | `not_found` | not there, **or belongs to another workspace** (the two look the same) |
 | 409 | `conflict` | the thing changed since you read it, or already exists; for an optimistic-lock conflict `details.current` holds what the server has now |
 | 429 | `rate_limited` | too many tries; `Retry-After` says how many seconds |
 | 500 | `internal` | a bug; nothing more is said |
@@ -42,8 +42,8 @@ the request: not from a path, a query or a header. It is the signed-in person's 
 answer is `409 conflict` with the current copy in `details.current`, and nothing is overwritten.
 
 **Sessions.** The `wh_session` cookie is the same cookie the Next app sets (httpOnly, SameSite=Lax, Secure in production, 30
-days), so a session started here works on `/api/v1` and the other way round. Every request resolves the person and their team
-from it. Sign-in and sign-up answer with the person, their team and role, and the CSRF token.
+days), so a session started here works on `/api/v1` and the other way round. Every request resolves the person and their workspace
+from it. Sign-in and sign-up answer with the person, their workspace and role, and the CSRF token.
 
 ## CSRF
 
@@ -68,20 +68,20 @@ token for you and, if the server says it went stale (signed in or out in another
    response and **never touches the database**; the isolation audit fails if a file under `apps/api/src` calls `getDb()`.
 2. `@Controller("api/app/...")` and `@AppEndpoints()` (CSRF and the error envelope); `@UseGuards(SessionGuard)` on anything for
    a signed-in person. Take the actor from `req.human`.
-3. Add the route to `API_ROUTE_AUDIT` in `src/lib/isolation.test.ts`, saying how it is scoped to the team. A route without an
+3. Add the route to `API_ROUTE_AUDIT` in `src/lib/isolation.test.ts`, saying how it is scoped to the workspace. A route without an
    entry fails the test.
 4. Contract tests in `tests/contract/*.app.contract.test.ts` (`pnpm test:contract --suite app --server-cmd "pnpm --filter
-   @wheelhouse/api start"`): the happy path, signed out, another team's data, a stale `version`, and a forged request.
+   @wheelhouse/api start"`): the happy path, signed out, another workspace's data, a stale `version`, and a forged request.
 5. A method on `@wheelhouse/api-client`.
 
-Pages also read data on the server, not only through actions (for example the dashboard, team, agents, admin, repositories and
+Pages also read data on the server, not only through actions (for example the dashboard, workspace, agents, admin, repositories and
 map pages). Each page-port ticket needs `GET` endpoints for those reads too; they are not in the inventory because they are not
 actions.
 
 ## Inventory of the 59 server actions
 
 Every exported action in `src/app/actions.ts` has exactly one row (a test keeps it that way). "Owner" is the ticket that builds
-the endpoint: WH-95 dashboard, team, agents, admin, new project, auth and invite pages; WH-96 board and ticket dialog; WH-97
+the endpoint: WH-95 dashboard, workspace, agents, admin, new project, auth and invite pages; WH-96 board and ticket dialog; WH-97
 map, decisions, glossary and activity; WH-98 docs, repositories and onboarding. "unneeded" means there is nothing to port, with
 the reason.
 
@@ -94,10 +94,10 @@ the reason.
 | `revokeInviteAction` | `DELETE /api/app/invites/:id` | WH-95 |  |
 | `lookupInviteAction` | `POST /api/app/invites/peek` | WH-95 | POST so the token never sits in a URL or a log; public (no session), rate limited per address |
 | `acceptInviteAction` | `POST /api/app/invites/accept` | WH-95 | public; creates the account and signs in like login; the two passwords must match |
-| `suspendTeamAction` | `POST /api/app/admin/teams/:id/suspend` | WH-95 | instance admins only |
-| `restoreTeamAction` | `POST /api/app/admin/teams/:id/restore` | WH-95 | instance admins only |
-| `updateMember` | `PATCH /api/app/team/members/:userId` | WH-95 | owners only; role and tags |
-| `removeMember` | `DELETE /api/app/team/members/:userId` | WH-95 | owners only |
+| `suspendWorkspaceAction` | `POST /api/app/admin/workspaces/:id/suspend` | WH-95 | instance admins only |
+| `restoreWorkspaceAction` | `POST /api/app/admin/workspaces/:id/restore` | WH-95 | instance admins only |
+| `updateMember` | `PATCH /api/app/workspace/members/:userId` | WH-95 | owners only; role and tags |
+| `removeMember` | `DELETE /api/app/workspace/members/:userId` | WH-95 | owners only |
 | `changePassword` | `POST /api/app/me/password` | WH-95 | needs the current password |
 | `createApiKey` | `POST /api/app/keys` | WH-95 | the secret is returned once, in this response only |
 | `revokeApiKey` | `DELETE /api/app/keys/:id` | WH-95 |  |
@@ -140,7 +140,7 @@ the reason.
 | `resolveDocDraftAction` | none | unneeded | not called by any page today; if the docs UI needs it later, add `POST /api/app/projects/:key/doc-drafts/:id/resolve` |
 | `listRepositoriesAction` | `GET /api/app/projects/:key/repositories` | WH-98 | also read by the docs anchor picker |
 | `createRepositoryAction` | `POST /api/app/projects/:key/repositories` | WH-98 | any teammate (as before); 201 |
-| `connectGithubRepositoryAction` | `POST /api/app/projects/:key/repositories/github` | WH-98 | owners only; the installation must be the team's own (ADR-12); name and branch are read from GitHub |
+| `connectGithubRepositoryAction` | `POST /api/app/projects/:key/repositories/github` | WH-98 | owners only; the installation must be the workspace's own (ADR-12); name and branch are read from GitHub |
 | `updateRepositoryAction` | `PATCH /api/app/projects/:key/repositories/:id` | WH-98 | any teammate (as before) |
 | `retireRepositoryAction` | `POST /api/app/projects/:key/repositories/:id/retire` | WH-98 | any teammate (as before) |
 | `browseRepoTreeAction` | `GET /api/app/projects/:key/repositories/:id/tree` | WH-98 | for the anchor picker |
@@ -154,10 +154,10 @@ ticket. Anything not marked public needs a session.
 
 | Endpoint | What it is |
 |---|---|
-| `GET /api/app/team` | the team page: members with roles and tags, seats, and (owners only) the pending join invites |
-| `GET /api/app/agents` | the Agents page: the team's keys (name, prefix, last used, `canWriteDocs`; never a key value) and the printed setup commands |
-| `GET /api/app/invites?kind=join_team\|new_team` | pending invites. `new_team` is for instance admins; anyone else gets a 404 |
-| `GET /api/app/admin/teams`, `GET /api/app/admin/teams/:id` | instance admins only; anyone else gets a 404. Names, emails and counts, never what a team wrote |
+| `GET /api/app/workspace` | the workspace page: members with roles and tags, seats, and (owners only) the pending join invites |
+| `GET /api/app/agents` | the Agents page: the workspace's keys (name, prefix, last used, `canWriteDocs`; never a key value) and the printed setup commands |
+| `GET /api/app/invites?kind=join_workspace\|new_workspace` | pending invites. `new_workspace` is for instance admins; anyone else gets a 404 |
+| `GET /api/app/admin/workspaces`, `GET /api/app/admin/workspaces/:id` | instance admins only; anyone else gets a 404. Names, emails and counts, never what a workspace wrote |
 | `GET /api/app/dashboard/:widget` | one dashboard widget's data: `kpis`, `progress`, `throughput`, `activity-split`, `agents`, `attention`, `recent`, `sync`. An unknown widget is a 404 |
 | `POST /api/app/invites/peek`, `POST /api/app/invites/accept` | **public** (no session; the CSRF token is `anonymous`), rate limited per address (30 tries per 15 minutes) |
 
@@ -167,7 +167,7 @@ Rules worth knowing:
   token in the link's `#fragment`. No later response contains either, and the client never needs to ask.
 - **Limits live in core**, with the rules: 10 keys an hour and 20 invites an hour per person, 30 invite lookups per 15 minutes per address.
   A limit answers `429 rate_limited` with `Retry-After`.
-- **Not found beats forbidden across teams.** Another team's member, key or invite is a 404 on every endpoint; only the same team's
+- **Not found beats forbidden across workspaces.** Another workspace's member, key or invite is a 404 on every endpoint; only the same workspace's
   non-owner gets a 403.
 - **Every bad invite link reads the same** (`400 invalid`, "This invite link is invalid or has expired."), so a link cannot be probed.
 - The dashboard's widgets are separate requests so each one paints as soon as its own data arrives. They do not share a snapshot the
@@ -175,7 +175,7 @@ Rules worth knowing:
 
 ## Built by WH-96
 
-The board and the ticket dialog. Everything needs a session. A ticket is addressed by its ref (`WH-12`, case-insensitive in the key), which already names its project, and a ticket or project of another team is a 404.
+The board and the ticket dialog. Everything needs a session. A ticket is addressed by its ref (`WH-12`, case-insensitive in the key), which already names its project, and a ticket or project of another workspace is a 404.
 
 | Endpoint | What it is |
 |---|---|
@@ -188,7 +188,7 @@ A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `b
 
 **Claiming.** Only agents claim a ticket (over MCP or `/api/v1`). A person decides whether agents may pick a ticket up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
 
-**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`column`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's team.
+**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`column`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's workspace.
 
 ### The version check
 
@@ -205,7 +205,7 @@ A change made by an agent over MCP or `/api/v1`, or by anyone through these endp
 
 ## Built by WH-97
 
-The map, decisions, glossary and activity pages. Everything needs a session. A project, node, edge, flow, decision, term or draft of another team is a 404.
+The map, decisions, glossary and activity pages. Everything needs a session. A project, node, edge, flow, decision, term or draft of another workspace is a 404.
 
 | Endpoint | What it is |
 |---|---|
@@ -223,7 +223,7 @@ The map, decisions, glossary and activity pages. Everything needs a session. A p
 
 **Locks on nodes, flows and decisions.** These carry a `version` but nothing checked it before: not the old app, and not the agents' MCP tools (only tickets and docs had a lock). The web endpoints take `version` and use the same pattern as tickets: a change made since is a `409 conflict`, nothing is overwritten, and `details.current` is the entity as it is now (`ApiError.current`). The check is an optional `expectedVersion` on the service functions; the MCP tools never pass it, so agents behave exactly as before. Two edits from the same version give exactly one 200 and one 409.
 
-**Ask the map spends money and calls out**, so: the project is resolved first (another team's is a 404 before anything is counted or called), then at most 20 questions per person per 10 minutes (`429` with `Retry-After`), then the server calls Claude with its own key. The key is read from the server's environment and is in no response, header or cookie (the contract suite checks that, including when Claude fails). Claude's own errors become plain reasons ("Claude is rate limited, try again in a moment", "ANTHROPIC_API_KEY is invalid", "Claude API error (500)"), never the upstream body. The contract suite runs Ask against a fake Claude server (`tests/contract/lib/fake-github.ts`) that answers from what it was sent.
+**Ask the map spends money and calls out**, so: the project is resolved first (another workspace's is a 404 before anything is counted or called), then at most 20 questions per person per 10 minutes (`429` with `Retry-After`), then the server calls Claude with its own key. The key is read from the server's environment and is in no response, header or cookie (the contract suite checks that, including when Claude fails). Claude's own errors become plain reasons ("Claude is rate limited, try again in a moment", "ANTHROPIC_API_KEY is invalid", "Claude API error (500)"), never the upstream body. The contract suite runs Ask against a fake Claude server (`tests/contract/lib/fake-github.ts`) that answers from what it was sent.
 
 **In flux and drafts.** When an agent's session is changing a node's files and the agent edits that node, the edit is stored as a draft and published when the code lands. `flux` in the graph lists those sessions and drafts per node; `resolve` publishes or discards one by hand.
 
@@ -231,7 +231,7 @@ The map, decisions, glossary and activity pages. Everything needs a session. A p
 
 ## Built by WH-98
 
-The docs, repositories and onboarding pages. Everything needs a session. A project, doc, map node or repository of another team is a 404.
+The docs, repositories and onboarding pages. Everything needs a session. A project, doc, map node or repository of another workspace is a 404.
 
 | Endpoint | What it is |
 |---|---|
@@ -248,8 +248,8 @@ The docs, repositories and onboarding pages. Everything needs a session. A proje
 | `POST /api/app/projects/:key/repositories` | `{ displayName, role, provider?, defaultBranch?, pathLimit?, lifecycle? }`; 201 |
 | `PATCH /api/app/projects/:key/repositories/:id` | any of the same fields (`pathLimit: null` clears it) |
 | `POST /api/app/projects/:key/repositories/:id/retire` | |
-| `GET /api/app/projects/:key/repositories/github` | the Connect GitHub card: `configured`, `missing` (settings to set; owners only), `isOwner`, and for owners each installation of the team with the repositories this project could still connect. GitHub is asked on every read |
-| `POST /api/app/projects/:key/repositories/github` | `{ installationId, repoId, role?, pathLimit? }`; 201. Owners only; the installation must be the team's own (ADR-12); the name and default branch are read from GitHub, not the request |
+| `GET /api/app/projects/:key/repositories/github` | the Connect GitHub card: `configured`, `missing` (settings to set; owners only), `isOwner`, and for owners each installation of the workspace with the repositories this project could still connect. GitHub is asked on every read |
+| `POST /api/app/projects/:key/repositories/github` | `{ installationId, repoId, role?, pathLimit? }`; 201. Owners only; the installation must be the workspace's own (ADR-12); the name and default branch are read from GitHub, not the request |
 | `GET /api/app/projects/:key/repositories/:id/tree` | `{ files, truncated }` for the doc anchor picker; only for a GitHub repository of the person's own project |
 | `GET /api/app/projects/:key/onboarding` | the wizard: the project, `hasRepos`, and the commands to paste (with this project's key; never an API key) |
 | `POST /api/app/projects/:key/onboarding/concept` | `{ description }`: the "no code yet" path; becomes the map's first concept. An empty one is a 400 on `description` |
@@ -279,7 +279,7 @@ A project is reachable only by its members. Every route below is for a signed-in
 | `GET /api/app/access/projects` | every project of the workspace by name with its admins and whether you are in it. Workspace owners and admins |
 | `GET /api/app/access/audit?project=KEY&limit=` | the access audit log, newest first. Workspace owners and admins |
 
-Workspace roles are now `owner`, `admin`, `member`, `viewer` and `guest`. Owners and admins invite, change roles and remove members (`/api/app/team/...`, `/api/app/invites`); only an owner can make, change or remove an owner. Removing a person who is the only admin of a project is a `409` that names the projects. `/api/v1` and `/mcp` are unchanged: an agent key keeps the access it had.
+Workspace roles are now `owner`, `admin`, `member`, `viewer` and `guest`. Owners and admins invite, change roles and remove members (`/api/app/workspace/...`, `/api/app/invites`); only an owner can make, change or remove an owner. Removing a person who is the only admin of a project is a `409` that names the projects. `/api/v1` and `/mcp` are unchanged: an agent key keeps the access it had.
 
 **More from WH-105.**
 
@@ -290,11 +290,11 @@ Workspace roles are now `owner`, `admin`, `member`, `viewer` and `guest`. Owners
 | `POST /api/app/invites/peek-existing` | signed in: what an invite sent to your own address would add you to. Anyone else's invite, or a bad token, is the usual `400` |
 | `POST /api/app/invites/accept-existing` | signed in: join that workspace with the account you have (you keep your other workspaces); this session then works in it. Already a member is a `409` and the invite stays unused |
 | `GET /api/app/me/workspaces` | `{ workspaces: [{ id, name, role, active }] }`; a suspended workspace is left out |
-| `POST /api/app/me/workspace` | `{ teamId }`: this session works in another of your workspaces. Not yours, suspended or malformed is a `404`. Only this session changes; every cached read in the browser belongs to the old workspace and is dropped |
+| `POST /api/app/me/workspace` | `{ workspaceId }`: this session works in another of your workspaces. Not yours, suspended or malformed is a `404`. Only this session changes; every cached read in the browser belongs to the old workspace and is dropped |
 
-A person who belongs to several workspaces works in one at a time, chosen per session (`sessions.active_team_id`; null means their first). Addresses do not carry the workspace (`/w/<slug>/...` is not built): two tabs of one session are in the same workspace. A workspace an instance admin suspended is never chosen; someone is locked out only when every workspace of theirs is suspended. Open event streams re-check access every 15 seconds: a project stream ends when its person is removed, and the dashboard stream follows joins and removals.
+A person who belongs to several workspaces works in one at a time, chosen per session (`sessions.active_workspace_id`; null means their first). Addresses do not carry the workspace (`/w/<slug>/...` is not built): two tabs of one session are in the same workspace. A workspace an instance admin suspended is never chosen; someone is locked out only when every workspace of theirs is suspended. Open event streams re-check access every 15 seconds: a project stream ends when its person is removed, and the dashboard stream follows joins and removals.
 
-**Wording.** The product says "workspace" where the code says "team" (tables, ids, URLs such as `/team` and `/api/app/team` are unchanged). Messages shown to people were reworded; messages that are part of the frozen `/api/v1` and `/mcp` contract were not.
+**Wording.** The product says "workspace" where the code says "workspace" (tables, ids, URLs such as `/workspace` and `/api/app/workspace` are unchanged). Messages shown to people were reworded; messages that are part of the frozen `/api/v1` and `/mcp` contract were not.
 
 ## Built by WH-107: a dashboard for each project
 

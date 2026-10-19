@@ -6,7 +6,7 @@ import { csrfToken } from "./csrf";
 export function meView(h: Human, sessionToken: string) {
   return {
     user: { id: h.user.id, name: h.user.name, email: h.user.email },
-    team: { id: h.team.id, name: h.team.name },
+    workspace: { id: h.workspace.id, name: h.workspace.name },
     role: h.membership.role,
     tags: h.membership.tags,
     isInstanceAdmin: isInstanceAdmin(h.user.email),

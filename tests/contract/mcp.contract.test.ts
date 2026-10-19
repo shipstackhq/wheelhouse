@@ -21,10 +21,10 @@ describe("POST /mcp: authentication", () => {
     }
   });
 
-  test("a suspended team's key gets 403, not 401, so clients stop retrying", async () => {
+  test("a suspended workspace's key gets 403, not 401, so clients stop retrying", async () => {
     const r = await mcp(asKey(fx.suspended.apiKey), "tools/list");
     assert.equal(r.status, 403);
-    assert.equal(r.json.error.message, "This team has been suspended. Contact the administrator.");
+    assert.equal(r.json.error.message, "This workspace has been suspended. Contact the administrator.");
   });
 
   test("repeated bad keys from one address are rate limited with Retry-After", async () => {
@@ -117,7 +117,7 @@ describe("POST /mcp: tools and prompts", () => {
     assert.equal(invalid.json.result.isError, true);
     assert.match(invalid.json.result.content[0].text, /^invalid: /);
     const other = await mcp(A, "tools/call", { name: "get_board", arguments: { project: fx.b.projectKey } });
-    assert.match(other.json.result.content[0].text, /^not_found: /, "another team's project looks like it does not exist");
+    assert.match(other.json.result.content[0].text, /^not_found: /, "another workspace's project looks like it does not exist");
   });
 
   test("a write through MCP is visible through the REST API", async () => {

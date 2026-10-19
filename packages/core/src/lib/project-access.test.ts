@@ -9,7 +9,7 @@ if (process.env.TEST_DATABASE_URL) {
   process.env.PGLITE_DIR = "memory://";
   delete process.env.DATABASE_URL;
 }
-process.env.MAX_TEAM_MEMBERS = "100";
+process.env.MAX_WORKSPACE_MEMBERS = "100";
 
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -23,28 +23,28 @@ import * as metrics from "./metrics";
 import { effectiveRole, roleAllows } from "./project-access";
 import * as pmem from "./project-members";
 import * as svc from "./service";
-import { projectScope, teamScope } from "./stream-scope";
+import { projectScope, workspaceScope } from "./stream-scope";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 /** Two letters unique to this run (project keys are letters only). */
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();
 let n = 0;
 
-async function team(name: string) {
+async function workspace(name: string) {
   const db = await getDb();
-  const [t] = await db.insert(schema.teams).values({ name }).returning();
+  const [t] = await db.insert(schema.workspaces).values({ name }).returning();
   return t;
 }
-async function person(teamId: string, workspaceRole: WorkspaceRole, name: string): Promise<Actor> {
+async function person(workspaceId: string, workspaceRole: WorkspaceRole, name: string): Promise<Actor> {
   const db = await getDb();
   const [u] = await db.insert(schema.users).values({ email: `${name}-${RUN}-${++n}@example.com`, name, passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: u.id, teamId, role: workspaceRole });
-  return { kind: "human", id: u.id, name, teamId };
+  await db.insert(schema.memberships).values({ userId: u.id, workspaceId, role: workspaceRole });
+  return { kind: "human", id: u.id, name, workspaceId };
 }
-async function agentKey(teamId: string): Promise<Actor> {
+async function agentKey(workspaceId: string): Promise<Actor> {
   const db = await getDb();
-  const [k] = await db.insert(schema.apiKeys).values({ teamId, name: "key", prefix: "wh_x", keyHash: `h-${RUN}-${++n}` }).returning();
-  return { kind: "agent", id: k.id, name: "key", teamId };
+  const [k] = await db.insert(schema.apiKeys).values({ workspaceId, name: "key", prefix: "wh_x", keyHash: `h-${RUN}-${++n}` }).returning();
+  return { kind: "agent", id: k.id, name: "key", workspaceId };
 }
 /** A project made by `by`, who becomes its admin through createProject itself. */
 const project = (by: Actor, key: string) => svc.createProject(by, { name: `Project ${key}`, key });
@@ -66,8 +66,8 @@ let p2: { id: string; key: string };
 let q1: { id: string; key: string };
 
 before(async () => {
-  const A = await team(`A ${RUN}`);
-  const B = await team(`B ${RUN}`);
+  const A = await workspace(`A ${RUN}`);
+  const B = await workspace(`B ${RUN}`);
   ada = await person(A.id, "owner", "ada");
   bob = await person(A.id, "member", "bob");
   cy = await person(A.id, "member", "cy");
@@ -197,7 +197,7 @@ describe("agents and the system", () => {
   });
 
   test("a system actor reaches its workspace's projects but is never mistaken for a member", async () => {
-    const sys: Actor = { kind: "human", id: "00000000-0000-4000-8000-000000000001", name: "GitHub", teamId: ada.teamId, system: true };
+    const sys: Actor = { kind: "human", id: "00000000-0000-4000-8000-000000000001", name: "GitHub", workspaceId: ada.workspaceId, system: true };
     assert.ok((await svc.getProject(sys, p2.key)).id);
     await assert.rejects(() => svc.getProject(sys, q1.key), code("not_found"));
     const notSystem: Actor = { ...sys, system: undefined };
@@ -264,11 +264,11 @@ describe("workspace owners and admins", () => {
 
 describe("removing someone from the workspace", () => {
   test("is refused while they are a project's only admin, then removes every project row", async () => {
-    const lee = await person(ada.teamId, "member", "lee");
+    const lee = await person(ada.workspaceId, "member", "lee");
     const leesProject = await svc.createProject(lee, { name: "Lee's", key: `LL${L}` });
-    await assert.rejects(() => removeMember(ada.teamId, ada.id, lee.id), code("conflict"));
+    await assert.rejects(() => removeMember(ada.workspaceId, ada.id, lee.id), code("conflict"));
     await pmem.joinProjectAsWorkspaceAdmin(eve, leesProject.key);
-    assert.equal(await removeMember(ada.teamId, ada.id, lee.id), true);
+    assert.equal(await removeMember(ada.workspaceId, ada.id, lee.id), true);
     const db = await getDb();
     const left = await db.select().from(schema.projectMembers).where(and(eq(schema.projectMembers.userId, lee.id)));
     assert.equal(left.length, 0);
@@ -277,15 +277,15 @@ describe("removing someone from the workspace", () => {
 });
 
 describe("invites that carry projects", () => {
-  const issuerOf = (a: Actor, role: WorkspaceRole): Issuer => ({ userId: a.id, email: `${a.name}@example.com`, teamId: a.teamId, role });
+  const issuerOf = (a: Actor, role: WorkspaceRole): Issuer => ({ userId: a.id, email: `${a.name}@example.com`, workspaceId: a.workspaceId, role });
   const PW = "correct horse battery";
 
   test("the new person lands in exactly the chosen projects with the chosen role, and it is audited in the inviter's name", async () => {
-    const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_team", email: `new-${RUN}-1@example.com`, role: "member", projects: [{ project: p1.key, role: "viewer" }] });
+    const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-1@example.com`, role: "member", projects: [{ project: p1.key, role: "viewer" }] });
     const pending = (await listInvites(issuerOf(ada, "owner"))).find((i) => i.id === inv.id)!;
     assert.deepEqual(pending.projects, [{ key: p1.key, name: `Project ${p1.key}`, role: "viewer" }]);
     const { userId } = await acceptInvite({ token: inv.token, name: "Newbie", password: PW });
-    const newbie: Actor = { kind: "human", id: userId, name: "Newbie", teamId: ada.teamId };
+    const newbie: Actor = { kind: "human", id: userId, name: "Newbie", workspaceId: ada.workspaceId };
     assert.deepEqual((await svc.listProjects(newbie)).map((p) => p.key), [p1.key]);
     await assert.rejects(() => svc.getProject(newbie, p2.key), code("not_found"));
     await assert.rejects(() => svc.createTicket(newbie, p1.key, { title: "no" }), code("forbidden")); // the viewer role they were given
@@ -295,65 +295,65 @@ describe("invites that carry projects", () => {
   });
 
   test("an invite with no projects leaves the person in none, as before", async () => {
-    const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_team", email: `new-${RUN}-2@example.com` });
+    const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-2@example.com` });
     const { userId } = await acceptInvite({ token: inv.token, name: "Plain", password: PW });
-    assert.deepEqual(await svc.listProjects({ kind: "human", id: userId, name: "Plain", teamId: ada.teamId }), []);
+    assert.deepEqual(await svc.listProjects({ kind: "human", id: userId, name: "Plain", workspaceId: ada.workspaceId }), []);
   });
 
   test("you can only hand out projects you administer, never another workspace's, and at most 20", async () => {
     const asEve = issuerOf(eve, "admin"); // a workspace admin, but in no project
-    await assert.rejects(() => createInvite(asEve, { kind: "join_team", email: `new-${RUN}-3@example.com`, projects: [{ project: p1.key, role: "viewer" }] }), (e) => (e as { code?: string }).code === "forbidden");
-    await assert.rejects(() => createInvite(issuerOf(bob, "member"), { kind: "join_team", email: `new-${RUN}-4@example.com`, projects: [{ project: p1.key, role: "viewer" }] }), (e) => (e as { code?: string }).code === "forbidden"); // not a manager at all
-    await assert.rejects(() => createInvite(issuerOf(ada, "owner"), { kind: "join_team", email: `new-${RUN}-5@example.com`, projects: [{ project: q1.key, role: "viewer" }] }), (e) => (e as { code?: string }).code === "forbidden"); // another workspace
-    await assert.rejects(() => createInvite(issuerOf(ada, "owner"), { kind: "join_team", email: `new-${RUN}-6@example.com`, projects: [{ project: p1.key, role: "owner" as never }] }), (e) => (e as { code?: string }).code === "invalid");
+    await assert.rejects(() => createInvite(asEve, { kind: "join_workspace", email: `new-${RUN}-3@example.com`, projects: [{ project: p1.key, role: "viewer" }] }), (e) => (e as { code?: string }).code === "forbidden");
+    await assert.rejects(() => createInvite(issuerOf(bob, "member"), { kind: "join_workspace", email: `new-${RUN}-4@example.com`, projects: [{ project: p1.key, role: "viewer" }] }), (e) => (e as { code?: string }).code === "forbidden"); // not a manager at all
+    await assert.rejects(() => createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-5@example.com`, projects: [{ project: q1.key, role: "viewer" }] }), (e) => (e as { code?: string }).code === "forbidden"); // another workspace
+    await assert.rejects(() => createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-6@example.com`, projects: [{ project: p1.key, role: "owner" as never }] }), (e) => (e as { code?: string }).code === "invalid");
   });
 
   test("a project deleted before the invite is accepted is skipped, not an error", async () => {
     const mine = await svc.createProject(ada, { name: "Short lived", key: `SL${L}` });
-    const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_team", email: `new-${RUN}-7@example.com`, projects: [{ project: mine.key, role: "editor" }, { project: p1.key, role: "viewer" }] });
+    const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-7@example.com`, projects: [{ project: mine.key, role: "editor" }, { project: p1.key, role: "viewer" }] });
     await svc.deleteProject(ada, mine.key);
     const { userId } = await acceptInvite({ token: inv.token, name: "Late", password: PW });
-    assert.deepEqual((await svc.listProjects({ kind: "human", id: userId, name: "Late", teamId: ada.teamId })).map((p) => p.key), [p1.key]);
+    assert.deepEqual((await svc.listProjects({ kind: "human", id: userId, name: "Late", workspaceId: ada.workspaceId })).map((p) => p.key), [p1.key]);
   });
 });
 
 describe("the audit log", () => {
   test("a workspace role change and a removal are written down, with who did it and what changed", async () => {
-    const t = await person(ada.teamId, "member", "audited");
-    assert.equal(await updateMember(ada.teamId, ada.id, { userId: t.id, role: "viewer", tags: [] }), true);
-    assert.equal(await removeMember(ada.teamId, ada.id, t.id), true);
+    const t = await person(ada.workspaceId, "member", "audited");
+    assert.equal(await updateMember(ada.workspaceId, ada.id, { userId: t.id, role: "viewer", tags: [] }), true);
+    assert.equal(await removeMember(ada.workspaceId, ada.id, t.id), true);
     const log = await pmem.listAudit(ada, { limit: 50 });
     const changed = log.find((a) => a.action === "workspace.role_changed" && a.targetId === t.id)!;
     assert.deepEqual([changed.actorName, changed.before, changed.after], ["ada", { role: "member" }, { role: "viewer" }]);
     assert.ok(log.some((a) => a.action === "workspace.member_removed" && a.targetId === t.id));
     assert.ok(log.every((a) => a.seq > 0));
     // an unchanged role writes nothing
-    const u = await person(ada.teamId, "member", "steady");
+    const u = await person(ada.workspaceId, "member", "steady");
     const before = (await pmem.listAudit(ada, { limit: 500 })).length;
-    await updateMember(ada.teamId, ada.id, { userId: u.id, role: "member", tags: ["x"] });
+    await updateMember(ada.workspaceId, ada.id, { userId: u.id, role: "member", tags: ["x"] });
     assert.equal((await pmem.listAudit(ada, { limit: 500 })).length, before);
   });
 });
 
 describe("live streams", () => {
   test("the dashboard stream replays and delivers only events of projects the person is in", async () => {
-    const adaScope = await teamScope()(ada);
-    const samScope = await teamScope()(sam);
-    const keyScope = await teamScope()(keyA);
-    const ev = (projectId: string) => ({ teamId: ada.teamId, projectId, type: "ticket.created" });
+    const adaScope = await workspaceScope()(ada);
+    const samScope = await workspaceScope()(sam);
+    const keyScope = await workspaceScope()(keyA);
+    const ev = (projectId: string) => ({ workspaceId: ada.workspaceId, projectId, type: "ticket.created" });
     assert.equal(adaScope.allow?.(ev(p1.id)), true);
     assert.equal(adaScope.allow?.(ev(p2.id)), false);
     assert.equal(samScope.allow?.(ev(p2.id)), true);
     assert.equal(samScope.allow?.(ev(p1.id)), false);
     assert.equal(keyScope.allow, undefined); // a whole-workspace scope: no filter
-    const nobody = await teamScope()(await person(ada.teamId, "member", "nobody"));
+    const nobody = await workspaceScope()(await person(ada.workspaceId, "member", "nobody"));
     assert.equal(nobody.allow?.(ev(p1.id)), false);
   });
 
   test("an open dashboard stream follows joins and removals, and a project stream ends when its person is removed", async () => {
-    const stream = await person(ada.teamId, "member", "watcher");
-    const scope = await teamScope()(stream);
-    const ev = (projectId: string) => ({ teamId: ada.teamId, projectId, type: "ticket.created" });
+    const stream = await person(ada.workspaceId, "member", "watcher");
+    const scope = await workspaceScope()(stream);
+    const ev = (projectId: string) => ({ workspaceId: ada.workspaceId, projectId, type: "ticket.created" });
     assert.equal(scope.allow?.(ev(p1.id)), false);
     await addTo(ada, p1.key, stream, "viewer");
     assert.equal(await scope.recheck?.(), true);
@@ -375,7 +375,7 @@ describe("the per-project dashboard (WH-107)", () => {
   const days = (n: number) => new Date(Date.now() - n * 864e5);
 
   before(async () => {
-    const T = await team(`Dash ${RUN}`);
+    const T = await workspace(`Dash ${RUN}`);
     owner = await person(T.id, "owner", "dashowner");
     viewer = await person(T.id, "member", "dashviewer");
     one = await project(owner, `DA${L}`);

@@ -13,7 +13,7 @@ import { afterEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import { sha256, TEAM_SUSPENDED_MESSAGE } from "./access";
+import { sha256, WORKSPACE_SUSPENDED_MESSAGE } from "./access";
 import { AccountError, logIn, signUp } from "./accounts";
 import { appFailure } from "./api-errors";
 import { endSession, startSession, verifyPassword } from "./auth-core";
@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe("signUp", () => {
-  test("creates the user, a team they own, and stores a password that verifies", async () => {
+  test("creates the user, a workspace they own, and stores a password that verifies", async () => {
     process.env.ALLOW_SIGNUP = "true";
     const { ip, email } = fresh();
     const { userId } = await signUp({ name: "  Ada ", email: `  ${email.toUpperCase()} `, password: PASSWORD }, ip);
@@ -53,12 +53,12 @@ describe("signUp", () => {
     assert.ok(!(await verifyPassword("wrong", u.passwordHash)));
     const [m] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, userId));
     assert.equal(m.role, "owner");
-    const [t] = await db.select().from(schema.teams).where(eq(schema.teams.id, m.teamId));
-    assert.equal(t.name, "Ada's team", "the team is named after the person unless they choose a name");
+    const [t] = await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, m.workspaceId));
+    assert.equal(t.name, "Ada's workspace", "the workspace is named after the person unless they choose a name");
     const second = fresh();
-    const two = await signUp({ name: "Bo", email: second.email, password: PASSWORD, team: " Acme " }, second.ip);
+    const two = await signUp({ name: "Bo", email: second.email, password: PASSWORD, workspace: " Acme " }, second.ip);
     const [m2] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, two.userId));
-    assert.equal((await db.select().from(schema.teams).where(eq(schema.teams.id, m2.teamId)))[0].name, "Acme");
+    assert.equal((await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, m2.workspaceId)))[0].name, "Acme");
   });
 
   test("is refused when signups are closed, except for the very first account", async () => {
@@ -151,16 +151,16 @@ describe("logIn", () => {
     resetRateLimit(`login-ip:${ip}`);
   });
 
-  test("a suspended team is told only after the password is right", async () => {
+  test("a suspended workspace is told only after the password is right", async () => {
     const a = await account();
     const db = await getDb();
     const [m] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, a.userId));
-    await db.update(schema.teams).set({ suspendedAt: new Date() }).where(eq(schema.teams.id, m.teamId));
+    await db.update(schema.workspaces).set({ suspendedAt: new Date() }).where(eq(schema.workspaces.id, m.workspaceId));
     assert.equal((await refusal(logIn({ email: a.email, password: "nope" }, fresh().ip))).message, "Invalid email or password");
     const e = await refusal(logIn({ email: a.email, password: PASSWORD }, fresh().ip));
     assert.equal(e.code, "team_suspended");
     assert.equal(e.status, 403);
-    assert.equal(e.message, TEAM_SUSPENDED_MESSAGE);
+    assert.equal(e.message, WORKSPACE_SUSPENDED_MESSAGE);
   });
 });
 

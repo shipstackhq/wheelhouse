@@ -14,7 +14,7 @@ import { bad, oneOf, text, textList, textOrNull, whole } from "./web-input";
 /**
  * What the web app's docs, repositories and onboarding pages read and write (WH-98), as functions of the signed-in person.
  * The API's controllers call these and nothing else. Everything goes through the service layer, which scopes it by the person's
- * team, so another team's project, doc or repository is "not found". Answers carry only what the screens use.
+ * workspace, so another workspace's project, doc or repository is "not found". Answers carry only what the screens use.
  */
 
 type Body = Record<string, unknown>;
@@ -72,7 +72,7 @@ export async function docsIndex(h: Human, projectKey: string) {
     .select({ id: schema.users.id, name: schema.users.name })
     .from(schema.memberships)
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-    .where(eq(schema.memberships.teamId, h.team.id));
+    .where(eq(schema.memberships.workspaceId, h.workspace.id));
   return {
     docs: docs as DocTreeItem[],
     nodes: g.nodes.map(({ id, name, layer, parentId }) => ({ id, name, layer, parentId })),
@@ -184,7 +184,7 @@ export async function retireRepositoryAs(actor: Actor, projectKey: string, id: s
 
 /**
  * The file paths of a connected GitHub repository's default branch, for the doc anchor picker. Read-only. The repository is looked up
- * in the person's own project, so an id from another team's project never matches and is "not found", never another team's tree.
+ * in the person's own project, so an id from another workspace's project never matches and is "not found", never another workspace's tree.
  */
 export async function browseRepoTreeAs(actor: Actor, projectKey: string, id: string) {
   const repo = (await svc.listRepositories(actor, projectKey)).find((r) => r.id === id);
@@ -204,7 +204,7 @@ export type GithubStatus = {
   /** For owners only: the settings an administrator must set to turn it on. */
   missing: string[];
   isOwner: boolean;
-  /** Owners only: each installation of the team and the repositories it can see that this project has not connected yet. */
+  /** Owners only: each installation of the workspace and the repositories it can see that this project has not connected yet. */
   installations: { installationId: string; account: string; failed: boolean; repositories: { id: string; fullName: string; private: boolean }[] }[];
 };
 
@@ -226,7 +226,7 @@ export async function githubStatus(h: Human, projectKey: string): Promise<Github
   return { configured: true, missing: [], isOwner, installations };
 }
 
-/** Owners only (checked in the service). Name and branch are read from GitHub, and the installation must be the team's own (ADR-12). */
+/** Owners only (checked in the service). Name and branch are read from GitHub, and the installation must be the workspace's own (ADR-12). */
 export async function connectGithubAs(actor: Actor, projectKey: string, b: Body): Promise<RepositoryView> {
   const installationId = text(b, "installationId", { required: true, max: 100 })!;
   const githubRepoId = text(b, "repoId", { required: true, max: 100 })!;

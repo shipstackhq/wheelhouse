@@ -19,7 +19,7 @@ const widget = (title: string) =>
 const frameNow = async (title: string) => (await screen.findByRole("heading", { name: title })).closest("section") as HTMLElement;
 
 describe("the dashboard", () => {
-  test("greets the person by first name, with their team, and offers a new project", async () => {
+  test("greets the person by first name, with their workspace, and offers a new project", async () => {
     renderApp("/");
     expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy();
     expect(screen.getByText("How Analytical Engines's projects are moving, and what the agents are up to.")).toBeTruthy();
@@ -205,7 +205,7 @@ describe("widgets load and fail on their own", () => {
 });
 
 describe("staying fresh", () => {
-  test("the team's event stream refreshes every widget, and the person's own identity is not re-read", async () => {
+  test("the workspace's event stream refreshes every widget, and the person's own identity is not re-read", async () => {
     const { server } = renderApp("/");
     await screen.findByText("Open tickets");
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));

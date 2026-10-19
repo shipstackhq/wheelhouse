@@ -53,7 +53,7 @@ export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"
       const me =
         mode === "login"
           ? await api.auth.login({ email: field(fd, "email"), password: field(fd, "password") })
-          : await api.auth.signup({ name: field(fd, "name"), email: field(fd, "email"), password: field(fd, "password"), team: field(fd, "team") });
+          : await api.auth.signup({ name: field(fd, "name"), email: field(fd, "email"), password: field(fd, "password"), workspace: field(fd, "workspace") });
       // Whatever an earlier person's session left in memory goes; the new person's own data is read fresh.
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
       queryClient.setQueryData(["me"], me);
@@ -79,8 +79,8 @@ export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"
               <input className="input rounded-lg py-2.5" id="name" name="name" required autoComplete="name" />
             </div>
             <div>
-              <label className={label} htmlFor="team">Workspace name</label>
-              <input className="input rounded-lg py-2.5" id="team" name="team" placeholder="Acme" />
+              <label className={label} htmlFor="workspace">Workspace name</label>
+              <input className="input rounded-lg py-2.5" id="workspace" name="workspace" placeholder="Acme" />
             </div>
           </>
         )}

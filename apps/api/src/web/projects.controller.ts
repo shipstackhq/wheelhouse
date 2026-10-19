@@ -10,7 +10,7 @@ const view = (p: { id: string; key: string; name: string; description: string; c
 @Controller("api/app/projects")
 @AppEndpoints()
 export class ProjectsController {
-  /** The team's projects, oldest first. The team is the signed-in person's own; it is never taken from the request. */
+  /** The workspace's projects, oldest first. The workspace is the signed-in person's own; it is never taken from the request. */
   @Get()
   @UseGuards(SessionGuard)
   async list(@Req() req: SessionRequest) {

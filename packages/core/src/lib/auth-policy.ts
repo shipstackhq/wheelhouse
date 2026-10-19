@@ -1,5 +1,5 @@
 /**
- * Who may create a new team by signing up.
+ * Who may create a new workspace by signing up.
  *  - ALLOW_SIGNUP=true  → open.
  *  - ALLOW_SIGNUP=false → closed, except for the very first account, so a fresh install can be claimed.
  *  - unset              → open outside production, closed in production.
@@ -29,13 +29,13 @@ const positiveInt = (v: string | undefined, fallback: number) => {
   return Number.isInteger(n) && n >= 1 ? n : fallback;
 };
 
-/** Seats per team, owner included; pending invites count (MAX_TEAM_MEMBERS, default 5). */
-export const maxTeamMembers = (raw = process.env.MAX_TEAM_MEMBERS) => positiveInt(raw, 5);
+/** Seats per workspace, owner included; pending invites count (MAX_WORKSPACE_MEMBERS, default 5). */
+export const maxWorkspaceMembers = (raw = process.env.MAX_WORKSPACE_MEMBERS) => positiveInt(raw, 5);
 
 /** How long an invite link works, in hours (INVITE_TTL_HOURS, default 7 days). */
 export const inviteTtlHours = (raw = process.env.INVITE_TTL_HOURS) => positiveInt(raw, 168);
 
-/** Instance admins may create invites that start a brand new team (ADMIN_EMAILS, comma-separated). */
+/** Instance admins may create invites that start a brand new workspace (ADMIN_EMAILS, comma-separated). */
 export const adminEmails = (raw = process.env.ADMIN_EMAILS) =>
   (raw ?? "")
     .split(",")

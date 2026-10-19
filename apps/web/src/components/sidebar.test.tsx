@@ -12,7 +12,7 @@ const PROJECTS = [
   { key: "CC", name: "Gamma" },
 ];
 const sidebar = (over: Partial<React.ComponentProps<typeof Sidebar>> = {}) => (
-  <Sidebar projects={PROJECTS} teamName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} />
+  <Sidebar projects={PROJECTS} workspaceName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} />
 );
 const nav = () => screen.getByRole("navigation");
 const switcher = () => within(nav()).getByRole("button", { name: /Alpha|Beta|Gamma|Select a project/ });
@@ -21,7 +21,7 @@ describe("what the sidebar shows", () => {
   test("a project's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
     renderIn(sidebar(), "/p/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", "Project members": "/p/AA/members", "Project settings": "/p/AA/settings", Members: "/team", "Agents & API keys": "/agents" });
+    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", "Project members": "/p/AA/members", "Project settings": "/p/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
     expect(screen.getByText("Work")).toBeTruthy();
     expect(screen.getByText("Knowledge")).toBeTruthy();
     expect(screen.getByText("Code")).toBeTruthy();
@@ -32,7 +32,7 @@ describe("what the sidebar shows", () => {
   });
 
   test("with no project open there are no project sections and the switcher invites a choice", () => {
-    renderIn(sidebar(), "/team");
+    renderIn(sidebar(), "/workspace");
     expect(switcher().textContent).toContain("Select a project");
     expect(within(nav()).queryByRole("link", { name: "Board" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Members" }).classList.contains("bg-panel-2")).toBe(true);
@@ -44,7 +44,7 @@ describe("what the sidebar shows", () => {
     unmount();
     renderIn(sidebar({ isAdmin: true }), "/");
     expect(screen.getByText("Admin")).toBeTruthy();
-    expect(within(nav()).getByRole("link", { name: "Workspaces" }).getAttribute("href")).toBe("/admin/teams");
+    expect(within(nav()).getByRole("link", { name: "Workspaces" }).getAttribute("href")).toBe("/admin/workspaces");
     expect(within(nav()).getByRole("link", { name: "Invite a new workspace" }).getAttribute("href")).toBe("/admin/invites");
   });
 });
@@ -92,7 +92,7 @@ describe("the project switcher", () => {
 
   test("from a page that is not a project's it goes to the project's board; an unknown section also falls back to the board", async () => {
     const user = userEvent.setup();
-    const { router, unmount } = renderIn(sidebar(), "/team");
+    const { router, unmount } = renderIn(sidebar(), "/workspace");
     await user.click(switcher());
     await user.click(screen.getByRole("button", { name: /Gamma/ }));
     expect(router.state.location.pathname).toBe("/p/CC");
@@ -140,11 +140,11 @@ describe("remembering the last project", () => {
 
   test("the logo goes to the last project, or home if it is unknown", () => {
     document.cookie = "wh_last_project=CC; path=/";
-    const { unmount } = renderIn(sidebar(), "/team");
+    const { unmount } = renderIn(sidebar(), "/workspace");
     expect(logo().getAttribute("href")).toBe("/p/CC");
     unmount();
     document.cookie = "wh_last_project=GONE; path=/";
-    renderIn(sidebar(), "/team");
+    renderIn(sidebar(), "/workspace");
     expect(logo().getAttribute("href")).toBe("/");
   });
 });
@@ -195,7 +195,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
     expect(iconOf(within(nav()).getByRole("link", { name: "Board" }))).toBe(pathOf(NAV_ICONS.board.fill as never));
     expect(iconOf(within(nav()).getByRole("link", { name: "Overview" }))).toBe(pathOf(NAV_ICONS.overview.line as never)); // /overview is its own address
     unmount();
-    renderIn(sidebar(), "/team");
+    renderIn(sidebar(), "/workspace");
     expect(iconOf(within(nav()).getByRole("link", { name: "Members" }))).toBe(pathOf(NAV_ICONS.people.fill as never));
   });
 });
@@ -280,7 +280,7 @@ describe("collapsing to the icon-only rail", () => {
 
   test("with no project open the collapsed switcher still invites a choice", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
-    renderIn(sidebar(), "/team");
+    renderIn(sidebar(), "/workspace");
     expect(within(nav()).getByRole("button", { name: "Select a project" })).toBeTruthy();
   });
 
@@ -294,7 +294,7 @@ describe("collapsing to the icon-only rail", () => {
   test("the sections, workspace and admin links all keep working when collapsed", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     renderIn(sidebar({ isAdmin: true }), "/p/AA");
-    for (const [name, href] of [["Home", "/"], ["Overview", "/p/AA/overview"], ["Map", "/p/AA/map"], ["Members", "/team"], ["Agents & API keys", "/agents"], ["Workspaces", "/admin/teams"], ["Invite a new workspace", "/admin/invites"]]) {
+    for (const [name, href] of [["Home", "/"], ["Overview", "/p/AA/overview"], ["Map", "/p/AA/map"], ["Members", "/workspace"], ["Agents & API keys", "/agents"], ["Workspaces", "/admin/workspaces"], ["Invite a new workspace", "/admin/invites"]]) {
       expect(within(nav()).getByRole("link", { name }).getAttribute("href")).toBe(href);
     }
   });

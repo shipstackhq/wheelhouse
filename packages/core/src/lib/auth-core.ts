@@ -18,43 +18,43 @@ export const SESSION_DAYS = 30;
  * The workspace a person is working in: the one their session chose, else their first. A suspended workspace is never
  * chosen. Null when they belong to none that is usable.
  */
-export async function currentMembership(userId: string, activeTeamId?: string | null) {
+export async function currentMembership(userId: string, activeWorkspaceId?: string | null) {
   const db = await getDb();
   const rows = await db
-    .select({ membership: schema.memberships, team: schema.teams })
+    .select({ membership: schema.memberships, workspace: schema.workspaces })
     .from(schema.memberships)
-    .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
+    .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.memberships.workspaceId))
     .where(eq(schema.memberships.userId, userId))
     .orderBy(schema.memberships.createdAt);
-  const usable = rows.filter((r) => !r.team.suspendedAt);
-  return usable.find((r) => r.team.id === activeTeamId) ?? usable[0] ?? null;
+  const usable = rows.filter((r) => !r.workspace.suspendedAt);
+  return usable.find((r) => r.workspace.id === activeWorkspaceId) ?? usable[0] ?? null;
 }
 
 /** Every workspace the person can work in, for the switcher; `active` marks the current one. */
-export async function listWorkspaces(userId: string, activeTeamId?: string | null) {
+export async function listWorkspaces(userId: string, activeWorkspaceId?: string | null) {
   const db = await getDb();
-  const cur = await currentMembership(userId, activeTeamId);
+  const cur = await currentMembership(userId, activeWorkspaceId);
   const rows = await db
-    .select({ team: schema.teams, role: schema.memberships.role })
+    .select({ workspace: schema.workspaces, role: schema.memberships.role })
     .from(schema.memberships)
-    .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
+    .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.memberships.workspaceId))
     .where(eq(schema.memberships.userId, userId))
     .orderBy(schema.memberships.createdAt);
-  return rows.filter((r) => !r.team.suspendedAt).map((r) => ({ id: r.team.id, name: r.team.name, role: r.role, active: r.team.id === cur?.team.id }));
+  return rows.filter((r) => !r.workspace.suspendedAt).map((r) => ({ id: r.workspace.id, name: r.workspace.name, role: r.role, active: r.workspace.id === cur?.workspace.id }));
 }
 
 /** Point this session at another of the person's workspaces. Refused for one they are not in or that is suspended. */
-export async function switchWorkspace(token: string, userId: string, teamId: string) {
-  if (!isUuid(teamId)) return null;
+export async function switchWorkspace(token: string, userId: string, workspaceId: string) {
+  if (!isUuid(workspaceId)) return null;
   const db = await getDb();
   const [m] = await db
-    .select({ team: schema.teams })
+    .select({ workspace: schema.workspaces })
     .from(schema.memberships)
-    .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
-    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.teamId, teamId)));
-  if (!m || m.team.suspendedAt) return null;
-  await db.update(schema.sessions).set({ activeTeamId: teamId }).where(and(eq(schema.sessions.id, sha256(token)), eq(schema.sessions.userId, userId)));
-  return { id: m.team.id, name: m.team.name };
+    .innerJoin(schema.workspaces, eq(schema.workspaces.id, schema.memberships.workspaceId))
+    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.workspaceId, workspaceId)));
+  if (!m || m.workspace.suspendedAt) return null;
+  await db.update(schema.sessions).set({ activeWorkspaceId: workspaceId }).where(and(eq(schema.sessions.id, sha256(token)), eq(schema.sessions.userId, userId)));
+  return { id: m.workspace.id, name: m.workspace.name };
 }
 
 /**
@@ -66,23 +66,23 @@ export async function actorFromCredentials(c: { authorization?: string | null; s
   const session = c.sessionToken ? await sessionForToken(c.sessionToken) : null;
   if (!session) throw new AuthError("Not authenticated");
   const user = session.user;
-  const m = await currentMembership(user.id, session.activeTeamId);
-  if (!m) throw new AuthError("No team");
-  return { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
+  const m = await currentMembership(user.id, session.activeWorkspaceId);
+  if (!m) throw new AuthError("No workspace");
+  return { kind: "human", id: user.id, name: user.name, workspaceId: m.workspace.id };
 }
 
 /**
- * The person behind a session cookie, with their team and membership, or null when signed out. Pages and routes that
+ * The person behind a session cookie, with their workspace and membership, or null when signed out. Pages and routes that
  * are only for people (connecting GitHub, the live streams) use this; each host decides what "signed out" looks like.
  */
 export async function humanFromSession(token: string | undefined | null) {
   const session = token ? await sessionForToken(token) : null;
   if (!session) return null;
   const user = session.user;
-  const m = await currentMembership(user.id, session.activeTeamId);
+  const m = await currentMembership(user.id, session.activeWorkspaceId);
   if (!m) return null;
-  const actor: Actor = { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
-  return { user, team: m.team, membership: m.membership, actor };
+  const actor: Actor = { kind: "human", id: user.id, name: user.name, workspaceId: m.workspace.id };
+  return { user, workspace: m.workspace, membership: m.membership, actor };
 }
 
 export type Human = NonNullable<Awaited<ReturnType<typeof humanFromSession>>>;

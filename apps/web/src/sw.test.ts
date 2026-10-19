@@ -180,7 +180,7 @@ describe("built files (/assets/)", () => {
 });
 
 describe("pages (navigation)", () => {
-  test.each(["/", "/p/WH", "/p/WH/docs", "/team", "/login"])("%s comes from the network and is never stored", async (url) => {
+  test.each(["/", "/p/WH", "/p/WH/docs", "/workspace", "/login"])("%s comes from the network and is never stored", async (url) => {
     sw.net.respond = () => new Response("<html>a person's page</html>", { headers: { "content-type": "text/html" } });
     const r = await sw.fetch(url, { mode: "navigate" });
     expect(r.intercepted).toBe(true);

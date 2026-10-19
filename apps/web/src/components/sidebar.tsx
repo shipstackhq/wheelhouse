@@ -76,13 +76,13 @@ function currentSection(path: string, key: string): string {
 
 export function Sidebar({
   projects,
-  teamName,
+  workspaceName,
   isAdmin,
   lastProject,
   profile,
 }: {
   projects: ProjectItem[];
-  teamName: string;
+  workspaceName: string;
   isAdmin: boolean;
   /** The project to open from the logo; read from the cookie when not given. */
   lastProject?: string | null;
@@ -204,7 +204,7 @@ export function Sidebar({
             </button>
           </Tip>
         </div>
-        <div className={clsx("px-4 pb-2 text-xs text-muted", collapsed && "md:hidden")}>{teamName}</div>
+        <div className={clsx("px-4 pb-2 text-xs text-muted", collapsed && "md:hidden")}>{workspaceName}</div>
         <nav className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
           <div className="relative mt-3">
@@ -293,12 +293,12 @@ export function Sidebar({
               </Group>
             ))}
           <Group title="Workspace" collapsed={collapsed} gap="mt-5">
-            <NavLink href="/team" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
+            <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
             <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
           </Group>
           {isAdmin && (
             <Group title="Admin" collapsed={collapsed} gap="mt-5">
-              <NavLink href="/admin/teams" icon={NAV_ICONS.workspaces} collapsed={collapsed}>Workspaces</NavLink>
+              <NavLink href="/admin/workspaces" icon={NAV_ICONS.workspaces} collapsed={collapsed}>Workspaces</NavLink>
               <NavLink href="/admin/invites" icon={NAV_ICONS.inviteWorkspace} collapsed={collapsed}>Invite a new workspace</NavLink>
             </Group>
           )}

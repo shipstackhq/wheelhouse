@@ -31,27 +31,27 @@ export type AuditEvent = {
   createdAt: string;
 };
 
-// ───────── team, members, keys, invites ─────────
+// ───────── workspace, members, keys, invites ─────────
 
-export type TeamMember = { userId: string; name: string; email: string; role: Role; tags: string[] };
+export type WorkspaceMember = { userId: string; name: string; email: string; role: Role; tags: string[] };
 export type Seats = { members: number; pending: number; used: number; max: number; full: boolean };
 
 export type PendingInvite = {
   id: string;
-  kind: "new_team" | "join_team";
+  kind: "new_workspace" | "join_workspace";
   email: string;
   role: Role;
-  teamName: string | null;
+  workspaceName: string | null;
   /** The projects they join on accepting. */
   projects: { key: string; name: string; role: ProjectRole }[];
   createdAt: string;
   expiresAt: string;
 };
 
-export type TeamOverview = {
-  team: { id: string; name: string };
+export type WorkspaceOverview = {
+  workspace: { id: string; name: string };
   role: Role;
-  members: TeamMember[];
+  members: WorkspaceMember[];
   seats: Seats;
   /** Join invites still waiting. Empty for a member: only owners see them. */
   pendingInvites: PendingInvite[];
@@ -80,16 +80,16 @@ export type SetupCommands = {
 export type AgentsPage = { keys: KeyView[]; setup: SetupCommands };
 export type CreatedKey = { key: KeyView; secret: string };
 
-export type CreateInviteInput = { kind: "join_team" | "new_team"; email: string; role?: Role; tags?: string[] | string; team?: string; /** join_team only: the projects the person joins on accepting, by key. The caller must administer each. */ projects?: { project: string; role: ProjectRole }[] };
-export type CreatedInvite = { id: string; email: string; kind: "new_team" | "join_team"; expiresAt: string; link: string };
-export type InvitePeek = { email: string; kind: "new_team" | "join_team"; teamName: string | null };
+export type CreateInviteInput = { kind: "join_workspace" | "new_workspace"; email: string; role?: Role; tags?: string[] | string; workspace?: string; /** join_workspace only: the projects the person joins on accepting, by key. The caller must administer each. */ projects?: { project: string; role: ProjectRole }[] };
+export type CreatedInvite = { id: string; email: string; kind: "new_workspace" | "join_workspace"; expiresAt: string; link: string };
+export type InvitePeek = { email: string; kind: "new_workspace" | "join_workspace"; workspaceName: string | null };
 /** What an invite sent to a signed-in person's own address would add them to. */
-export type InvitePeekExisting = { email: string; teamName: string; role: Role; projects: { key: string; name: string; role: ProjectRole }[] };
+export type InvitePeekExisting = { email: string; workspaceName: string; role: Role; projects: { key: string; name: string; role: ProjectRole }[] };
 export type AcceptInviteInput = { token: string; name: string; password: string; confirm: string };
 
 // ───────── instance admin ─────────
 
-export type AdminTeam = {
+export type AdminWorkspace = {
   id: string;
   name: string;
   createdAt: string;
@@ -106,10 +106,10 @@ export type AdminTeam = {
   isYours: boolean;
 };
 
-export type AdminTeamDetail = AdminTeam & {
+export type AdminWorkspaceDetail = AdminWorkspace & {
   suspendedBy: { name: string; email: string } | null;
   memberList: { userId: string; name: string; email: string; role: Role; tags: string[]; joinedAt: string }[];
-  inviteList: { id: string; kind: "new_team" | "join_team"; email: string; role: string; status: "pending" | "used" | "revoked" | "expired"; expiresAt: string; createdAt: string }[];
+  inviteList: { id: string; kind: "new_workspace" | "join_workspace"; email: string; role: string; status: "pending" | "used" | "revoked" | "expired"; expiresAt: string; createdAt: string }[];
   keys: { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null }[];
 };
 

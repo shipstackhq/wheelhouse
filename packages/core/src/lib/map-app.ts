@@ -8,8 +8,8 @@ import { bad, finite, oneOf, rateLimited, text, textList, textOrNull, whole } fr
 
 /**
  * What the web app's map, decisions, glossary and activity pages read and write (WH-97), as functions of the signed-in person.
- * The API's controllers call these and nothing else. Everything is scoped by the actor's team through the service layer, so another
- * team's project, node, edge, flow, decision or term is "not found". Answers carry only what the screens use, never raw rows.
+ * The API's controllers call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another
+ * workspace's project, node, edge, flow, decision or term is "not found". Answers carry only what the screens use, never raw rows.
  */
 
 type Body = Record<string, unknown>;
@@ -315,7 +315,7 @@ export async function upsertTermAs(actor: Actor, projectKey: string, term: strin
 export const ASK_LIMIT = { count: 20, windowMs: 10 * 60_000 };
 
 /**
- * Ask a question of the map. Order matters: the project is resolved first (another team's is a 404 before anything else happens),
+ * Ask a question of the map. Order matters: the project is resolved first (another workspace's is a 404 before anything else happens),
  * then the limit is counted, and only then does the server call Claude. The API key is read from the server's environment by
  * `askMap` and is in no answer.
  */

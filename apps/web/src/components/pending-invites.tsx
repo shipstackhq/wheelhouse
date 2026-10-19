@@ -25,7 +25,7 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
           <div className="min-w-40 flex-1">
             <div className="font-medium">{i.email}</div>
             <div className="text-xs text-muted">
-              {i.kind === "new_team" ? `new workspace${i.teamName ? `: ${i.teamName}` : ""}` : i.role}
+              {i.kind === "new_workspace" ? `new workspace${i.workspaceName ? `: ${i.workspaceName}` : ""}` : i.role}
               {i.projects.length > 0 && ` · joins ${i.projects.map((p) => `${p.key} as ${p.role}`).join(", ")}`} · expires {i.expiresAt.slice(0, 10)}
             </div>
           </div>

@@ -7,7 +7,7 @@ import { activityQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 import { AgentIcon } from "../../components/icons";
 
-/** What happened in the project, newest first: everything, only agents, or only the team. Each line links to the thing it is about. */
+/** What happened in the project, newest first: everything, only agents, or only the workspace. Each line links to the thing it is about. */
 export function ActivityPage() {
   const { key = "" } = useParams();
   const [search] = useSearchParams();
@@ -26,7 +26,7 @@ export function ActivityPage() {
         <div className="mb-4 flex gap-1">
           {tab(undefined, "Everything")}
           {tab("agent", <><AgentIcon /> Agents</>)}
-          {tab("human", "Team")}
+          {tab("human", "Workspace")}
         </div>
         <Loaded query={query} label="Loading the activity">
           {(events) => (

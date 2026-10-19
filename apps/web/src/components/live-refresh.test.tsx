@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, render } from "@testing-library/react";
 import { useQuery } from "@tanstack/react-query";
 import { createServices, ServicesProvider } from "../lib/services";
-import { LiveRefresh, ProjectLiveRefresh, TeamLiveRefresh } from "./live-refresh";
+import { LiveRefresh, ProjectLiveRefresh, WorkspaceLiveRefresh } from "./live-refresh";
 import { FakeEventSource } from "../test/fake-event-source";
 import { DEBOUNCE_MS, FALLBACK_POLL_MS } from "../lib/live-stream";
 
@@ -95,8 +95,8 @@ describe("which stream", () => {
     mount(<ProjectLiveRefresh projectKey="A B" />);
     expect(stream().url).toBe("/api/projects/A%20B/stream");
   });
-  test("the team's changes", async () => {
-    mount(<TeamLiveRefresh />);
+  test("the workspace's changes", async () => {
+    mount(<WorkspaceLiveRefresh />);
     expect(stream().url).toBe("/api/stream");
   });
 });

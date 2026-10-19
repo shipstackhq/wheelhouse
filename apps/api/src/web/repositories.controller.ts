@@ -5,7 +5,7 @@ import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 import { requestOrigin } from "./origin";
 
-/** The repositories page, the Connect GitHub card, and the onboarding wizard. A project or repository of another team is a 404. */
+/** The repositories page, the Connect GitHub card, and the onboarding wizard. A project or repository of another workspace is a 404. */
 @Controller("api/app/projects")
 @AppEndpoints()
 @UseGuards(SessionGuard)
@@ -22,7 +22,7 @@ export class RepositoriesController {
   }
 
   /**
-   * Connect GitHub: whether the server has the App, and (for owners) each installation of the team with the repositories this
+   * Connect GitHub: whether the server has the App, and (for owners) each installation of the workspace with the repositories this
    * project could still connect. Everything is asked of GitHub on the way in, so it is never stale.
    */
   @Get(":key/repositories/github")
@@ -30,7 +30,7 @@ export class RepositoriesController {
     return githubStatus(req.human, key);
   }
 
-  /** `{ installationId, repoId, role?, pathLimit? }`. Owners only; the installation must be the team's own (ADR-12). Name and branch come from GitHub. */
+  /** `{ installationId, repoId, role?, pathLimit? }`. Owners only; the installation must be the workspace's own (ADR-12). Name and branch come from GitHub. */
   @Post(":key/repositories/github")
   async connectGithub(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
     return { repository: await connectGithubAs(req.human.actor, key, jsonBody(req)) };

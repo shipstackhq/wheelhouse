@@ -1,5 +1,5 @@
 /**
- * The data tools (WH-100). They move a database between PGlite and Postgres; a mistake here loses or corrupts what the team wrote, so the
+ * The data tools (WH-100). They move a database between PGlite and Postgres; a mistake here loses or corrupts what the workspace wrote, so the
  * tests are about exactness (nothing rounded, reformatted or reordered), about refusing to make a mess, and about noticing one when it is made.
  * The Postgres cases run when TEST_DATABASE_URL is set (a scratch database is created and dropped), as in CI.
  */
@@ -34,10 +34,10 @@ before(async () => {
   process.env.PGLITE_DIR = source;
   delete process.env.DATABASE_URL;
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Move team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Move workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: "move@example.test", name: "Mo", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  const actor: Actor = { kind: "human", id: user.id, name: user.name, teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  const actor: Actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
   await svc.createProject(actor, { name: "Move", key: "MV", description: TRICKY });
   const t = await svc.createTicket(actor, "MV", { title: TRICKY, body: "body" });
   await svc.addComment(actor, t.id, "a comment");
@@ -48,11 +48,11 @@ before(async () => {
   await svc.upsertDecision(actor, "MV", { title: "Use it", context: TRICKY });
   await svc.upsertTerm(actor, "MV", { term: "Thing", definition: "a thing" });
   await svc.upsertFlow(actor, "MV", { name: "Go", steps: [{ node: a.id, title: "start" }] });
-  const [key] = await db.insert(schema.apiKeys).values({ teamId: team.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
+  const [key] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
   const [project] = await db.select().from(schema.projects);
   await db.insert(schema.agentCursors).values({ apiKeyId: key.id, projectId: project.id, lastSeq: 3 });
   await db.insert(schema.sessions).values({ id: "b".repeat(64), userId: user.id, expiresAt: new Date(Date.now() + 864e5) });
-  await db.insert(schema.githubInstallations).values({ installationId: "4242", teamId: team.id, accountLogin: "acme", accountType: "Organization", connectedBy: user.id });
+  await db.insert(schema.githubInstallations).values({ installationId: "4242", workspaceId: workspace.id, accountLogin: "acme", accountType: "Organization", connectedBy: user.id });
   await db.insert(schema.repositories).values({ projectId: project.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
   await db.insert(schema.workSessions).values({ id: "sess-1", projectId: project.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
   // Values that a careless copy gets wrong: the newest event's number past 2^53, a double that is not exact, a microsecond timestamp, an empty string beside a null.
@@ -131,7 +131,7 @@ describe("export and import between PGlite directories", () => {
   test("a failure part-way leaves the target empty, so the import can simply be run again", async () => {
     const broken = path.join(work, "export-broken");
     fs.cpSync(exportDir, broken, { recursive: true });
-    fs.appendFileSync(path.join(broken, "tickets.ndjson"), '{"id":"not-a-uuid"}\n'); // users, teams, projects… load first; this fails later
+    fs.appendFileSync(path.join(broken, "tickets.ndjson"), '{"id":"not-a-uuid"}\n'); // users, workspaces, projects… load first; this fails later
     const dst = await fresh("dst-7");
     await assert.rejects(importData(dst, broken));
     assert.equal((await snapshot(dst.query)).tables.every((t) => t.rows === 0), true);

@@ -1,5 +1,5 @@
 import type {
-  Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminTeam, AdminTeamDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, ProjectMembers, SetupCommands, TeamOverview } from "@wheelhouse/api-client";
+  Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminWorkspace, AdminWorkspaceDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, ProjectMembers, SetupCommands, WorkspaceOverview } from "@wheelhouse/api-client";
 
 /** Believable answers from the page endpoints, for tests to start from and bend. */
 
@@ -35,18 +35,18 @@ export const agentsPage = (keys: KeyView[] = [key()], setup: Partial<SetupComman
 
 export const invite = (over: Partial<PendingInvite> = {}): PendingInvite => ({
   id: "i1",
-  kind: "join_team",
+  kind: "join_workspace",
   email: "grace@example.test",
   role: "member",
-  teamName: null,
+  workspaceName: null,
   projects: [],
   createdAt: "2026-10-16T00:00:00.000Z",
   expiresAt: "2026-10-23T00:00:00.000Z",
   ...over,
 });
 
-export const team = (over: Partial<TeamOverview> = {}): TeamOverview => ({
-  team: { id: "t1", name: "Analytical Engines" },
+export const workspace = (over: Partial<WorkspaceOverview> = {}): WorkspaceOverview => ({
+  workspace: { id: "t1", name: "Analytical Engines" },
   role: "owner",
   members: [
     { userId: "u1", name: "Ada Lovelace", email: "ada@example.test", role: "owner", tags: ["eng"] },
@@ -57,7 +57,7 @@ export const team = (over: Partial<TeamOverview> = {}): TeamOverview => ({
   ...over,
 });
 
-export const adminTeam = (over: Partial<AdminTeam> = {}): AdminTeam => ({
+export const adminWorkspace = (over: Partial<AdminWorkspace> = {}): AdminWorkspace => ({
   id: "t2",
   name: "Babbage & Co",
   createdAt: "2026-09-01T00:00:00.000Z",
@@ -75,11 +75,11 @@ export const adminTeam = (over: Partial<AdminTeam> = {}): AdminTeam => ({
   ...over,
 });
 
-export const adminTeamDetail = (over: Partial<AdminTeamDetail> = {}): AdminTeamDetail => ({
-  ...adminTeam(),
+export const adminWorkspaceDetail = (over: Partial<AdminWorkspaceDetail> = {}): AdminWorkspaceDetail => ({
+  ...adminWorkspace(),
   suspendedBy: null,
   memberList: [{ userId: "u9", name: "Charles Babbage", email: "charles@example.test", role: "owner", tags: [], joinedAt: "2026-09-02T00:00:00.000Z" }],
-  inviteList: [{ id: "i9", kind: "join_team", email: "new@example.test", role: "member", status: "pending", expiresAt: "2026-10-30T00:00:00.000Z", createdAt: "2026-10-16T00:00:00.000Z" }],
+  inviteList: [{ id: "i9", kind: "join_workspace", email: "new@example.test", role: "member", status: "pending", expiresAt: "2026-10-30T00:00:00.000Z", createdAt: "2026-10-16T00:00:00.000Z" }],
   keys: [{ id: "k9", name: "ci", prefix: "wh_zzzzzzz", createdAt: "2026-09-03T00:00:00.000Z", lastUsedAt: null, revokedAt: null }],
   ...over,
 });
@@ -204,7 +204,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
       { id: "machines", label: "Machines", done: true, status: "linked", href: `/p/${key}` },
       { id: "agents", label: "Agents", done: true, status: "1 key", href: "/agents" },
       { id: "map", label: "Map", done: true, status: "built", href: `/p/${key}/map` },
-      { id: "teammates", label: "Teammates", done: true, status: "invited", href: "/team" },
+      { id: "teammates", label: "Teammates", done: true, status: "invited", href: "/workspace" },
     ],
     done: true,
     doneCount: 5,

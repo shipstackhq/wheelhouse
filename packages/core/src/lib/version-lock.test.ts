@@ -23,10 +23,10 @@ const ROUNDS = 6;
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Lock team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Lock workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: `lock-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Lena", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  actor = { kind: "human", id: user.id, name: user.name, teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
   await svc.createProject(actor, { name: "Lock", key: "LK" });
 });
 

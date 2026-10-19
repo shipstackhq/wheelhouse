@@ -6,7 +6,7 @@ import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-/** The map, decisions, glossary and activity pages. A project, node, edge, flow, decision or term of another team is a 404. */
+/** The map, decisions, glossary and activity pages. A project, node, edge, flow, decision or term of another workspace is a 404. */
 @Controller("api/app/projects")
 @AppEndpoints()
 @UseGuards(SessionGuard)
@@ -97,7 +97,7 @@ export class MapController {
 
   /**
    * `{ question, focus? }`. Claude is called from the server with the server's own key, which is in no response. 20 questions per
-   * person per 10 minutes. Another team's project is a 404 before anything is counted or called.
+   * person per 10 minutes. Another workspace's project is a 404 before anything is counted or called.
    */
   @Post(":key/ask")
   @HttpCode(200)

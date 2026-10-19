@@ -1,8 +1,8 @@
 /**
- * Team documentation (WH-51): service-layer CRUD/locking/tree/limits, tool-layer
+ * Workspace documentation (WH-51): service-layer CRUD/locking/tree/limits, tool-layer
  * permissions and the prompt-injection-hygiene output marker, and search ranking/budget.
- * Cross-team isolation for docs lives in isolation.test.ts (shares its two-team fixture
- * and attack registry); this file is single-team, focused on docs' own behaviour.
+ * Cross-workspace isolation for docs lives in isolation.test.ts (shares its two-workspace fixture
+ * and attack registry); this file is single-workspace, focused on docs' own behaviour.
  */
 process.env.PGLITE_DIR = "memory://";
 delete process.env.DATABASE_URL;
@@ -28,21 +28,21 @@ let projectKey: string;
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: `docs team ${RUN}` }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: `docs workspace ${RUN}` }).returning();
   const [owner] = await db.insert(schema.users).values({ email: `docs-owner-${RUN}@example.com`, name: "Docs owner", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: owner.id, teamId: team.id, role: "owner" });
-  human = { kind: "human", id: owner.id, name: "Docs owner", teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: owner.id, workspaceId: workspace.id, role: "owner" });
+  human = { kind: "human", id: owner.id, name: "Docs owner", workspaceId: workspace.id };
 
   const roKey = `wh_${crypto.randomBytes(18).toString("base64url")}`;
-  const [ro] = await db.insert(schema.apiKeys).values({ teamId: team.id, name: "read-only key", prefix: roKey.slice(0, 10), keyHash: sha256(roKey), createdBy: owner.id }).returning();
-  readOnlyAgent = { kind: "agent", id: ro.id, name: "read-only key", teamId: team.id };
+  const [ro] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "read-only key", prefix: roKey.slice(0, 10), keyHash: sha256(roKey), createdBy: owner.id }).returning();
+  readOnlyAgent = { kind: "agent", id: ro.id, name: "read-only key", workspaceId: workspace.id };
 
   const wKey = `wh_${crypto.randomBytes(18).toString("base64url")}`;
   const [w] = await db
     .insert(schema.apiKeys)
-    .values({ teamId: team.id, name: "writer key", prefix: wKey.slice(0, 10), keyHash: sha256(wKey), createdBy: owner.id, capabilities: ["docs:write"] })
+    .values({ workspaceId: workspace.id, name: "writer key", prefix: wKey.slice(0, 10), keyHash: sha256(wKey), createdBy: owner.id, capabilities: ["docs:write"] })
     .returning();
-  writerAgent = { kind: "agent", id: w.id, name: "writer key", teamId: team.id };
+  writerAgent = { kind: "agent", id: w.id, name: "writer key", workspaceId: workspace.id };
 
   const project = await svc.createProject(human, { name: "Docs project", key: "DP" });
   projectKey = project.key;
@@ -149,8 +149,8 @@ describe("service layer: CRUD, locking, tree, limits", () => {
 
   test("a project at the 500-doc cap refuses further creates", async () => {
     const db = await getDb();
-    const [capProject] = await db.insert(schema.projects).values({ teamId: human.teamId, key: "CAP", name: "Cap project" }).returning();
-    await db.insert(schema.projectMembers).values({ projectId: capProject.id, userId: human.id, teamId: human.teamId, role: "editor" }); // a project is reachable only by its members
+    const [capProject] = await db.insert(schema.projects).values({ workspaceId: human.workspaceId, key: "CAP", name: "Cap project" }).returning();
+    await db.insert(schema.projectMembers).values({ projectId: capProject.id, userId: human.id, workspaceId: human.workspaceId, role: "editor" }); // a project is reachable only by its members
     // Insert 500 docs directly (fast path) rather than through the service, to keep the test quick.
     const rows = Array.from({ length: 500 }, (_, i) => ({
       projectId: capProject.id,

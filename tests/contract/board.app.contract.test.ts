@@ -5,13 +5,13 @@ import { anon, app, newAccount, type Sess } from "./lib/app";
 
 /**
  * The board and ticket endpoints behind the project page and the ticket dialog (WH-96): reads, create, edit with the version
- * check, move by id, name or role, comment, link, delete, the Bots menu's queue, and the rules that keep one team out of another's
- * tickets. Everything that changes data does it in a team made for the test.
+ * check, move by id, name or role, comment, link, delete, the Bots menu's queue, and the rules that keep one workspace out of another's
+ * tickets. Everything that changes data does it in a workspace made for the test.
  */
 const SID = "00000000-0000-4000-8000-000000000000";
 
-/** A team with one project, an API key for its agents, and the sessions to act as its owner. */
-async function team(projectName = "Rocket") {
+/** A workspace with one project, an API key for its agents, and the sessions to act as its owner. */
+async function workspace(projectName = "Rocket") {
   const owner = await newAccount();
   const project = (await app("POST", "/api/app/projects", owner.sess, { body: { name: projectName, key: "RKT" } })).json.project;
   const key = (await app("POST", "/api/app/keys", owner.sess, { body: { name: "agent" } })).json.secret as string;
@@ -49,7 +49,7 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
   }
 
   test("a forged request (another site, no token, a wrong token) changes nothing", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Keep me" });
     for (const f of [{ origin: "https://evil.example" }, { csrf: null }, { csrf: "wrong" }]) {
       for (const [method, path, body] of [
@@ -72,7 +72,7 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
 
 describe("GET /api/app/projects/:key/board", () => {
   test("the project, its five columns with their roles, tickets, map nodes, members and the checklist", async () => {
-    const t = await team();
+    const t = await workspace();
     const b = await board(t.s);
     assert.deepEqual(Object.keys(b).sort(), ["checklist", "columns", "members", "nodes", "project", "tickets"]);
     assert.deepEqual(Object.keys(b.project).sort(), ["description", "id", "key", "name"]);
@@ -85,7 +85,7 @@ describe("GET /api/app/projects/:key/board", () => {
   });
 
   test("a ticket carries what a card shows, its linked nodes and comment count, and nothing internal", async () => {
-    const t = await team();
+    const t = await workspace();
     const node = await v1ok({ key: t.key }, "upsert_node", { project: "RKT", layer: "concept", kind: "capability", name: "Billing", summary: "Takes money" });
     const tk = await make(t.s, { title: "Card", priority: "high", labels: ["bug"], body: "Why" });
     await app("PUT", `/api/app/tickets/${tk.ref}/nodes/${node.id}`, t.s);
@@ -96,19 +96,19 @@ describe("GET /api/app/projects/:key/board", () => {
     assert.deepEqual(b.tickets[0].nodeIds, [node.id]);
     assert.equal(b.tickets[0].commentCount, 1);
     assert.deepEqual(Object.keys(b.nodes[0]).sort(), ["id", "kind", "layer", "name", "parentId"]);
-    assert.ok(!/projectId|createdById|teamId/.test(JSON.stringify(b.tickets)), "no internal ids");
+    assert.ok(!/projectId|createdById|workspaceId/.test(JSON.stringify(b.tickets)), "no internal ids");
   });
 
-  test("members are this team's people only", async () => {
-    const a = await team();
+  test("members are this workspace's people only", async () => {
+    const a = await workspace();
     const other = await newAccount("Other");
     const members = (await board(a.s)).members.map((m: { id: string }) => m.id);
     assert.ok(members.includes(a.owner.me.user.id));
     assert.ok(!members.includes(other.me.user.id));
   });
 
-  test("another team's project is a 404, whatever the case of its key", async () => {
-    const a = await team();
+  test("another workspace's project is a 404, whatever the case of its key", async () => {
+    const a = await workspace();
     const other = await newAccount("Other");
     for (const key of ["RKT", "rkt"]) {
       const r = await app("GET", `/api/app/projects/${key}/board`, other.sess);
@@ -121,7 +121,7 @@ describe("GET /api/app/projects/:key/board", () => {
 
 describe("POST /api/app/projects/:key/tickets", () => {
   test("creates in the first column by default: 201, version 1, a ref from the project", async () => {
-    const t = await team();
+    const t = await workspace();
     const r = await app("POST", "/api/app/projects/RKT/tickets", t.s, { body: { title: "  First one  " } });
     assert.equal(r.status, 201);
     const tk = r.json.ticket;
@@ -137,7 +137,7 @@ describe("POST /api/app/projects/:key/tickets", () => {
   });
 
   test("the column can be an id, a name, or a role", async () => {
-    const t = await team();
+    const t = await workspace();
     const cols = (await board(t.s)).columns;
     const byId = await make(t.s, { title: "by id", column: cols[1].id });
     const byName = await make(t.s, { title: "by name", column: "In Progress" });
@@ -146,13 +146,13 @@ describe("POST /api/app/projects/:key/tickets", () => {
   });
 
   test("it takes priority, labels, body, assignee and the AI flag", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Full", body: "Markdown **body**", priority: "urgent", labels: ["a", "b"], assigneeId: t.owner.me.user.id, agentClaimable: true });
     assert.deepEqual([tk.body, tk.priority, tk.labels, tk.assigneeId, tk.agentClaimable], ["Markdown **body**", "urgent", ["a", "b"], t.owner.me.user.id, true]);
   });
 
   test("problems name the field: no title, the wrong type, an unknown priority or column", async () => {
-    const t = await team();
+    const t = await workspace();
     const cases: [Record<string, unknown>, string][] = [
       [{}, "title"],
       [{ title: "   " }, "title"],
@@ -177,18 +177,18 @@ describe("POST /api/app/projects/:key/tickets", () => {
     assert.deepEqual((await board(t.s)).tickets, [], "nothing was created");
   });
 
-  test("an assignee from another team is refused, and so is a made-up one", async () => {
-    const t = await team();
+  test("an assignee from another workspace is refused, and so is a made-up one", async () => {
+    const t = await workspace();
     const other = await newAccount("Other");
     for (const assigneeId of [other.me.user.id, SID, "not-an-id"]) {
       const r = await app("POST", "/api/app/projects/RKT/tickets", t.s, { body: { title: "x", assigneeId } });
       assert.equal(r.status, 400, assigneeId);
-      assert.equal(r.json.error.message, "Assignee must be a member of your team");
+      assert.equal(r.json.error.message, "Assignee must be a member of your workspace");
     }
   });
 
-  test("another team's project is a 404 and gets no ticket", async () => {
-    const t = await team();
+  test("another workspace's project is a 404 and gets no ticket", async () => {
+    const t = await workspace();
     const other = await newAccount("Other");
     const r = await app("POST", "/api/app/projects/RKT/tickets", other.sess, { body: { title: "Intruder" } });
     assert.equal(r.status, 404);
@@ -198,7 +198,7 @@ describe("POST /api/app/projects/:key/tickets", () => {
 
 describe("GET /api/app/tickets/:ref", () => {
   test("the ticket, its discussion, linked nodes, history and pull requests", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Detail" });
     await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "first" } });
     await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { priority: "high" } });
@@ -216,7 +216,7 @@ describe("GET /api/app/tickets/:ref", () => {
   });
 
   test("a ref is case-insensitive in its key, a made-up one is 404, a malformed one is 400", async () => {
-    const t = await team();
+    const t = await workspace();
     await make(t.s, { title: "x" });
     assert.equal((await app("GET", "/api/app/tickets/rkt-1", t.s)).status, 200);
     assert.equal((await app("GET", "/api/app/tickets/RKT-99", t.s)).status, 404);
@@ -228,7 +228,7 @@ describe("GET /api/app/tickets/:ref", () => {
 
 describe("PATCH /api/app/tickets/:ref: the version check", () => {
   test("a change bumps the version; changing nothing does not", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "v" });
     const a = await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { title: "v2", priority: "low", version: 1 } });
     assert.equal(a.status, 200);
@@ -239,7 +239,7 @@ describe("PATCH /api/app/tickets/:ref: the version check", () => {
   });
 
   test("a stale version is a 409 with the ticket as it is now, and nothing is overwritten", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Original", body: "mine" });
     await v1ok({ key: t.key }, "update_ticket", { ticket: tk.ref, title: "Changed by an agent", expected_version: 1 });
     const stale = await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { body: "my slow edit", version: 1 } });
@@ -260,14 +260,14 @@ describe("PATCH /api/app/tickets/:ref: the version check", () => {
   });
 
   test("two edits from the same version: exactly one wins", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Race" });
     const [x, y] = await Promise.all(["x", "y"].map((p) => app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { title: `by ${p}`, version: 1 } })));
     assert.deepEqual([x.status, y.status].sort(), [200, 409]);
   });
 
   test("without a version the change is applied over whatever is there (as the agents' tools do)", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Open" });
     await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { title: "one" } });
     const r = await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { title: "two" } });
@@ -275,7 +275,7 @@ describe("PATCH /api/app/tickets/:ref: the version check", () => {
   });
 
   test("every field can be set, and a wrong type names the field and changes nothing", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Fields" });
     const ok = await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { title: "T", body: "B", priority: "urgent", labels: ["x"], agentClaimable: true, assigneeId: t.owner.me.user.id, version: 1 } });
     assert.deepEqual([ok.json.ticket.title, ok.json.ticket.body, ok.json.ticket.priority, ok.json.ticket.labels, ok.json.ticket.agentClaimable, ok.json.ticket.assigneeId], ["T", "B", "urgent", ["x"], true, t.owner.me.user.id]);
@@ -289,8 +289,8 @@ describe("PATCH /api/app/tickets/:ref: the version check", () => {
     assert.equal((await app("GET", `/api/app/tickets/${tk.ref}`, t.s)).json.ticket.title, "T");
   });
 
-  test("an assignee from another team is refused", async () => {
-    const t = await team();
+  test("an assignee from another workspace is refused", async () => {
+    const t = await workspace();
     const other = await newAccount("Other");
     const tk = await make(t.s, { title: "x" });
     const r = await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { assigneeId: other.me.user.id } });
@@ -301,7 +301,7 @@ describe("PATCH /api/app/tickets/:ref: the version check", () => {
 
 describe("POST /api/app/tickets/:ref/move", () => {
   test("by column id, by name and by role; the ticket changes column and its version goes up", async () => {
-    const t = await team();
+    const t = await workspace();
     const cols = (await board(t.s)).columns;
     const tk = await make(t.s, { title: "Mover" });
     const byId = await app("POST", `/api/app/tickets/${tk.ref}/move`, t.s, { body: { column: cols[1].id } });
@@ -312,7 +312,7 @@ describe("POST /api/app/tickets/:ref/move", () => {
   });
 
   test("index puts it in a place: first, in the middle, and the end when absent", async () => {
-    const t = await team();
+    const t = await workspace();
     const cols = (await board(t.s)).columns;
     const [a, b, c] = [await make(t.s, { title: "a", column: "Todo" }), await make(t.s, { title: "b", column: "Todo" }), await make(t.s, { title: "c", column: "Todo" })];
     const d = await make(t.s, { title: "d" });
@@ -325,7 +325,7 @@ describe("POST /api/app/tickets/:ref/move", () => {
   });
 
   test("into an empty column", async () => {
-    const t = await team();
+    const t = await workspace();
     const cols = (await board(t.s)).columns;
     const tk = await make(t.s, { title: "Lonely" });
     const r = await app("POST", `/api/app/tickets/${tk.ref}/move`, t.s, { body: { column: cols[3].id, index: 0 } });
@@ -335,7 +335,7 @@ describe("POST /api/app/tickets/:ref/move", () => {
   });
 
   test("a stale version is a 409 with the current ticket, and the ticket does not move", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Stale" });
     await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { priority: "high" } });
     const r = await app("POST", `/api/app/tickets/${tk.ref}/move`, t.s, { body: { column: "Done", version: 1 } });
@@ -345,7 +345,7 @@ describe("POST /api/app/tickets/:ref/move", () => {
   });
 
   test("problems: no column, an unknown one, a column that is not text, an index that is not a whole number", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Bad" });
     const go = (body: unknown) => app("POST", `/api/app/tickets/${tk.ref}/move`, t.s, { body });
     assert.equal((await go({})).json.error.details.fields.column, "column is required");
@@ -357,7 +357,7 @@ describe("POST /api/app/tickets/:ref/move", () => {
   });
 
   test("the move is an event agents see, through the same write path (the agents' board shows it)", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Shared" });
     await app("POST", `/api/app/tickets/${tk.ref}/move`, t.s, { body: { column: "review" } });
     const agentsBoard = await v1ok({ key: t.key }, "get_board", { project: "RKT" });
@@ -368,7 +368,7 @@ describe("POST /api/app/tickets/:ref/move", () => {
 
 describe("DELETE /api/app/tickets/:ref", () => {
   test("removes the ticket and its comments; asking again is a 404", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Doomed" });
     await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: "bye" });
     assert.deepEqual((await app("DELETE", `/api/app/tickets/${tk.ref}`, t.s)).json, { ok: true });
@@ -380,7 +380,7 @@ describe("DELETE /api/app/tickets/:ref", () => {
 
 describe("comments", () => {
   test("a comment is 201, trimmed, by the person, and counted on the board", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Talk" });
     const r = await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "  Looks **good**  " } });
     assert.equal(r.status, 201);
@@ -390,7 +390,7 @@ describe("comments", () => {
   });
 
   test("an empty or non-text comment is a 400 and adds nothing", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Talk" });
     for (const body of [{}, { body: "   " }, { body: 5 }, { body: null }]) {
       const r = await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body });
@@ -403,7 +403,7 @@ describe("comments", () => {
 
 describe("linking a ticket to a map node", () => {
   test("link, link again (no harm), unlink; the board and the ticket both show it", async () => {
-    const t = await team();
+    const t = await workspace();
     const node = await v1ok({ key: t.key }, "upsert_node", { project: "RKT", layer: "system", kind: "service", name: "API", summary: "The API" });
     const tk = await make(t.s, { title: "Linked" });
     const url = `/api/app/tickets/${tk.ref}/nodes/${node.id}`;
@@ -416,9 +416,9 @@ describe("linking a ticket to a map node", () => {
     assert.deepEqual((await board(t.s)).tickets[0].nodeIds, []);
   });
 
-  test("a node of another team or project is a 404, and nothing is linked", async () => {
-    const t = await team();
-    const other = await team("Other");
+  test("a node of another workspace or project is a 404, and nothing is linked", async () => {
+    const t = await workspace();
+    const other = await workspace("Other");
     const foreign = await v1ok({ key: other.key }, "upsert_node", { project: "RKT", layer: "system", kind: "service", name: "Foreign", summary: "x" });
     const tk = await make(t.s, { title: "Mine" });
     const r = await app("PUT", `/api/app/tickets/${tk.ref}/nodes/${foreign.id}`, t.s);
@@ -427,9 +427,9 @@ describe("linking a ticket to a map node", () => {
   });
 });
 
-describe("another team's tickets are out of reach", () => {
-  test("every read and write on a ticket of another team is a 404, and the ticket is untouched", async () => {
-    const a = await team();
+describe("another workspace's tickets are out of reach", () => {
+  test("every read and write on a ticket of another workspace is a 404, and the ticket is untouched", async () => {
+    const a = await workspace();
     const b = await newAccount("Intruder");
     const node = await v1ok({ key: a.key }, "upsert_node", { project: "RKT", layer: "system", kind: "service", name: "N", summary: "x" });
     const tk = await make(a.s, { title: "Private", body: "secret plan" });
@@ -454,9 +454,9 @@ describe("another team's tickets are out of reach", () => {
     assert.deepEqual(mine.comments, []);
   });
 
-  test("a ticket ref is only ever resolved inside the caller's own team, even when both teams have the same key", async () => {
-    const a = await team();
-    const b = await team();
+  test("a ticket ref is only ever resolved inside the caller's own workspace, even when both workspaces have the same key", async () => {
+    const a = await workspace();
+    const b = await workspace();
     await make(a.s, { title: "A's first" });
     await make(b.s, { title: "B's first" });
     assert.equal((await app("GET", "/api/app/tickets/RKT-1", a.s)).json.ticket.title, "A's first");
@@ -466,7 +466,7 @@ describe("another team's tickets are out of reach", () => {
 
 describe("the Bots menu's queue", () => {
   test("each agent key with its queue depth and sessions", async () => {
-    const t = await team();
+    const t = await workspace();
     const r = await app("GET", "/api/app/projects/RKT/queue", t.s);
     assert.equal(r.status, 200);
     assert.deepEqual(Object.keys(r.json), ["bots"]);
@@ -478,7 +478,7 @@ describe("the Bots menu's queue", () => {
   });
 
   test("a change by another actor shows up as queued for an agent, and mark-all-seen for the project clears it", async () => {
-    const t = await team();
+    const t = await workspace();
     await v1ok({ key: t.key }, "get_changes", { project: "RKT" });
     await make(t.s, { title: "Queued for the agent" });
     const before = (await app("GET", "/api/app/projects/RKT/queue", t.s)).json.bots[0];
@@ -490,7 +490,7 @@ describe("the Bots menu's queue", () => {
 
 describe("a change by an agent reaches an open board within a second", () => {
   test("the project's stream announces it", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Watched" });
     const stream = await openSse("/api/projects/RKT/stream", { cookie: t.s.cookie });
     try {
@@ -507,7 +507,7 @@ describe("a change by an agent reaches an open board within a second", () => {
   });
 
   test("and the person's own change through the web API is announced the same way", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "Mine" });
     const stream = await openSse("/api/projects/RKT/stream", { cookie: t.s.cookie });
     try {
@@ -522,7 +522,7 @@ describe("a change by an agent reaches an open board within a second", () => {
 
 describe("claim state", () => {
   test("a person lets agents pick a ticket up; an agent claims it; the board and the dialog show it", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = await make(t.s, { title: "For agents" });
     assert.equal((await app("PATCH", `/api/app/tickets/${tk.ref}`, t.s, { body: { agentClaimable: true } })).json.ticket.agentClaimable, true);
     await v1ok({ key: t.key }, "claim_ticket", { ticket: tk.ref });

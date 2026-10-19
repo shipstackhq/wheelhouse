@@ -18,7 +18,7 @@ import { sql } from "drizzle-orm";
 
 /**
  * Workspace roles (ADR-23). A role decides what a person may do around projects (create them, manage people, pay); it never
- * opens a project by itself: that takes a row in `project_members`. The table is still called `teams` (renamed in a later step).
+ * opens a project by itself: that takes a row in `project_members`.
  */
 export const WORKSPACE_ROLES = ["owner", "admin", "member", "viewer", "guest"] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
@@ -43,15 +43,20 @@ export const sessions = pgTable("sessions", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   // The workspace this session is working in, for a person who belongs to several (ADR-23). Null: their first one.
-  activeTeamId: uuid("active_team_id").references(() => teams.id, { onDelete: "set null" }),
+  activeWorkspaceId: uuid("active_workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
 
-export const teams = pgTable("teams", {
+export const workspaces = pgTable("workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  // The workspace's address (`/w/<slug>` later). Created from the name; the default only keeps rows that skip it unique.
+  slug: text("slug").notNull().unique().default(sql`replace(gen_random_uuid()::text, '-', '')`),
+  // Seats, owner included. Null: the instance default (MAX_WORKSPACE_MEMBERS).
+  seatLimit: integer("seat_limit"),
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
-  // Instance-admin suspension (WH-52): a suspended team's members cannot sign in and its API keys are refused.
+  // Instance-admin suspension (WH-52): a suspended workspace's members cannot sign in and its API keys are refused.
   // Reversible: nothing is deleted, restoring clears these three columns.
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
   suspendedBy: uuid("suspended_by").references(() => users.id, { onDelete: "set null" }),
@@ -62,30 +67,30 @@ export const memberships = pgTable(
   "memberships",
   {
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     role: text("role", { enum: WORKSPACE_ROLES }).notNull().default("member"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.teamId] })],
+  (t) => [primaryKey({ columns: [t.userId, t.workspaceId] })],
 );
 
 /**
  * Who can open a project (ADR-23). A project is visible only to the people in this table; there is no open/private flag and
  * no other way in. Only people are listed: agent keys still work across their whole workspace until scoped keys arrive.
- * `team_id` repeats the project's workspace so every row can be checked against it without a join.
+ * `workspace_id` repeats the project's workspace so every row can be checked against it without a join.
  */
 export const projectMembers = pgTable(
   "project_members",
   {
     projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
     role: text("role", { enum: PROJECT_ROLES }).notNull().default("editor"),
     addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.userId] }), index("project_members_user_idx").on(t.userId, t.teamId)],
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] }), index("project_members_user_idx").on(t.userId, t.workspaceId)],
 );
 
 /**
@@ -97,7 +102,7 @@ export const auditEvents = pgTable(
   "audit_events",
   {
     seq: bigserial("seq", { mode: "number" }).primaryKey(),
-    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     projectId: uuid("project_id"),
     actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
     actorId: uuid("actor_id"),
@@ -109,22 +114,22 @@ export const auditEvents = pgTable(
     after: jsonb("after").$type<Record<string, unknown> | null>(),
     createdAt: createdAt(),
   },
-  (t) => [index("audit_events_team_seq_idx").on(t.teamId, t.seq)],
+  (t) => [index("audit_events_workspace_seq_idx").on(t.workspaceId, t.seq)],
 );
 
 // Invite-only signup (WH-49). Only the SHA-256 of the token is stored; the plain token is shown once.
-// kind new_team: the invitee gets a fresh team and owns it. kind join_team: the invitee joins team_id.
+// kind new_workspace: the invitee gets a fresh workspace and owns it. kind join_workspace: the invitee joins workspace_id.
 export const invites = pgTable(
   "invites",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    kind: text("kind", { enum: ["new_team", "join_team"] }).notNull(),
+    kind: text("kind", { enum: ["new_workspace", "join_workspace"] }).notNull(),
     email: text("email").notNull(), // lower-cased; the account is created with exactly this address
-    teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }), // join_team only
-    teamName: text("team_name"), // new_team only (optional)
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }), // join_workspace only
+    workspaceName: text("workspace_name"), // new_workspace only (optional)
     role: text("role", { enum: WORKSPACE_ROLES }).notNull().default("member"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
-    // join_team only: the projects the person is put into when they accept, each with a project role (ADR-23).
+    // join_workspace only: the projects the person is put into when they accept, each with a project role (ADR-23).
     projects: jsonb("projects").$type<{ projectId: string; role: ProjectRole }[]>().notNull().default([]),
     tokenHash: text("token_hash").notNull().unique(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
@@ -134,12 +139,12 @@ export const invites = pgTable(
     usedBy: uuid("used_by").references(() => users.id, { onDelete: "set null" }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
-  (t) => [index("invites_team_idx").on(t.teamId, t.usedAt)],
+  (t) => [index("invites_workspace_idx").on(t.workspaceId, t.usedAt)],
 );
 
 export const apiKeys = pgTable("api_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   prefix: text("prefix").notNull(), // first chars, shown in UI
   keyHash: text("key_hash").notNull().unique(),
@@ -158,7 +163,7 @@ export type KeyCapability = (typeof KEY_CAPABILITIES)[number];
 
 export const projects = pgTable("projects", {
   id: uuid("id").primaryKey().defaultRandom(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   key: text("key").notNull(), // short prefix like "WH" for ticket refs
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
@@ -367,7 +372,7 @@ export const events = pgTable(
   "events",
   {
     seq: bigserial("seq", { mode: "number" }).primaryKey(),
-    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     projectId: uuid("project_id").notNull(),
     actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
     actorId: uuid("actor_id"),
@@ -417,7 +422,7 @@ export const repositories = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
-    role: text("role").notNull(), // free text: teams name their own roles (frontend/backend/admin/…)
+    role: text("role").notNull(), // free text: workspaces name their own roles (frontend/backend/admin/…)
     provider: text("provider", { enum: REPO_PROVIDERS }).notNull().default("local"),
     // Natural identifying key for "same physical repo": the slug/name the CLI reports (provider=local),
     // or the stringified GitHub repo id once connected (provider=github). Unique per project so
@@ -510,11 +515,11 @@ export const nodeDrafts = pgTable(
 
 // ───────── GitHub App (WH-20) ─────────
 
-// Which team an installation of the App belongs to. A row exists only after the installing person proved, through
+// Which workspace an installation of the App belongs to. A row exists only after the installing person proved, through
 // GitHub's own sign-in, that they administer that installation: an installation id alone is a public number.
 export const githubInstallations = pgTable("github_installations", {
   installationId: text("installation_id").primaryKey(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   accountLogin: text("account_login").notNull().default(""),
   accountType: text("account_type").notNull().default(""),
   connectedBy: uuid("connected_by"), // the user who connected it; no FK, people can leave
@@ -560,7 +565,7 @@ export const pullRequestTickets = pgTable(
   (t) => [primaryKey({ columns: [t.pullRequestId, t.ticketId] }), index("pull_request_tickets_ticket_idx").on(t.ticketId)],
 );
 
-// ───────── team documentation (WH-51) ─────────
+// ───────── workspace documentation (WH-51) ─────────
 //
 // Markdown docs that live in Wheelhouse next to the board and map: runbooks,
 // product notes, conventions, decisions in prose. A tree (parentId), optimistic

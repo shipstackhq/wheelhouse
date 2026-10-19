@@ -11,43 +11,43 @@ const { githubDeliveries, githubInstallations, memberships, projects, pullReques
 
 /** Writes made because of something GitHub reported are attributed to this actor, like the claim sweep's "Wheelhouse". */
 export const GITHUB_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
-export const githubActor = (teamId: string): Actor => ({ kind: "human", id: GITHUB_ACTOR_ID, name: "GitHub", teamId, system: true });
+export const githubActor = (workspaceId: string): Actor => ({ kind: "human", id: GITHUB_ACTOR_ID, name: "GitHub", workspaceId, system: true });
 
 /** Land at most this many files per call, like the baseline does. */
 const LAND_CHUNK = 2000;
 
 // ───────── connecting (owner, verified) ─────────
 
-async function requireOwner(userId: string, teamId: string) {
+async function requireOwner(userId: string, workspaceId: string) {
   const db = await getDb();
-  const [m] = await db.select({ role: memberships.role }).from(memberships).where(and(eq(memberships.userId, userId), eq(memberships.teamId, teamId)));
+  const [m] = await db.select({ role: memberships.role }).from(memberships).where(and(eq(memberships.userId, userId), eq(memberships.workspaceId, workspaceId)));
   if (m?.role !== "owner") throw new ServiceError("forbidden", "Only workspace owners can connect GitHub");
 }
 
 /**
- * Record that this team's owner has installed the App. The caller has already proved, with GitHub's own sign-in, that this
- * person administers the installation. An installation belongs to one team: a second team cannot take it over.
+ * Record that this workspace's owner has installed the App. The caller has already proved, with GitHub's own sign-in, that this
+ * person administers the installation. An installation belongs to one workspace: a second workspace cannot take it over.
  */
 export async function registerInstallation(actor: Actor, i: { installationId: string; accountLogin: string; accountType: string }) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can connect GitHub");
-  await requireOwner(actor.id, actor.teamId);
+  await requireOwner(actor.id, actor.workspaceId);
   const db = await getDb();
   const [existing] = await db.select().from(githubInstallations).where(eq(githubInstallations.installationId, i.installationId));
-  if (existing && existing.teamId !== actor.teamId) throw new ServiceError("conflict", "That GitHub installation is already connected to another workspace");
+  if (existing && existing.workspaceId !== actor.workspaceId) throw new ServiceError("conflict", "That GitHub installation is already connected to another workspace");
   await db
     .insert(githubInstallations)
-    .values({ installationId: i.installationId, teamId: actor.teamId, accountLogin: i.accountLogin, accountType: i.accountType, connectedBy: actor.id })
+    .values({ installationId: i.installationId, workspaceId: actor.workspaceId, accountLogin: i.accountLogin, accountType: i.accountType, connectedBy: actor.id })
     .onConflictDoUpdate({ target: githubInstallations.installationId, set: { accountLogin: i.accountLogin, accountType: i.accountType } });
   return { ok: true };
 }
 
 export async function listInstallations(actor: Actor) {
   const db = await getDb();
-  return db.select().from(githubInstallations).where(eq(githubInstallations.teamId, actor.teamId));
+  return db.select().from(githubInstallations).where(eq(githubInstallations.workspaceId, actor.workspaceId));
 }
 
 /**
- * Connect one repository of one of the team's installations to a project. The repository's name and default branch are
+ * Connect one repository of one of the workspace's installations to a project. The repository's name and default branch are
  * read from GitHub, not taken from the request, so what is stored is what GitHub says about a repository the installation
  * can really see.
  */
@@ -58,12 +58,12 @@ export async function connectGithubRepository(
   api: GithubApi | null,
 ) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can connect repositories");
-  await requireOwner(actor.id, actor.teamId);
+  await requireOwner(actor.id, actor.workspaceId);
   if (!api) throw new ServiceError("invalid", "The GitHub App is not configured on this server");
   const db = await getDb();
   const project = await getProject(actor, projectRef);
-  // The installation must be this team's own: otherwise a repository id from someone else's installation would feed their pushes here.
-  const [inst] = await db.select().from(githubInstallations).where(and(eq(githubInstallations.installationId, i.installationId), eq(githubInstallations.teamId, actor.teamId)));
+  // The installation must be this workspace's own: otherwise a repository id from someone else's installation would feed their pushes here.
+  const [inst] = await db.select().from(githubInstallations).where(and(eq(githubInstallations.installationId, i.installationId), eq(githubInstallations.workspaceId, actor.workspaceId)));
   if (!inst) throw new ServiceError("forbidden", "That GitHub installation is not connected to your workspace");
   const visible = await api.installationRepositories(i.installationId);
   const gh = visible.find((r) => r.id === i.githubRepoId);
@@ -89,7 +89,7 @@ export type Outcome = { status: "handled" | "ignored" | "duplicate"; detail?: st
 
 /**
  * The repositories a webhook is about: connected through GitHub, with this exact installation and repository id, and whose
- * installation is registered to the same team as the project. A webhook can therefore only ever reach the team that
+ * installation is registered to the same workspace as the project. A webhook can therefore only ever reach the workspace that
  * proved it owns the installation.
  */
 export async function targetsFor(installationId: string, repoId: string) {
@@ -98,7 +98,7 @@ export async function targetsFor(installationId: string, repoId: string) {
     .select({ repo: repositories, project: projects })
     .from(repositories)
     .innerJoin(projects, eq(projects.id, repositories.projectId))
-    .innerJoin(githubInstallations, and(eq(githubInstallations.installationId, repositories.githubInstallationId), eq(githubInstallations.teamId, projects.teamId)))
+    .innerJoin(githubInstallations, and(eq(githubInstallations.installationId, repositories.githubInstallationId), eq(githubInstallations.workspaceId, projects.workspaceId)))
     .where(and(eq(repositories.provider, "github"), eq(repositories.githubInstallationId, installationId), eq(repositories.githubRepoId, repoId), ne(repositories.lifecycle, "retired")));
 }
 
@@ -166,7 +166,7 @@ async function onPush(payload: Delivery["payload"], installationId: string | nul
 
   const db = await getDb();
   for (const t of targets) {
-    const actor = githubActor(t.project.teamId);
+    const actor = githubActor(t.project.workspaceId);
     for (let i = 0; i < files.length || i === 0; i += LAND_CHUNK) {
       const chunk = Object.fromEntries(files.slice(i, i + LAND_CHUNK).map((f) => [f.path, f.hash]));
       if (!Object.keys(chunk).length) break;
@@ -231,7 +231,7 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
     if (linked.length) await db.insert(pullRequestTickets).values(linked.map((x) => ({ pullRequestId: row.id, ticketId: x.id }))).onConflictDoNothing();
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
 
-    const actor = githubActor(t.project.teamId);
+    const actor = githubActor(t.project.workspaceId);
     const boardColumns = await db.select({ id: columns.id, name: columns.name, role: columns.role }).from(columns).where(eq(columns.projectId, t.project.id)).orderBy(columns.position);
     for (const tk of linked) {
       if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
@@ -289,7 +289,7 @@ async function onCheckRun(payload: Delivery["payload"], installationId: string |
       touched++;
       if (next !== pr.ciState && (next === "failure" || next === "success")) {
         const links = await db.select({ ticketId: pullRequestTickets.ticketId }).from(pullRequestTickets).where(eq(pullRequestTickets.pullRequestId, pr.id));
-        const actor = githubActor(t.project.teamId);
+        const actor = githubActor(t.project.workspaceId);
         for (const l of links) {
           const [tk] = await db.select().from(tickets).where(eq(tickets.id, l.ticketId));
           if (!tk) continue;

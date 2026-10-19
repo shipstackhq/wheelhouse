@@ -9,11 +9,11 @@ export type ChecklistInput = {
   repositories: { provider: "github" | "local"; lifecycle: "live" | "being_replaced" | "planned" | "retired" }[];
   /** Work sessions (machines/clients) seen for this project, active or not. */
   sessionCount: number;
-  /** Active (non-revoked) API keys for the team. */
+  /** Active (non-revoked) API keys for the workspace. */
   activeAgentKeyCount: number;
   /** Map nodes for this project, any layer. */
   nodeCount: number;
-  /** Team members (including the creator) + pending join invites. */
+  /** Workspace members (including the creator) + pending join invites. */
   memberCount: number;
   pendingInviteCount: number;
 };
@@ -77,7 +77,7 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
       label: "Agents connected",
       done: agentsDone,
       status: agentsDone
-        ? `${input.activeAgentKeyCount} active API key${input.activeAgentKeyCount === 1 ? "" : "s"} for this team.`
+        ? `${input.activeAgentKeyCount} active API key${input.activeAgentKeyCount === 1 ? "" : "s"} for this workspace.`
         : "No agent API key yet.",
       href: "/agents",
     },
@@ -93,11 +93,11 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
       label: "Teammates invited",
       done: teammatesDone,
       status: teammatesDone
-        ? `${input.memberCount} teammate${input.memberCount === 1 ? "" : "s"} on the team${input.pendingInviteCount ? `, ${input.pendingInviteCount} invite${input.pendingInviteCount === 1 ? "" : "s"} pending` : ""}.`
+        ? `${input.memberCount} teammate${input.memberCount === 1 ? "" : "s"} on the workspace${input.pendingInviteCount ? `, ${input.pendingInviteCount} invite${input.pendingInviteCount === 1 ? "" : "s"} pending` : ""}.`
         : input.pendingInviteCount
           ? `${input.pendingInviteCount} invite${input.pendingInviteCount === 1 ? "" : "s"} pending, no one has joined yet.`
           : "Just you so far.",
-      href: "/team",
+      href: "/workspace",
     },
   ];
 

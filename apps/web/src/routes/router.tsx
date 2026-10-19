@@ -1,6 +1,6 @@
 import { type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
-import { AdminInvitesPage, AdminTeamPage, AdminTeamsPage } from "../pages/admin";
+import { AdminInvitesPage, AdminWorkspacePage, AdminWorkspacesPage } from "../pages/admin";
 import { AgentsPage } from "../pages/agents";
 import { ActivityPage } from "../pages/activity/activity";
 import { BoardPage } from "../pages/board";
@@ -17,7 +17,7 @@ import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
 import { InvitePage } from "../pages/invite";
 import { NewProjectPage } from "../pages/new-project";
-import { TeamPage } from "../pages/team";
+import { WorkspacePage } from "../pages/workspace";
 import { NotFound, RouteError } from "./errors";
 import { redirectIfSignedIn, requireSignedIn } from "./guards";
 import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, ProjectLayout, RequireAdmin, RootLayout } from "./layouts";
@@ -51,13 +51,13 @@ export function buildRoutes(services: Services): RouteObject[] {
           children: [
             { index: true, Component: Dashboard },
             { path: "projects/new", Component: NewProjectPage },
-            { path: "team", Component: TeamPage },
+            { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
             {
               Component: RequireAdmin,
               children: [
-                { path: "admin/teams", Component: AdminTeamsPage },
-                { path: "admin/teams/:id", Component: AdminTeamPage },
+                { path: "admin/workspaces", Component: AdminWorkspacesPage },
+                { path: "admin/workspaces/:id", Component: AdminWorkspacePage },
                 { path: "admin/invites", Component: AdminInvitesPage },
               ],
             },

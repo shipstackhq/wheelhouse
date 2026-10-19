@@ -1,6 +1,6 @@
 # Moving the data and cutting over (WH-100)
 
-> **Four additive migrations came after the freeze: 0014 (WH-103, `docs.labels`) and, for WH-105, 0015 (project members and the access audit log), 0016 (`invites.projects`) and 0017 (`sessions.active_team_id`), and `db:import` refuses a target whose migrations differ from the export's.**
+> **Four additive migrations came after the freeze: 0014 (WH-103, `docs.labels`) and, for WH-105, 0015 (project members and the access audit log), 0016 (`invites.projects`) and 0017 (`sessions.active_workspace_id`), and `db:import` refuses a target whose migrations differ from the export's.**
 > Before exporting, bring a **copy** of the source database to this code's migrations with `pnpm db:migrate --to <copy>` (all are additive; 0015 also gives every current member access to the projects they could already see,
 > so the old app keeps working on a database that has them). Otherwise the import stops with "the target's migrations (18) are not the export's (14)".
 

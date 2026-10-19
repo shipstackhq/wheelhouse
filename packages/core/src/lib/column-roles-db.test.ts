@@ -30,12 +30,12 @@ const columnOf = async (ref: string) => (await svc.getTicket(human, ref)).ticket
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Roles team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Roles workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: `r-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Rae", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  const [k] = await db.insert(schema.apiKeys).values({ teamId: team.id, name: "worker", prefix: "wh_", keyHash: "worker" }).returning();
-  human = { kind: "human", id: user.id, name: "Rae", teamId: team.id };
-  agent = { kind: "agent", id: k.id, name: "worker", teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  const [k] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "worker", prefix: "wh_", keyHash: "worker" }).returning();
+  human = { kind: "human", id: user.id, name: "Rae", workspaceId: workspace.id };
+  agent = { kind: "agent", id: k.id, name: "worker", workspaceId: workspace.id };
   projectId = (await svc.createProject(human, { name: "Roles", key: "RR" })).id;
 });
 

@@ -92,9 +92,9 @@ export function AppLayout() {
       <NavigationProgress />
       <Sidebar
         projects={projects.map((p) => ({ key: p.key, name: p.name }))}
-        teamName={me.team.name}
+        workspaceName={me.workspace.name}
         isAdmin={me.isInstanceAdmin}
-        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} team={me.team.name} compact={collapsed} />}
+        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} compact={collapsed} />}
       />
       <main className="min-w-0 flex-1 overflow-hidden pt-10 md:pt-0">
         <Outlet />
@@ -103,7 +103,7 @@ export function AppLayout() {
   );
 }
 
-/** One project: its header, live updates for it, and its page. A project that is not this team's is simply not found. */
+/** One project: its header, live updates for it, and its page. A project that is not this workspace's is simply not found. */
 export function ProjectLayout() {
   const { key = "" } = useParams();
   const project = useProjects().data?.find((p) => p.key === key);

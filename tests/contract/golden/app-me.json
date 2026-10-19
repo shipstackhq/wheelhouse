@@ -3,12 +3,12 @@
   "isInstanceAdmin": "boolean",
   "role": "string",
   "tags": [],
-  "team": {
+  "user": {
+    "email": "string",
     "id": "string",
     "name": "string"
   },
-  "user": {
-    "email": "string",
+  "workspace": {
     "id": "string",
     "name": "string"
   }

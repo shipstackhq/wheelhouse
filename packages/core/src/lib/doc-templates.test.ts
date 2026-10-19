@@ -1,7 +1,7 @@
 /**
  * Doc templates (WH-65): the five static templates, threading `template` through
  * createDoc, the list_doc_templates tool, and the action-item extraction logic that backs
- * the docs UI's "Create ticket" affordance. Cross-team isolation for the new
+ * the docs UI's "Create ticket" affordance. Cross-workspace isolation for the new
  * createTicketFromActionItemAction lives in isolation.test.ts (list_doc_templates itself
  * is static/global, so it's registered there with no attacks to run).
  */
@@ -25,10 +25,10 @@ let projectKey: string;
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: `doc-templates team ${RUN}` }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: `doc-templates workspace ${RUN}` }).returning();
   const [owner] = await db.insert(schema.users).values({ email: `doc-templates-owner-${RUN}@example.com`, name: "Owner", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: owner.id, teamId: team.id, role: "owner" });
-  human = { kind: "human", id: owner.id, name: "Owner", teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: owner.id, workspaceId: workspace.id, role: "owner" });
+  human = { kind: "human", id: owner.id, name: "Owner", workspaceId: workspace.id };
   const project = await svc.createProject(human, { name: "Templates project", key: "TP" });
   projectKey = project.key;
 });
@@ -120,10 +120,10 @@ describe("extractActionItems", () => {
 ## Action items
 - [ ] Ship the thing
 - [x] Already done, skip this one
-- [ ] Tell the team
+- [ ] Tell the workspace
 `;
     const items = extractActionItems(md);
-    assert.deepEqual(items.map((i) => i.text), ["Ship the thing", "Tell the team"]);
+    assert.deepEqual(items.map((i) => i.text), ["Ship the thing", "Tell the workspace"]);
   });
 
   test("ignores checklist items outside the Action items section", () => {

@@ -5,14 +5,14 @@ import { anon, app, newAccount, type Sess } from "./lib/app";
 
 /**
  * The map, decisions, glossary and activity endpoints (WH-97): the whole map in one read, nodes, layout, edges, flows, decisions,
- * terms, drafts, Ask the map, and the activity feed. Everything that changes data does it in a team made for the test.
+ * terms, drafts, Ask the map, and the activity feed. Everything that changes data does it in a workspace made for the test.
  * Ask is answered by a fake Anthropic server (see lib/fake-github.ts) so the whole path can be checked, including that the
  * server's API key is in no answer.
  */
 const SID = "00000000-0000-4000-8000-000000000000";
 const API_KEY = fx.serverEnv.ANTHROPIC_API_KEY;
 
-async function team(name = "Mapper") {
+async function workspace(name = "Mapper") {
   const owner = await newAccount(name);
   const project = (await app("POST", "/api/app/projects", owner.sess, { body: { name: `${name} project`, key: "MAP" } })).json.project;
   const key = (await app("POST", "/api/app/keys", owner.sess, { body: { name: "agent" } })).json.secret as string;
@@ -57,7 +57,7 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
   }
 
   test("a forged request (another site, no token, a wrong token) changes nothing and calls nobody", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Keep", layer: "system" });
     for (const f of [{ origin: "https://evil.example" }, { csrf: null }, { csrf: "wrong" }]) {
       for (const [method, path, body] of [
@@ -80,7 +80,7 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
 
 describe("GET /api/app/projects/:key/graph", () => {
   test("an empty project: the project, nothing else, and whether Ask is on", async () => {
-    const t = await team();
+    const t = await workspace();
     const g = await graph(t.s);
     assert.deepEqual(Object.keys(g).sort(), ["askEnabled", "decisions", "edges", "flows", "flux", "nodes", "project", "terms", "ticketLinks"]);
     assert.deepEqual(g.project, { id: t.project.id, key: "MAP", name: "Mapper project", description: "" });
@@ -89,7 +89,7 @@ describe("GET /api/app/projects/:key/graph", () => {
   });
 
   test("a node carries what the panel shows and nothing internal", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Gateway", layer: "system", summary: "The front door", purpose: "Why", anchors: ["src/gw/**"] });
     const g = await graph(t.s);
     assert.deepEqual(Object.keys(g.nodes[0]).sort(), ["anchors", "columns", "describedAt", "describedSha", "details", "gotchas", "height", "id", "indexes", "interfaces", "kind", "layer", "name", "parentId", "placed", "purpose", "responsibilities", "stale", "staleReason", "status", "summary", "version", "width", "x", "y"]);
@@ -98,7 +98,7 @@ describe("GET /api/app/projects/:key/graph", () => {
   });
 
   test("everything on the map is there: edges, ticket links, flows, decisions and terms", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "Web", layer: "system" });
     const b = await node(t.s, { name: "API", layer: "system" });
     await app("POST", "/api/app/projects/MAP/edges", t.s, { body: { from: a.id, to: b.id, label: "REST" } });
@@ -119,8 +119,8 @@ describe("GET /api/app/projects/:key/graph", () => {
     assert.deepEqual(g.ticketLinks.map((l: { nodeId: string; ref: string }) => [l.nodeId, l.ref]), [[a.id, "MAP-1"]]);
   });
 
-  test("another team's project is a 404", async () => {
-    await team();
+  test("another workspace's project is a 404", async () => {
+    await workspace();
     const other = await newAccount("Other");
     const r = await app("GET", "/api/app/projects/MAP/graph", other.sess);
     assert.equal(r.status, 404);
@@ -130,7 +130,7 @@ describe("GET /api/app/projects/:key/graph", () => {
 
 describe("PUT /api/app/projects/:key/nodes", () => {
   test("creates a node: the kind follows the layer and whether it is nested, and it is placed on the map", async () => {
-    const t = await team();
+    const t = await workspace();
     const top = await node(t.s, { name: "Shop", layer: "concept" });
     const child = await node(t.s, { name: "Cart", layer: "concept", parent: top.id });
     const sys = await node(t.s, { name: "API", layer: "system" });
@@ -143,7 +143,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
   });
 
   test("changes fields, bumps the version, and a change that alters nothing does not", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Svc", layer: "system" });
     const a = await node(t.s, { id: n.id, summary: "S", purpose: "P", responsibilities: "R", interfaces: "I", gotchas: "G", details: "D", status: "live", kind: "database", anchors: ["a/**", "b.ts"], version: 1 });
     assert.deepEqual([a.summary, a.purpose, a.responsibilities, a.interfaces, a.gotchas, a.details, a.status, a.kind, a.anchors, a.version], ["S", "P", "R", "I", "G", "D", "live", "database", ["a/**", "b.ts"], 2]);
@@ -152,7 +152,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
   });
 
   test("a stale version is a 409 with the node as it is now, and nothing is overwritten", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Svc", layer: "system", summary: "mine" });
     await agentNode(t, { name: "Svc", layer: "system", summary: "changed by an agent" });
     const stale = await put(t.s, "/api/app/projects/MAP/nodes", { id: n.id, summary: "my slow edit", version: 1 });
@@ -168,7 +168,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
   });
 
   test("two edits from the same version: exactly one wins; without a version the change goes over whatever is there", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Race", layer: "system" });
     const [x, y] = await Promise.all(["x", "y"].map((p) => put(t.s, "/api/app/projects/MAP/nodes", { id: n.id, summary: `by ${p}`, version: 1 })));
     assert.deepEqual([x.status, y.status].sort(), [200, 409]);
@@ -177,7 +177,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
   });
 
   test("problems name the field: a wrong type, an unknown enum, a missing name, a bad column", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Svc", layer: "system" });
     const cases: [Record<string, unknown>, string][] = [
       [{ layer: "system" }, "name"],
@@ -202,7 +202,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
   });
 
   test("the rules of the map are the service's: a kind from the wrong layer, columns off the data layer, a parent from another layer, a node as its own parent, moving between layers", async () => {
-    const t = await team();
+    const t = await workspace();
     const sys = await node(t.s, { name: "API", layer: "system" });
     const con = await node(t.s, { name: "Idea", layer: "concept" });
     const msg = async (body: Record<string, unknown>) => (await put(t.s, "/api/app/projects/MAP/nodes", body)).json.error.message as string;
@@ -215,7 +215,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
   });
 
   test("a table's columns are saved, a foreign key makes a relationship, and clearing it removes it", async () => {
-    const t = await team();
+    const t = await workspace();
     const users = await node(t.s, { name: "users", layer: "data", columns: [{ name: "id", type: "uuid", pk: true }] });
     const posts = await node(t.s, { name: "posts", layer: "data", columns: [{ name: "id", type: "uuid", pk: true }, { name: "author_id", type: "uuid", references: "users.id", onDelete: "cascade" }] });
     let g = await graph(t.s);
@@ -230,9 +230,9 @@ describe("PUT /api/app/projects/:key/nodes", () => {
     assert.match(bad.json.error.message, /references must look like "table.column"/);
   });
 
-  test("another team's node cannot be changed by id: a 404, and it is untouched", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("another workspace's node cannot be changed by id: a 404, and it is untouched", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const n = await node(a.s, { name: "Secret", layer: "system", summary: "private" });
     const r = await put(b.s, "/api/app/projects/MAP/nodes", { id: n.id, summary: "hacked" });
     assert.equal(r.status, 404);
@@ -243,7 +243,7 @@ describe("PUT /api/app/projects/:key/nodes", () => {
 
 describe("DELETE /api/app/projects/:key/nodes/:id", () => {
   test("removes the node and everything nested in it, with its links, and says so in the activity", async () => {
-    const t = await team();
+    const t = await workspace();
     const parent = await node(t.s, { name: "Parent", layer: "system" });
     const child = await node(t.s, { name: "Child", layer: "system", parent: parent.id });
     const other = await node(t.s, { name: "Other", layer: "system" });
@@ -257,9 +257,9 @@ describe("DELETE /api/app/projects/:key/nodes/:id", () => {
     assert.equal((await app("DELETE", `/api/app/projects/MAP/nodes/${parent.id}`, t.s)).status, 404, "asking again");
   });
 
-  test("another team's node is a 404 and survives", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("another workspace's node is a 404 and survives", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const n = await node(a.s, { name: "Mine", layer: "system" });
     assert.equal((await app("DELETE", `/api/app/projects/MAP/nodes/${n.id}`, b.s)).status, 404);
     assert.equal((await graph(a.s)).nodes.length, 1);
@@ -268,7 +268,7 @@ describe("DELETE /api/app/projects/:key/nodes/:id", () => {
 
 describe("PUT /api/app/projects/:key/layout", () => {
   test("saves positions and sizes, marks them as placed by a person, and does not bump the version", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "A", layer: "system" });
     const b = await node(t.s, { name: "B", layer: "system" });
     const r = await put(t.s, "/api/app/projects/MAP/layout", { positions: [{ id: a.id, x: 100.4, y: 50 }, { id: b.id, x: 7, y: 9, width: 300, height: 200 }] });
@@ -280,14 +280,14 @@ describe("PUT /api/app/projects/:key/layout", () => {
   });
 
   test("a whole-lens Tidy passes placed: false, so a later automatic pass may move them again", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "A", layer: "system" });
     await put(t.s, "/api/app/projects/MAP/layout", { positions: [{ id: a.id, x: 1, y: 2 }], placed: false });
     assert.equal((await graph(t.s)).nodes[0].placed, false);
   });
 
   test("a bad list is a 400 that names it: empty, not a list, a position that is not a number, no id, placed that is not true or false", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "A", layer: "system" });
     for (const body of [{}, { positions: [] }, { positions: "x" }, { positions: [{ id: a.id, x: "1", y: 2 }] }, { positions: [{ x: 1, y: 2 }] }, { positions: [{ id: a.id, x: 1, y: 2 }], placed: "yes" }, { positions: [{ id: a.id, x: null, y: 2 }] }]) {
       const r = await put(t.s, "/api/app/projects/MAP/layout", body);
@@ -297,9 +297,9 @@ describe("PUT /api/app/projects/:key/layout", () => {
     assert.equal((await graph(t.s)).nodes[0].x, a.x, "nothing moved");
   });
 
-  test("another team's node ids move nothing", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("another workspace's node ids move nothing", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const n = await node(a.s, { name: "Mine", layer: "system" });
     await put(b.s, "/api/app/projects/MAP/layout", { positions: [{ id: n.id, x: 9999, y: 9999 }] });
     assert.notEqual((await graph(a.s)).nodes[0].x, 9999);
@@ -308,7 +308,7 @@ describe("PUT /api/app/projects/:key/layout", () => {
 
 describe("edges", () => {
   test("connect two nodes: a label is kept, the same connection again is the same edge, and a new label renames it", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "A", layer: "system" });
     const b = await node(t.s, { name: "B", layer: "system" });
     const first = await app("POST", "/api/app/projects/MAP/edges", t.s, { body: { from: a.id, to: b.id } });
@@ -321,7 +321,7 @@ describe("edges", () => {
   });
 
   test("implements goes from a lower layer to a higher one; connecting a node to itself is refused; references are made with columns", async () => {
-    const t = await team();
+    const t = await workspace();
     const code = await node(t.s, { name: "src/a.ts", layer: "code" });
     const sys = await node(t.s, { name: "API", layer: "system" });
     const ok = await app("POST", "/api/app/projects/MAP/edges", t.s, { body: { from: code.id, to: sys.id, kind: "implements" } });
@@ -335,9 +335,9 @@ describe("edges", () => {
     assert.ok(refs.json.error.details.fields.kind);
   });
 
-  test("problems name the field; a node of another team is a 404 and nothing is connected", async () => {
-    const t = await team();
-    const other = await team("Other");
+  test("problems name the field; a node of another workspace is a 404 and nothing is connected", async () => {
+    const t = await workspace();
+    const other = await workspace("Other");
     const mine = await node(t.s, { name: "Mine", layer: "system" });
     const foreign = await node(other.s, { name: "Foreign", layer: "system" });
     for (const [body, field] of [[{ to: mine.id }, "from"], [{ from: mine.id }, "to"], [{ from: 1, to: mine.id }, "from"], [{ from: mine.id, to: mine.id, label: 5 }, "label"]] as const) {
@@ -349,13 +349,13 @@ describe("edges", () => {
     assert.deepEqual((await graph(t.s)).edges, []);
   });
 
-  test("deleting an edge removes it; asking again is fine; another team's edge is not touched", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("deleting an edge removes it; asking again is fine; another workspace's edge is not touched", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const x = await node(a.s, { name: "X", layer: "system" });
     const y = await node(a.s, { name: "Y", layer: "system" });
     const e = (await app("POST", "/api/app/projects/MAP/edges", a.s, { body: { from: x.id, to: y.id } })).json.edge;
-    assert.deepEqual((await app("DELETE", `/api/app/projects/MAP/edges/${e.id}`, b.s)).json, { ok: true }, "another team's: a no-op");
+    assert.deepEqual((await app("DELETE", `/api/app/projects/MAP/edges/${e.id}`, b.s)).json, { ok: true }, "another workspace's: a no-op");
     assert.equal((await graph(a.s)).edges.length, 1, "still there");
     assert.deepEqual((await app("DELETE", `/api/app/projects/MAP/edges/${e.id}`, a.s)).json, { ok: true });
     assert.deepEqual((await graph(a.s)).edges, []);
@@ -365,7 +365,7 @@ describe("edges", () => {
 
 describe("flows", () => {
   test("a flow is created with its steps in order, and changed with the version it was read at", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "Web", layer: "system" });
     const b = await node(t.s, { name: "API", layer: "system" });
     const made = await put(t.s, "/api/app/projects/MAP/flows", { name: "Sign in", description: "How", steps: [{ node: a.id, title: "Open" }, { node: b.id, title: "Check", detail: "bcrypt" }] });
@@ -377,7 +377,7 @@ describe("flows", () => {
   });
 
   test("a stale version is a 409 with the flow as it is now, and nothing is overwritten", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "Web", layer: "system" });
     const f = (await put(t.s, "/api/app/projects/MAP/flows", { name: "F", steps: [{ node: a.id, title: "one" }] })).json.flow;
     await put(t.s, "/api/app/projects/MAP/flows", { id: f.id, name: "F renamed", version: 1 });
@@ -389,7 +389,7 @@ describe("flows", () => {
   });
 
   test("problems: no name, steps that are not a list, a step with no node or no title, a node that is not on the map", async () => {
-    const t = await team();
+    const t = await workspace();
     const a = await node(t.s, { name: "Web", layer: "system" });
     for (const [body, field] of [[{}, "name"], [{ name: "  " }, "name"], [{ name: "F", steps: "x" }, "steps"], [{ name: "F", steps: [5] }, "steps"], [{ name: "F", steps: [{ title: "t" }] }, "node"], [{ name: "F", steps: [{ node: a.id }] }, "title"], [{ name: "F", description: 5 }, "description"]] as const) {
       const r = await put(t.s, "/api/app/projects/MAP/flows", body);
@@ -400,9 +400,9 @@ describe("flows", () => {
     assert.deepEqual((await graph(t.s)).flows, []);
   });
 
-  test("a step cannot point at another team's node, and another team's flow cannot be deleted", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("a step cannot point at another workspace's node, and another workspace's flow cannot be deleted", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const foreign = await node(b.s, { name: "Foreign", layer: "system" });
     assert.equal((await put(a.s, "/api/app/projects/MAP/flows", { name: "F", steps: [{ node: foreign.id, title: "t" }] })).status, 404);
     const mine = await node(a.s, { name: "Mine", layer: "system" });
@@ -415,7 +415,7 @@ describe("flows", () => {
 
 describe("decisions", () => {
   test("recording one numbers it in order, and editing it by number bumps the version", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "API", layer: "system" });
     const one = (await put(t.s, "/api/app/projects/MAP/decisions", { title: "First", context: "c", decision: "d", consequences: "q", nodes: [n.id] })).json.decision;
     const two = (await put(t.s, "/api/app/projects/MAP/decisions", { title: "Second", status: "proposed" })).json.decision;
@@ -427,7 +427,7 @@ describe("decisions", () => {
   });
 
   test("a stale version is a 409 with the decision as it is now", async () => {
-    const t = await team();
+    const t = await workspace();
     await put(t.s, "/api/app/projects/MAP/decisions", { title: "ADR" });
     await put(t.s, "/api/app/projects/MAP/decisions", { number: 1, title: "Renamed", version: 1 });
     const stale = await put(t.s, "/api/app/projects/MAP/decisions", { number: 1, title: "Slow", version: 1 });
@@ -438,7 +438,7 @@ describe("decisions", () => {
   });
 
   test("problems: no title, a status that is not one, text that is not text, a number that does not exist, a node that is not on the map", async () => {
-    const t = await team();
+    const t = await workspace();
     for (const [body, field] of [[{}, "title"], [{ title: "  " }, "title"], [{ title: "x", status: "maybe" }, "status"], [{ title: "x", context: 5 }, "context"], [{ title: "x", nodes: "a" }, "nodes"], [{ number: "1" }, "number"]] as const) {
       const r = await put(t.s, "/api/app/projects/MAP/decisions", body);
       assert.equal(r.status, 400, JSON.stringify(body));
@@ -449,9 +449,9 @@ describe("decisions", () => {
     assert.deepEqual((await graph(t.s)).decisions, []);
   });
 
-  test("another team's decision numbers are its own: ADR-1 of one team is not ADR-1 of another, and cannot be edited across", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("another workspace's decision numbers are its own: ADR-1 of one workspace is not ADR-1 of another, and cannot be edited across", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     await put(a.s, "/api/app/projects/MAP/decisions", { title: "A's" });
     await put(b.s, "/api/app/projects/MAP/decisions", { title: "B's" });
     await put(a.s, "/api/app/projects/MAP/decisions", { number: 1, title: "A's, edited" });
@@ -462,7 +462,7 @@ describe("decisions", () => {
 
 describe("glossary terms", () => {
   test("defining a term, redefining it by name in any case, linking it to a concept, and removing it", async () => {
-    const t = await team();
+    const t = await workspace();
     const c = await node(t.s, { name: "Billing", layer: "concept" });
     const made = await put(t.s, "/api/app/projects/MAP/terms/Invoice", { definition: "A bill", node: c.id });
     assert.deepEqual([made.json.term.term, made.json.term.definition, made.json.term.nodeId], ["Invoice", "A bill", c.id]);
@@ -480,7 +480,7 @@ describe("glossary terms", () => {
   });
 
   test("a term with spaces or slashes in its name works in the path", async () => {
-    const t = await team();
+    const t = await workspace();
     for (const name of ["Work item", "CI/CD", "Q&A?"]) {
       const r = await put(t.s, `/api/app/projects/MAP/terms/${encodeURIComponent(name)}`, { definition: "x" });
       assert.equal(r.status, 200, name);
@@ -491,7 +491,7 @@ describe("glossary terms", () => {
   });
 
   test("problems: no definition, a definition that is not text, a node that is not on the map; removing what is not there is a 404", async () => {
-    const t = await team();
+    const t = await workspace();
     for (const [body, field] of [[{}, "definition"], [{ definition: "  " }, "definition"], [{ definition: 5 }, "definition"], [{ definition: "x", node: 5 }, "node"]] as const) {
       const r = await put(t.s, "/api/app/projects/MAP/terms/T", body);
       assert.equal(r.status, 400, JSON.stringify(body));
@@ -501,9 +501,9 @@ describe("glossary terms", () => {
     assert.equal((await app("DELETE", "/api/app/projects/MAP/terms/Nope", t.s)).status, 404);
   });
 
-  test("terms are per team: the same word in two teams is two terms, and one team cannot remove the other's", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("terms are per workspace: the same word in two workspaces is two terms, and one workspace cannot remove the other's", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const ta = (await put(a.s, "/api/app/projects/MAP/terms/Shared", { definition: "A" })).json.term;
     await put(b.s, "/api/app/projects/MAP/terms/Shared", { definition: "B" });
     assert.equal((await app("DELETE", `/api/app/projects/MAP/terms/${ta.id}`, b.s)).status, 404);
@@ -514,14 +514,14 @@ describe("glossary terms", () => {
 
 describe("stale and in-flux markings, and drafts", () => {
   /** A node anchored to a file, described, and then the file reported changed: stale. */
-  const staleNode = async (t: Awaited<ReturnType<typeof team>>) => {
+  const staleNode = async (t: Awaited<ReturnType<typeof workspace>>) => {
     const n = await node(t.s, { name: "Billing", layer: "system", summary: "Takes money", anchors: ["src/billing/**"] });
     await v1ok({ key: t.key }, "report_changes", { project: "MAP", files: ["src/billing/charge.ts"], summary: "changed" });
     return n;
   };
 
   test("a node whose code changed is stale, with the reason; 'still accurate' clears it without changing what it says", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await staleNode(t);
     let g = await graph(t.s);
     assert.equal(nodeOf(g, n.id).stale, true);
@@ -534,14 +534,14 @@ describe("stale and in-flux markings, and drafts", () => {
   });
 
   test("editing a stale node's explanation clears the flag too", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await staleNode(t);
     const r = await put(t.s, "/api/app/projects/MAP/nodes", { id: n.id, purpose: "Now explained", version: n.version });
     assert.equal(r.json.node.stale, false);
   });
 
   test("code an agent's session is changing shows as in flux; its map update waits as a draft until published or discarded", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Billing", layer: "system", summary: "Takes money", anchors: ["src/billing/**"] });
     await v1ok({ key: t.key }, "session_sync", { project: "MAP", session: "sess-flux", files: ["src/billing/charge.ts"] });
     await v1ok({ key: t.key }, "upsert_node", { project: "MAP", name: "Billing", layer: "system", purpose: "Drafted while the code is in flux", session: "sess-flux" });
@@ -564,7 +564,7 @@ describe("stale and in-flux markings, and drafts", () => {
   });
 
   test("a draft can be discarded, and then the map is as it was", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Billing", layer: "system", anchors: ["src/billing/**"] });
     await v1ok({ key: t.key }, "session_sync", { project: "MAP", session: "sess-d", files: ["src/billing/x.ts"] });
     await v1ok({ key: t.key }, "upsert_node", { project: "MAP", name: "Billing", layer: "system", purpose: "Never mind", session: "sess-d" });
@@ -575,9 +575,9 @@ describe("stale and in-flux markings, and drafts", () => {
     assert.equal(g.flux[n.id]?.drafts.length ?? 0, 0);
   });
 
-  test("the action must be publish or discard; another team's draft is a 404 and stays pending", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("the action must be publish or discard; another workspace's draft is a 404 and stays pending", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     const n = await node(a.s, { name: "Billing", layer: "system", anchors: ["src/billing/**"] });
     await v1ok({ key: a.key }, "session_sync", { project: "MAP", session: "sess-x", files: ["src/billing/x.ts"] });
     await v1ok({ key: a.key }, "upsert_node", { project: "MAP", name: "Billing", layer: "system", purpose: "p", session: "sess-x" });
@@ -593,13 +593,13 @@ describe("stale and in-flux markings, and drafts", () => {
 describe("POST /api/app/projects/:key/ask", () => {
   const ask = (s: Sess, body: unknown, key = "MAP") => app("POST", `/api/app/projects/${key}/ask`, s, { body });
   const withMap = async (name = "Asker") => {
-    const t = await team(name);
+    const t = await workspace(name);
     await node(t.s, { name: "Gateway", layer: "system", summary: "The front door" });
     await node(t.s, { name: "Billing", layer: "concept", summary: "Takes money" });
     return t;
   };
 
-  test("answers from the server's own call to Claude: the question reaches it with this team's map, and the answer is text and a flag", async () => {
+  test("answers from the server's own call to Claude: the question reaches it with this workspace's map, and the answer is text and a flag", async () => {
     const t = await withMap();
     const r = await ask(t.s, { question: "What does the gateway do?" });
     assert.equal(r.status, 200, r.text);
@@ -647,7 +647,7 @@ describe("POST /api/app/projects/:key/ask", () => {
   });
 
   test("an empty map, no question, a question that is too long or not text: a 400 that says what to do, and nothing is called", async () => {
-    const t = await team();
+    const t = await workspace();
     const empty = await ask(t.s, { question: "Hello?" });
     assert.equal(empty.status, 400);
     assert.match(empty.json.error.message, /The map is empty\. Map the codebase first\./);
@@ -659,7 +659,7 @@ describe("POST /api/app/projects/:key/ask", () => {
     }
   });
 
-  test("another team's project is a 404 before anything is counted or called; the answer holds only the caller's own map", async () => {
+  test("another workspace's project is a 404 before anything is counted or called; the answer holds only the caller's own map", async () => {
     const a = await withMap("Alpha");
     const b = await newAccount("Beta");
     await app("POST", "/api/app/projects", b.sess, { body: { name: "Beta project", key: "BET" } });
@@ -667,7 +667,7 @@ describe("POST /api/app/projects/:key/ask", () => {
     const cross = await ask(b.sess, { question: "What does Alpha do?" }, "MAP");
     assert.equal(cross.status, 404);
     assert.equal(cross.json.error.code, "not_found");
-    assert.ok(!cross.text.includes("Gateway"), "nothing of the other team's map");
+    assert.ok(!cross.text.includes("Gateway"), "nothing of the other workspace's map");
     const own = await ask(b.sess, { question: "What do I have?" }, "BET");
     assert.match(own.json.answer, /# Project BET: Beta project/);
     assert.match(own.json.answer, /SecretBetaThing/);
@@ -693,7 +693,7 @@ describe("POST /api/app/projects/:key/ask", () => {
 
 describe("GET /api/app/projects/:key/activity", () => {
   test("the project's events, newest first, with who did what, linking data and nothing else", async () => {
-    const t = await team();
+    const t = await workspace();
     const n = await node(t.s, { name: "Gateway", layer: "system" });
     const tk = (await app("POST", "/api/app/projects/MAP/tickets", t.s, { body: { title: "Do it" } })).json.ticket;
     await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "Looks right" } });
@@ -713,7 +713,7 @@ describe("GET /api/app/projects/:key/activity", () => {
   });
 
   test("a comment's text is cut at 500 characters", async () => {
-    const t = await team();
+    const t = await workspace();
     const tk = (await app("POST", "/api/app/projects/MAP/tickets", t.s, { body: { title: "Long" } })).json.ticket;
     await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "x".repeat(900) } });
     const c = (await app("GET", "/api/app/projects/MAP/activity", t.s)).json.events.find((e: { type: string }) => e.type === "comment.created");
@@ -721,7 +721,7 @@ describe("GET /api/app/projects/:key/activity", () => {
   });
 
   test("?who=agent shows only agents, ?who=human only people, anything else everyone", async () => {
-    const t = await team();
+    const t = await workspace();
     await node(t.s, { name: "By a person", layer: "system" });
     await agentNode(t, { name: "By an agent", layer: "system" });
     const get = async (q: string) => (await app("GET", `/api/app/projects/MAP/activity${q}`, t.s)).json.events;
@@ -733,9 +733,9 @@ describe("GET /api/app/projects/:key/activity", () => {
     assert.equal(all.length, agents.length + humans.length);
   });
 
-  test("another team's project is a 404, and an event of one team never shows in another's feed", async () => {
-    const a = await team();
-    const b = await team("Other");
+  test("another workspace's project is a 404, and an event of one workspace never shows in another's feed", async () => {
+    const a = await workspace();
+    const b = await workspace("Other");
     await node(a.s, { name: "OnlyInA", layer: "system" });
     assert.equal((await app("GET", "/api/app/projects/MAP/activity", b.s)).status, 200, "b's own project with the same key");
     const feed = JSON.stringify((await app("GET", "/api/app/projects/MAP/activity", b.s)).json);

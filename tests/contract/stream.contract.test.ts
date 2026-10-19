@@ -17,7 +17,7 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
     assert.equal(project.status, 403);
   });
 
-  test("another team's project is a 404, not a stream", async () => {
+  test("another workspace's project is a 404, not a stream", async () => {
     const r = await openSse(`/api/projects/${fx.b.projectKey}/stream`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 404);
   });
@@ -63,28 +63,28 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
     }
   });
 
-  test("a team never receives another team's events, on either stream", async () => {
-    const teamA = await openSse("/api/stream", { cookie: fx.a.sessionToken });
-    const teamB = await openSse("/api/stream", { cookie: fx.b.sessionToken });
+  test("a workspace never receives another workspace's events, on either stream", async () => {
+    const workspaceA = await openSse("/api/stream", { cookie: fx.a.sessionToken });
+    const workspaceB = await openSse("/api/stream", { cookie: fx.b.sessionToken });
     const projB = await openSse(`/api/projects/${fx.b.projectKey}/stream`, { cookie: fx.b.sessionToken });
     try {
-      await teamA.waitFor((e) => e.event === "ready");
-      await teamB.waitFor((e) => e.event === "ready");
+      await workspaceA.waitFor((e) => e.event === "ready");
+      await workspaceB.waitFor((e) => e.event === "ready");
       await projB.waitFor((e) => e.event === "ready");
       const a = unique("only-a");
       const b = unique("only-b");
       await v1ok(A, "create_ticket", { project: fx.a.projectKey, title: a });
       await v1ok(B, "create_ticket", { project: fx.b.projectKey, title: b });
-      await teamA.waitFor((e) => String(e.data?.summary).includes(a));
-      await teamB.waitFor((e) => String(e.data?.summary).includes(b));
+      await workspaceA.waitFor((e) => String(e.data?.summary).includes(a));
+      await workspaceB.waitFor((e) => String(e.data?.summary).includes(b));
       await projB.waitFor((e) => String(e.data?.summary).includes(b));
       await sleep(500);
-      for (const [name, s, other] of [["team A", teamA, b], ["team B", teamB, a], ["project B", projB, a]] as const) {
-        assert.ok(!s.events.some((e) => String(e.data?.summary).includes(other)), `${name} received another team's event`);
+      for (const [name, s, other] of [["workspace A", workspaceA, b], ["workspace B", workspaceB, a], ["project B", projB, a]] as const) {
+        assert.ok(!s.events.some((e) => String(e.data?.summary).includes(other)), `${name} received another workspace's event`);
       }
     } finally {
-      teamA.close();
-      teamB.close();
+      workspaceA.close();
+      workspaceB.close();
       projB.close();
     }
   });

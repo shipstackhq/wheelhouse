@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ApiError, createApiClient, type Me } from "./index";
 
 type Call = { method: string; url: string; headers: Record<string, string>; body: unknown };
-const me = (token: string): Me => ({ user: { id: "u1", name: "Ada", email: "ada@example.test" }, team: { id: "t1", name: "Ada's team" }, role: "owner", tags: ["eng"], isInstanceAdmin: false, csrfToken: token });
+const me = (token: string): Me => ({ user: { id: "u1", name: "Ada", email: "ada@example.test" }, workspace: { id: "t1", name: "Ada's workspace" }, role: "owner", tags: ["eng"], isInstanceAdmin: false, csrfToken: token });
 
 /** A scripted fetch: each call takes the next reply (a status and JSON body, plus optional headers). */
 function script(replies: { status?: number; json?: unknown; text?: string; headers?: Record<string, string> }[]) {
@@ -157,13 +157,13 @@ describe("the page endpoints (WH-95)", () => {
     return { method, url, body };
   };
 
-  test("team: overview is a read; a member change is a PATCH with the id escaped; removal is a DELETE; the member comes out of the envelope", async () => {
-    assert.deepEqual(await sent((a) => a.team.overview(), { json: { team: {} } }), { method: "GET", url: "/api/app/team", body: undefined });
-    const patch = await sent((a) => a.team.updateMember("a b/c", { role: "owner", tags: ["x"] }), { json: { member: {} } });
-    assert.deepEqual(patch, { method: "PATCH", url: "/api/app/team/members/a%20b%2Fc", body: { role: "owner", tags: ["x"] } });
-    assert.deepEqual(await sent((a) => a.team.removeMember("u1")), { method: "DELETE", url: "/api/app/team/members/u1", body: undefined });
+  test("workspace: overview is a read; a member change is a PATCH with the id escaped; removal is a DELETE; the member comes out of the envelope", async () => {
+    assert.deepEqual(await sent((a) => a.workspace.overview(), { json: { workspace: {} } }), { method: "GET", url: "/api/app/workspace", body: undefined });
+    const patch = await sent((a) => a.workspace.updateMember("a b/c", { role: "owner", tags: ["x"] }), { json: { member: {} } });
+    assert.deepEqual(patch, { method: "PATCH", url: "/api/app/workspace/members/a%20b%2Fc", body: { role: "owner", tags: ["x"] } });
+    assert.deepEqual(await sent((a) => a.workspace.removeMember("u1")), { method: "DELETE", url: "/api/app/workspace/members/u1", body: undefined });
     const s = script([{ json: { member: { userId: "u1", tags: ["x"] } } }]);
-    assert.deepEqual(await createApiClient({ fetch: s.f }).team.updateMember("u1", { role: "member", tags: "x" }), { userId: "u1", tags: ["x"] });
+    assert.deepEqual(await createApiClient({ fetch: s.f }).workspace.updateMember("u1", { role: "member", tags: "x" }), { userId: "u1", tags: ["x"] });
   });
 
   test("password: POST /me/password with both passwords", async () => {
@@ -183,9 +183,9 @@ describe("the page endpoints (WH-95)", () => {
 
   test("invites: list picks the kind and unwraps; peek is a POST so the token never sits in a URL; accept adopts the new session's token", async () => {
     const list = script([{ json: { invites: [{ id: "i1" }] } }]);
-    assert.deepEqual(await createApiClient({ fetch: list.f }).invites.list("new_team"), [{ id: "i1" }]);
-    assert.equal(list.calls[0].url, "/api/app/invites?kind=new_team");
-    assert.deepEqual(await sent((a) => a.invites.create({ kind: "join_team", email: "x@y.z" }), { status: 201, json: {} }), { method: "POST", url: "/api/app/invites", body: { kind: "join_team", email: "x@y.z" } });
+    assert.deepEqual(await createApiClient({ fetch: list.f }).invites.list("new_workspace"), [{ id: "i1" }]);
+    assert.equal(list.calls[0].url, "/api/app/invites?kind=new_workspace");
+    assert.deepEqual(await sent((a) => a.invites.create({ kind: "join_workspace", email: "x@y.z" }), { status: 201, json: {} }), { method: "POST", url: "/api/app/invites", body: { kind: "join_workspace", email: "x@y.z" } });
     const peek = await sent((a) => a.invites.peek("TOKEN"), { json: { invite: { email: "x@y.z" } } });
     assert.deepEqual(peek, { method: "POST", url: "/api/app/invites/peek", body: { token: "TOKEN" } });
     assert.ok(!peek.url.includes("TOKEN"));
@@ -199,10 +199,10 @@ describe("the page endpoints (WH-95)", () => {
   });
 
   test("admin, projects and dashboard", async () => {
-    assert.deepEqual(await sent((a) => a.admin.suspend("t1", { confirm: "Acme", reason: "x" }), { json: { name: "Acme", sessionsEnded: 0 } }), { method: "POST", url: "/api/app/admin/teams/t1/suspend", body: { confirm: "Acme", reason: "x" } });
-    assert.deepEqual(await sent((a) => a.admin.restore("t1")), { method: "POST", url: "/api/app/admin/teams/t1/restore", body: {} });
-    assert.deepEqual(await sent((a) => a.admin.teams(), { json: { teams: [] } }), { method: "GET", url: "/api/app/admin/teams", body: undefined });
-    assert.deepEqual(await sent((a) => a.admin.team("t1"), { json: { team: {} } }), { method: "GET", url: "/api/app/admin/teams/t1", body: undefined });
+    assert.deepEqual(await sent((a) => a.admin.suspend("t1", { confirm: "Acme", reason: "x" }), { json: { name: "Acme", sessionsEnded: 0 } }), { method: "POST", url: "/api/app/admin/workspaces/t1/suspend", body: { confirm: "Acme", reason: "x" } });
+    assert.deepEqual(await sent((a) => a.admin.restore("t1")), { method: "POST", url: "/api/app/admin/workspaces/t1/restore", body: {} });
+    assert.deepEqual(await sent((a) => a.admin.workspaces(), { json: { workspaces: [] } }), { method: "GET", url: "/api/app/admin/workspaces", body: undefined });
+    assert.deepEqual(await sent((a) => a.admin.workspace("t1"), { json: { workspace: {} } }), { method: "GET", url: "/api/app/admin/workspaces/t1", body: undefined });
     assert.deepEqual(await sent((a) => a.projects.create({ name: "Rocket" }), { status: 201, json: { project: {} } }), { method: "POST", url: "/api/app/projects", body: { name: "Rocket" } });
     assert.deepEqual(await sent((a) => a.projects.removeSession("WH", "s/1")), { method: "DELETE", url: "/api/app/projects/WH/sessions/s%2F1", body: undefined });
     assert.deepEqual(await sent((a) => a.dashboard.widget("activity-split"), { json: [] }), { method: "GET", url: "/api/app/dashboard/activity-split", body: undefined });

@@ -13,7 +13,7 @@ export const MAX_STREAMS_PER_USER = 12;
 const open = new Map<string, number>();
 
 const toStreamEvent = (r: typeof schema.events.$inferSelect): StreamEvent => ({
-  teamId: r.teamId,
+  workspaceId: r.workspaceId,
   projectId: r.projectId,
   seq: r.seq,
   type: r.type,
@@ -28,8 +28,8 @@ const toStreamEvent = (r: typeof schema.events.$inferSelect): StreamEvent => ({
 export type StreamResult = { status: 200; headers: typeof SSE_HEADERS; body: ReadableStream<Uint8Array> } | { status: number; text: string; headers?: Record<string, string> };
 
 /**
- * Shared by the project stream and the dashboard's team stream: the caller must be a person signed in with a session
- * cookie, the scope is resolved to exactly their own team, and then the event stream is handed back. `getActor` resolves the
+ * Shared by the project stream and the dashboard's workspace stream: the caller must be a person signed in with a session
+ * cookie, the scope is resolved to exactly their own workspace, and then the event stream is handed back. `getActor` resolves the
  * caller the host's way; `signal` ends the stream when the client goes away.
  */
 export async function openStream(i: {

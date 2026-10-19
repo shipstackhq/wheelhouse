@@ -25,7 +25,7 @@ describe("POST /api/v1/:tool: errors", () => {
     assert.equal(r.json.error.code, "unauthorized");
   });
 
-  test("a bad or revoked key is 401; a suspended team's key is 403 team_suspended", async () => {
+  test("a bad or revoked key is 401; a suspended workspace's key is 403 team_suspended", async () => {
     assert.equal((await v1(asKey("wh_bogus"), "list_projects")).status, 401);
     assert.equal((await v1(asKey(fx.a.revokedKey), "list_projects")).status, 401);
     const s = await v1(asKey(fx.suspended.apiKey), "list_projects");

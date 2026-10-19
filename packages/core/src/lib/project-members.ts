@@ -36,7 +36,7 @@ export async function listProjectMembers(actor: Actor, projectRef: string) {
     .select({ userId: users.id, name: users.name, email: users.email, role: pm.role, workspaceRole: memberships.role, addedAt: pm.createdAt })
     .from(pm)
     .innerJoin(users, eq(users.id, pm.userId))
-    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.teamId, pm.teamId)))
+    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.workspaceId, pm.workspaceId)))
     .where(eq(pm.projectId, project.id))
     .orderBy(pm.createdAt);
   return { project: { id: project.id, key: project.key, name: project.name }, myRole: await roleOnProject(db, actor, project.id), members: rows as ProjectMemberView[] };
@@ -53,7 +53,7 @@ export async function listAddableMembers(actor: Actor, projectRef: string) {
     .innerJoin(users, eq(users.id, memberships.userId))
     .where(
       and(
-        eq(memberships.teamId, actor.teamId),
+        eq(memberships.workspaceId, actor.workspaceId),
         sql`not exists (select 1 from ${pm} where ${pm.projectId} = ${project.id} and ${pm.userId} = ${memberships.userId})`,
       ),
     )
@@ -73,13 +73,13 @@ export async function addProjectMember(actor: Actor, projectRef: string, input: 
   const db = await getDb();
   const project = await getProject(actor, projectRef, "admin");
   if (!isUuid(input.userId)) throw new ServiceError("not_found", "That person is not in this workspace");
-  const ws = await workspaceRoleOf(db, actor.teamId, input.userId);
+  const ws = await workspaceRoleOf(db, actor.workspaceId, input.userId);
   if (!ws) throw new ServiceError("not_found", "That person is not in this workspace");
   const role = input.role;
   return db.transaction(async (tx) => {
     const [dup] = await tx.select({ userId: pm.userId }).from(pm).where(and(eq(pm.projectId, project.id), eq(pm.userId, input.userId)));
     if (dup) throw new ServiceError("conflict", "They are already in this project");
-    await tx.insert(pm).values({ projectId: project.id, userId: input.userId, teamId: actor.teamId, role, addedBy: actor.id });
+    await tx.insert(pm).values({ projectId: project.id, userId: input.userId, workspaceId: actor.workspaceId, role, addedBy: actor.id });
     await audit(tx, actor, { action: "project.member_added", targetType: "user", targetId: input.userId, projectId: project.id, after: { role } });
     return { userId: input.userId, role };
   });
@@ -129,14 +129,14 @@ export type WorkspaceProjectView = { id: string; key: string; name: string; admi
 export async function listWorkspaceProjects(actor: Actor): Promise<WorkspaceProjectView[]> {
   people(actor);
   const db = await getDb();
-  const ws = await workspaceRoleOf(db, actor.teamId, actor.id);
+  const ws = await workspaceRoleOf(db, actor.workspaceId, actor.id);
   if (!ws || !canManagePeople(ws)) throw new ServiceError("forbidden", "Only workspace owners and admins can see every project");
-  const ps = await db.select().from(schema.projects).where(eq(schema.projects.teamId, actor.teamId)).orderBy(schema.projects.createdAt);
+  const ps = await db.select().from(schema.projects).where(eq(schema.projects.workspaceId, actor.workspaceId)).orderBy(schema.projects.createdAt);
   const rows = await db
     .select({ projectId: pm.projectId, userId: pm.userId, role: pm.role, name: users.name })
     .from(pm)
     .innerJoin(users, eq(users.id, pm.userId))
-    .where(eq(pm.teamId, actor.teamId));
+    .where(eq(pm.workspaceId, actor.workspaceId));
   return ps.map((p) => {
     const mine = rows.filter((r) => r.projectId === p.id);
     return { id: p.id, key: p.key, name: p.name, admins: mine.filter((r) => r.role === "admin").map((r) => r.name), memberCount: mine.length, isMember: mine.some((r) => r.userId === actor.id) };
@@ -150,14 +150,14 @@ export async function listWorkspaceProjects(actor: Actor): Promise<WorkspaceProj
 export async function joinProjectAsWorkspaceAdmin(actor: Actor, projectRef: string) {
   people(actor);
   const db = await getDb();
-  const ws = await workspaceRoleOf(db, actor.teamId, actor.id);
+  const ws = await workspaceRoleOf(db, actor.workspaceId, actor.id);
   if (!ws || !canManagePeople(ws)) throw new ServiceError("forbidden", "Only workspace owners and admins can join a project");
   const project = await findWorkspaceProject(actor, projectRef, db);
   if (!project) throw new ServiceError("not_found", `Project ${projectRef} not found`);
   return db.transaction(async (tx) => {
     const [dup] = await tx.select({ userId: pm.userId }).from(pm).where(and(eq(pm.projectId, project.id), eq(pm.userId, actor.id)));
     if (dup) throw new ServiceError("conflict", "You are already in this project");
-    await tx.insert(pm).values({ projectId: project.id, userId: actor.id, teamId: actor.teamId, role: "admin", addedBy: actor.id });
+    await tx.insert(pm).values({ projectId: project.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
     await audit(tx, actor, { action: "project.admin_joined", targetType: "user", targetId: actor.id, projectId: project.id, after: { role: "admin", workspaceRole: ws } });
     await emit(tx, actor, project.id, { type: "project.admin_joined", entity: "project", entityId: project.id, summary: `${actor.name} (workspace ${ws}) joined ${project.key} as admin` });
     return { project: { id: project.id, key: project.key, name: project.name } };
@@ -170,7 +170,7 @@ export type AuditView = { seq: number; actorName: string; action: string; target
 export async function listAudit(actor: Actor, opts: { projectRef?: string; limit?: number } = {}): Promise<AuditView[]> {
   people(actor);
   const db = await getDb();
-  const ws = await workspaceRoleOf(db, actor.teamId, actor.id);
+  const ws = await workspaceRoleOf(db, actor.workspaceId, actor.id);
   if (!ws || !canManagePeople(ws)) throw new ServiceError("forbidden", "Only workspace owners and admins can read the audit log");
   const a = schema.auditEvents;
   let projectId: string | undefined;
@@ -183,7 +183,7 @@ export async function listAudit(actor: Actor, opts: { projectRef?: string; limit
     .select({ a, key: schema.projects.key })
     .from(a)
     .leftJoin(schema.projects, eq(schema.projects.id, a.projectId))
-    .where(and(eq(a.teamId, actor.teamId), projectId ? eq(a.projectId, projectId) : undefined))
+    .where(and(eq(a.workspaceId, actor.workspaceId), projectId ? eq(a.projectId, projectId) : undefined))
     .orderBy(desc(a.seq))
     .limit(Number.isFinite(opts.limit) ? Math.min(Math.max(Math.trunc(opts.limit!), 1), 500) : 100);
   return rows.map(({ a: r, key }) => ({ seq: r.seq, actorName: r.actorName, action: r.action, targetType: r.targetType, targetId: r.targetId, projectKey: key, before: r.before, after: r.after, createdAt: r.createdAt }));

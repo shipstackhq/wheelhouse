@@ -1,7 +1,7 @@
 import { isRouteErrorResponse, Link, useRouteError } from "react-router";
 import { ApiError } from "@wheelhouse/api-client";
 
-/** The page for a URL that is not here, or a project that is not this team's (the two look the same, by design). */
+/** The page for a URL that is not here, or a project that is not this workspace's (the two look the same, by design). */
 export function NotFound() {
   return (
     <main className="flex h-full min-h-60 flex-col items-center justify-center gap-2 p-6 text-center" data-testid="not-found">

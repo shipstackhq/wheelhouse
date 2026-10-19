@@ -665,6 +665,18 @@ export function listToolDefs(opts: { includeHidden?: boolean } = {}) {
   });
 }
 
+/**
+ * `/api/v1` and the MCP keep the wire shape agents and the plugin were built against, which still says `teamId` where the
+ * schema now says `workspaceId` (WH-111). The new MCP replaces this; until then the rename happens here, once, on the way out.
+ */
+function toLegacyWire(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toLegacyWire);
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k === "workspaceId" ? "teamId" : k, toLegacyWire(v)]));
+  }
+  return value;
+}
+
 export async function runTool(actor: Actor, name: string, rawArgs: unknown) {
   const t = (tools as Record<string, Tool<z.ZodType>>)[name];
   if (!t) throw new svc.ServiceError("not_found", `Unknown tool ${name}`);
@@ -675,7 +687,7 @@ export async function runTool(actor: Actor, name: string, rawArgs: unknown) {
   const caller = actor.kind === "agent" && session ? { ...actor, sessionId: session } : actor;
   await svc.checkSession(caller);
   await svc.touchSession(caller); // every call that names a session counts as activity; a removed session is restored here
-  const result = await t.run(caller, parsed.data);
+  const result = toLegacyWire(await t.run(caller, parsed.data));
   if ((name === "get_changes" || name === "get_briefing") && result && typeof result === "object" && !Array.isArray(result)) {
     const notice = await svc.sessionNotice(caller);
     if (notice) return { ...result, session_removed: notice };

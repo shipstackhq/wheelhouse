@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { MemoryBus, type StreamEvent } from "./event-bus";
 import { eventStream, formatChange, formatHeartbeat, formatMarker, parseSince, REPLAY_CAP, type StreamDeps } from "./sse";
 
-const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ teamId: "T", projectId: "P", seq, type: "ticket.moved", summary: `s${seq}`, ...over });
+const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T", projectId: "P", seq, type: "ticket.moved", summary: `s${seq}`, ...over });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Read everything the stream has produced so far (and whatever arrives in the next few ms). */

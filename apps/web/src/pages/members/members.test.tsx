@@ -56,7 +56,7 @@ describe("the project members page", () => {
     expect(server.sent(`POST ${url}`)[0].body).toEqual({ userId: "u9", role: "viewer" });
   });
 
-  test("when everyone is already in, it says to invite people from the Team page", async () => {
+  test("when everyone is already in, it says to invite people from the Workspace page", async () => {
     open(projectMembers(), (s) => s.on(`GET ${url}/addable`, { people: [] }));
     await userEvent.setup().click(await screen.findByRole("button", { name: "+ Add member" }));
     expect(await screen.findByText(/Everyone in the workspace is already in this project/)).toBeTruthy();

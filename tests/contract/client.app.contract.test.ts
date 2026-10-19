@@ -35,7 +35,7 @@ describe("@wheelhouse/api-client against the real API", () => {
   test("sign in, read, sign out", async () => {
     const api = client();
     const me = await api.auth.login({ email: fx.a.email, password: fx.password });
-    assert.equal(me.team.id, fx.a.teamId);
+    assert.equal(me.workspace.id, fx.a.workspaceId);
     assert.equal((await api.me())?.user.email, fx.a.email);
     assert.deepEqual((await api.projects.list()).map((p) => p.key), [fx.a.projectKey]);
     await api.auth.logout();
@@ -53,8 +53,8 @@ describe("@wheelhouse/api-client against the real API", () => {
 
   test("sign-up signs the new person in", async () => {
     const api = client();
-    const me = await api.auth.signup({ name: "Client Kim", email: newEmail(), password: "a-long-enough-password", team: "Kim Co" });
-    assert.equal(me.team.name, "Kim Co");
+    const me = await api.auth.signup({ name: "Client Kim", email: newEmail(), password: "a-long-enough-password", workspace: "Kim Co" });
+    assert.equal(me.workspace.name, "Kim Co");
     assert.deepEqual(await api.projects.list(), []);
     await api.auth.logout();
   });

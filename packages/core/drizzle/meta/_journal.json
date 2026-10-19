@@ -127,6 +127,13 @@
       "when": 1792385313291,
       "tag": "0017_session_active_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792448992227,
+      "tag": "0018_workspaces_rename",
+      "breakpoints": true
     }
   ]
 }

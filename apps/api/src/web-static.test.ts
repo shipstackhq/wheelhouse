@@ -37,7 +37,7 @@ const get = (p: string, init: RequestInit = {}) => fetch(base + p, { redirect: "
 
 describe("the React app is served by the API process", () => {
   test("a page of the app, at any address, is the shell, and it is never cached", async () => {
-    for (const p of ["/", "/login", "/p/WH/map", "/p/WH/docs?x=1", "/invite", "/admin/teams/abc"]) {
+    for (const p of ["/", "/login", "/p/WH/map", "/p/WH/docs?x=1", "/invite", "/admin/workspaces/abc"]) {
       const r = await get(p);
       assert.equal(r.status, 200, p);
       assert.match(r.headers.get("content-type")!, /^text\/html/);

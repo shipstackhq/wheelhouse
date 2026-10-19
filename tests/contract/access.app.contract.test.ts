@@ -4,21 +4,21 @@ import { anon, app, newEmail, sessionFrom, type Sess } from "./lib/app";
 
 /**
  * Project isolation over real HTTP (ADR-23): a person reaches a project only as its member, whatever their workspace role.
- * Everything runs in accounts made for the test, so the seeded teams stay as they were.
+ * Everything runs in accounts made for the test, so the seeded workspaces stay as they were.
  */
 const PW = "a-long-enough-password";
 type Person = { email: string; sess: Sess; id: string; role: string };
 
 async function signUp(name: string): Promise<Person> {
   const email = newEmail();
-  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: PW, team: `${name} team` } });
+  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: PW, workspace: `${name} workspace` } });
   assert.equal(r.status, 201, r.text);
   return { email, sess: sessionFrom(r), id: r.json.user.id, role: r.json.role };
 }
 /** The owner invites someone into the workspace with a role, and they accept. */
 async function join(owner: Person, name: string, role: string): Promise<Person> {
   const email = newEmail();
-  const inv = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_team", email, role } });
+  const inv = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_workspace", email, role } });
   assert.equal(inv.status, 201, inv.text);
   const r = await app("POST", "/api/app/invites/accept", anon(), { body: { token: inv.json.link.split("#")[1], name, password: PW, confirm: PW } });
   assert.equal(r.status, 201, r.text);
@@ -94,7 +94,7 @@ describe("roles inside a project", () => {
     const editor = await join(owner, "Eddie", "member");
     const viewer = await join(owner, "Vic", "member");
     const outsider = await join(owner, "Out", "member");
-    const key = await makeProject(owner, "Team project");
+    const key = await makeProject(owner, "Workspace project");
     assert.equal((await add(owner, key, editor, "editor")).status, 201);
     assert.equal((await add(owner, key, viewer, "viewer")).status, 201);
 
@@ -174,11 +174,11 @@ describe("workspace owners and admins", () => {
     const owner = await signUp("Owner");
     const bob = await join(owner, "Bob", "member");
     const key = await makeProject(bob, "Bob's only admin");
-    const r = await app("DELETE", `/api/app/team/members/${bob.id}`, owner.sess);
+    const r = await app("DELETE", `/api/app/workspace/members/${bob.id}`, owner.sess);
     assert.equal(r.status, 409, r.text);
     assert.match(r.json.error.message, new RegExp(key));
     await app("POST", `/api/app/projects/${key}/join`, owner.sess, { body: {} });
-    assert.equal((await app("DELETE", `/api/app/team/members/${bob.id}`, owner.sess)).status, 200);
+    assert.equal((await app("DELETE", `/api/app/workspace/members/${bob.id}`, owner.sess)).status, 200);
   });
 
   test("workspace roles: viewers and guests cannot start projects; an admin invites but cannot make an owner", async () => {
@@ -187,9 +187,9 @@ describe("workspace owners and admins", () => {
     const guest = await join(owner, "Gus", "guest");
     const admin = await join(owner, "Ann", "admin");
     for (const p of [viewer, guest]) assert.equal((await app("POST", "/api/app/projects", p.sess, { body: { name: "No", key: newKey() } })).status, 403);
-    const ok = await app("POST", "/api/app/invites", admin.sess, { body: { kind: "join_team", email: newEmail(), role: "member" } });
+    const ok = await app("POST", "/api/app/invites", admin.sess, { body: { kind: "join_workspace", email: newEmail(), role: "member" } });
     assert.equal(ok.status, 201, ok.text);
-    const owner2 = await app("POST", "/api/app/invites", admin.sess, { body: { kind: "join_team", email: newEmail(), role: "owner" } });
+    const owner2 = await app("POST", "/api/app/invites", admin.sess, { body: { kind: "join_workspace", email: newEmail(), role: "owner" } });
     assert.equal(owner2.status, 403, owner2.text);
   });
 });
@@ -200,7 +200,7 @@ describe("invites that carry projects", () => {
     const mine = await makeProject(owner, "Handed out");
     const other = await makeProject(owner, "Kept back");
     const email = newEmail();
-    const inv = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_team", email, role: "member", projects: [{ project: mine, role: "viewer" }] } });
+    const inv = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_workspace", email, role: "member", projects: [{ project: mine, role: "viewer" }] } });
     assert.equal(inv.status, 201, inv.text);
     const pending = await app("GET", "/api/app/invites", owner.sess);
     assert.deepEqual(pending.json.invites.find((i: { email: string }) => i.email === email).projects.map((p: { key: string; role: string }) => [p.key, p.role]), [[mine, "viewer"]]);
@@ -215,9 +215,9 @@ describe("invites that carry projects", () => {
 
     // an admin of the workspace who is in no project cannot give projects away; an unknown project is refused too
     const admin = await join(owner, "Ann", "admin");
-    const refused = await app("POST", "/api/app/invites", admin.sess, { body: { kind: "join_team", email: newEmail(), role: "member", projects: [{ project: mine, role: "viewer" }] } });
+    const refused = await app("POST", "/api/app/invites", admin.sess, { body: { kind: "join_workspace", email: newEmail(), role: "member", projects: [{ project: mine, role: "viewer" }] } });
     assert.equal(refused.status, 403, refused.text);
-    const unknown = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_team", email: newEmail(), role: "member", projects: [{ project: "NOSUCH", role: "viewer" }] } });
+    const unknown = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_workspace", email: newEmail(), role: "member", projects: [{ project: "NOSUCH", role: "viewer" }] } });
     assert.equal(unknown.status, 403, unknown.text);
   });
 });
@@ -230,7 +230,7 @@ describe("one person in several workspaces", () => {
     const zed = await signUp("Zed"); // owner of a second workspace
     const zedsProject = await makeProject(zed, "Zed's shared");
     const hidden = await makeProject(zed, "Zed's private");
-    const inv = await app("POST", "/api/app/invites", zed.sess, { body: { kind: "join_team", email: pat.email, role: "viewer", projects: [{ project: zedsProject, role: "editor" }] } });
+    const inv = await app("POST", "/api/app/invites", zed.sess, { body: { kind: "join_workspace", email: pat.email, role: "viewer", projects: [{ project: zedsProject, role: "editor" }] } });
     assert.equal(inv.status, 201, inv.text);
     const token = inv.json.link.split("#")[1];
 
@@ -244,8 +244,8 @@ describe("one person in several workspaces", () => {
 
     const peek = await app("POST", "/api/app/invites/peek-existing", pat.sess, { body: { token } });
     assert.equal(peek.status, 200, peek.text);
-    assert.deepEqual([peek.json.invite.teamName, peek.json.invite.role], ["Zed team", "viewer"]);
-    const before = (await me(pat)).json.team.id;
+    assert.deepEqual([peek.json.invite.workspaceName, peek.json.invite.role], ["Zed workspace", "viewer"]);
+    const before = (await me(pat)).json.workspace.id;
     const other = await app("POST", "/api/app/auth/login", anon(), { body: { email: pat.email, password: PW } }); // a second session of the same person
     const otherSess = sessionFrom(other);
 
@@ -255,38 +255,38 @@ describe("one person in several workspaces", () => {
 
     // this session now works in Zed's workspace, as a viewer, in the one project it was given (the workspace viewer role caps it to read only)
     const now = await me(pat);
-    assert.equal(now.json.team.name, "Zed team");
+    assert.equal(now.json.workspace.name, "Zed workspace");
     assert.equal(now.json.role, "viewer");
-    assert.notEqual(now.json.team.id, before);
+    assert.notEqual(now.json.workspace.id, before);
     assert.deepEqual((await app("GET", "/api/app/projects", pat.sess)).json.projects.map((p: { key: string; role: string }) => [p.key, p.role]), [[zedsProject, "viewer"]]); // given editor, capped to viewer by the workspace role
     assert.equal((await app("GET", `/api/app/projects/${hidden}/board`, pat.sess)).status, 404);
     // the other session of the same person was not moved
-    assert.equal((await app("GET", "/api/app/me", { ...pat.sess, cookie: otherSess.cookie, csrf: otherSess.csrf })).json.team.id, before);
+    assert.equal((await app("GET", "/api/app/me", { ...pat.sess, cookie: otherSess.cookie, csrf: otherSess.csrf })).json.workspace.id, before);
 
     const list = await app("GET", "/api/app/me/workspaces", pat.sess);
-    assert.deepEqual(list.json.workspaces.map((w: { name: string; active: boolean }) => [w.name, w.active]).sort(), [["Pat team", false], ["Zed team", true]]);
+    assert.deepEqual(list.json.workspaces.map((w: { name: string; active: boolean }) => [w.name, w.active]).sort(), [["Pat workspace", false], ["Zed workspace", true]]);
     // back to the first, and Zed's project is not found from there
-    assert.equal((await app("POST", "/api/app/me/workspace", pat.sess, { body: { teamId: before } })).status, 200);
-    assert.equal((await me(pat)).json.team.id, before);
+    assert.equal((await app("POST", "/api/app/me/workspace", pat.sess, { body: { workspaceId: before } })).status, 200);
+    assert.equal((await me(pat)).json.workspace.id, before);
     assert.equal((await app("GET", `/api/app/projects/${zedsProject}/board`, pat.sess)).status, 404);
     // a workspace you are not in, or no id at all, is a plain 404 and changes nothing
-    const strangersTeam = (await me(zed)).json.team.id === before ? (await me(someoneElse)).json.team.id : (await me(someoneElse)).json.team.id;
-    assert.equal((await app("POST", "/api/app/me/workspace", pat.sess, { body: { teamId: strangersTeam } })).status, 404);
+    const strangersWorkspace = (await me(zed)).json.workspace.id === before ? (await me(someoneElse)).json.workspace.id : (await me(someoneElse)).json.workspace.id;
+    assert.equal((await app("POST", "/api/app/me/workspace", pat.sess, { body: { workspaceId: strangersWorkspace } })).status, 404);
     assert.equal((await app("POST", "/api/app/me/workspace", pat.sess, { body: {} })).status, 404);
-    assert.equal((await me(pat)).json.team.id, before);
+    assert.equal((await me(pat)).json.workspace.id, before);
   });
 
   test("signed out and forged requests are refused on the workspace endpoints", async () => {
     for (const [m, path, body] of [
       ["GET", "/api/app/me/workspaces"],
-      ["POST", "/api/app/me/workspace", { teamId: "x" }],
+      ["POST", "/api/app/me/workspace", { workspaceId: "x" }],
       ["POST", "/api/app/invites/peek-existing", { token: "x" }],
       ["POST", "/api/app/invites/accept-existing", { token: "x" }],
     ] as [string, string, unknown?][]) {
       assert.equal((await app(m, path, anon(), { body })).status, 401, `${m} ${path}`);
     }
     const p = await signUp("Pat");
-    assert.equal((await app("POST", "/api/app/me/workspace", p.sess, { body: { teamId: "x" }, origin: "https://evil.example" })).status, 403);
+    assert.equal((await app("POST", "/api/app/me/workspace", p.sess, { body: { workspaceId: "x" }, origin: "https://evil.example" })).status, 403);
   });
 });
 
@@ -300,15 +300,15 @@ describe("ids that are not ids", () => {
       for (const [m, path, body] of [
         ["PATCH", `/api/app/projects/${key}/members/${e}`, { role: "viewer" }],
         ["DELETE", `/api/app/projects/${key}/members/${e}`],
-        ["PATCH", `/api/app/team/members/${e}`, { role: "member" }],
-        ["DELETE", `/api/app/team/members/${e}`],
+        ["PATCH", `/api/app/workspace/members/${e}`, { role: "member" }],
+        ["DELETE", `/api/app/workspace/members/${e}`],
       ] as [string, string, unknown?][]) {
         const r = await app(m, path, owner.sess, { body });
         assert.equal(r.status, 404, `${m} ${path}: ${r.status} ${r.text.slice(0, 120)}`);
       }
       const add = await app("POST", `/api/app/projects/${key}/members`, owner.sess, { body: { userId: id, role: "viewer" } });
       assert.equal(add.status, 404, `add ${id}: ${add.status}`);
-      const sw = await app("POST", "/api/app/me/workspace", owner.sess, { body: { teamId: id } });
+      const sw = await app("POST", "/api/app/me/workspace", owner.sess, { body: { workspaceId: id } });
       assert.equal(sw.status, 404, `switch ${id}: ${sw.status}`);
     }
     for (const token of ["x", "", "a".repeat(43), "a".repeat(500)]) {

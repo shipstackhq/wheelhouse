@@ -1,5 +1,5 @@
 /**
- * Creates a demo user/team/API key. Run while the app is NOT running when using
+ * Creates a demo user/workspace/API key. Run while the app is NOT running when using
  * local PGlite (single-process DB):  pnpm seed
  * Prints the login + API key to stdout.
  */
@@ -38,22 +38,22 @@ async function getDb() {
 async function main() {
   const { db, close } = await getDb();
   let [user] = await db.select().from(schema.users).where(eq(schema.users.email, EMAIL));
-  let teamId: string;
+  let workspaceId: string;
   if (!user) {
     [user] = await db
       .insert(schema.users)
       .values({ email: EMAIL, name: "Demo", passwordHash: await bcrypt.hash(PASSWORD, 10) })
       .returning();
-    const [team] = await db.insert(schema.teams).values({ name: "Demo team" }).returning();
-    await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner", tags: ["eng"] });
-    teamId = team.id;
+    const [workspace] = await db.insert(schema.workspaces).values({ name: "Demo workspace" }).returning();
+    await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner", tags: ["eng"] });
+    workspaceId = workspace.id;
   } else {
     const [m] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, user.id));
-    teamId = m.teamId;
+    workspaceId = m.workspaceId;
   }
   const key = `wh_${crypto.randomBytes(24).toString("base64url")}`;
   await db.insert(schema.apiKeys).values({
-    teamId,
+    workspaceId,
     name: "Claude (seed)",
     prefix: key.slice(0, 10),
     keyHash: crypto.createHash("sha256").update(key).digest("hex"),

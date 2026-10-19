@@ -35,8 +35,8 @@ import type {
   NodePosition,
   Term,
   AcceptInviteInput,
-  AdminTeam,
-  AdminTeamDetail,
+  AdminWorkspace,
+  AdminWorkspaceDetail,
   AgentsPage,
   BoardView,
   Bot,
@@ -59,8 +59,8 @@ import type {
   NewTicket,
   PendingInvite,
   Role,
-  TeamMember,
-  TeamOverview,
+  WorkspaceMember,
+  WorkspaceOverview,
   TicketComment,
   TicketDetail,
   TicketPatch,
@@ -71,9 +71,9 @@ export type * from "./types";
 
 export type Me = {
   user: { id: string; name: string; email: string };
-  team: { id: string; name: string };
+  workspace: { id: string; name: string };
   role: Role;
-  /** The person's labels within the team (for example "eng"). */
+  /** The person's labels within the workspace (for example "eng"). */
   tags: string[];
   isInstanceAdmin: boolean;
   /** Sent back as X-CSRF-Token on state-changing requests; the client does this for you. */
@@ -84,7 +84,7 @@ export type Project = { id: string; key: string; name: string; description: stri
 export type CreateProjectInput = { name: string; key?: string; description?: string };
 
 export type LoginInput = { email: string; password: string };
-export type SignupInput = { name: string; email: string; password: string; team?: string };
+export type SignupInput = { name: string; email: string; password: string; workspace?: string };
 
 /** Every failed request. `code` is stable and meant for code; `message` is meant for people. */
 export class ApiError extends Error {
@@ -212,7 +212,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     /** The person's workspaces, and moving this session to another. After a switch every cached read belongs to the old one. */
     workspaces: {
       list: async () => (await request<{ workspaces: WorkspaceChoice[] }>("GET", "/api/app/me/workspaces")).workspaces,
-      switchTo: async (teamId: string) => (await request<{ team: { id: string; name: string } }>("POST", "/api/app/me/workspace", { teamId })).team,
+      switchTo: async (workspaceId: string) => (await request<{ workspace: { id: string; name: string } }>("POST", "/api/app/me/workspace", { workspaceId })).workspace,
     },
 
     /** Workspace-level views of access (owners and admins). */
@@ -326,7 +326,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** The file paths of a connected GitHub repository's default branch. */
       tree: (projectKey: string, id: string) =>
         request<{ files: string[]; truncated: boolean }>("GET", `${project(projectKey)}/repositories/${encodeURIComponent(id)}/tree`),
-      /** Is GitHub set up here, and (owners) which repositories of the team's installations could still be connected. */
+      /** Is GitHub set up here, and (owners) which repositories of the workspace's installations could still be connected. */
       github: (projectKey: string) => request<GithubStatus>("GET", `${project(projectKey)}/repositories/github`),
       connectGithub: async (projectKey: string, input: { installationId: string; repoId: string; role?: string; pathLimit?: string | null }) =>
         (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories/github`, input)).repository,
@@ -341,16 +341,16 @@ export function createApiClient(options: ApiClientOptions = {}) {
     /** Change your own password. */
     changePassword: (input: { current: string; next: string }) => request<{ ok: true }>("POST", "/api/app/me/password", input),
 
-    team: {
-      overview: () => request<TeamOverview>("GET", "/api/app/team"),
+    workspace: {
+      overview: () => request<WorkspaceOverview>("GET", "/api/app/workspace"),
       /** Owners only. `tags` as a list or a comma-separated string. */
       updateMember: async (userId: string, input: { role: Role; tags: string[] | string }) =>
-        (await request<{ member: TeamMember }>("PATCH", `/api/app/team/members/${encodeURIComponent(userId)}`, input)).member,
-      removeMember: (userId: string) => request<{ ok: true }>("DELETE", `/api/app/team/members/${encodeURIComponent(userId)}`),
+        (await request<{ member: WorkspaceMember }>("PATCH", `/api/app/workspace/members/${encodeURIComponent(userId)}`, input)).member,
+      removeMember: (userId: string) => request<{ ok: true }>("DELETE", `/api/app/workspace/members/${encodeURIComponent(userId)}`),
     },
 
     agents: {
-      /** The team's keys (never their values) and the commands for connecting an agent. */
+      /** The workspace's keys (never their values) and the commands for connecting an agent. */
       page: () => request<AgentsPage>("GET", "/api/app/agents"),
       /** Reset an agent's queue: one key and/or one project, or everything. */
       markAllSeen: (input: { keyId?: string; projectKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/agents/mark-all-seen", input),
@@ -364,8 +364,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     },
 
     invites: {
-      /** Pending invites: join invites of your team (owners), or new-team invites (instance admins). */
-      list: async (kind: "join_team" | "new_team" = "join_team") =>
+      /** Pending invites: join invites of your workspace (owners), or new-workspace invites (instance admins). */
+      list: async (kind: "join_workspace" | "new_workspace" = "join_workspace") =>
         (await request<{ invites: PendingInvite[] }>("GET", `/api/app/invites?kind=${kind}`)).invites,
       create: (input: CreateInviteInput) => request<CreatedInvite>("POST", "/api/app/invites", input),
       revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/invites/${encodeURIComponent(id)}`),
@@ -374,17 +374,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** For a signed-in person with an account: what an invite sent to their own address adds them to. */
       peekExisting: async (token: string) => (await request<{ invite: InvitePeekExisting }>("POST", "/api/app/invites/peek-existing", { token })).invite,
       /** For a signed-in person with an account: join that workspace; this session then works in it. */
-      acceptExisting: async (token: string) => (await request<{ team: { id: string; name: string } }>("POST", "/api/app/invites/accept-existing", { token })).team,
+      acceptExisting: async (token: string) => (await request<{ workspace: { id: string; name: string } }>("POST", "/api/app/invites/accept-existing", { token })).workspace,
       /** Creates the account and signs the new person in. */
       accept: async (input: AcceptInviteInput) => adopt(await request<Me>("POST", "/api/app/invites/accept", input)),
     },
 
     admin: {
-      teams: async () => (await request<{ teams: AdminTeam[] }>("GET", "/api/app/admin/teams")).teams,
-      team: async (id: string) => (await request<{ team: AdminTeamDetail }>("GET", `/api/app/admin/teams/${encodeURIComponent(id)}`)).team,
+      workspaces: async () => (await request<{ workspaces: AdminWorkspace[] }>("GET", "/api/app/admin/workspaces")).workspaces,
+      workspace: async (id: string) => (await request<{ workspace: AdminWorkspaceDetail }>("GET", `/api/app/admin/workspaces/${encodeURIComponent(id)}`)).workspace,
       suspend: (id: string, input: { confirm: string; reason?: string }) =>
-        request<{ name: string; sessionsEnded: number }>("POST", `/api/app/admin/teams/${encodeURIComponent(id)}/suspend`, input),
-      restore: (id: string) => request<{ ok: true }>("POST", `/api/app/admin/teams/${encodeURIComponent(id)}/restore`, {}),
+        request<{ name: string; sessionsEnded: number }>("POST", `/api/app/admin/workspaces/${encodeURIComponent(id)}/suspend`, input),
+      restore: (id: string) => request<{ ok: true }>("POST", `/api/app/admin/workspaces/${encodeURIComponent(id)}/restore`, {}),
     },
 
     dashboard: {

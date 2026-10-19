@@ -8,7 +8,7 @@ import type { SessionView } from "./session-buckets";
 
 /**
  * Read-only aggregates for the dashboard. One function per widget so new
- * widgets can be added without touching the others. Everything is team-scoped.
+ * widgets can be added without touching the others. Everything is workspace-scoped.
  * Day buckets are UTC calendar days.
  */
 
@@ -28,26 +28,26 @@ export function lastNDays(n: number) {
  */
 type Memo = <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R;
 let memo: Memo = (fn) => fn;
-let memoised: ((teamId: string, viewer: string, projectId: string) => ReturnType<typeof loadSnapshot>) | null = null;
+let memoised: ((workspaceId: string, viewer: string, projectId: string) => ReturnType<typeof loadSnapshot>) | null = null;
 export function setRequestMemo(m: Memo) {
   memo = m;
   memoised = null;
 }
 /** `viewer` is the person's user id, or "*" for an agent key or the system, who see the whole workspace (ADR-23). */
-const snapshot = (actor: Actor, projectId?: string) => (memoised ??= memo(loadSnapshot))(actor.teamId, actor.kind === "human" && !actor.system ? actor.id : "*", projectId ?? "*");
+const snapshot = (actor: Actor, projectId?: string) => (memoised ??= memo(loadSnapshot))(actor.workspaceId, actor.kind === "human" && !actor.system ? actor.id : "*", projectId ?? "*");
 
 /**
- * Projects, columns, tickets, recent events for one team, limited to the projects `viewer` can open, and to one project when
+ * Projects, columns, tickets, recent events for one workspace, limited to the projects `viewer` can open, and to one project when
  * `projectId` is given (the caller has already resolved it through getProject, so it is one the viewer can open; it is
  * intersected with what they can open anyway, so a stray id yields an empty snapshot rather than someone else's numbers).
  */
-const loadSnapshot = async (teamId: string, viewer: string, projectId: string) => {
+const loadSnapshot = async (workspaceId: string, viewer: string, projectId: string) => {
   const db = await getDb();
-  const visible = viewer === "*" ? null : await visibleProjectIds(db, { kind: "human", id: viewer, name: "", teamId });
+  const visible = viewer === "*" ? null : await visibleProjectIds(db, { kind: "human", id: viewer, name: "", workspaceId });
   const ps = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.teamId, teamId), visible ? inArray(projects.id, visible) : undefined, projectId === "*" ? undefined : eq(projects.id, projectId)))
+    .where(and(eq(projects.workspaceId, workspaceId), visible ? inArray(projects.id, visible) : undefined, projectId === "*" ? undefined : eq(projects.id, projectId)))
     .orderBy(asc(projects.createdAt));
   const pids = ps.map((p) => p.id);
   if (!pids.length) return { projects: ps, columns: [], tickets: [], events: [], nodes: [], docs: [] };
@@ -57,7 +57,7 @@ const loadSnapshot = async (teamId: string, viewer: string, projectId: string) =
     db
       .select()
       .from(events)
-      .where(and(eq(events.teamId, teamId), inArray(events.projectId, pids), gte(events.createdAt, new Date(Date.now() - 28 * DAY))))
+      .where(and(eq(events.workspaceId, workspaceId), inArray(events.projectId, pids), gte(events.createdAt, new Date(Date.now() - 28 * DAY))))
       .orderBy(desc(events.seq)),
     db
       .select({ id: nodes.id, projectId: nodes.projectId, name: nodes.name, layer: nodes.layer, stale: nodes.stale, staleReason: nodes.staleReason })
@@ -105,7 +105,7 @@ export async function summary(actor: Actor, projectId?: string) {
   const agentEvents = week.filter((e) => e.actorKind === "agent").length;
 
   const db = await getDb();
-  const keys = await db.select({ id: apiKeys.id }).from(apiKeys).where(and(eq(apiKeys.teamId, actor.teamId), isNull(apiKeys.revokedAt)));
+  const keys = await db.select({ id: apiKeys.id }).from(apiKeys).where(and(eq(apiKeys.workspaceId, actor.workspaceId), isNull(apiKeys.revokedAt)));
 
   return {
     projects: s.projects.length,
@@ -182,7 +182,7 @@ export async function agentQueues(actor: Actor, projectId?: string) {
   const keys = await db
     .select({ id: apiKeys.id, name: apiKeys.name, lastUsedAt: apiKeys.lastUsedAt })
     .from(apiKeys)
-    .where(and(eq(apiKeys.teamId, actor.teamId), isNull(apiKeys.revokedAt)))
+    .where(and(eq(apiKeys.workspaceId, actor.workspaceId), isNull(apiKeys.revokedAt)))
     .orderBy(desc(apiKeys.lastUsedAt));
   const pending = new Map<string, { total: number; byProject: { key: string; pending: number }[]; sessions: SessionView[] }>();
   for (const p of s.projects) {
@@ -266,7 +266,7 @@ export async function syncHealth(actor: Actor, projectId?: string) {
     .map((x) => ({ id: x.id, projectKey: pkey.get(x.projectId)!, by: x.actorName, files: x.own, since: x.firstChangeAt ?? x.startedAt }));
 
   const QUIET_MS = 2 * 3600e3;
-  const keys = await db.select({ id: apiKeys.id, name: apiKeys.name }).from(apiKeys).where(eq(apiKeys.teamId, actor.teamId));
+  const keys = await db.select({ id: apiKeys.id, name: apiKeys.name }).from(apiKeys).where(eq(apiKeys.workspaceId, actor.workspaceId));
   const keyName = new Map(keys.map((k) => [k.id, k.name]));
   const quiet = s.tickets
     .filter((t) => t.claimedByKeyId && !doneIds.has(t.columnId))

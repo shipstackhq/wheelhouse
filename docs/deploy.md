@@ -114,8 +114,8 @@ The token only lives for the workflow run and is removed on exit, so no registry
 | `WHEELHOUSE_PORT` | `3000` (or any free port; Caddy points here) |
 | `PG_CONTAINER`, `PG_DB`, `PG_DUMP_USER` | container name, `wheelhouse`, the Postgres admin user (used by the dump and restore) |
 | `ALLOW_SIGNUP` | `false` (keep it: people join through invite links) |
-| `ADMIN_EMAILS` | your email; only these accounts can invite someone into a brand new team |
-| `MAX_TEAM_MEMBERS`, `INVITE_TTL_HOURS` | optional: seats per team including the owner (default 5), link lifetime in hours (default 168) |
+| `ADMIN_EMAILS` | your email; only these accounts can invite someone into a brand new workspace |
+| `MAX_WORKSPACE_MEMBERS`, `INVITE_TTL_HOURS` | optional: seats per workspace including the owner (default 5), link lifetime in hours (default 168) |
 | `RCLONE_REMOTE` | optional, off-box backup target, see Backups |
 
 `chmod 600 .env`. `WHEELHOUSE_IMAGE` is written by the deploy script.
@@ -163,33 +163,33 @@ There is no path variable: the wrapper decides where the app lives.
 
 Run **Deploy** manually from the `production` branch. Then open `APP_URL` and **create the first account straight
 away**: with `ALLOW_SIGNUP=false` only the very first signup is accepted, and after that owners add members
-under *Team*. Do this before sharing the URL.
+under *Workspace*. Do this before sharing the URL.
 
 ## Inviting people
 
 Signup stays closed; everyone gets in through a one-time invite link.
 
-- **Someone outside your team** (their own separate team): sign in with an account listed in `ADMIN_EMAILS`, open
-  **Invite a new team** in the sidebar, enter their email (and a team name if you like), and send them the link.
-  They choose a password and become the owner of their own team.
-- **Someone for your own team:** the team owner uses **Team → Invite someone**. A team has at most
-  `MAX_TEAM_MEMBERS` seats including the owner, and pending invites count.
+- **Someone outside your workspace** (their own separate workspace): sign in with an account listed in `ADMIN_EMAILS`, open
+  **Invite a new workspace** in the sidebar, enter their email (and a workspace name if you like), and send them the link.
+  They choose a password and become the owner of their own workspace.
+- **Someone for your own workspace:** the workspace owner uses **Workspace → Invite someone**. A workspace has at most
+  `MAX_WORKSPACE_MEMBERS` seats including the owner, and pending invites count.
 
 A link is shown once, works for one person, and expires after `INVITE_TTL_HOURS` (or sooner if you revoke it under
 *Pending invites*). It is tied to the email you entered. The secret sits in the part of the URL after `#`, which browsers
 do not send to the server, so it stays out of Caddy's access logs. New passwords must be at least 12 characters.
 
-## Seeing and suspending teams
+## Seeing and suspending workspaces
 
-Admins (`ADMIN_EMAILS`) get **Teams** in the sidebar: every team on the server with its owners, seats, project count
+Admins (`ADMIN_EMAILS`) get **Workspaces** in the sidebar: every workspace on the server with its owners, seats, project count
 and last activity, and a detail page with members, invites and API keys (the prefix only, never the key). You see
-names, emails and counts, **never what a team wrote** (tickets, comments, the map).
+names, emails and counts, **never what a workspace wrote** (tickets, comments, the map).
 
-**Suspend** cuts a whole team off and is reversible. You type the team's exact name to confirm, and optionally a reason
-that only admins see. At once: every member is signed out, their sign-in is refused ("This team has been suspended"),
-the team's API keys get a 403 on `/mcp` and `/api/v1`, and the team's invites stop working. Nothing is deleted.
-**Restore** brings the team back as it was; people sign in again. You cannot suspend your own team. Suspensions are
-logged on the server (`[admin] team suspended <id> by <user>`).
+**Suspend** cuts a whole workspace off and is reversible. You type the workspace's exact name to confirm, and optionally a reason
+that only admins see. At once: every member is signed out, their sign-in is refused ("This workspace has been suspended"),
+the workspace's API keys get a 403 on `/mcp` and `/api/v1`, and the workspace's invites stop working. Nothing is deleted.
+**Restore** brings the workspace back as it was; people sign in again. You cannot suspend your own workspace. Suspensions are
+logged on the server (`[admin] workspace suspended <id> by <user>`).
 
 ## Updating the compose file or scripts
 
@@ -265,14 +265,14 @@ Then put these in `/opt/apps/wheelhouse/.env` and redeploy (see `.env.example`):
 | `GITHUB_WEBHOOK_SECRET` | the secret you chose |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the App's *Client ID* and a generated client secret |
 
-Leave all six empty to keep the integration off. Anyone who is a team **owner** then opens a project's
+Leave all six empty to keep the integration off. Anyone who is a workspace **owner** then opens a project's
 *Repositories* page, presses *Connect GitHub*, installs the App on the repositories they choose, and picks which of them
 this project uses (a monorepo can be limited to a path). Push, pull request and CI events then arrive at the webhook.
 
 What to know:
 
 - **Signed and scoped.** Every delivery is checked against the webhook secret before anything is read, and a delivery can
-  only reach a repository that a team connected through *its own* installation. An installation is tied to the team
+  only reach a repository that a workspace connected through *its own* installation. An installation is tied to the workspace
   whose owner proved, through GitHub's sign-in, that they administer it; no one can claim someone else's.
 - **Nothing but metadata.** Wheelhouse reads which files changed and their git hashes. It never stores file contents.
 - **Pull requests move tickets with care.** Opened (not draft) moves a ticket to Review, closed without merging moves it

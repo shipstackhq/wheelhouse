@@ -19,7 +19,7 @@ describe("the activity page", () => {
     const agent = await row("added a node");
     expect(within(agent).getByText("CI bot")).toBeTruthy();
     expect(within(agent).getByText("just now")).toBeTruthy();
-    for (const name of ["Everything", "Agents", "Team"]) expect(screen.getByRole("link", { name })).toBeTruthy();
+    for (const name of ["Everything", "Agents", "Workspace"]) expect(screen.getByRole("link", { name })).toBeTruthy();
   });
 
   test("with nothing yet it says so", async () => {
@@ -62,14 +62,14 @@ describe("the activity page", () => {
     expect((await row("commented on AA-1")).textContent).toContain("“Looks right to me”");
   });
 
-  test("the tabs ask for agents only or the team only, and Everything asks for all", async () => {
+  test("the tabs ask for agents only or the workspace only, and Everything asks for all", async () => {
     const { server, router } = open();
     const user = userEvent.setup();
     await screen.findByText(/created AA-1/);
     await user.click(screen.getByRole("link", { name: "Agents" }));
     await waitFor(() => expect(server.sent("GET /api/app/projects/AA/activity").some((c) => c.url.endsWith("?who=agent"))).toBe(true));
     expect(router.state.location.search).toBe("?who=agent");
-    await user.click(screen.getByRole("link", { name: "Team" }));
+    await user.click(screen.getByRole("link", { name: "Workspace" }));
     await waitFor(() => expect(server.sent("GET /api/app/projects/AA/activity").some((c) => c.url.endsWith("?who=human"))).toBe(true));
     await user.click(screen.getByRole("link", { name: "Everything" }));
     await waitFor(() => expect(router.state.location.search).toBe(""));

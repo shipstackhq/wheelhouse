@@ -44,7 +44,7 @@ export class CsrfGuard implements CanActivate {
 
 export type SessionRequest = Request & { human: Human };
 
-/** A signed-in person (session cookie). Signed out is a JSON 401, never a redirect. The team comes from the session, never from the request. */
+/** A signed-in person (session cookie). Signed out is a JSON 401, never a redirect. The workspace comes from the session, never from the request. */
 @Injectable()
 export class SessionGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {

@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 import { actorFromCredentials, SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
 import { openStream } from "@wheelhouse/core/lib/stream-open";
-import { projectScope, teamScope, type StreamScope } from "@wheelhouse/core/lib/stream-scope";
+import { projectScope, workspaceScope, type StreamScope } from "@wheelhouse/core/lib/stream-scope";
 import type { Actor } from "@wheelhouse/core/lib/access";
 import { cookieValue, toHeaders } from "../http/util";
 import { StreamRegistry } from "./stream.registry";
@@ -13,10 +13,10 @@ import { StreamRegistry } from "./stream.registry";
 export class StreamController {
   constructor(@Inject(StreamRegistry) private readonly streams: StreamRegistry) {}
 
-  /** Server-sent changes across the signed-in user's whole team, for the dashboard (WH-1). */
+  /** Server-sent changes across the signed-in user's whole workspace, for the dashboard (WH-1). */
   @Get("api/stream")
-  team(@Req() req: Request, @Res() res: Response) {
-    return this.serve(req, res, teamScope());
+  workspace(@Req() req: Request, @Res() res: Response) {
+    return this.serve(req, res, workspaceScope());
   }
 
   /** Server-sent changes for one project (WH-1). */

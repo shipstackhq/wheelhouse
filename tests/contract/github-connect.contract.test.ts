@@ -7,7 +7,7 @@ const cookieOf = (r: { cookies: string[] }, name: string) => r.cookies.find((c) 
 const valueOf = (setCookie: string) => setCookie.split(";")[0].split("=").slice(1).join("=");
 const location = (r: { headers: Headers }) => r.headers.get("location") ?? "";
 
-/** Start the flow as an owner of team `t` and return what GitHub would get back to the callback. */
+/** Start the flow as an owner of workspace `t` and return what GitHub would get back to the callback. */
 async function start(t: typeof fx.a) {
   const r = await call(`/api/github/install?project=${t.projectKey}`, { cookie: t.sessionToken });
   const state = new URL(location(r)).searchParams.get("state")!;
@@ -48,7 +48,7 @@ describe("GET /api/github/install", () => {
     assert.equal(new URL(location(r), "http://x").pathname, `/p/${fx.a.projectKey}/repos`);
   });
 
-  test("another team's project is a plain 404", async () => {
+  test("another workspace's project is a plain 404", async () => {
     const r = await call(`/api/github/install?project=${fx.b.projectKey}`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 404);
   });
@@ -61,7 +61,7 @@ describe("GET /api/github/callback", () => {
     assert.equal((await callback(fx.a, { installation_id: gh.connectInstallationId, code: "good" }, a.nonce)).status, 400);
     // The right state without the browser's cookie is also refused: the link cannot be replayed from another browser.
     assert.equal((await callback(fx.a, { state: a.state, installation_id: gh.connectInstallationId, code: "good" }, null)).status, 400);
-    // State minted for team A's owner, presented by team B's owner.
+    // State minted for workspace A's owner, presented by workspace B's owner.
     const fromB = await callback(fx.b, { state: a.state, installation_id: gh.connectInstallationId, code: "good" }, a.nonce);
     assert.equal(fromB.status, 400);
   });
@@ -95,7 +95,7 @@ describe("GET /api/github/callback", () => {
     assert.equal(replay.status, 400);
   });
 
-  test("an installation another team already holds cannot be taken over", async () => {
+  test("an installation another workspace already holds cannot be taken over", async () => {
     const s = await start(fx.b);
     const r = await callback(fx.b, { state: s.state, installation_id: gh.connectInstallationId, code: "good" }, s.nonce);
     assert.equal(new URL(location(r), "http://x").searchParams.get("github_error"), "taken");

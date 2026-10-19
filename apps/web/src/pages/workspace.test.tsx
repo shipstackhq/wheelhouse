@@ -2,15 +2,15 @@ import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiError, renderApp } from "../test/harness";
-import { invite, team } from "../test/data";
+import { invite, workspace } from "../test/data";
 
 /** A member's row. The name also appears in the account menu, so look only inside the page. */
 const rowOf = (name: string) => within(screen.getByRole("main")).getByText(name).closest("form") as HTMLElement;
 const findRow = async (name: string) => (await within(await screen.findByRole("main")).findByText(name)).closest("form") as HTMLElement;
 
-describe("the team page, for an owner", () => {
+describe("the workspace page, for an owner", () => {
   test("lists the members with their role and tags, marks you, and offers Save and Remove (never Remove on yourself)", async () => {
-    renderApp("/team");
+    renderApp("/workspace");
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     const ada = await findRow("Ada Lovelace");
     expect(within(ada).getByText("(you)")).toBeTruthy();
@@ -22,38 +22,38 @@ describe("the team page, for an owner", () => {
     expect(within(grace).getByRole("button", { name: "Remove" })).toBeTruthy();
   });
 
-  test("Save sends the role and the tags as typed, and reads the team again", async () => {
-    const { server } = renderApp("/team", (s) => s.on("PATCH /api/app/team/members/u2", { member: team().members[1] }));
+  test("Save sends the role and the tags as typed, and reads the workspace again", async () => {
+    const { server } = renderApp("/workspace", (s) => s.on("PATCH /api/app/workspace/members/u2", { member: workspace().members[1] }));
     const user = userEvent.setup();
     const tags = (await within(await findRow("Grace Hopper")).findByLabelText("Tags for Grace Hopper")) as HTMLInputElement;
     await user.clear(tags);
     await user.type(tags, "Backend, Ops");
-    const before = server.sent("GET /api/app/team").length;
+    const before = server.sent("GET /api/app/workspace").length;
     await user.click(within(rowOf("Grace Hopper")).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(server.sent("PATCH /api/app/team/members/u2")).toHaveLength(1));
-    expect(server.sent("PATCH /api/app/team/members/u2")[0].body).toEqual({ role: "member", tags: "Backend, Ops" });
-    await waitFor(() => expect(server.sent("GET /api/app/team").length).toBeGreaterThan(before));
+    await waitFor(() => expect(server.sent("PATCH /api/app/workspace/members/u2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/workspace/members/u2")[0].body).toEqual({ role: "member", tags: "Backend, Ops" });
+    await waitFor(() => expect(server.sent("GET /api/app/workspace").length).toBeGreaterThan(before));
   });
 
   test("Remove sends a DELETE for that member only", async () => {
-    const { server } = renderApp("/team", (s) => s.on("DELETE /api/app/team/members/u2", { ok: true }));
+    const { server } = renderApp("/workspace", (s) => s.on("DELETE /api/app/workspace/members/u2", { ok: true }));
     const user = userEvent.setup();
     await user.click(await within(await findRow("Grace Hopper")).findByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(server.sent("DELETE /api/app/team/members/u2")).toHaveLength(1));
-    expect(server.sent("PATCH /api/app/team/members/u2")).toHaveLength(0);
+    await waitFor(() => expect(server.sent("DELETE /api/app/workspace/members/u2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/workspace/members/u2")).toHaveLength(0);
   });
 
   test("a refusal (the last owner) is shown on that row, in the server's words", async () => {
-    renderApp("/team", (s) => s.on("PATCH /api/app/team/members/u1", apiError(409, "conflict", "A team needs at least one owner")));
+    renderApp("/workspace", (s) => s.on("PATCH /api/app/workspace/members/u1", apiError(409, "conflict", "A workspace needs at least one owner")));
     const user = userEvent.setup();
     await user.click(await within(await findRow("Ada Lovelace")).findByRole("button", { name: "Save" }));
-    expect((await within(rowOf("Ada Lovelace")).findByRole("alert")).textContent).toBe("A team needs at least one owner");
+    expect((await within(rowOf("Ada Lovelace")).findByRole("alert")).textContent).toBe("A workspace needs at least one owner");
     expect(within(rowOf("Grace Hopper")).queryByRole("alert")).toBeNull(); // only the row that was refused
   });
 
   test("the seats are shown, the invite form is there, and pending invites can be revoked", async () => {
-    const { server } = renderApp("/team", (s) => {
-      s.on("GET /api/app/team", team({ seats: { members: 2, pending: 1, used: 3, max: 5, full: false }, pendingInvites: [invite()] }));
+    const { server } = renderApp("/workspace", (s) => {
+      s.on("GET /api/app/workspace", workspace({ seats: { members: 2, pending: 1, used: 3, max: 5, full: false }, pendingInvites: [invite()] }));
       s.on("DELETE /api/app/invites/i1", { ok: true });
     });
     await screen.findByText("3 of 5 seats used (2 members, 1 pending)");
@@ -65,15 +65,15 @@ describe("the team page, for an owner", () => {
   });
 
   test("a full workspace says so and the invite form is switched off", async () => {
-    renderApp("/team", (s) => s.on("GET /api/app/team", team({ seats: { members: 5, pending: 0, used: 5, max: 5, full: true } })));
+    renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ seats: { members: 5, pending: 0, used: 5, max: 5, full: true } })));
     await screen.findByText("Your workspace is full. Revoke a pending invite or remove a member to free a seat.");
     expect((screen.getByRole("button", { name: "Create invite link" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByPlaceholderText("Their email") as HTMLInputElement).disabled).toBe(true);
   });
 
   test("creating an invite shows the link once, in a box to copy from", async () => {
-    const { server } = renderApp("/team", (s) =>
-      s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_team", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" }),
+    const { server } = renderApp("/workspace", (s) =>
+      s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_workspace", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" }),
     );
     const user = userEvent.setup();
     await user.type(await screen.findByPlaceholderText("Their email"), "new@example.test");
@@ -81,16 +81,16 @@ describe("the team page, for an owner", () => {
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
     await screen.findByText("Invite created for new@example.test. Send them this link. It is shown only once, works for one person and expires on 2026-10-23:");
     expect(screen.getByText("https://wh.example.test/invite#SECRET")).toBeTruthy();
-    expect(server.sent("POST /api/app/invites")[0].body).toEqual({ kind: "join_team", email: "new@example.test", role: "member", tags: "design", team: "" });
+    expect(server.sent("POST /api/app/invites")[0].body).toEqual({ kind: "join_workspace", email: "new@example.test", role: "member", tags: "design", workspace: "" });
   });
 
   test("the invite form offers only the projects you administer, and sends the ones ticked with a project role", async () => {
-    const { server } = renderApp("/team", (s) => {
+    const { server } = renderApp("/workspace", (s) => {
       s.projects = [
         { id: "p1", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "admin" },
         { id: "p2", key: "BB", name: "Beta", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "editor" },
       ];
-      s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_team", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" });
+      s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_workspace", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" });
     });
     const user = userEvent.setup();
     await user.type(await screen.findByPlaceholderText("Their email"), "new@example.test");
@@ -103,12 +103,12 @@ describe("the team page, for an owner", () => {
   });
 
   test("a pending invite says which projects it adds the person to", async () => {
-    renderApp("/team", (s) => s.on("GET /api/app/team", team({ pendingInvites: [invite({ projects: [{ key: "AA", name: "Alpha", role: "viewer" }] })] })));
+    renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ pendingInvites: [invite({ projects: [{ key: "AA", name: "Alpha", role: "viewer" }] })] })));
     expect(await screen.findByText(/joins AA as viewer/)).toBeTruthy();
   });
 
   test("an invite problem (already invited, not allowed) is shown in the server's words", async () => {
-    renderApp("/team", (s) => s.on("POST /api/app/invites", apiError(409, "conflict", "That email already has a pending invite. Revoke it first to send a new one.")));
+    renderApp("/workspace", (s) => s.on("POST /api/app/invites", apiError(409, "conflict", "That email already has a pending invite. Revoke it first to send a new one.")));
     const user = userEvent.setup();
     await user.type(await screen.findByPlaceholderText("Their email"), "dup@example.test");
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
@@ -116,11 +116,11 @@ describe("the team page, for an owner", () => {
   });
 });
 
-describe("the team page, for a member", () => {
-  const asMember = (s: { on: (r: string, a: unknown) => unknown }) => s.on("GET /api/app/team", team({ role: "member", pendingInvites: [] }));
+describe("the workspace page, for a member", () => {
+  const asMember = (s: { on: (r: string, a: unknown) => unknown }) => s.on("GET /api/app/workspace", workspace({ role: "member", pendingInvites: [] }));
 
   test("shows the roster read-only, with chips instead of fields, and no invite section", async () => {
-    renderApp("/team", asMember);
+    renderApp("/workspace", asMember);
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
@@ -130,7 +130,7 @@ describe("the team page, for a member", () => {
   });
 
   test("but can still change their own password", async () => {
-    renderApp("/team", asMember);
+    renderApp("/workspace", asMember);
     expect(await screen.findByRole("heading", { name: "Your password" })).toBeTruthy();
   });
 });
@@ -144,52 +144,52 @@ describe("changing your password", () => {
   };
 
   test("sends both passwords and confirms", async () => {
-    const { server } = renderApp("/team", (s) => s.on("POST /api/app/me/password", { ok: true }));
+    const { server } = renderApp("/workspace", (s) => s.on("POST /api/app/me/password", { ok: true }));
     await fill("old password 1", "a brand new passphrase");
     expect((await screen.findByRole("status")).textContent).toBe("Password updated");
     expect(server.sent("POST /api/app/me/password")[0].body).toEqual({ current: "old password 1", next: "a brand new passphrase" });
   });
 
   test("a wrong current password is shown as the server says it", async () => {
-    renderApp("/team", (s) => s.on("POST /api/app/me/password", apiError(400, "invalid", "Current password is wrong", { fields: { current: "Current password is wrong" } })));
+    renderApp("/workspace", (s) => s.on("POST /api/app/me/password", apiError(400, "invalid", "Current password is wrong", { fields: { current: "Current password is wrong" } })));
     await fill("not mine", "a brand new passphrase");
     expect((await screen.findByRole("alert")).textContent).toBe("Current password is wrong");
   });
 
   test("the new password must be at least twelve characters, even before it is sent", async () => {
-    renderApp("/team");
+    renderApp("/workspace");
     expect(((await screen.findByLabelText("New password")) as HTMLInputElement).minLength).toBe(12);
     expect((screen.getByLabelText("Current password") as HTMLInputElement).autocomplete).toBe("current-password");
   });
 });
 
 describe("loading and failing", () => {
-  test("a busy skeleton while the team loads", async () => {
+  test("a busy skeleton while the workspace loads", async () => {
     let release!: () => void;
-    renderApp("/team", (s) => (s.hold = new Promise<void>((r) => (release = r))));
+    renderApp("/workspace", (s) => (s.hold = new Promise<void>((r) => (release = r))));
     // (the first screen's own data is held too, so the shell's skeleton shows first)
     expect(await screen.findByRole("status")).toBeTruthy();
     release();
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
   });
 
-  test("a message with Try again if the team cannot be read, and Try again reads it again", async () => {
+  test("a message with Try again if the workspace cannot be read, and Try again reads it again", async () => {
     let healthy = false;
-    const { server } = renderApp("/team", (s) =>
-      s.on("GET /api/app/team", () => (healthy ? team() : apiError(404 + 96, "internal", "Internal error"))),
+    const { server } = renderApp("/workspace", (s) =>
+      s.on("GET /api/app/workspace", () => (healthy ? workspace() : apiError(404 + 96, "internal", "Internal error"))),
     );
     const alert = await screen.findByRole("alert", {}, { timeout: 8000 });
     expect(alert.textContent).toContain("Internal error");
     healthy = true;
     await userEvent.setup().click(within(alert).getByRole("button", { name: "Try again" }));
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
-    expect(server.sent("GET /api/app/team").length).toBeGreaterThan(1);
+    expect(server.sent("GET /api/app/workspace").length).toBeGreaterThan(1);
   });
 });
 
-describe("the team page and project access (ADR-23)", () => {
+describe("the workspace page and project access (ADR-23)", () => {
   test("an admin edits members and invites, but cannot touch an owner or hand out the owner role", async () => {
-    renderApp("/team", (s) => s.on("GET /api/app/team", team({ role: "admin" })));
+    renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ role: "admin" })));
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     const ada = await findRow("Ada Lovelace"); // an owner: read only for an admin
     expect(within(ada).queryByRole("button", { name: "Save" })).toBeNull();
@@ -205,24 +205,24 @@ describe("the team page and project access (ADR-23)", () => {
   });
 
   test("an owner is offered all five roles", async () => {
-    renderApp("/team");
+    renderApp("/workspace");
     const user = userEvent.setup();
     await user.click(within(await findRow("Grace Hopper")).getByRole("combobox"));
     expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["owner", "admin", "member", "viewer", "guest"]);
   });
 
   test("Save sends the chosen role, whatever it is", async () => {
-    const { server } = renderApp("/team", (s) => s.on("PATCH /api/app/team/members/u2", { member: team().members[1] }));
+    const { server } = renderApp("/workspace", (s) => s.on("PATCH /api/app/workspace/members/u2", { member: workspace().members[1] }));
     const user = userEvent.setup();
     await user.click(within(await findRow("Grace Hopper")).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "viewer" }));
     await user.click(within(rowOf("Grace Hopper")).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(server.sent("PATCH /api/app/team/members/u2")).toHaveLength(1));
-    expect(server.sent("PATCH /api/app/team/members/u2")[0].body).toMatchObject({ role: "viewer" });
+    await waitFor(() => expect(server.sent("PATCH /api/app/workspace/members/u2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/workspace/members/u2")[0].body).toMatchObject({ role: "viewer" });
   });
 
   test("a plain member sees the list read only, with no invite form, project list or access log, and asks for neither", async () => {
-    const { server } = renderApp("/team", (s) => s.on("GET /api/app/team", team({ role: "member", pendingInvites: [] })));
+    const { server } = renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ role: "member", pendingInvites: [] })));
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     expect(screen.queryByRole("button", { name: "Create invite link" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Projects" })).toBeNull();
@@ -232,7 +232,7 @@ describe("the team page and project access (ADR-23)", () => {
   });
 
   test("owners see every project by name and admins, and can join one as admin", async () => {
-    const { server } = renderApp("/team", (s) => {
+    const { server } = renderApp("/workspace", (s) => {
       s.on("GET /api/app/access/projects", {
         projects: [
           { id: "p1", key: "AA", name: "Analytical Engine", admins: ["Ada Lovelace"], memberCount: 3, isMember: true },
@@ -251,7 +251,7 @@ describe("the team page and project access (ADR-23)", () => {
   });
 
   test("the access log lists who changed access, newest first", async () => {
-    renderApp("/team", (s) =>
+    renderApp("/workspace", (s) =>
       s.on("GET /api/app/access/audit", {
         events: [
           { seq: 2, actorName: "Ada Lovelace", action: "project.admin_joined", targetType: "user", targetId: "u1", projectKey: "BB", before: null, after: { role: "admin" }, createdAt: "2026-10-18T10:00:00.000Z" },

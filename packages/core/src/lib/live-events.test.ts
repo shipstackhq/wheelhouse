@@ -17,30 +17,30 @@ import type { Actor } from "./access";
 import { bus, type StreamEvent } from "./event-bus";
 import * as svc from "./service";
 import { runTool } from "./tools";
-import { projectScope, teamScope } from "./stream-scope";
+import { projectScope, workspaceScope } from "./stream-scope";
 
 let human: Actor;
 let agent: Actor;
 let projectId: string;
-let teamId: string;
-let otherTeamId: string;
+let workspaceId: string;
+let otherWorkspaceId: string;
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Live team" }).returning();
-  const [other] = await db.insert(schema.teams).values({ name: "Someone else" }).returning();
-  teamId = team.id;
-  otherTeamId = other.id;
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Live workspace" }).returning();
+  const [other] = await db.insert(schema.workspaces).values({ name: "Someone else" }).returning();
+  workspaceId = workspace.id;
+  otherWorkspaceId = other.id;
   const [user] = await db.insert(schema.users).values({ email: `l-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Lia", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  const [k] = await db.insert(schema.apiKeys).values({ teamId: team.id, name: "laptop", prefix: "wh_", keyHash: "live-laptop" }).returning();
-  agent = { kind: "agent", id: k.id, name: "laptop", teamId: team.id };
-  human = { kind: "human", id: user.id, name: "Lia", teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  const [k] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "laptop", prefix: "wh_", keyHash: "live-laptop" }).returning();
+  agent = { kind: "agent", id: k.id, name: "laptop", workspaceId: workspace.id };
+  human = { kind: "human", id: user.id, name: "Lia", workspaceId: workspace.id };
   projectId = (await svc.createProject(human, { name: "Live test", key: "LV" })).id;
 });
 
 /** Everything the bus carries for the project while `fn` runs. */
-async function heard(fn: () => Promise<unknown>, scope: { project: string } | { team: string } = { project: projectId }) {
+async function heard(fn: () => Promise<unknown>, scope: { project: string } | { workspace: string } = { project: projectId }) {
   const got: StreamEvent[] = [];
   const off = bus.subscribe(scope, (e) => got.push(e));
   try {
@@ -52,18 +52,18 @@ async function heard(fn: () => Promise<unknown>, scope: { project: string } | { 
 }
 
 describe("who may watch what", () => {
-  test("a project stream resolves for the project's own team and is a plain not-found for any other team", async () => {
+  test("a project stream resolves for the project's own workspace and is a plain not-found for any other workspace", async () => {
     const db = await getDb();
     const [outsider] = await db.insert(schema.users).values({ email: `o-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Out", passwordHash: "x" }).returning();
-    const stranger: Actor = { kind: "human", id: outsider.id, name: "Out", teamId: otherTeamId };
+    const stranger: Actor = { kind: "human", id: outsider.id, name: "Out", workspaceId: otherWorkspaceId };
     const own = await projectScope("LV")(human);
     assert.deepEqual(own.scope, { project: projectId });
-    await assert.rejects(projectScope("LV")(stranger), (e: unknown) => e instanceof svc.ServiceError, "another team cannot even tell the project exists");
+    await assert.rejects(projectScope("LV")(stranger), (e: unknown) => e instanceof svc.ServiceError, "another workspace cannot even tell the project exists");
   });
 
-  test("the team stream is always the caller's own team, never one named by the request", async () => {
-    const { scope } = await teamScope()(human);
-    assert.deepEqual(scope, { team: teamId });
+  test("the workspace stream is always the caller's own workspace, never one named by the request", async () => {
+    const { scope } = await workspaceScope()(human);
+    assert.deepEqual(scope, { workspace: workspaceId });
   });
 });
 
@@ -117,16 +117,16 @@ describe("live events from the service layer", () => {
     assert.equal((await db.select().from(schema.events).where(eq(schema.events.projectId, projectId))).length, before);
   });
 
-  test("a watcher of the team hears the project, and a watcher of another team hears nothing", async () => {
+  test("a watcher of the workspace hears the project, and a watcher of another workspace hears nothing", async () => {
     const mine: StreamEvent[] = [];
     const theirs: StreamEvent[] = [];
-    const a = bus.subscribe({ team: teamId }, (e) => mine.push(e));
-    const b = bus.subscribe({ team: otherTeamId }, (e) => theirs.push(e));
-    await svc.createTicket(human, "LV", { title: "Private to the team" });
+    const a = bus.subscribe({ workspace: workspaceId }, (e) => mine.push(e));
+    const b = bus.subscribe({ workspace: otherWorkspaceId }, (e) => theirs.push(e));
+    await svc.createTicket(human, "LV", { title: "Private to the workspace" });
     a();
     b();
     assert.ok(mine.length > 0);
-    assert.deepEqual(theirs, [], "another team's stream never sees it");
+    assert.deepEqual(theirs, [], "another workspace's stream never sees it");
   });
 
   test("an agent acking its queue sends a transient signal, so the Bots menu count can update", async () => {

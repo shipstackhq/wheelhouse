@@ -56,9 +56,9 @@ before(async () => {
 
   conn = await openConn(path.join(work, "db"), { migrate: true, create: true });
   const q = conn.query;
-  const [team] = await q(`insert into teams (name) values ('t') returning id`);
-  const [p1] = await q(`insert into projects (team_id, key, name) values ($1, 'WH', 'W') returning id`, [team.id]);
-  const [p2] = await q(`insert into projects (team_id, key, name) values ($1, 'OT', 'O') returning id`, [team.id]);
+  const [workspace] = await q(`insert into workspaces (name) values ('t') returning id`);
+  const [p1] = await q(`insert into projects (workspace_id, key, name) values ($1, 'WH', 'W') returning id`, [workspace.id]);
+  const [p2] = await q(`insert into projects (workspace_id, key, name) values ($1, 'OT', 'O') returning id`, [workspace.id]);
   wh = String(p1.id);
   other = String(p2.id);
   const node = async (project: unknown, name: string, anchors: string[], hashes: Record<string, string> = {}, extra: { drift?: string[]; reason?: string } = {}) =>

@@ -81,9 +81,9 @@ export function InvitePage() {
     <form action={action} className="space-y-4">
       <input type="hidden" name="token" value={token} />
       <p className="text-sm text-muted">
-        {invite.kind === "new_team"
-          ? `Create your account and your workspace${invite.teamName ? `, ${invite.teamName}` : ""}.`
-          : `Create your account to join ${invite.teamName ?? "the workspace"}.`}
+        {invite.kind === "new_workspace"
+          ? `Create your account and your workspace${invite.workspaceName ? `, ${invite.workspaceName}` : ""}.`
+          : `Create your account to join ${invite.workspaceName ?? "the workspace"}.`}
       </p>
       <div>
         <label className="label" htmlFor="email">Email</label>
@@ -114,7 +114,7 @@ function JoinExisting({ invite, token }: { invite: InvitePeekExisting; token: st
   const [state, action] = useActionState<FormState, FormData>(async () => {
     try {
       await api.invites.acceptExisting(token);
-      // Everything read so far belongs to the workspace they were in: drop it all, and the person's own record too (the team changed).
+      // Everything read so far belongs to the workspace they were in: drop it all, and the person's own record too (the workspace changed).
       queryClient.clear();
       await navigate("/", { replace: true });
       return undefined;
@@ -125,12 +125,12 @@ function JoinExisting({ invite, token }: { invite: InvitePeekExisting; token: st
   return (
     <form action={action} className="space-y-4">
       <p className="text-sm">
-        You are signed in as <span className="font-medium">{invite.email}</span>. Join <span className="font-medium">{invite.teamName}</span> as {invite.role}
+        You are signed in as <span className="font-medium">{invite.email}</span>. Join <span className="font-medium">{invite.workspaceName}</span> as {invite.role}
         {invite.projects.length > 0 && <>, in {invite.projects.map((p) => `${p.name} (${p.role})`).join(", ")}</>}?
       </p>
       <p className="text-sm text-muted">You keep your account and your other workspaces; you can switch between them from the account menu.</p>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
-      <SubmitButton className="btn btn-primary w-full justify-center">Join {invite.teamName}</SubmitButton>
+      <SubmitButton className="btn btn-primary w-full justify-center">Join {invite.workspaceName}</SubmitButton>
     </form>
   );
 }

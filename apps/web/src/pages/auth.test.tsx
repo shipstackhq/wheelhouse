@@ -102,10 +102,10 @@ describe("sign in", () => {
     expect(at()).toBe("/login");
   });
 
-  test("too many tries and a suspended team are told in the server's own words", async () => {
+  test("too many tries and a suspended workspace are told in the server's own words", async () => {
     for (const [reply, text] of [
       [apiError(429, "rate_limited", "Too many attempts. Try again in 15 minutes.", undefined, { "retry-after": "900" }), "Too many attempts. Try again in 15 minutes."],
-      [apiError(403, "team_suspended", "This team has been suspended. Contact the administrator."), "This team has been suspended. Contact the administrator."],
+      [apiError(403, "team_suspended", "This workspace has been suspended. Contact the administrator."), "This workspace has been suspended. Contact the administrator."],
     ] as const) {
       const { unmount } = renderApp("/login", (s) => {
         signedOut(s);
@@ -161,7 +161,7 @@ describe("sign up", () => {
     await user.type(screen.getByLabelText("Password"), "correct horse battery");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     await waitFor(() => expect(at()).toBe("/"));
-    expect(server.sent("POST /api/app/auth/signup")[0].body).toEqual({ name: "Ada Lovelace", email: "ada@example.test", password: "correct horse battery", team: "Analytical Engines" });
+    expect(server.sent("POST /api/app/auth/signup")[0].body).toEqual({ name: "Ada Lovelace", email: "ada@example.test", password: "correct horse battery", workspace: "Analytical Engines" });
   });
 
   test("a taken email is shown as the server says it", async () => {

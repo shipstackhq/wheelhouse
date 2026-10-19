@@ -7,7 +7,7 @@ import type { ChecklistState } from "./setup-checklist";
 
 /**
  * What the web app's board and ticket dialog read and write (WH-96), as functions of the signed-in person. The API's controllers
- * call these and nothing else. Everything is scoped by the actor's team through the service layer, so another team's project or
+ * call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another workspace's project or
  * ticket is simply "not found". Responses carry only what the screens use, never raw rows.
  */
 
@@ -64,7 +64,7 @@ export type BoardView = {
   checklist: ChecklistState;
 };
 
-/** The project page: its columns, every ticket, the map nodes a ticket can link to, the team's members and the setup checklist. */
+/** The project page: its columns, every ticket, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
 export async function boardView(actor: Actor, projectKey: string): Promise<BoardView> {
   const [board, checklist] = await Promise.all([svc.getBoard(actor, projectKey), svc.checklistForProject(actor, projectKey)]);
   const db = await getDb();
@@ -77,7 +77,7 @@ export async function boardView(actor: Actor, projectKey: string): Promise<Board
       .select({ id: schema.users.id, name: schema.users.name })
       .from(schema.memberships)
       .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-      .where(eq(schema.memberships.teamId, actor.teamId)),
+      .where(eq(schema.memberships.workspaceId, actor.workspaceId)),
   ]);
   return {
     project: { id: board.project.id, key: board.project.key, name: board.project.name, description: board.project.description },

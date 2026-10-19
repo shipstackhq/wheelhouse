@@ -1,5 +1,5 @@
 import { useActionState, useState } from "react";
-import type { Role, TeamMember } from "@wheelhouse/api-client";
+import type { Role, WorkspaceMember } from "@wheelhouse/api-client";
 import { InviteForm } from "../components/invite-form";
 import { AccessLog, ProjectsAccess } from "../components/workspace-access";
 import { PendingInvites } from "../components/pending-invites";
@@ -7,14 +7,14 @@ import { Loaded } from "../components/query-state";
 import { SubmitButton } from "../components/submit-button";
 import { Select } from "../components/ui";
 import { failure, field, type FormState } from "../lib/form-state";
-import { useTeam } from "../lib/queries";
+import { useWorkspace } from "../lib/queries";
 import { asRole, assignableRoles, canManagePeople } from "../lib/roles";
 import { useMe, useProjects } from "../lib/session";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 
-export function TeamPage() {
-  const query = useTeam();
+export function WorkspacePage() {
+  const query = useWorkspace();
   const adminOf = (useProjects().data ?? []).filter((p) => p.role === "admin");
   const youId = useMe().data?.user.id;
   return (
@@ -25,7 +25,7 @@ export function TeamPage() {
           <div className="h-full overflow-y-auto">
             <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
               <div>
-                <h1 className="text-xl font-semibold">{t.team.name}</h1>
+                <h1 className="text-xl font-semibold">{t.workspace.name}</h1>
                 <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around projects; they reach a project only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
               </div>
 
@@ -49,7 +49,7 @@ export function TeamPage() {
                   {t.seats.full && (
                     <p className="mt-2 text-sm text-warn">Your workspace is full. Revoke a pending invite or remove a member to free a seat.</p>
                   )}
-                  <InviteForm kind="join_team" disabled={t.seats.full} roles={assignableRoles(t.role)} projects={adminOf} />
+                  <InviteForm kind="join_workspace" disabled={t.seats.full} roles={assignableRoles(t.role)} projects={adminOf} />
                   <h3 className="mt-6 text-sm font-medium">Pending invites</h3>
                   <PendingInvites invites={t.pendingInvites} />
                 </div>
@@ -71,7 +71,7 @@ export function TeamPage() {
 }
 
 /** One member: owners and admins edit role and tags or remove them (an admin leaves owners alone); everyone else just reads. */
-function MemberRow({ member: m, mine, isYou }: { member: TeamMember; mine: Role; isYou: boolean }) {
+function MemberRow({ member: m, mine, isYou }: { member: WorkspaceMember; mine: Role; isYou: boolean }) {
   const canEdit = canManagePeople(mine) && (mine === "owner" || m.role !== "owner");
   const { api, queryClient } = useServices();
   const [error, setError] = useState<string>();
@@ -86,7 +86,7 @@ function MemberRow({ member: m, mine, isYou }: { member: TeamMember; mine: Role;
   };
   return (
     <form
-      action={(fd) => attempt(() => api.team.updateMember(m.userId, { role: asRole(field(fd, "role")), tags: field(fd, "tags") }))}
+      action={(fd) => attempt(() => api.workspace.updateMember(m.userId, { role: asRole(field(fd, "role")), tags: field(fd, "tags") }))}
       className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm"
     >
       <div className="min-w-40 flex-1">
@@ -99,7 +99,7 @@ function MemberRow({ member: m, mine, isYou }: { member: TeamMember; mine: Role;
           <input name="tags" defaultValue={m.tags.join(", ")} placeholder="tags" aria-label={`Tags for ${m.name}`} className="input w-48 py-1.5" />
           <SubmitButton className="btn">Save</SubmitButton>
           {!isYou && (
-            <SubmitButton formAction={() => attempt(() => api.team.removeMember(m.userId))} className="btn btn-danger">Remove</SubmitButton>
+            <SubmitButton formAction={() => attempt(() => api.workspace.removeMember(m.userId))} className="btn btn-danger">Remove</SubmitButton>
           )}
           {error && <p className="basis-full text-sm text-danger" role="alert">{error}</p>}
         </>

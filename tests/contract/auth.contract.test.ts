@@ -15,7 +15,7 @@ describe("session cookie (wh_session)", () => {
     assert.equal((await mcp(asCookie(fx.a.sessionToken), "tools/list")).status, 200);
   });
 
-  test("a team member who is not an owner is signed in too", async () => {
+  test("a workspace member who is not an owner is signed in too", async () => {
     assert.equal((await v1(asCookie(fx.a.memberSessionToken), "list_projects")).status, 200);
   });
 
@@ -27,7 +27,7 @@ describe("session cookie (wh_session)", () => {
     }
   });
 
-  test("a member of a suspended team counts as signed out", async () => {
+  test("a member of a suspended workspace counts as signed out", async () => {
     assert.equal((await v1(asCookie(fx.suspended.sessionToken), "list_projects")).status, 401);
   });
 });
@@ -43,7 +43,7 @@ describe("API keys (Authorization: Bearer)", () => {
     assert.equal(r.status, 401);
   });
 
-  test("a key wins over a cookie: the request acts as the key's team", async () => {
+  test("a key wins over a cookie: the request acts as the key's workspace", async () => {
     const r = await v1({ key: fx.b.apiKey, cookie: fx.a.sessionToken }, "list_projects");
     assert.equal(r.status, 200);
     const keys = r.json.data.map((p: { key: string }) => p.key);

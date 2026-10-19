@@ -25,10 +25,10 @@ const edge = async (from: string, to: string) => {
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Map team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Map workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: "map@example.test", name: "Mia", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  actor = { kind: "human", id: user.id, name: user.name, teamId: team.id };
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
   await svc.createProject(actor, { name: "Wheelhouse", key: P });
   const n = (name: string, layer: schema.Layer, extra: Partial<svc.NodeInput> = {}) => svc.upsertNode(actor, P, { name, layer, forcePublish: true, ...extra });
   await n("web", "system", { kind: "service", summary: "Next.js app: UI, server actions, MCP + REST, installable as a PWA" });

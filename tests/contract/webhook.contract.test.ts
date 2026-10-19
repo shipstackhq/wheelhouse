@@ -141,20 +141,20 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
   });
 });
 
-describe("POST /api/webhooks/github: two teams, one repository id", () => {
-  test("a delivery through team A's installation never touches team B's tickets", async () => {
+describe("POST /api/webhooks/github: two workspaces, one repository id", () => {
+  test("a delivery through workspace A's installation never touches workspace B's tickets", async () => {
     const bRef = fx.b.ticketRef;
     const before = await ticket(B, bRef);
-    // Team B also holds a forged repository row that points at team A's installation; it must never be reached.
+    // Workspace B also holds a forged repository row that points at workspace A's installation; it must never be reached.
     const r = await deliver("pull_request", pr({ action: "opened", number: 21, title: `${bRef} sneaking in`, installation: gh.installationA }));
-    assert.equal(r.json.matched, 1, "only team A's own repository matched");
+    assert.equal(r.json.matched, 1, "only workspace A's own repository matched");
     const after = await ticket(B, bRef);
     assert.equal(after.ticket.column, before.ticket.column);
     assert.equal(after.pullRequests.length, 0);
     assert.equal(after.ticket.version, before.ticket.version);
   });
 
-  test("a delivery through team B's installation never touches team A's tickets", async () => {
+  test("a delivery through workspace B's installation never touches workspace A's tickets", async () => {
     const aRef = fx.a.ticketRef;
     const before = await ticket(A, aRef);
     await deliver("pull_request", pr({ action: "opened", number: 22, title: `${aRef} sneaking in`, installation: gh.installationB }));

@@ -54,7 +54,7 @@ Goal: a teammate should understand this codebase at a high level from the map al
    - implements: the concept it stores (create the concept with upsert_node layer "concept" if missing) and the system database node it lives in
    - described_sha: output of \`git rev-parse HEAD\`
 4. Re-check the \`unresolved\` lists returned; every FK target should end up mapped.
-5. Add glossary terms (upsert_term) for domain words that appear as table or column names, and an ADR for any notable modelling choice (e.g. soft deletes, multi-tenancy by team_id, JSONB over tables).
+5. Add glossary terms (upsert_term) for domain words that appear as table or column names, and an ADR for any notable modelling choice (e.g. soft deletes, multi-tenancy by workspace_id, JSONB over tables).
 Report the number of tables and relationships mapped and anything you couldn't resolve.`,
   },
 

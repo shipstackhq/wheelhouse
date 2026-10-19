@@ -46,7 +46,7 @@ check "the webhook refuses an unsigned delivery (503 with no GitHub App)" bash -
 
 echo "==> sign up, then a live stream through Caddy"
 SIGNUP="$(curl -fsS -c "$WORK/jar" -H "Origin: $BASE" -H "X-CSRF-Token: anonymous" -H 'content-type: application/json' \
-  -d '{"name":"Smoke","email":"smoke@example.test","password":"a-long-enough-password","team":"Smoke team"}' "$BASE/api/app/auth/signup")"
+  -d '{"name":"Smoke","email":"smoke@example.test","password":"a-long-enough-password","workspace":"Smoke workspace"}' "$BASE/api/app/auth/signup")"
 CSRF="$(sed -E 's/.*"csrfToken":"([^"]+)".*/\1/' <<<"$SIGNUP")"
 post() { curl -fsS -b "$WORK/jar" -H "Origin: $BASE" -H "X-CSRF-Token: $CSRF" -H 'content-type: application/json' -d "$2" "$BASE$1"; }
 post /api/app/projects '{"name":"Smoke","key":"SMK"}' >/dev/null

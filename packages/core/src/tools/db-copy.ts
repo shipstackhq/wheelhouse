@@ -266,8 +266,8 @@ export async function integrity(q: Q): Promise<Finding[]> {
   const [sess] = await q(`select count(*)::int as n, count(*) filter (where id !~ '^[0-9a-f]{64}$')::int as bad from sessions`);
   if (Number(sess.bad) > 0) err("sessions", `${sess.bad} session id(s) are not a sha256 hex string`);
   else ok("sessions", `${sess.n} session(s), every id a sha256`);
-  const [people] = await q(`select (select count(*) from users)::int as u, (select count(*) from teams)::int as t, (select count(*) from memberships)::int as m`);
-  ok("people", `${people.u} user(s), ${people.t} team(s), ${people.m} membership(s)`);
+  const [people] = await q(`select (select count(*) from users)::int as u, (select count(*) from workspaces)::int as t, (select count(*) from memberships)::int as m`);
+  ok("people", `${people.u} user(s), ${people.t} workspace(s), ${people.m} membership(s)`);
   return out;
 }
 

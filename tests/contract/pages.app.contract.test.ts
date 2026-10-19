@@ -4,25 +4,25 @@ import { fx, freshIp, v1 } from "./lib/http";
 import { anon, app, login, newEmail, sessionFrom, signIn, type Sess } from "./lib/app";
 
 /**
- * The endpoints behind the dashboard, team, agents, admin, new-project, sign-in and invite pages (WH-95): each one's happy path,
- * signed out, another team's data, a forged request, and the rules the old server actions had (owner-only, limits, one-time secrets).
- * Anything that changes data does it in an account made for the test, so the seeded teams stay as they were.
+ * The endpoints behind the dashboard, workspace, agents, admin, new-project, sign-in and invite pages (WH-95): each one's happy path,
+ * signed out, another workspace's data, a forged request, and the rules the old server actions had (owner-only, limits, one-time secrets).
+ * Anything that changes data does it in an account made for the test, so the seeded workspaces stay as they were.
  */
 const PW = "a-long-enough-password";
 
-type Person = { email: string; sess: Sess; me: { user: { id: string }; team: { id: string }; role: string } };
+type Person = { email: string; sess: Sess; me: { user: { id: string }; workspace: { id: string }; role: string } };
 
 async function signUp(name = "Owner"): Promise<Person> {
   const email = newEmail();
-  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: PW, team: `${name} team` } });
+  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: PW, workspace: `${name} workspace` } });
   assert.equal(r.status, 201, r.text);
   return { email, sess: sessionFrom(r), me: r.json };
 }
 
-/** An owner invites someone by email and they accept, so the test has a real second member of a real team. */
+/** An owner invites someone by email and they accept, so the test has a real second member of a real workspace. */
 async function addMember(owner: Person, over: { role?: string; tags?: string } = {}): Promise<Person> {
   const email = newEmail();
-  const inv = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_team", email, role: over.role ?? "member", tags: over.tags } });
+  const inv = await app("POST", "/api/app/invites", owner.sess, { body: { kind: "join_workspace", email, role: over.role ?? "member", tags: over.tags } });
   assert.equal(inv.status, 201, inv.text);
   const token = inv.json.link.split("#")[1];
   const r = await app("POST", "/api/app/invites/accept", anon(), { body: { token, name: "Member", password: PW, confirm: PW } });
@@ -33,9 +33,9 @@ async function addMember(owner: Person, over: { role?: string; tags?: string } =
 describe("every endpoint needs a signed-in person", () => {
   const sid = "00000000-0000-4000-8000-000000000000";
   const table: [string, string, unknown?][] = [
-    ["GET", "/api/app/team"],
-    ["PATCH", `/api/app/team/members/${sid}`, { role: "member" }],
-    ["DELETE", `/api/app/team/members/${sid}`],
+    ["GET", "/api/app/workspace"],
+    ["PATCH", `/api/app/workspace/members/${sid}`, { role: "member" }],
+    ["DELETE", `/api/app/workspace/members/${sid}`],
     ["POST", "/api/app/me/password", { current: PW, next: PW + "x" }],
     ["GET", "/api/app/agents"],
     ["POST", "/api/app/agents/mark-all-seen", {}],
@@ -43,12 +43,12 @@ describe("every endpoint needs a signed-in person", () => {
     ["DELETE", `/api/app/keys/${sid}`],
     ["PATCH", `/api/app/keys/${sid}`, { docsWrite: true }],
     ["GET", "/api/app/invites"],
-    ["POST", "/api/app/invites", { kind: "join_team", email: "x@example.test" }],
+    ["POST", "/api/app/invites", { kind: "join_workspace", email: "x@example.test" }],
     ["DELETE", `/api/app/invites/${sid}`],
-    ["GET", "/api/app/admin/teams"],
-    ["GET", `/api/app/admin/teams/${sid}`],
-    ["POST", `/api/app/admin/teams/${sid}/suspend`, { confirm: "x" }],
-    ["POST", `/api/app/admin/teams/${sid}/restore`, {}],
+    ["GET", "/api/app/admin/workspaces"],
+    ["GET", `/api/app/admin/workspaces/${sid}`],
+    ["POST", `/api/app/admin/workspaces/${sid}/suspend`, { confirm: "x" }],
+    ["POST", `/api/app/admin/workspaces/${sid}/restore`, {}],
     ["POST", "/api/app/projects", { name: "x" }],
     ["DELETE", `/api/app/projects/${fx.a.projectKey}/sessions/${sid}`],
     ["GET", "/api/app/dashboard/kpis"],
@@ -74,7 +74,7 @@ describe("a forged request is refused before anything happens", () => {
     for (const f of forged) {
       for (const [method, path, body] of [
         ["POST", "/api/app/keys", { name: "forged" }],
-        ["DELETE", `/api/app/team/members/${m.me.user.id}`, undefined],
+        ["DELETE", `/api/app/workspace/members/${m.me.user.id}`, undefined],
         ["POST", "/api/app/projects", { name: "Forged" }],
         ["POST", "/api/app/me/password", { current: PW, next: PW + "!" }],
       ] as const) {
@@ -83,8 +83,8 @@ describe("a forged request is refused before anything happens", () => {
         assert.equal(r.json.error.code, "csrf_failed");
       }
     }
-    const team = await app("GET", "/api/app/team", o.sess);
-    assert.equal(team.json.members.length, 2, "nobody was removed");
+    const workspace = await app("GET", "/api/app/workspace", o.sess);
+    assert.equal(workspace.json.members.length, 2, "nobody was removed");
     assert.equal((await app("GET", "/api/app/agents", o.sess)).json.keys.length, 0, "no key was made");
     assert.deepEqual((await app("GET", "/api/app/projects", o.sess)).json, { projects: [] });
     assert.equal((await login(o.email)).status, 401, "the password was not changed");
@@ -100,15 +100,15 @@ describe("a forged request is refused before anything happens", () => {
   });
 });
 
-describe("the team page", () => {
+describe("the workspace page", () => {
   test("members, roles, tags and seats; only an owner sees the pending invites", async () => {
     const o = await signUp("Ada Lovelace");
     const m = await addMember(o, { tags: "Design, UX" });
-    await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } });
-    const owner = await app("GET", "/api/app/team", o.sess);
+    await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } });
+    const owner = await app("GET", "/api/app/workspace", o.sess);
     assert.equal(owner.status, 200);
-    assert.deepEqual(Object.keys(owner.json).sort(), ["members", "pendingInvites", "role", "seats", "team"]);
-    assert.equal(owner.json.team.id, o.me.team.id);
+    assert.deepEqual(Object.keys(owner.json).sort(), ["members", "pendingInvites", "role", "seats", "workspace"]);
+    assert.equal(owner.json.workspace.id, o.me.workspace.id);
     assert.equal(owner.json.role, "owner");
     assert.deepEqual(owner.json.members.map((x: { role: string }) => x.role).sort(), ["member", "owner"]);
     assert.deepEqual(owner.json.members.find((x: { userId: string }) => x.userId === m.me.user.id).tags, ["design", "ux"]);
@@ -116,24 +116,24 @@ describe("the team page", () => {
     assert.equal(owner.json.pendingInvites.length, 1);
     assert.ok(!owner.text.includes("passwordHash") && !owner.text.includes("password_hash"));
 
-    const member = await app("GET", "/api/app/team", m.sess);
+    const member = await app("GET", "/api/app/workspace", m.sess);
     assert.equal(member.json.role, "member");
     assert.deepEqual(member.json.pendingInvites, [], "a member does not see invites");
   });
 
-  test("it never shows another team's people", async () => {
-    const r = await app("GET", "/api/app/team", await signIn(fx.a.email));
-    assert.equal(r.json.team.id, fx.a.teamId);
-    assert.ok(r.json.members.every((x: { email: string }) => x.email.startsWith("ct-a-")), "only team A");
+  test("it never shows another workspace's people", async () => {
+    const r = await app("GET", "/api/app/workspace", await signIn(fx.a.email));
+    assert.equal(r.json.workspace.id, fx.a.workspaceId);
+    assert.ok(r.json.members.every((x: { email: string }) => x.email.startsWith("ct-a-")), "only workspace A");
   });
 
   test("an owner changes a member's role and tags; tags are lower-cased; a list works too", async () => {
     const o = await signUp();
     const m = await addMember(o);
-    const a = await app("PATCH", `/api/app/team/members/${m.me.user.id}`, o.sess, { body: { role: "owner", tags: " Backend, Lead " } });
+    const a = await app("PATCH", `/api/app/workspace/members/${m.me.user.id}`, o.sess, { body: { role: "owner", tags: " Backend, Lead " } });
     assert.equal(a.status, 200);
     assert.deepEqual(a.json.member, { userId: m.me.user.id, name: "Member", email: m.email, role: "owner", tags: ["backend", "lead"] });
-    const b = await app("PATCH", `/api/app/team/members/${m.me.user.id}`, o.sess, { body: { role: "member", tags: ["QA"] } });
+    const b = await app("PATCH", `/api/app/workspace/members/${m.me.user.id}`, o.sess, { body: { role: "member", tags: ["QA"] } });
     assert.deepEqual(b.json.member.tags, ["qa"]);
     assert.equal((await app("GET", "/api/app/me", m.sess)).json.role, "member");
   });
@@ -141,44 +141,44 @@ describe("the team page", () => {
   test("a member may not change or remove anyone: 403, nothing changes", async () => {
     const o = await signUp();
     const m = await addMember(o);
-    const p = await app("PATCH", `/api/app/team/members/${o.me.user.id}`, m.sess, { body: { role: "member", tags: [] } });
+    const p = await app("PATCH", `/api/app/workspace/members/${o.me.user.id}`, m.sess, { body: { role: "member", tags: [] } });
     assert.equal(p.status, 403);
     assert.equal(p.json.error.code, "forbidden");
-    assert.equal((await app("DELETE", `/api/app/team/members/${o.me.user.id}`, m.sess)).status, 403);
-    assert.equal((await app("GET", "/api/app/team", o.sess)).json.members.length, 2);
+    assert.equal((await app("DELETE", `/api/app/workspace/members/${o.me.user.id}`, m.sess)).status, 403);
+    assert.equal((await app("GET", "/api/app/workspace", o.sess)).json.members.length, 2);
   });
 
-  test("a person from another team is not found: 404, and they are untouched", async () => {
+  test("a person from another workspace is not found: 404, and they are untouched", async () => {
     const o = await signUp();
     const other = await signUp("Other");
-    const patch = await app("PATCH", `/api/app/team/members/${other.me.user.id}`, o.sess, { body: { role: "member", tags: ["pwned"] } });
+    const patch = await app("PATCH", `/api/app/workspace/members/${other.me.user.id}`, o.sess, { body: { role: "member", tags: ["pwned"] } });
     assert.equal(patch.status, 404);
     assert.equal(patch.json.error.code, "not_found");
-    assert.equal((await app("DELETE", `/api/app/team/members/${other.me.user.id}`, o.sess)).status, 404);
-    const theirs = await app("GET", "/api/app/team", other.sess);
+    assert.equal((await app("DELETE", `/api/app/workspace/members/${other.me.user.id}`, o.sess)).status, 404);
+    const theirs = await app("GET", "/api/app/workspace", other.sess);
     assert.deepEqual(theirs.json.members.map((x: { tags: string[] }) => x.tags), [[]]);
     assert.equal(theirs.json.members.length, 1);
   });
 
   test("the last owner cannot be demoted (409) or remove themselves (400); a bad role is a field error", async () => {
     const o = await signUp();
-    const demote = await app("PATCH", `/api/app/team/members/${o.me.user.id}`, o.sess, { body: { role: "member", tags: [] } });
+    const demote = await app("PATCH", `/api/app/workspace/members/${o.me.user.id}`, o.sess, { body: { role: "member", tags: [] } });
     assert.equal(demote.status, 409);
     assert.equal(demote.json.error.code, "conflict");
-    const self = await app("DELETE", `/api/app/team/members/${o.me.user.id}`, o.sess);
+    const self = await app("DELETE", `/api/app/workspace/members/${o.me.user.id}`, o.sess);
     assert.equal(self.status, 400);
-    const bad = await app("PATCH", `/api/app/team/members/${o.me.user.id}`, o.sess, { body: { role: "root", tags: [] } });
+    const bad = await app("PATCH", `/api/app/workspace/members/${o.me.user.id}`, o.sess, { body: { role: "root", tags: [] } });
     assert.equal(bad.status, 400);
     assert.deepEqual(bad.json.error.details, { fields: { role: "Choose a role" } });
   });
 
-  test("an owner removes a member, who can then no longer use the team", async () => {
+  test("an owner removes a member, who can then no longer use the workspace", async () => {
     const o = await signUp();
     const m = await addMember(o);
-    const r = await app("DELETE", `/api/app/team/members/${m.me.user.id}`, o.sess);
+    const r = await app("DELETE", `/api/app/workspace/members/${m.me.user.id}`, o.sess);
     assert.deepEqual(r.json, { ok: true });
-    assert.equal((await app("GET", "/api/app/team", o.sess)).json.members.length, 1);
-    assert.equal((await app("GET", "/api/app/team", m.sess)).status, 401, "a removed member has no team, so no session");
+    assert.equal((await app("GET", "/api/app/workspace", o.sess)).json.members.length, 1);
+    assert.equal((await app("GET", "/api/app/workspace", m.sess)).status, 401, "a removed member has no workspace, so no session");
   });
 });
 
@@ -220,12 +220,12 @@ describe("API keys and the Agents page", () => {
     assert.match(page.json.setup.mcp, /\/mcp /);
   });
 
-  test("the key works on the frozen API for its own team, and stops when it is revoked", async () => {
+  test("the key works on the frozen API for its own workspace, and stops when it is revoked", async () => {
     const p = await signUp();
     const { json } = await app("POST", "/api/app/keys", p.sess, { body: { name: "agent" } });
     const before = await v1({ key: json.secret }, "list_projects");
     assert.equal(before.status, 200);
-    assert.deepEqual(before.json.data, [], "the new team has no projects, and sees none of team A's");
+    assert.deepEqual(before.json.data, [], "the new workspace has no projects, and sees none of workspace A's");
     assert.deepEqual((await app("DELETE", `/api/app/keys/${json.key.id}`, p.sess)).json, { ok: true });
     assert.equal((await v1({ key: json.secret }, "list_projects")).status, 401);
     const listed = (await app("GET", "/api/app/agents", p.sess)).json.keys[0];
@@ -255,7 +255,7 @@ describe("API keys and the Agents page", () => {
     assert.equal(bad.json.error.code, "invalid");
   });
 
-  test("another team's key cannot be revoked, changed or reset: 404, and it keeps working", async () => {
+  test("another workspace's key cannot be revoked, changed or reset: 404, and it keeps working", async () => {
     const mine = await signUp();
     const theirs = await signUp("Theirs");
     const k = (await app("POST", "/api/app/keys", theirs.sess, { body: { name: "theirs" } })).json;
@@ -285,10 +285,10 @@ describe("API keys and the Agents page", () => {
 });
 
 describe("invites", () => {
-  test("an owner gets a one-time link; the invitee follows it, chooses a password and lands signed in, in that team", async () => {
-    const o = await signUp("Team lead");
+  test("an owner gets a one-time link; the invitee follows it, chooses a password and lands signed in, in that workspace", async () => {
+    const o = await signUp("Workspace lead");
     const email = newEmail();
-    const inv = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: email.toUpperCase(), role: "member", tags: "Backend" } });
+    const inv = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: email.toUpperCase(), role: "member", tags: "Backend" } });
     assert.equal(inv.status, 201);
     assert.match(inv.json.link, /\/invite#[A-Za-z0-9_-]{43}$/);
     assert.equal(inv.json.email, email, "lower-cased");
@@ -299,16 +299,16 @@ describe("invites", () => {
     assert.ok(!listed.text.includes(token), "the link is never shown again");
 
     const peek = await app("POST", "/api/app/invites/peek", anon(), { body: { token } });
-    assert.deepEqual(peek.json, { invite: { email, kind: "join_team", teamName: "Team lead team" } });
+    assert.deepEqual(peek.json, { invite: { email, kind: "join_workspace", workspaceName: "Workspace lead workspace" } });
 
     const accepted = await app("POST", "/api/app/invites/accept", anon(), { body: { token, name: "  New Person ", password: PW, confirm: PW } });
     assert.equal(accepted.status, 201);
-    assert.equal(accepted.json.team.id, o.me.team.id);
+    assert.equal(accepted.json.workspace.id, o.me.workspace.id);
     assert.equal(accepted.json.role, "member");
     assert.equal(accepted.json.user.name, "New Person");
     const s = sessionFrom(accepted);
     assert.equal((await app("GET", "/api/app/me", s)).json.user.email, email);
-    assert.deepEqual((await app("GET", "/api/app/team", s)).json.members.find((m: { email: string }) => m.email === email).tags, ["backend"]);
+    assert.deepEqual((await app("GET", "/api/app/workspace", s)).json.members.find((m: { email: string }) => m.email === email).tags, ["backend"]);
     assert.deepEqual((await app("GET", "/api/app/invites", o.sess)).json.invites, [], "used");
     const again = await app("POST", "/api/app/invites/accept", anon(), { body: { token, name: "Again", password: PW, confirm: PW } });
     assert.equal(again.status, 400);
@@ -318,7 +318,7 @@ describe("invites", () => {
 
   test("every bad link gets the same answer, so a link cannot be probed", async () => {
     const o = await signUp();
-    const inv = (await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } })).json;
+    const inv = (await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } })).json;
     await app("DELETE", `/api/app/invites/${inv.id}`, o.sess);
     const answers = [];
     for (const token of ["", "short", "A".repeat(43), inv.link.split("#")[1]]) {
@@ -334,7 +334,7 @@ describe("invites", () => {
 
   test("the two passwords must match, and a weak one is a field error", async () => {
     const o = await signUp();
-    const token = (await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } })).json.link.split("#")[1];
+    const token = (await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } })).json.link.split("#")[1];
     const mismatch = await app("POST", "/api/app/invites/accept", anon(), { body: { token, name: "X", password: PW, confirm: PW + "!" } });
     assert.equal(mismatch.status, 400);
     assert.equal(mismatch.json.error.message, "The two passwords do not match");
@@ -347,64 +347,64 @@ describe("invites", () => {
     assert.equal(still.status, 200, "a failed attempt does not use the invite up");
   });
 
-  test("a member cannot invite; a team owner cannot invite to a new team; there is one pending invite per email", async () => {
+  test("a member cannot invite; a workspace owner cannot invite to a new workspace; there is one pending invite per email", async () => {
     const o = await signUp();
     const m = await addMember(o);
-    const asMember = await app("POST", "/api/app/invites", m.sess, { body: { kind: "join_team", email: newEmail() } });
+    const asMember = await app("POST", "/api/app/invites", m.sess, { body: { kind: "join_workspace", email: newEmail() } });
     assert.equal(asMember.status, 403);
     assert.equal(asMember.json.error.code, "forbidden");
-    const newTeam = await app("POST", "/api/app/invites", o.sess, { body: { kind: "new_team", email: newEmail() } });
-    assert.equal(newTeam.status, 403);
+    const newWorkspace = await app("POST", "/api/app/invites", o.sess, { body: { kind: "new_workspace", email: newEmail() } });
+    assert.equal(newWorkspace.status, 403);
     const email = newEmail();
-    assert.equal((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email } })).status, 201);
-    const dup = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email } });
+    assert.equal((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email } })).status, 201);
+    const dup = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email } });
     assert.equal(dup.status, 409);
     assert.equal(dup.json.error.code, "conflict");
-    const bad = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: "not an email" } });
+    const bad = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: "not an email" } });
     assert.equal(bad.status, 400);
     assert.equal(bad.json.error.message, "Enter a valid email address");
   });
 
-  test("seats are counted with pending invites; a full team says so (409), and revoking frees a seat", async () => {
+  test("seats are counted with pending invites; a full workspace says so (409), and revoking frees a seat", async () => {
     const o = await signUp();
-    const max = (await app("GET", "/api/app/team", o.sess)).json.seats.max;
+    const max = (await app("GET", "/api/app/workspace", o.sess)).json.seats.max;
     const ids: string[] = [];
-    for (let i = 1; i < max; i++) ids.push((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } })).json.id);
-    const team = (await app("GET", "/api/app/team", o.sess)).json;
-    assert.equal(team.seats.full, true);
-    const over = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } });
+    for (let i = 1; i < max; i++) ids.push((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } })).json.id);
+    const workspace = (await app("GET", "/api/app/workspace", o.sess)).json;
+    assert.equal(workspace.seats.full, true);
+    const over = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } });
     assert.equal(over.status, 409);
     assert.match(over.json.error.message, /^Your workspace is full/);
     assert.deepEqual((await app("DELETE", `/api/app/invites/${ids[0]}`, o.sess)).json, { ok: true });
-    assert.equal((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } })).status, 201);
+    assert.equal((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } })).status, 201);
   });
 
-  test("another team's invites are invisible and cannot be revoked", async () => {
+  test("another workspace's invites are invisible and cannot be revoked", async () => {
     const mine = await signUp();
     const theirs = await signUp("Theirs");
-    const inv = (await app("POST", "/api/app/invites", theirs.sess, { body: { kind: "join_team", email: newEmail() } })).json;
+    const inv = (await app("POST", "/api/app/invites", theirs.sess, { body: { kind: "join_workspace", email: newEmail() } })).json;
     assert.deepEqual((await app("GET", "/api/app/invites", mine.sess)).json.invites, []);
     const r = await app("DELETE", `/api/app/invites/${inv.id}`, mine.sess);
     assert.equal(r.status, 404);
     assert.equal((await app("GET", "/api/app/invites", theirs.sess)).json.invites.length, 1, "still there");
   });
 
-  test("new-team invites: only an instance admin lists or makes them; the invitee gets a team of their own", async () => {
+  test("new-workspace invites: only an instance admin lists or makes them; the invitee gets a workspace of their own", async () => {
     const admin = await signIn(fx.admin.email);
     const ordinary = await signUp();
-    assert.equal((await app("GET", "/api/app/invites?kind=new_team", ordinary.sess)).status, 404, "the page does not exist for them");
+    assert.equal((await app("GET", "/api/app/invites?kind=new_workspace", ordinary.sess)).status, 404, "the page does not exist for them");
     const email = newEmail();
-    const inv = await app("POST", "/api/app/invites", admin, { body: { kind: "new_team", email, team: "Fresh Co" } });
+    const inv = await app("POST", "/api/app/invites", admin, { body: { kind: "new_workspace", email, workspace: "Fresh Co" } });
     assert.equal(inv.status, 201);
-    const listed = await app("GET", "/api/app/invites?kind=new_team", admin);
-    assert.ok(listed.json.invites.some((i: { email: string; teamName: string }) => i.email === email && i.teamName === "Fresh Co"));
+    const listed = await app("GET", "/api/app/invites?kind=new_workspace", admin);
+    assert.ok(listed.json.invites.some((i: { email: string; workspaceName: string }) => i.email === email && i.workspaceName === "Fresh Co"));
     const token = inv.json.link.split("#")[1];
-    assert.deepEqual((await app("POST", "/api/app/invites/peek", anon(), { body: { token } })).json.invite, { email, kind: "new_team", teamName: "Fresh Co" });
+    assert.deepEqual((await app("POST", "/api/app/invites/peek", anon(), { body: { token } })).json.invite, { email, kind: "new_workspace", workspaceName: "Fresh Co" });
     const accepted = await app("POST", "/api/app/invites/accept", anon(), { body: { token, name: "Founder", password: PW, confirm: PW } });
     assert.equal(accepted.json.role, "owner");
-    assert.equal(accepted.json.team.name, "Fresh Co");
-    assert.notEqual(accepted.json.team.id, fx.admin.teamId);
-    assert.deepEqual((await app("DELETE", `/api/app/invites/${(await app("POST", "/api/app/invites", admin, { body: { kind: "new_team", email: newEmail() } })).json.id}`, admin)).json, { ok: true });
+    assert.equal(accepted.json.workspace.name, "Fresh Co");
+    assert.notEqual(accepted.json.workspace.id, fx.admin.workspaceId);
+    assert.deepEqual((await app("DELETE", `/api/app/invites/${(await app("POST", "/api/app/invites", admin, { body: { kind: "new_workspace", email: newEmail() } })).json.id}`, admin)).json, { ok: true });
   });
 
   test("twenty invites an hour per person, then 429", async () => {
@@ -412,7 +412,7 @@ describe("invites", () => {
     const statuses = new Set<number>();
     let limited;
     for (let i = 0; i < 22 && !limited; i++) {
-      const r = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } });
+      const r = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } });
       statuses.add(r.status);
       if (r.status === 429) limited = r;
     }
@@ -421,7 +421,7 @@ describe("invites", () => {
     const p = await signUp();
     let hit: Awaited<ReturnType<typeof app>> | undefined;
     for (let i = 0; i < 25 && !hit; i++) {
-      const made = await app("POST", "/api/app/invites", p.sess, { body: { kind: "join_team", email: newEmail() } });
+      const made = await app("POST", "/api/app/invites", p.sess, { body: { kind: "join_workspace", email: newEmail() } });
       if (made.status === 201) await app("DELETE", `/api/app/invites/${made.json.id}`, p.sess);
       else if (made.status === 429) hit = made;
     }
@@ -441,77 +441,77 @@ describe("invites", () => {
   });
 });
 
-describe("the instance admin's teams pages", () => {
+describe("the instance admin's workspaces pages", () => {
   test("to anyone else they do not exist (404); the actions are forbidden (403)", async () => {
     const owner = await signIn(fx.a.email);
-    for (const path of ["/api/app/admin/teams", `/api/app/admin/teams/${fx.a.teamId}`]) {
+    for (const path of ["/api/app/admin/workspaces", `/api/app/admin/workspaces/${fx.a.workspaceId}`]) {
       const r = await app("GET", path, owner);
       assert.equal(r.status, 404, path);
       assert.equal(r.json.error.code, "not_found");
     }
-    const suspend = await app("POST", `/api/app/admin/teams/${fx.b.teamId}/suspend`, owner, { body: { confirm: "Contract team B" } });
+    const suspend = await app("POST", `/api/app/admin/workspaces/${fx.b.workspaceId}/suspend`, owner, { body: { confirm: "Contract workspace B" } });
     assert.ok([403, 404].includes(suspend.status), String(suspend.status));
-    const restore = await app("POST", `/api/app/admin/teams/${fx.b.teamId}/restore`, owner, { body: {} });
+    const restore = await app("POST", `/api/app/admin/workspaces/${fx.b.workspaceId}/restore`, owner, { body: {} });
     assert.ok([403, 404].includes(restore.status));
-    assert.equal((await app("GET", "/api/app/me", await signIn(fx.b.email))).status, 200, "team B is untouched");
+    assert.equal((await app("GET", "/api/app/me", await signIn(fx.b.email))).status, 200, "workspace B is untouched");
   });
 
-  test("an admin sees every team with counts and emails only, and a team's detail without anything it wrote", async () => {
+  test("an admin sees every workspace with counts and emails only, and a workspace's detail without anything it wrote", async () => {
     const admin = await signIn(fx.admin.email);
-    const list = await app("GET", "/api/app/admin/teams", admin);
+    const list = await app("GET", "/api/app/admin/workspaces", admin);
     assert.equal(list.status, 200);
-    const names = list.json.teams.map((t: { name: string }) => t.name);
-    for (const n of ["Contract team A", "Contract team B", "Contract admin team", "Contract suspended team"]) assert.ok(names.includes(n), n);
-    const a = list.json.teams.find((t: { id: string }) => t.id === fx.a.teamId);
+    const names = list.json.workspaces.map((t: { name: string }) => t.name);
+    for (const n of ["Contract workspace A", "Contract workspace B", "Contract admin workspace", "Contract suspended workspace"]) assert.ok(names.includes(n), n);
+    const a = list.json.workspaces.find((t: { id: string }) => t.id === fx.a.workspaceId);
     assert.equal(a.isYours, false);
     assert.equal(a.members, 2);
     assert.equal(a.projects, 1);
-    assert.ok(list.json.teams.find((t: { id: string }) => t.id === fx.admin.teamId).isYours);
-    assert.ok(list.json.teams.find((t: { name: string }) => t.name === "Contract suspended team").suspendedAt);
+    assert.ok(list.json.workspaces.find((t: { id: string }) => t.id === fx.admin.workspaceId).isYours);
+    assert.ok(list.json.workspaces.find((t: { name: string }) => t.name === "Contract suspended workspace").suspendedAt);
 
-    const detail = await app("GET", `/api/app/admin/teams/${fx.a.teamId}`, admin);
+    const detail = await app("GET", `/api/app/admin/workspaces/${fx.a.workspaceId}`, admin);
     assert.equal(detail.status, 200);
-    assert.equal(detail.json.team.memberList.length, 2);
-    assert.ok(detail.json.team.keys.length >= 3);
+    assert.equal(detail.json.workspace.memberList.length, 2);
+    assert.ok(detail.json.workspace.keys.length >= 3);
     assert.ok(!detail.text.includes(fx.a.apiKey), "no key value");
-    assert.ok(!detail.text.includes("Contract ticket A"), "nothing the team wrote");
+    assert.ok(!detail.text.includes("Contract ticket A"), "nothing the workspace wrote");
     assert.ok(!/passwordHash|keyHash/.test(detail.text));
-    assert.equal((await app("GET", `/api/app/admin/teams/00000000-0000-4000-8000-000000000000`, admin)).status, 404);
+    assert.equal((await app("GET", `/api/app/admin/workspaces/00000000-0000-4000-8000-000000000000`, admin)).status, 404);
   });
 
-  test("suspending needs the exact name, refuses your own team, signs members out and blocks sign-in; restoring undoes it", async () => {
+  test("suspending needs the exact name, refuses your own workspace, signs members out and blocks sign-in; restoring undoes it", async () => {
     const admin = await signIn(fx.admin.email);
     const victim = await signUp("Victim");
     const k = (await app("POST", "/api/app/keys", victim.sess, { body: { name: "k" } })).json.secret;
-    const id = victim.me.team.id;
+    const id = victim.me.workspace.id;
 
-    const own = await app("POST", `/api/app/admin/teams/${fx.admin.teamId}/suspend`, admin, { body: { confirm: "Contract admin team" } });
+    const own = await app("POST", `/api/app/admin/workspaces/${fx.admin.workspaceId}/suspend`, admin, { body: { confirm: "Contract admin workspace" } });
     assert.equal(own.status, 409);
     assert.equal(own.json.error.message, "You cannot suspend your own workspace");
-    const wrong = await app("POST", `/api/app/admin/teams/${id}/suspend`, admin, { body: { confirm: "victim team" } });
+    const wrong = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: "victim workspace" } });
     assert.equal(wrong.status, 400);
     assert.equal(wrong.json.error.message, "Type the workspace name exactly to confirm");
     assert.equal((await app("GET", "/api/app/me", victim.sess)).status, 200, "still signed in");
 
-    const done = await app("POST", `/api/app/admin/teams/${id}/suspend`, admin, { body: { confirm: "Victim team", reason: "contract test" } });
+    const done = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: "Victim workspace", reason: "contract test" } });
     assert.equal(done.status, 200);
-    assert.deepEqual(done.json, { name: "Victim team", sessionsEnded: 1 });
+    assert.deepEqual(done.json, { name: "Victim workspace", sessionsEnded: 1 });
     assert.equal((await app("GET", "/api/app/me", victim.sess)).status, 401, "members are signed out");
     const blocked = await login(victim.email, PW);
     assert.equal(blocked.status, 403);
     assert.equal(blocked.json.error.code, "team_suspended");
     assert.equal((await v1({ key: k }, "list_projects")).status, 403, "its keys are refused");
-    const again = await app("POST", `/api/app/admin/teams/${id}/suspend`, admin, { body: { confirm: "Victim team" } });
+    const again = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: "Victim workspace" } });
     assert.equal(again.status, 409);
-    const detail = (await app("GET", `/api/app/admin/teams/${id}`, admin)).json.team;
+    const detail = (await app("GET", `/api/app/admin/workspaces/${id}`, admin)).json.workspace;
     assert.ok(detail.suspendedAt);
     assert.equal(detail.suspendedReason, "contract test");
     assert.equal(detail.suspendedBy.email, fx.admin.email);
 
-    assert.deepEqual((await app("POST", `/api/app/admin/teams/${id}/restore`, admin, { body: {} })).json, { ok: true });
+    assert.deepEqual((await app("POST", `/api/app/admin/workspaces/${id}/restore`, admin, { body: {} })).json, { ok: true });
     assert.equal((await login(victim.email, PW)).status, 200, "people sign in again");
     assert.equal((await v1({ key: k }, "list_projects")).status, 200);
-    assert.equal((await app("POST", `/api/app/admin/teams/${id}/restore`, admin, { body: {} })).status, 409, "it is not suspended any more");
+    assert.equal((await app("POST", `/api/app/admin/workspaces/${id}/restore`, admin, { body: {} })).status, 409, "it is not suspended any more");
   });
 });
 
@@ -538,7 +538,7 @@ describe("POST /api/app/projects", () => {
     assert.equal(blank.json.error.message, "Project name is required");
   });
 
-  test("keys are per team: another team can use a key that is taken elsewhere, and neither sees the other's project", async () => {
+  test("keys are per workspace: another workspace can use a key that is taken elsewhere, and neither sees the other's project", async () => {
     const x = await signUp();
     const y = await signUp("Other");
     assert.equal((await app("POST", "/api/app/projects", x.sess, { body: { name: "Shared", key: "SHR" } })).status, 201);
@@ -546,20 +546,20 @@ describe("POST /api/app/projects", () => {
     assert.equal((await app("GET", "/api/app/projects", x.sess)).json.projects[0].name, "Shared");
   });
 
-  test("an agent session can be removed by a teammate of that project's team only", async () => {
+  test("an agent session can be removed by a teammate of that project's workspace only", async () => {
     const owner = await signIn(fx.a.email);
     const unknown = await app("DELETE", `/api/app/projects/${fx.a.projectKey}/sessions/nonexistent`, owner);
     assert.equal(unknown.status, 404);
-    const crossTeam = await app("DELETE", `/api/app/projects/${fx.b.projectKey}/sessions/nonexistent`, owner);
-    assert.equal(crossTeam.status, 404);
-    assert.equal(crossTeam.json.error.code, "not_found");
+    const crossWorkspace = await app("DELETE", `/api/app/projects/${fx.b.projectKey}/sessions/nonexistent`, owner);
+    assert.equal(crossWorkspace.status, 404);
+    assert.equal(crossWorkspace.json.error.code, "not_found");
   });
 });
 
 describe("the dashboard", () => {
   const WIDGETS = ["kpis", "progress", "throughput", "activity-split", "agents", "attention", "recent", "sync"];
 
-  test("every widget answers for the signed-in person's team, with the shape the page draws", async () => {
+  test("every widget answers for the signed-in person's workspace, with the shape the page draws", async () => {
     const s = await signIn(fx.a.email);
     const get = async (w: string) => {
       const r = await app("GET", `/api/app/dashboard/${w}`, s);
@@ -570,7 +570,7 @@ describe("the dashboard", () => {
     assert.deepEqual(Object.keys(kpis).sort(), ["agentShare7d", "agents", "agentsActive7d", "completed7d", "completedPrev7d", "events7d", "inProgress", "inReview", "mapNodes", "open", "projects", "staleDocs", "staleNodes"]);
     assert.equal(kpis.projects, 1);
     const progress = await get("progress");
-    assert.deepEqual(progress.map((p: { key: string }) => p.key), [fx.a.projectKey], "team A's project, never team B's");
+    assert.deepEqual(progress.map((p: { key: string }) => p.key), [fx.a.projectKey], "workspace A's project, never workspace B's");
     assert.deepEqual(Object.keys(progress[0]).sort(), ["agentReady", "done", "id", "key", "lastActivity", "mapNodes", "name", "pct", "stages", "staleDocs", "staleNodes", "total", "urgent"]);
     assert.equal(progress[0].stages.length, 5);
     for (const w of ["throughput", "activity-split"]) {
@@ -587,7 +587,7 @@ describe("the dashboard", () => {
     assert.ok(recent.every((e: { projectKey: string }) => e.projectKey === fx.a.projectKey));
   });
 
-  test("team B sees its own numbers, and a new team starts empty", async () => {
+  test("workspace B sees its own numbers, and a new workspace starts empty", async () => {
     const b = await app("GET", "/api/app/dashboard/progress", await signIn(fx.b.email));
     assert.deepEqual(b.json.map((p: { key: string }) => p.key), [fx.b.projectKey]);
     const fresh = await signUp();
@@ -606,9 +606,9 @@ describe("the dashboard", () => {
     assert.equal(WIDGETS.length, 8);
   });
 
-  test("a teamId in the query or a header changes nothing", async () => {
+  test("a workspaceId in the query or a header changes nothing", async () => {
     const s = await signIn(fx.a.email);
-    const r = await app("GET", `/api/app/dashboard/progress?teamId=${fx.b.teamId}`, s, { headers: { "x-team-id": fx.b.teamId } });
+    const r = await app("GET", `/api/app/dashboard/progress?workspaceId=${fx.b.workspaceId}`, s, { headers: { "x-workspace-id": fx.b.workspaceId } });
     assert.deepEqual(r.json.map((p: { key: string }) => p.key), [fx.a.projectKey]);
   });
 });

@@ -63,7 +63,7 @@ export function startFakeGithub(port: number, connectInstallationId: string): Pr
       if (req.method === "GET" && /^\/repositories\/[^/]+\/git\/trees\//.test(p)) return json(res, 200, { tree: [{ path: LANDED_FILE, type: "blob", sha: "c0ffee0000000000000000000000000000000001" }], truncated: false });
       if (req.method === "GET" && /^\/app\/installations\/[^/]+$/.test(p)) return json(res, 200, { account: { login: "contract-org", type: "Organization" } });
       if (req.method === "GET" && p === "/installation/repositories") {
-        // The connect team's installation (3001) sees its own repository; every other installation sees ct/app.
+        // The connect workspace's installation (3001) sees its own repository; every other installation sees ct/app.
         if (bearer.endsWith("_3001")) return json(res, 200, { repositories: [{ id: 7001, full_name: "ct/connect-app", default_branch: "trunk", private: true }] });
         return json(res, 200, { repositories: [{ id: 5001, full_name: "ct/app", default_branch: "main", private: false }] });
       }

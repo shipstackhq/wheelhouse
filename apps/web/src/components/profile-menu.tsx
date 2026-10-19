@@ -91,7 +91,7 @@ function WorkspaceSwitcher() {
 }
 
 /** `compact`: the icon-only sidebar rail (tablet and up), where only the avatar fits; the menu it opens is the same. */
-export function ProfileMenu(props: { name: string; email: string; role: Role; tags: string[]; team: string; compact?: boolean }) {
+export function ProfileMenu(props: { name: string; email: string; role: Role; tags: string[]; workspace: string; compact?: boolean }) {
   const compact = !!props.compact;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
@@ -138,7 +138,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1 px-3 pb-3 text-xs">
-            <span className="text-muted">{props.team}</span>
+            <span className="text-muted">{props.workspace}</span>
             <span className="text-muted">·</span>
             <span className={clsx("chip", props.role === "owner" ? "bg-accent/15 text-accent" : "bg-panel-2 text-fg")}>{props.role}</span>
             {props.tags.map((t) => (

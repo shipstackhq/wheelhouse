@@ -37,8 +37,8 @@ export async function roleOnProject(q: Q, actor: Actor, projectId: string): Prom
   const [row] = await q
     .select({ role: pm.role, workspaceRole: memberships.role })
     .from(pm)
-    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.teamId, pm.teamId)))
-    .where(and(eq(pm.projectId, projectId), eq(pm.userId, actor.id), eq(pm.teamId, actor.teamId)));
+    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.workspaceId, pm.workspaceId)))
+    .where(and(eq(pm.projectId, projectId), eq(pm.userId, actor.id), eq(pm.workspaceId, actor.workspaceId)));
   return row ? effectiveRole(row.role, row.workspaceRole) : null;
 }
 
@@ -49,8 +49,8 @@ export async function visibleProjectIds(q: Q, actor: Actor): Promise<string[] | 
   const rows = await q
     .select({ id: pm.projectId, workspaceRole: memberships.role })
     .from(pm)
-    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.teamId, pm.teamId)))
-    .where(and(eq(pm.userId, actor.id), eq(pm.teamId, actor.teamId)));
+    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.workspaceId, pm.workspaceId)))
+    .where(and(eq(pm.userId, actor.id), eq(pm.workspaceId, actor.workspaceId)));
   return rows.map((r) => r.id);
 }
 
@@ -61,17 +61,17 @@ export async function projectRoleMap(q: Q, actor: Actor): Promise<Map<string, Pr
   const rows = await q
     .select({ id: pm.projectId, role: pm.role, workspaceRole: memberships.role })
     .from(pm)
-    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.teamId, pm.teamId)))
-    .where(and(eq(pm.userId, actor.id), eq(pm.teamId, actor.teamId)));
+    .innerJoin(memberships, and(eq(memberships.userId, pm.userId), eq(memberships.workspaceId, pm.workspaceId)))
+    .where(and(eq(pm.userId, actor.id), eq(pm.workspaceId, actor.workspaceId)));
   return new Map(rows.flatMap((r) => { const e = effectiveRole(r.role, r.workspaceRole); return e ? [[r.id, e] as const] : []; }));
 }
 
 /** The person's role in the workspace, or null if they are not in it. */
-export async function workspaceRoleOf(q: Q, teamId: string, userId: string): Promise<WorkspaceRole | null> {
+export async function workspaceRoleOf(q: Q, workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
   const [m] = await q
     .select({ role: schema.memberships.role })
     .from(schema.memberships)
-    .where(and(eq(schema.memberships.teamId, teamId), eq(schema.memberships.userId, userId)));
+    .where(and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)));
   return m?.role ?? null;
 }
 
@@ -82,7 +82,7 @@ export async function audit(
   e: { action: string; targetType: "user" | "project" | "membership"; targetId?: string | null; projectId?: string | null; before?: Record<string, unknown> | null; after?: Record<string, unknown> | null },
 ) {
   await q.insert(schema.auditEvents).values({
-    teamId: actor.teamId,
+    workspaceId: actor.workspaceId,
     projectId: e.projectId ?? null,
     actorKind: actor.kind,
     actorId: actor.id,

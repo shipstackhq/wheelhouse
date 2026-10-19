@@ -10,7 +10,7 @@
  */
 
 export type StreamEvent = {
-  teamId: string;
+  workspaceId: string;
   projectId: string;
   /** The events-table sequence. Absent on transient signals (an agent acked its queue), which are not in the log. */
   seq?: number;
@@ -22,7 +22,7 @@ export type StreamEvent = {
   summary?: string;
 };
 
-export type Scope = { project: string } | { team: string };
+export type Scope = { project: string } | { workspace: string };
 
 export interface EventBus {
   publish(e: StreamEvent): void;
@@ -31,13 +31,13 @@ export interface EventBus {
   size(): number;
 }
 
-const key = (s: Scope) => ("project" in s ? `project:${s.project}` : `team:${s.team}`);
+const key = (s: Scope) => ("project" in s ? `project:${s.project}` : `workspace:${s.workspace}`);
 
 export class MemoryBus implements EventBus {
   private subs = new Map<string, Set<(e: StreamEvent) => void>>();
 
   publish(e: StreamEvent) {
-    for (const k of [`project:${e.projectId}`, `team:${e.teamId}`]) {
+    for (const k of [`project:${e.projectId}`, `workspace:${e.workspaceId}`]) {
       for (const fn of [...(this.subs.get(k) ?? [])]) {
         try {
           fn(e);

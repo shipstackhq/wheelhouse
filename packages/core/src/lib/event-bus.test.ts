@@ -2,23 +2,23 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { deferPublish, MemoryBus, publishAfterCommit, type StreamEvent } from "./event-bus";
 
-const ev = (over: Partial<StreamEvent> = {}): StreamEvent => ({ teamId: "T1", projectId: "P1", seq: 1, type: "ticket.created", ...over });
+const ev = (over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T1", projectId: "P1", seq: 1, type: "ticket.created", ...over });
 
 describe("the in-process bus", () => {
-  test("a project subscriber hears that project, a team subscriber hears every project of the team, and nobody hears anyone else's", () => {
+  test("a project subscriber hears that project, a workspace subscriber hears every project of the workspace, and nobody hears anyone else's", () => {
     const bus = new MemoryBus();
     const p1: number[] = [], p2: number[] = [], t1: number[] = [], t2: number[] = [];
     bus.subscribe({ project: "P1" }, (e) => p1.push(e.seq!));
     bus.subscribe({ project: "P2" }, (e) => p2.push(e.seq!));
-    bus.subscribe({ team: "T1" }, (e) => t1.push(e.seq!));
-    bus.subscribe({ team: "T2" }, (e) => t2.push(e.seq!));
-    bus.publish(ev({ seq: 1, projectId: "P1", teamId: "T1" }));
-    bus.publish(ev({ seq: 2, projectId: "P2", teamId: "T1" }));
-    bus.publish(ev({ seq: 3, projectId: "P9", teamId: "T9" }));
+    bus.subscribe({ workspace: "T1" }, (e) => t1.push(e.seq!));
+    bus.subscribe({ workspace: "T2" }, (e) => t2.push(e.seq!));
+    bus.publish(ev({ seq: 1, projectId: "P1", workspaceId: "T1" }));
+    bus.publish(ev({ seq: 2, projectId: "P2", workspaceId: "T1" }));
+    bus.publish(ev({ seq: 3, projectId: "P9", workspaceId: "T9" }));
     assert.deepEqual(p1, [1]);
     assert.deepEqual(p2, [2]);
-    assert.deepEqual(t1, [1, 2], "the team stream carries all of its projects");
-    assert.deepEqual(t2, [], "another team hears nothing");
+    assert.deepEqual(t1, [1, 2], "the workspace stream carries all of its projects");
+    assert.deepEqual(t2, [], "another workspace hears nothing");
   });
 
   test("unsubscribing stops delivery and leaves nothing behind", () => {

@@ -577,7 +577,7 @@ describe("live", () => {
     expect(await screen.findByRole("button", { name: "Runbook" })).toBeTruthy();
   });
 
-  test("another team's project has no docs page", async () => {
+  test("another workspace's project has no docs page", async () => {
     renderApp("/p/ZZ/docs");
     expect(await screen.findByText(/not found|can.t find|doesn.t exist/i)).toBeTruthy();
   });

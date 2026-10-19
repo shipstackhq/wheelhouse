@@ -40,12 +40,12 @@ The server must use the seeded database (`PGLITE_DIR` or `DATABASE_URL` from the
 |---|---|
 | `mcp.contract.test.ts` | JSON-RPC protocol, auth, rate limit, the tool list and prompts (golden), tool errors |
 | `v1.contract.test.ts` | REST envelope, error codes, ticket lifecycle, optimistic locking, roles in `move_ticket`, sessions |
-| `auth.contract.test.ts` | `wh_session` cookie, API keys, suspended teams, key-over-cookie precedence |
-| `isolation.contract.test.ts` | one team cannot read or change another's data |
-| `webhook.contract.test.ts` | signatures, framing, idempotency, push, pull request, CI, two teams sharing a repository id |
+| `auth.contract.test.ts` | `wh_session` cookie, API keys, suspended workspaces, key-over-cookie precedence |
+| `isolation.contract.test.ts` | one workspace cannot read or change another's data |
+| `webhook.contract.test.ts` | signatures, framing, idempotency, push, pull request, CI, two workspaces sharing a repository id |
 | `github-connect.contract.test.ts` | install redirect, state cookie, callback checks, ownership, takeover |
 | `github-unconfigured.contract.test.ts` | the same routes on a server with no GitHub App |
-| `stream.contract.test.ts` | SSE headers and events, resume, team and project scoping, the 12-streams-per-person cap, no slot leaks |
+| `stream.contract.test.ts` | SSE headers and events, resume, workspace and project scoping, the 12-streams-per-person cap, no slot leaks |
 | `health.contract.test.ts` | liveness |
 | `csrf.app.contract.test.ts` | **suite `app`:** forged and cross-site requests to the web app's API are refused, tokens are bound to a session |
 | `web-api.app.contract.test.ts` | **suite `app`:** sign in, sign up, sign out, who am I, projects; cookie attributes; rate limits; error envelopes |

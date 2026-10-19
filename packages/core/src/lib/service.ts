@@ -13,7 +13,7 @@ export { ServiceError };
 
 /**
  * The single write path for Wheelhouse. UI server actions, the REST API and the
- * MCP server all call into here, so every mutation is team-scoped, versioned
+ * MCP server all call into here, so every mutation is workspace-scoped, versioned
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
@@ -46,7 +46,7 @@ export async function emit(
   const [row] = await q
     .insert(events)
     .values({
-      teamId: actor.teamId,
+      workspaceId: actor.workspaceId,
       projectId,
       actorKind: actor.kind,
       actorId: actor.id,
@@ -61,7 +61,7 @@ export async function emit(
     .returning({ seq: events.seq });
   // Tell open browser streams (WH-1). Inside a transaction this waits for the commit, so a watcher never re-reads old data.
   deferPublish(q, {
-    teamId: actor.teamId,
+    workspaceId: actor.workspaceId,
     projectId,
     seq: row.seq,
     type: e.type,
@@ -94,7 +94,7 @@ export async function listProjects(actor: Actor) {
   return db
     .select()
     .from(projects)
-    .where(and(eq(projects.teamId, actor.teamId), visible ? inArray(projects.id, visible) : undefined))
+    .where(and(eq(projects.workspaceId, actor.workspaceId), visible ? inArray(projects.id, visible) : undefined))
     .orderBy(asc(projects.createdAt));
 }
 
@@ -106,7 +106,7 @@ export async function findWorkspaceProject(actor: Actor, ref: string, q?: Q) {
     .from(projects)
     .where(
       and(
-        eq(projects.teamId, actor.teamId),
+        eq(projects.workspaceId, actor.workspaceId),
         isUuid(ref) ? eq(projects.id, ref) : eq(sql`upper(${projects.key})`, ref.toUpperCase()),
       ),
     );
@@ -162,25 +162,25 @@ export async function createProject(actor: Actor, input: { name: string; key?: s
   if (!name) throw new ServiceError("invalid", "Project name is required");
   // Workspace Viewers and Guests cannot start projects (ADR-23); agent keys keep creating them as before.
   if (actor.kind === "human") {
-    const ws = await workspaceRoleOf(db, actor.teamId, actor.id);
+    const ws = await workspaceRoleOf(db, actor.workspaceId, actor.id);
     if (ws !== "owner" && ws !== "admin" && ws !== "member") throw new ServiceError("forbidden", "Your workspace role cannot create projects");
   }
   const key = (input.key || name.replace(/[^a-zA-Z]/g, "").slice(0, 3) || "PRJ").toUpperCase().slice(0, 6);
   const existing = await db
     .select({ id: projects.id })
     .from(projects)
-    .where(and(eq(projects.teamId, actor.teamId), eq(projects.key, key)));
+    .where(and(eq(projects.workspaceId, actor.workspaceId), eq(projects.key, key)));
   if (existing.length) throw new ServiceError("conflict", `Project key ${key} already in use`);
 
   return db.transaction(async (tx) => {
     const [p] = await tx
       .insert(projects)
-      .values({ teamId: actor.teamId, name, key, description: input.description ?? "" })
+      .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "" })
       .returning();
     await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ projectId: p.id, name: c.name, role: c.role, position: i + 1 })));
     // The creator becomes the project's first admin: without a row here nobody could open the project they just made.
     if (actor.kind === "human") {
-      await tx.insert(schema.projectMembers).values({ projectId: p.id, userId: actor.id, teamId: actor.teamId, role: "admin", addedBy: actor.id });
+      await tx.insert(schema.projectMembers).values({ projectId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
       await audit(tx, actor, { action: "project.created", targetType: "project", targetId: p.id, projectId: p.id, after: { key: p.key, creatorRole: "admin" } });
     }
     await emit(tx, actor, p.id, { type: "project.created", entity: "project", entityId: p.id, summary: `created project ${p.name}` });
@@ -217,7 +217,7 @@ export async function expireStaleClaims(projectId: string) {
     await db.transaction(async (tx) => {
       await tx.update(tickets).set({ claimedByKeyId: null, version: t.version + 1, updatedAt: new Date() }).where(eq(tickets.id, t.id));
       await tx.insert(events).values({
-        teamId: p.teamId,
+        workspaceId: p.workspaceId,
         projectId,
         actorKind: "human",
         actorId: null,
@@ -257,16 +257,16 @@ export async function getBoard(actor: Actor, projectRef: string) {
   return { project, columns: cols, tickets: withLinks };
 }
 
-/** An assignee must belong to the caller's team: a user id from another team (or a made-up one) is refused. */
-async function assertAssignee(q: Q, teamId: string, userId: string | null | undefined) {
+/** An assignee must belong to the caller's workspace: a user id from another workspace (or a made-up one) is refused. */
+async function assertAssignee(q: Q, workspaceId: string, userId: string | null | undefined) {
   if (!userId) return;
   const [m] = isUuid(userId)
     ? await q
         .select({ userId: schema.memberships.userId })
         .from(schema.memberships)
-        .where(and(eq(schema.memberships.teamId, teamId), eq(schema.memberships.userId, userId)))
+        .where(and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)))
     : [];
-  if (!m) throw new ServiceError("invalid", "Assignee must be a member of your team");
+  if (!m) throw new ServiceError("invalid", "Assignee must be a member of your workspace");
 }
 
 async function resolveColumn(q: Q, projectId: string, ref: string) {
@@ -287,7 +287,7 @@ export async function resolveTicket(actor: Actor, ref: string, q?: Q, need: Need
       .select({ t: tickets, p: projects })
       .from(tickets)
       .innerJoin(projects, eq(projects.id, tickets.projectId))
-      .where(and(eq(tickets.id, ref), eq(projects.teamId, actor.teamId)));
+      .where(and(eq(tickets.id, ref), eq(projects.workspaceId, actor.workspaceId)));
   } else {
     const m = /^([A-Za-z]+)-(\d+)$/.exec(ref.trim());
     if (!m) throw new ServiceError("invalid", `Bad ticket ref "${ref}" (use uuid or KEY-123)`);
@@ -296,7 +296,7 @@ export async function resolveTicket(actor: Actor, ref: string, q?: Q, need: Need
       .from(tickets)
       .innerJoin(projects, eq(projects.id, tickets.projectId))
       .where(
-        and(eq(projects.teamId, actor.teamId), eq(projects.key, m[1].toUpperCase()), eq(tickets.number, Number(m[2]))),
+        and(eq(projects.workspaceId, actor.workspaceId), eq(projects.key, m[1].toUpperCase()), eq(tickets.number, Number(m[2]))),
       );
   }
   const role = row ? await roleOnProject(db, actor, row.p.id) : null;
@@ -356,7 +356,7 @@ export async function createTicket(actor: Actor, projectRef: string, input: Tick
   const project = await getProject(actor, projectRef, "edit");
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
-    await assertAssignee(tx, project.teamId, input.assigneeId);
+    await assertAssignee(tx, project.workspaceId, input.assigneeId);
     const col = await resolveColumn(tx, project.id, input.column ?? DEFAULT_COLUMNS[0]);
     const [{ ticketCounter }] = await tx
       .update(projects)
@@ -415,7 +415,7 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     }
     const clean: TicketInput = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
-    await assertAssignee(tx, project.teamId, clean.assigneeId);
+    await assertAssignee(tx, project.workspaceId, clean.assigneeId);
     const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...ticket, ref: r };
     const [t] = await tx
@@ -490,7 +490,7 @@ export async function claimTicket(actor: Actor, ref: string) {
   const db = await getDb();
   const t = await db.transaction(async (tx) => {
     const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
-    if (!ticket.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the team`);
+    if (!ticket.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the workspace`);
     if (ticket.claimedByKeyId && ticket.claimedByKeyId !== actor.id)
       throw new ServiceError("conflict", `${r} is already claimed by another agent`);
     const [t] = await tx
@@ -1955,13 +1955,13 @@ export async function ackChanges(actor: Actor, projectRef: string, seq: number) 
       set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${seq})` },
     });
   // An ack is not an event in the log, but it changes the Bots menu's queue counts: tell open browsers (WH-1).
-  bus.publish({ teamId: actor.teamId, projectId: project.id, type: "queue.changed", actorKind: "agent", actorName: actor.name });
+  bus.publish({ workspaceId: actor.workspaceId, projectId: project.id, type: "queue.changed", actorKind: "agent", actorName: actor.name });
   return { ok: true, cursor: seq, session: actor.sessionId ?? null };
 }
 
 /**
  * Human reset: mark everything as seen for one agent key (or every key), in one
- * project or all of the team's projects. Used after demos, long breaks, or when
+ * project or all of the workspace's projects. Used after demos, long breaks, or when
  * a backlog isn't worth replaying.
  */
 export async function markAllSeen(actor: Actor, opts: { keyId?: string; projectRef?: string } = {}) {
@@ -1970,7 +1970,7 @@ export async function markAllSeen(actor: Actor, opts: { keyId?: string; projectR
   const keys = await db
     .select({ id: schema.apiKeys.id })
     .from(schema.apiKeys)
-    .where(and(eq(schema.apiKeys.teamId, actor.teamId), opts.keyId ? eq(schema.apiKeys.id, opts.keyId) : undefined));
+    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), opts.keyId ? eq(schema.apiKeys.id, opts.keyId) : undefined));
   if (opts.keyId && !keys.length) throw new ServiceError("not_found", "API key not found");
   const ps = opts.projectRef ? [await getProject(actor, opts.projectRef)] : await listProjects(actor);
   let reset = 0;
@@ -2009,7 +2009,7 @@ export async function queueStatus(actor: Actor, projectRef: string) {
   const keys = await db
     .select({ id: schema.apiKeys.id, name: schema.apiKeys.name, lastUsedAt: schema.apiKeys.lastUsedAt, createdAt: schema.apiKeys.createdAt })
     .from(schema.apiKeys)
-    .where(and(eq(schema.apiKeys.teamId, actor.teamId), sql`${schema.apiKeys.revokedAt} is null`));
+    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), sql`${schema.apiKeys.revokedAt} is null`));
   const out = [];
   for (const { createdAt, ...k } of keys) {
     const after = await cursorFor(db, { id: k.id, createdAt }, project.id);
@@ -2079,16 +2079,16 @@ export async function checklistForProject(actor: Actor, projectRef: string): Pro
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.apiKeys)
-        .where(and(eq(schema.apiKeys.teamId, project.teamId), isNull(schema.apiKeys.revokedAt))),
+        .where(and(eq(schema.apiKeys.workspaceId, project.workspaceId), isNull(schema.apiKeys.revokedAt))),
       db.select({ count: sql<number>`count(*)::int` }).from(nodes).where(eq(nodes.projectId, project.id)),
-      db.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.teamId, project.teamId)),
+      db.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.workspaceId, project.workspaceId)),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.invites)
         .where(
           and(
-            eq(schema.invites.kind, "join_team"),
-            eq(schema.invites.teamId, project.teamId),
+            eq(schema.invites.kind, "join_workspace"),
+            eq(schema.invites.workspaceId, project.workspaceId),
             isNull(schema.invites.usedAt),
             isNull(schema.invites.revokedAt),
             gt(schema.invites.expiresAt, new Date()),
@@ -2106,7 +2106,7 @@ export async function checklistForProject(actor: Actor, projectRef: string): Pro
   });
 }
 
-// ───────────────────────── team documentation (WH-51) ─────────────────────────
+// ───────────────────────── workspace documentation (WH-51) ─────────────────────────
 //
 // Markdown docs stored in Wheelhouse, next to the board and map: runbooks, product
 // notes, conventions, onboarding, decisions in prose. A tree via parentId, optimistic
@@ -2300,7 +2300,7 @@ export async function getDoc(actor: Actor, projectRef: string, ref: string) {
   const touched = await db
     .select({ type: events.type, actorKind: events.actorKind, actorId: events.actorId, actorName: events.actorName })
     .from(events)
-    .where(and(eq(events.teamId, project.teamId), eq(events.entity, "doc"), eq(events.entityId, d.id), inArray(events.type, ["doc.created", "doc.updated"])))
+    .where(and(eq(events.workspaceId, project.workspaceId), eq(events.entity, "doc"), eq(events.entityId, d.id), inArray(events.type, ["doc.created", "doc.updated"])))
     .orderBy(asc(events.seq));
   const created = touched.find((e) => e.type === "doc.created");
   const [owner] = d.createdByKind === "human" && d.createdById ? await db.select({ name: users.name }).from(users).where(eq(users.id, d.createdById)) : [];

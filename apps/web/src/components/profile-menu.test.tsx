@@ -5,10 +5,10 @@ import { Avatar, avatarUrl, ProfileMenu } from "./profile-menu";
 import { renderIn, serverWithData } from "../test/harness";
 
 afterEach(() => Reflect.deleteProperty(navigator, "serviceWorker"));
-const menu = () => <ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={["eng", "lead"]} team="Analytical Engines" />;
+const menu = () => <ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={["eng", "lead"]} workspace="Analytical Engines" />;
 
 describe("the account menu", () => {
-  test("shows who you are, your team, your role and your tags", async () => {
+  test("shows who you are, your workspace, your role and your tags", async () => {
     renderIn(menu());
     await userEvent.setup().click(screen.getByRole("button", { name: "Account menu" }));
     const content = await screen.findByText("Analytical Engines");
@@ -35,7 +35,7 @@ describe("the account menu", () => {
         { id: "t2", name: "Difference Engines", role: "viewer", active: false },
       ],
     });
-    two.on("POST /api/app/me/workspace", { team: { id: "t2", name: "Difference Engines" } });
+    two.on("POST /api/app/me/workspace", { workspace: { id: "t2", name: "Difference Engines" } });
     const { server, services, router } = renderIn(menu(), "/p/AA", two);
     services.queryClient.setQueryData(["marker"], "from the old workspace");
     const user = userEvent.setup();
@@ -47,13 +47,13 @@ describe("the account menu", () => {
     expect(within(group).getByText("viewer")).toBeTruthy();
     await user.click(within(group).getByRole("button", { name: /Difference Engines/ }));
     await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
-    expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ teamId: "t2" });
+    expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ workspaceId: "t2" });
     await waitFor(() => expect(router.state.location.pathname).toBe("/"));
     expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing from the old workspace lingers
   });
 
   test("compact (the icon-only sidebar): only the avatar shows on the button, and the menu it opens is the same", async () => {
-    renderIn(<ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={[]} team="Analytical Engines" compact />);
+    renderIn(<ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={[]} workspace="Analytical Engines" compact />);
     const trigger = screen.getByRole("button", { name: "Account menu" });
     expect(within(trigger).getByText("Ada Lovelace").parentElement!.className).toContain("md:hidden"); // name and email leave the button
     await userEvent.setup().click(trigger);
