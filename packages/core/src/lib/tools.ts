@@ -681,7 +681,14 @@ const legacyWord = (k: string, v: unknown) => {
 function toLegacyWire(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toLegacyWire);
   if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [legacyKey(k), legacyWord(k, toLegacyWire(v))]));
+    // A row of a team-scoped table now also carries its workspace (WH-113), which the old shape never showed. Events always
+    // carried both ids, so they keep them.
+    const dropWorkspace = "workspaceId" in value && "teamId" in value && !("entity" in value);
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([k]) => !(dropWorkspace && k === "workspaceId"))
+        .map(([k, v]) => [legacyKey(k), legacyWord(k, toLegacyWire(v))]),
+    );
   }
   return value;
 }

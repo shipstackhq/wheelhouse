@@ -57,7 +57,7 @@ describe("column roles", () => {
 
     // A column that is literally called "review" but has no role beats the role alias on an exact name match.
     const db = await getDb();
-    await db.insert(schema.columns).values({ teamId, name: "review", position: 99, role: null });
+    await db.insert(schema.columns).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: null });
     assert.equal((await svc.moveTicket(human, t.ref, "review")).column, "review");
     await db.delete(schema.columns).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, "review")));
   });

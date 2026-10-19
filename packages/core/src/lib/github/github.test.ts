@@ -154,7 +154,7 @@ describe("who a webhook can reach", () => {
     // Workspace B's team gets a row pointing at WORKSPACE A's installation, as an owner editing the fields by hand could try.
     const [forged] = await db
       .insert(schema.repositories)
-      .values({ teamId: (await svc.requireTeam(B.owner, "BB")).id, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
+      .values({ teamId: (await svc.requireTeam(B.owner, "BB")).id, workspaceId: B.owner.workspaceId, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
       .returning();
     assert.deepEqual(await targetsFor(A.installation, "31337"), [], "the join on the installation's owning workspace excludes it");
     await db.delete(schema.repositories).where(eq(schema.repositories.id, forged.id));

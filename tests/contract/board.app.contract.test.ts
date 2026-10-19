@@ -183,7 +183,7 @@ describe("POST /api/app/teams/:key/tickets", () => {
     for (const assigneeId of [other.me.user.id, SID, "not-an-id"]) {
       const r = await app("POST", "/api/app/teams/RKT/tickets", t.s, { body: { title: "x", assigneeId } });
       assert.equal(r.status, 400, assigneeId);
-      assert.equal(r.json.error.message, "Assignee must be a member of your workspace");
+      assert.equal(r.json.error.message, "Assignee must be a member of this team");
     }
   });
 

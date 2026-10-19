@@ -64,7 +64,7 @@ export type BoardView = {
   checklist: ChecklistState;
 };
 
-/** The team page: its columns, every ticket, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
+/** The team page: its columns, every ticket, the map nodes a ticket can link to, the team's members (the people a ticket can be assigned to) and the setup checklist. */
 export async function boardView(actor: Actor, teamKey: string): Promise<BoardView> {
   const [board, checklist] = await Promise.all([svc.getBoard(actor, teamKey), svc.checklistForTeam(actor, teamKey)]);
   const db = await getDb();
@@ -75,9 +75,9 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
       .where(eq(schema.nodes.teamId, board.team.id)),
     db
       .select({ id: schema.users.id, name: schema.users.name })
-      .from(schema.memberships)
-      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-      .where(eq(schema.memberships.workspaceId, actor.workspaceId)),
+      .from(schema.teamMembers)
+      .innerJoin(schema.users, eq(schema.users.id, schema.teamMembers.userId))
+      .where(eq(schema.teamMembers.teamId, board.team.id)),
   ]);
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },

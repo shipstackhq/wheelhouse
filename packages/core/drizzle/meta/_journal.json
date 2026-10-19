@@ -141,6 +141,13 @@
       "when": 1792450561634,
       "tag": "0019_teams_rename",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792451474768,
+      "tag": "0020_workspace_scoped_teams",
+      "breakpoints": true
     }
   ]
 }

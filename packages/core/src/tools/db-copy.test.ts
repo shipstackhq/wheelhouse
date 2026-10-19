@@ -50,11 +50,11 @@ before(async () => {
   await svc.upsertFlow(actor, "MV", { name: "Go", steps: [{ node: a.id, title: "start" }] });
   const [key] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
   const [team] = await db.select().from(schema.teams);
-  await db.insert(schema.agentCursors).values({ apiKeyId: key.id, teamId: team.id, lastSeq: 3 });
+  await db.insert(schema.agentCursors).values({ apiKeyId: key.id, teamId: team.id, workspaceId: workspace.id, lastSeq: 3 });
   await db.insert(schema.sessions).values({ id: "b".repeat(64), userId: user.id, expiresAt: new Date(Date.now() + 864e5) });
   await db.insert(schema.githubInstallations).values({ installationId: "4242", workspaceId: workspace.id, accountLogin: "acme", accountType: "Organization", connectedBy: user.id });
-  await db.insert(schema.repositories).values({ teamId: team.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
-  await db.insert(schema.workSessions).values({ id: "sess-1", teamId: team.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
+  await db.insert(schema.repositories).values({ teamId: team.id, workspaceId: workspace.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
+  await db.insert(schema.workSessions).values({ id: "sess-1", teamId: team.id, workspaceId: workspace.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
   // Values that a careless copy gets wrong: the newest event's number past 2^53, a double that is not exact, a microsecond timestamp, an empty string beside a null.
   await db.execute(sql`update work_sessions set resume_from_seq = 2, resume_removed_at = '2026-10-17T12:34:56.789123+00:00' where id = 'sess-1'`);
   await db.execute(sql`update events set seq = ${BIG}::bigint where seq = (select max(seq) from events)`); // the newest event's number is past 2^53
@@ -170,7 +170,7 @@ describe("verification notices a mistake", () => {
     assert.ok((await errors(dst)).some((e) => e.check === "table api_keys"));
     await dst.query(`delete from agent_cursors`);
     assert.ok((await errors(dst)).some((e) => e.check === "table agent_cursors" && /1 rows expected, 0 found/.test(e.detail)));
-    await dst.query(`insert into terms (team_id, term, definition) select id, 'extra', 'x' from teams`);
+    await dst.query(`insert into terms (team_id, workspace_id, term, definition) select id, workspace_id, 'extra', 'x' from teams`);
     assert.ok((await errors(dst)).some((e) => e.check === "table terms" && /expected, .* found/.test(e.detail)));
     await dst.query(`select setval('events_seq_seq', 5)`);
     assert.ok((await errors(dst)).some((e) => e.check === "sequence events_seq_seq"));

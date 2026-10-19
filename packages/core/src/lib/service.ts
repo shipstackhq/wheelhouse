@@ -177,7 +177,7 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
       .insert(teams)
       .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "" })
       .returning();
-    await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ teamId: p.id, name: c.name, role: c.role, position: i + 1 })));
+    await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, position: i + 1 })));
     // The creator becomes the team's first admin: without a row here nobody could open the team they just made.
     if (actor.kind === "human") {
       await tx.insert(schema.teamMembers).values({ teamId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
@@ -257,16 +257,16 @@ export async function getBoard(actor: Actor, teamRef: string) {
   return { team, columns: cols, tickets: withLinks };
 }
 
-/** An assignee must belong to the caller's workspace: a user id from another workspace (or a made-up one) is refused. */
-async function assertAssignee(q: Q, workspaceId: string, userId: string | null | undefined) {
+/** An assignee must be a member of the ticket's team: a user from another workspace, a workspace member who is not on the team, or a made-up id is refused. */
+async function assertAssignee(q: Q, teamId: string, userId: string | null | undefined) {
   if (!userId) return;
   const [m] = isUuid(userId)
     ? await q
-        .select({ userId: schema.memberships.userId })
-        .from(schema.memberships)
-        .where(and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)))
+        .select({ userId: schema.teamMembers.userId })
+        .from(schema.teamMembers)
+        .where(and(eq(schema.teamMembers.teamId, teamId), eq(schema.teamMembers.userId, userId)))
     : [];
-  if (!m) throw new ServiceError("invalid", "Assignee must be a member of your workspace");
+  if (!m) throw new ServiceError("invalid", "Assignee must be a member of this team");
 }
 
 async function resolveColumn(q: Q, teamId: string, ref: string) {
@@ -356,7 +356,7 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
   const team = await requireTeam(actor, teamRef, "edit");
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
-    await assertAssignee(tx, team.workspaceId, input.assigneeId);
+    await assertAssignee(tx, team.id, input.assigneeId);
     const col = await resolveColumn(tx, team.id, input.column ?? DEFAULT_COLUMNS[0]);
     const [{ ticketCounter }] = await tx
       .update(teams)
@@ -368,6 +368,7 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
       .insert(tickets)
       .values({
         teamId: team.id,
+        workspaceId: team.workspaceId,
         columnId: col.id,
         number: ticketCounter,
         title: input.title.trim(),
@@ -415,7 +416,7 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     }
     const clean: TicketInput = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
-    await assertAssignee(tx, team.workspaceId, clean.assigneeId);
+    await assertAssignee(tx, team.id, clean.assigneeId);
     const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...ticket, ref: r };
     const [t] = await tx
@@ -831,6 +832,7 @@ export async function upsertNode(actor: Actor, teamRef: string, input: NodeInput
       .insert(nodes)
       .values({
         teamId: team.id,
+        workspaceId: team.workspaceId,
         parentId: parentId ?? null,
         layer,
         kind,
@@ -956,6 +958,7 @@ export async function syncReferences(actor: Actor, teamRef: string) {
     for (const w of want.values()) {
       await tx.insert(edges).values({
         teamId: team.id,
+        workspaceId: team.workspaceId,
         fromNodeId: w.from.id,
         toNodeId: w.to.id,
         kind: "references",
@@ -1093,7 +1096,7 @@ export async function upsertEdge(
     }
     const [e] = await tx
       .insert(edges)
-      .values({ teamId: team.id, fromNodeId: from.id, toNodeId: to.id, kind, label: input.label ?? "" })
+      .values({ teamId: team.id, workspaceId: team.workspaceId, fromNodeId: from.id, toNodeId: to.id, kind, label: input.label ?? "" })
       .returning();
     await emit(tx, actor, team.id, {
       type: "edge.created",
@@ -1219,7 +1222,7 @@ export async function upsertFlow(actor: Actor, teamRef: string, input: FlowInput
     }
     const [f] = await tx
       .insert(flows)
-      .values({ teamId: team.id, name: input.name.trim(), description: input.description ?? "", steps: steps ?? [] })
+      .values({ teamId: team.id, workspaceId: team.workspaceId, name: input.name.trim(), description: input.description ?? "", steps: steps ?? [] })
       .returning();
     await emit(tx, actor, team.id, { type: "flow.created", entity: "flow", entityId: f.id, summary: `added flow "${f.name}" (${f.steps.length} steps)`, data: { name: f.name } });
     return f;
@@ -1302,6 +1305,7 @@ export async function createRepository(actor: Actor, teamRef: string, input: Rep
     .insert(repositories)
     .values({
       teamId: team.id,
+      workspaceId: team.workspaceId,
       displayName: input.displayName.trim(),
       role: input.role.trim(),
       provider: input.provider ?? "local",
@@ -1364,7 +1368,7 @@ export async function findOrCreateRepository(actor: Actor, teamId: string, ref?:
   if (existing) return existing;
   const [r] = await db
     .insert(repositories)
-    .values({ teamId, displayName: ref?.trim() || "Default", role, provider: "local", slug, lifecycle: "live", lastEventAt: new Date() })
+    .values({ teamId, workspaceId: actor.workspaceId, displayName: ref?.trim() || "Default", role, provider: "local", slug, lifecycle: "live", lastEventAt: new Date() })
     .returning();
   await emit(db, actor, teamId, { type: "repository.created", entity: "team", entityId: r.id, summary: `registered repository "${r.displayName}" from a client report` });
   await repoSystemNode(actor, teamId, r);
@@ -1608,6 +1612,7 @@ export async function upsertDecision(actor: Actor, teamRef: string, input: Decis
       .insert(decisions)
       .values({
         teamId: team.id,
+        workspaceId: team.workspaceId,
         number: Number(max) + 1,
         title: input.title.trim(),
         status: input.status ?? "accepted",
@@ -1661,7 +1666,7 @@ export async function upsertTerm(actor: Actor, teamRef: string, input: { term: s
     }
     const [t] = await tx
       .insert(terms)
-      .values({ teamId: team.id, term, definition: input.definition.trim(), nodeId: nodeId ?? null })
+      .values({ teamId: team.id, workspaceId: team.workspaceId, term, definition: input.definition.trim(), nodeId: nodeId ?? null })
       .returning();
     await emit(tx, actor, team.id, { type: "term.created", entity: "term", entityId: t.id, summary: `defined glossary term "${t.term}"` });
     return t;
@@ -1859,7 +1864,7 @@ async function sessionCursor(q: Q, actor: Actor, teamId: string) {
   else
     await q
       .insert(workSessions)
-      .values({ id, teamId, apiKeyId: actor.id, actorName: actor.name, lastSeq: start })
+      .values({ id, teamId, workspaceId: actor.workspaceId, apiKeyId: actor.id, actorName: actor.name, lastSeq: start })
       .onConflictDoNothing();
   return start;
 }
@@ -1949,7 +1954,7 @@ export async function ackChanges(actor: Actor, teamRef: string, seq: number) {
   // The key-level cursor follows the furthest any session has read: new sessions start there.
   await db
     .insert(agentCursors)
-    .values({ apiKeyId: actor.id, teamId: team.id, lastSeq: seq })
+    .values({ apiKeyId: actor.id, teamId: team.id, workspaceId: team.workspaceId, lastSeq: seq })
     .onConflictDoUpdate({
       target: [agentCursors.apiKeyId, agentCursors.teamId],
       set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${seq})` },
@@ -1983,7 +1988,7 @@ export async function markAllSeen(actor: Actor, opts: { keyId?: string; teamRef?
       for (const k of keys) {
         await tx
           .insert(agentCursors)
-          .values({ apiKeyId: k.id, teamId: p.id, lastSeq: Number(head) })
+          .values({ apiKeyId: k.id, teamId: p.id, workspaceId: p.workspaceId, lastSeq: Number(head) })
           .onConflictDoUpdate({ target: [agentCursors.apiKeyId, agentCursors.teamId], set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${Number(head)})` } });
         await tx
           .update(workSessions)
@@ -2343,6 +2348,7 @@ export async function createDoc(actor: Actor, teamRef: string, input: DocInput &
       .insert(docs)
       .values({
         teamId: team.id,
+        workspaceId: team.workspaceId,
         parentId,
         slug,
         title: input.title.trim(),

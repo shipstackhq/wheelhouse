@@ -122,6 +122,7 @@ export async function sessionSync(actor: Actor, teamRef: string, r: SessionRepor
   const hasChanges = Object.keys(files).length > 0;
   const values = {
     teamId: team.id,
+    workspaceId: team.workspaceId,
     apiKeyId: actor.kind === "agent" ? actor.id : null,
     actorName: actor.name,
     client: r.client ?? existing?.client ?? "unknown",
@@ -214,6 +215,7 @@ export async function maybeDraft(actor: Actor, node: NodeRow, input: NodeInput) 
   } else {
     await db.insert(nodeDrafts).values({
       teamId: node.teamId,
+      workspaceId: node.workspaceId,
       nodeId: node.id,
       sessionId: session.id,
       authorName: actor.name,
@@ -308,6 +310,7 @@ export async function maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateI
   } else {
     await db.insert(docDrafts).values({
       teamId: doc.teamId,
+      workspaceId: doc.workspaceId,
       docId: doc.id,
       sessionId: session.id,
       authorName: actor.name,
@@ -398,7 +401,7 @@ export async function land(actor: Actor, teamRef: string, r: LandReport) {
     if (hash) {
       await db
         .insert(teamFiles)
-        .values({ teamId: team.id, path, hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null })
+        .values({ teamId: team.id, workspaceId: team.workspaceId, path, hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null })
         .onConflictDoUpdate({
           target: [teamFiles.teamId, teamFiles.path],
           set: { hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null, updatedAt: new Date() },

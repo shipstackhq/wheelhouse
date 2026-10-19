@@ -12,6 +12,9 @@ import {
   doublePrecision,
   index,
   uniqueIndex,
+  unique,
+  foreignKey,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { COLUMN_ROLES } from "../lib/column-roles";
 import { sql } from "drizzle-orm";
@@ -26,6 +29,13 @@ export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 /** What a person can do inside one team. */
 export const TEAM_ROLES = ["admin", "editor", "viewer"] as const;
 export type TeamRole = (typeof TEAM_ROLES)[number];
+
+/**
+ * A row that belongs to a team also says which workspace that is, and the database makes the two agree: the foreign key is
+ * `(team_id, workspace_id)` to the team's own `(id, workspace_id)`, so a row can never point across workspaces (WH-113).
+ */
+const teamScope = (table: string, t: { teamId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
+  foreignKey({ name: `${table}_team_fk`, columns: [t.teamId, t.workspaceId], foreignColumns: [teams.id, teams.workspaceId] }).onDelete("cascade");
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
@@ -83,14 +93,20 @@ export const memberships = pgTable(
 export const teamMembers = pgTable(
   "team_members",
   {
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     role: text("role", { enum: TEAM_ROLES }).notNull().default("editor"),
     addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.teamId, t.userId] }), index("team_members_user_idx").on(t.userId, t.workspaceId)],
+  (t) => [
+    primaryKey({ columns: [t.teamId, t.userId] }),
+    index("team_members_user_idx").on(t.userId, t.workspaceId),
+    teamScope("team_members", t),
+    // A team member is a workspace member: leaving the workspace removes the person from every team in it.
+    foreignKey({ name: "team_members_membership_fk", columns: [t.userId, t.workspaceId], foreignColumns: [memberships.userId, memberships.workspaceId] }).onDelete("cascade"),
+  ],
 );
 
 /**
@@ -169,16 +185,17 @@ export const teams = pgTable("teams", {
   description: text("description").notNull().default(""),
   ticketCounter: integer("ticket_counter").notNull().default(0),
   createdAt: createdAt(),
-});
+}, (t) => [unique("teams_id_workspace_id_unique").on(t.id, t.workspaceId)]);
 
 export const columns = pgTable("columns", {
   id: uuid("id").primaryKey().defaultRandom(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
   name: text("name").notNull(),
   position: doublePrecision("position").notNull(),
   // What stage of work this column stands for (WH-86); rules and reports use it, never the name. Null: a custom column.
   role: text("role", { enum: COLUMN_ROLES }),
-});
+}, (t) => [teamScope("columns", t)]);
 
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 
@@ -186,13 +203,17 @@ export const tickets = pgTable(
   "tickets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     columnId: uuid("column_id").notNull().references(() => columns.id, { onDelete: "cascade" }),
     number: integer("number").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),
     priority: text("priority", { enum: PRIORITIES }).notNull().default("medium"),
-    assigneeId: uuid("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    // Only a member of the ticket's team can be assigned. The foreign key `(team_id, assignee_id)` to team_members
+    // is `ON DELETE SET NULL (assignee_id)` (migration 0020; drizzle cannot express the column list), so leaving the
+    // team unassigns the person's tickets without touching team_id.
+    assigneeId: uuid("assignee_id"),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     labels: jsonb("labels").$type<string[]>().notNull().default([]),
@@ -204,6 +225,7 @@ export const tickets = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
+    teamScope("tickets", t),
     index("tickets_team_idx").on(t.teamId),
     uniqueIndex("tickets_team_number_idx").on(t.teamId, t.number),
   ],
@@ -255,7 +277,8 @@ export type EdgeMeta = { fromColumn?: string; toColumn?: string; cardinality?: (
 
 export const nodes = pgTable("nodes", {
   id: uuid("id").primaryKey().defaultRandom(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
   parentId: uuid("parent_id"),
   layer: text("layer", { enum: LAYERS }).notNull().default("system"),
   kind: text("kind", { enum: NODE_KINDS }).notNull().default("service"),
@@ -293,11 +316,12 @@ export const nodes = pgTable("nodes", {
   placed: boolean("placed").notNull().default(false),
   version: integer("version").notNull().default(1),
   updatedAt: updatedAt(),
-});
+}, (t) => [teamScope("nodes", t)]);
 
 export const edges = pgTable("edges", {
   id: uuid("id").primaryKey().defaultRandom(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
   fromNodeId: uuid("from_node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   toNodeId: uuid("to_node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   // depends: from uses/calls to (same layer). implements: from (lower layer) realizes to (higher layer).
@@ -305,20 +329,21 @@ export const edges = pgTable("edges", {
   label: text("label").notNull().default(""),
   // references edges: column-level FK detail + cardinality.
   meta: jsonb("meta").$type<EdgeMeta>().notNull().default({}),
-});
+}, (t) => [teamScope("edges", t)]);
 
 export type FlowStep = { nodeId: string; title: string; detail: string };
 
 /** A named, ordered walk across nodes that explains how something works end to end. */
 export const flows = pgTable("flows", {
   id: uuid("id").primaryKey().defaultRandom(),
-  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull(),
+  workspaceId: uuid("workspace_id").notNull(),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   steps: jsonb("steps").$type<FlowStep[]>().notNull().default([]),
   version: integer("version").notNull().default(1),
   updatedAt: updatedAt(),
-});
+}, (t) => [teamScope("flows", t)]);
 
 export const DECISION_STATUSES = ["proposed", "accepted", "superseded", "rejected"] as const;
 
@@ -327,7 +352,8 @@ export const decisions = pgTable(
   "decisions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     number: integer("number").notNull(),
     title: text("title").notNull(),
     status: text("status", { enum: DECISION_STATUSES }).notNull().default("accepted"),
@@ -341,7 +367,7 @@ export const decisions = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("decisions_team_number_idx").on(t.teamId, t.number)],
+  (t) => [teamScope("decisions", t), uniqueIndex("decisions_team_number_idx").on(t.teamId, t.number)],
 );
 
 /** Domain glossary; terms get hover cards wherever they appear in explainers. */
@@ -349,13 +375,14 @@ export const terms = pgTable(
   "terms",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     term: text("term").notNull(),
     definition: text("definition").notNull(),
     nodeId: uuid("node_id").references(() => nodes.id, { onDelete: "set null" }),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("terms_team_term_idx").on(t.teamId, t.term)],
+  (t) => [teamScope("terms", t), uniqueIndex("terms_team_term_idx").on(t.teamId, t.term)],
 );
 
 export const ticketNodes = pgTable(
@@ -395,10 +422,11 @@ export const agentCursors = pgTable(
   "agent_cursors",
   {
     apiKeyId: uuid("api_key_id").notNull().references(() => apiKeys.id, { onDelete: "cascade" }),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     lastSeq: bigint("last_seq", { mode: "number" }).notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.apiKeyId, t.teamId] })],
+  (t) => [teamScope("agent_cursors", t), primaryKey({ columns: [t.apiKeyId, t.teamId] })],
 );
 
 /** Server's view of the default branch: content hash per file, updated when code lands. */
@@ -420,7 +448,8 @@ export const repositories = pgTable(
   "repositories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     displayName: text("display_name").notNull(),
     role: text("role").notNull(), // free text: workspaces name their own roles (frontend/backend/admin/…)
     provider: text("provider", { enum: REPO_PROVIDERS }).notNull().default("local"),
@@ -439,13 +468,14 @@ export const repositories = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("repositories_team_idx").on(t.teamId), uniqueIndex("repositories_team_slug_idx").on(t.teamId, t.slug)],
+  (t) => [teamScope("repositories", t), index("repositories_team_idx").on(t.teamId), uniqueIndex("repositories_team_slug_idx").on(t.teamId, t.slug)],
 );
 
 export const teamFiles = pgTable(
   "team_files",
   {
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     path: text("path").notNull(),
     hash: text("hash").notNull(),
     sha: text("sha"),
@@ -454,7 +484,7 @@ export const teamFiles = pgTable(
     repositoryId: uuid("repository_id").references(() => repositories.id, { onDelete: "cascade" }),
     updatedAt: updatedAt(),
   },
-  (t) => [primaryKey({ columns: [t.teamId, t.path] })],
+  (t) => [teamScope("team_files", t), primaryKey({ columns: [t.teamId, t.path] })],
 );
 
 export type SessionFile = { hash: string | null; at: string; external?: boolean; repositoryId?: string | null }; // external: changed outside the agent (e.g. a human in the IDE)
@@ -468,7 +498,8 @@ export const workSessions = pgTable(
   "work_sessions",
   {
     id: text("id").primaryKey(), // client-provided session id (Claude Code session_id)
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     actorName: text("actor_name").notNull(),
     client: text("client").notNull().default("unknown"),
@@ -487,7 +518,7 @@ export const workSessions = pgTable(
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
   },
-  (t) => [index("work_sessions_team_idx").on(t.teamId)],
+  (t) => [teamScope("work_sessions", t), index("work_sessions_team_idx").on(t.teamId)],
 );
 
 /**
@@ -498,7 +529,8 @@ export const nodeDrafts = pgTable(
   "node_drafts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     nodeId: uuid("node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
     sessionId: text("session_id").references(() => workSessions.id, { onDelete: "set null" }),
     authorName: text("author_name").notNull(),
@@ -510,7 +542,7 @@ export const nodeDrafts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("node_drafts_node_idx").on(t.nodeId)],
+  (t) => [teamScope("node_drafts", t), index("node_drafts_node_idx").on(t.nodeId)],
 );
 
 // ───────── GitHub App (WH-20) ─────────
@@ -576,7 +608,8 @@ export const docs = pgTable(
   "docs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     parentId: uuid("parent_id"),
     slug: text("slug").notNull(),
     title: text("title").notNull(),
@@ -608,6 +641,7 @@ export const docs = pgTable(
     labels: jsonb("labels").$type<string[]>().notNull().default([]),
   },
   (t) => [
+    teamScope("docs", t),
     index("docs_team_idx").on(t.teamId),
     // Unique per (team, parent, slug) among live docs. Partial index: deleted docs don't block reusing a slug.
     uniqueIndex("docs_team_parent_slug_idx").on(t.teamId, t.parentId, t.slug).where(sql`deleted_at is null`),
@@ -627,7 +661,8 @@ export const docDrafts = pgTable(
   "doc_drafts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
     docId: uuid("doc_id").notNull().references(() => docs.id, { onDelete: "cascade" }),
     sessionId: text("session_id").references(() => workSessions.id, { onDelete: "set null" }),
     authorName: text("author_name").notNull(),
@@ -639,7 +674,7 @@ export const docDrafts = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("doc_drafts_doc_idx").on(t.docId)],
+  (t) => [teamScope("doc_drafts", t), index("doc_drafts_doc_idx").on(t.docId)],
 );
 
 /** Links a doc to a map node, mirroring ticket_nodes, so a node's page can list "read these docs". */

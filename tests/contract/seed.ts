@@ -144,6 +144,7 @@ async function main() {
       const proj = (await db.select().from(schema.teams).where(eq(schema.teams.workspaceId, t.workspaceId)))[0];
       await db.insert(schema.repositories).values({
         teamId: proj.id,
+        workspaceId: proj.workspaceId,
         displayName: "app",
         role: "webapp",
         provider: "github",
@@ -158,7 +159,7 @@ async function main() {
     // A forged row: workspace B's team claims a repository through WORKSPACE A's installation. Webhooks must resolve an installation to
     // its own workspace (the join on github_installations.workspace_id), so this row must never be reached.
     const projB = (await db.select().from(schema.teams).where(eq(schema.teams.workspaceId, b.workspaceId)))[0];
-    await db.insert(schema.repositories).values({ teamId: projB.id, displayName: "forged", role: "webapp", provider: "github", slug: "ct/forged", githubRepoId: github.repoId, githubInstallationId: github.installationA, githubFullName: "ct/app", defaultBranch: "main" });
+    await db.insert(schema.repositories).values({ teamId: projB.id, workspaceId: projB.workspaceId, displayName: "forged", role: "webapp", provider: "github", slug: "ct/forged", githubRepoId: github.repoId, githubInstallationId: github.installationA, githubFullName: "ct/app", defaultBranch: "main" });
   } else {
     // Explicitly blank so a developer's own .env.local can never leak GitHub credentials into the server under test.
     for (const k of ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_API_URL", "GITHUB_WEB_URL"]) serverEnv[k] = "";

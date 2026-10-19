@@ -151,12 +151,12 @@ before(async () => {
   const map = await seedMap(a);
   const db = await getDb();
   const sessionId = `a-secret-session-${RUN}`;
-  await db.insert(schema.workSessions).values({ id: sessionId, teamId: a.teamId, apiKeyId: a.keyId, actorName: a.agent.name, lastSeq: 0 });
+  await db.insert(schema.workSessions).values({ id: sessionId, teamId: a.teamId, workspaceId: a.workspaceId, apiKeyId: a.keyId, actorName: a.agent.name, lastSeq: 0 });
   const [draft] = await db
     .insert(schema.nodeDrafts)
-    .values({ teamId: a.teamId, nodeId: map.sys.id, sessionId, authorName: a.agent.name, authorKind: "agent", patch: { summary: "A-SECRET draft" } })
+    .values({ teamId: a.teamId, workspaceId: a.workspaceId, nodeId: map.sys.id, sessionId, authorName: a.agent.name, authorKind: "agent", patch: { summary: "A-SECRET draft" } })
     .returning();
-  await db.insert(schema.teamFiles).values({ teamId: a.teamId, path: "src/a/secret.ts", hash: "a".repeat(40) });
+  await db.insert(schema.teamFiles).values({ teamId: a.teamId, workspaceId: a.workspaceId, path: "src/a/secret.ts", hash: "a".repeat(40) });
   const repo = await svc.createRepository(a.owner, a.teamKey, { displayName: "A-SECRET backend", role: "backend", slug: `a-secret-repo-${RUN}` });
   const [spare] = await db
     .insert(schema.apiKeys)
@@ -555,6 +555,31 @@ describe("team keys are per workspace (continued)", () => {
     const board = (await runTool(B.owner, "get_board", { project: "AA" })) as { project: { name: string } };
     assert.equal(board.project.name, "B's AA");
     assert.equal(await fingerprint(A), before);
+  });
+});
+
+describe("the database refuses a row that points across workspaces (WH-113)", () => {
+  // Even code that skips the service layer cannot put workspace B's row on workspace A's team, or the reverse.
+  const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
+
+  test("B's workspace id on A's team is refused, for a column, a node and a team member", async () => {
+    const db = await getDb();
+    const before = await fingerprint(A);
+    await assert.rejects(db.insert(schema.columns).values({ teamId: A.teamId, workspaceId: B.workspaceId, name: "planted", position: 99 }), refused);
+    await assert.rejects(db.insert(schema.nodes).values({ teamId: A.teamId, workspaceId: B.workspaceId, layer: "system", kind: "service", name: "planted" }), refused);
+    await assert.rejects(db.insert(schema.teamMembers).values({ teamId: A.teamId, workspaceId: B.workspaceId, userId: B.owner.id, role: "admin" }), refused);
+    assert.equal(await fingerprint(A), before);
+  });
+
+  test("B's owner cannot be made a member of A's team under A's workspace either: they are not in it", async () => {
+    const db = await getDb();
+    await assert.rejects(db.insert(schema.teamMembers).values({ teamId: A.teamId, workspaceId: A.workspaceId, userId: B.owner.id, role: "admin" }), refused);
+  });
+
+  test("a ticket of A cannot be assigned to someone from B, through the service or around it", async () => {
+    const db = await getDb();
+    await assert.rejects(svc.updateTicket(A.owner, A.ticketRef, { assigneeId: B.owner.id }), svc.ServiceError);
+    await assert.rejects(db.update(schema.tickets).set({ assigneeId: B.owner.id }).where(eq(schema.tickets.id, A.ticketId)), refused);
   });
 });
 

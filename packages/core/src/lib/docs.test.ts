@@ -154,6 +154,7 @@ describe("service layer: CRUD, locking, tree, limits", () => {
     // Insert 500 docs directly (fast path) rather than through the service, to keep the test quick.
     const rows = Array.from({ length: 500 }, (_, i) => ({
       teamId: capTeam.id,
+      workspaceId: capTeam.workspaceId,
       slug: `doc-${i}`,
       title: `Doc ${i}`,
       createdByKind: "human" as const,
@@ -313,7 +314,7 @@ describe("flagging: report_changes and land flag anchored docs, parallel to node
 
   test("land() flags a doc via drift when its landed content differs from what it was described against, and clears on revert", async () => {
     const db = await getDb();
-    await db.insert(schema.teamFiles).values({ teamId: (await svc.requireTeam(human, teamKey)).id, path: "src/lib/billing.ts", hash: "1".repeat(40) });
+    await db.insert(schema.teamFiles).values({ teamId: (await svc.requireTeam(human, teamKey)).id, workspaceId: human.workspaceId, path: "src/lib/billing.ts", hash: "1".repeat(40) });
     const d = await svc.createDoc(human, teamKey, { title: "Billing doc", anchors: ["src/lib/billing.ts"] });
     const { doc: initial } = await svc.getDoc(human, teamKey, d.id);
     assert.equal(initial.describedHashes["src/lib/billing.ts"], "1".repeat(40), "baseline hash captured at creation");
@@ -406,7 +407,7 @@ describe("drafts (WH-64): an agent session editing a doc for unlanded code gets 
     const landedHash = "e".repeat(40);
     const db = await getDb();
     const team = await svc.requireTeam(writerAgent, teamKey);
-    await db.insert(schema.teamFiles).values({ teamId: team.id, path: "src/lib/abandon.ts", hash: landedHash });
+    await db.insert(schema.teamFiles).values({ teamId: team.id, workspaceId: team.workspaceId, path: "src/lib/abandon.ts", hash: landedHash });
     const d = await svc.createDoc(writerAgent, teamKey, { title: "Abandoned draft doc", body: "v1", anchors: ["src/lib/abandon.ts"] });
     await sync.sessionSync(writerAgent, teamKey, { session: sessionId, files: { "src/lib/abandon.ts": "f".repeat(40) } });
     await svc.updateDoc(writerAgent, teamKey, d.id, { body: "agent draft" }, undefined);

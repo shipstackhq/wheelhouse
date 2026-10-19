@@ -62,7 +62,7 @@ before(async () => {
   wh = String(p1.id);
   other = String(p2.id);
   const node = async (team: unknown, name: string, anchors: string[], hashes: Record<string, string> = {}, extra: { drift?: string[]; reason?: string } = {}) =>
-    (await q(`insert into nodes (team_id, layer, kind, name, anchors, described_hashes, drift_paths, stale, stale_reason) values ($1, 'system', 'service', $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7) returning id`, [
+    (await q(`insert into nodes (team_id, workspace_id, layer, kind, name, anchors, described_hashes, drift_paths, stale, stale_reason) select $1::uuid, workspace_id, 'system', 'service', $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7 from teams where id = $1::uuid returning id`, [
       team, name, JSON.stringify(anchors), JSON.stringify(hashes), JSON.stringify(extra.drift ?? []), !!extra.reason, extra.reason ?? null,
     ]))[0].id;
   await node(p1.id, "Lib", ["src/lib/a.ts", "src/lib/b.ts", "src/lib/keep.ts"], { "src/lib/a.ts": "h-a", "src/lib/b.ts": "h-b", "src/lib/keep.ts": "h-k" }, { drift: ["src/lib/b.ts"], reason: "src/lib/b.ts changed in abc1234" });
@@ -71,9 +71,9 @@ before(async () => {
   await node(p1.id, "Whole", ["wheelhouse:**", "backend:src/**", "cli:src/**"]);
   await node(p1.id, "Lost", ["no/such/**", "gone/**"], { "no/such/x.ts": "h-x" });
   await node(other, "Elsewhere", ["src/lib/a.ts", "src/db/**"], { "src/lib/a.ts": "h-o" });
-  await q(`insert into docs (team_id, slug, title, created_by_kind, updated_by_kind, anchors, described_hashes) values ($1, 'd', 'Doc', 'human', 'human', $2::jsonb, $3::jsonb)`, [wh, JSON.stringify(["src/lib/a.ts"]), JSON.stringify({ "src/lib/a.ts": "h-doc" })]);
+  await q(`insert into docs (team_id, workspace_id, slug, title, created_by_kind, updated_by_kind, anchors, described_hashes) select $1::uuid, workspace_id, 'd', 'Doc', 'human', 'human', $2::jsonb, $3::jsonb from teams where id = $1::uuid`, [wh, JSON.stringify(["src/lib/a.ts"]), JSON.stringify({ "src/lib/a.ts": "h-doc" })]);
   const [n1] = await q(`select id from nodes where name = 'Lib'`);
-  await q(`insert into node_drafts (team_id, node_id, author_name, author_kind, patch) values ($1, $2, 'Claude', 'agent', $3::jsonb)`, [wh, n1.id, JSON.stringify({ anchors: ["src/lib/a.ts"], summary: "s" })]);
+  await q(`insert into node_drafts (team_id, workspace_id, node_id, author_name, author_kind, patch) select $1::uuid, workspace_id, $2::uuid, 'Claude', 'agent', $3::jsonb from teams where id = $1::uuid`, [wh, n1.id, JSON.stringify({ anchors: ["src/lib/a.ts"], summary: "s" })]);
 });
 
 after(async () => {

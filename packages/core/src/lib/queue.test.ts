@@ -177,6 +177,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     await db.insert(schema.workSessions).values({
       id,
       teamId,
+      workspaceId: key.workspaceId,
       apiKeyId: key.id,
       actorName: "laptop",
       lastSeq: over.lastSeq === undefined ? 0 : over.lastSeq,
