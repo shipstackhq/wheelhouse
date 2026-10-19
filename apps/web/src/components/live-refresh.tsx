@@ -23,8 +23,8 @@ export function LiveRefresh({ path }: { path: string }) {
   return null;
 }
 
-/** One project's changes (the project pages). */
-export const ProjectLiveRefresh = ({ projectKey }: { projectKey: string }) => <LiveRefresh path={`/api/projects/${encodeURIComponent(projectKey)}/stream`} />;
+/** One team's changes (the team pages). */
+export const TeamLiveRefresh = ({ teamKey }: { teamKey: string }) => <LiveRefresh path={`/api/teams/${encodeURIComponent(teamKey)}/stream`} />;
 
 /** Everything in the signed-in workspace (the dashboard). */
 export const WorkspaceLiveRefresh = () => <LiveRefresh path="/api/stream" />;

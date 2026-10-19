@@ -92,12 +92,12 @@ describe("the workspaces list", () => {
   test("shows every workspace with correct counts, owners and the caller's own workspace", async () => {
     await createInvite(X.owner, { kind: "join_workspace", email: email("pend") }); // one pending invite for Acme
     const db = await getDb();
-    await db.insert(schema.projects).values({ workspaceId: X.workspaceId, key: "AC", name: "Acme app" });
+    await db.insert(schema.teams).values({ workspaceId: X.workspaceId, key: "AC", name: "Acme app" });
     const rows = await listWorkspaces(admin);
     const x = rows.find((t) => t.id === X.workspaceId)!;
     assert.deepEqual(
-      { members: x.members, pending: x.pendingInvites, used: x.seatsUsed, projects: x.projects, suspended: !!x.suspendedAt, yours: x.isYours },
-      { members: 2, pending: 1, used: 3, projects: 1, suspended: false, yours: false },
+      { members: x.members, pending: x.pendingInvites, used: x.seatsUsed, teams: x.teams, suspended: !!x.suspendedAt, yours: x.isYours },
+      { members: 2, pending: 1, used: 3, teams: 1, suspended: false, yours: false },
     );
     assert.deepEqual(x.owners.map((o) => o.email), [X.owner.email]);
     assert.ok(rows.find((t) => t.id === admin.workspaceId)!.isYours);
@@ -114,12 +114,12 @@ describe("the workspaces list", () => {
 
   test("shows no workspace content: a ticket's title and a comment never appear on the admin pages", async () => {
     const human = { kind: "human" as const, id: X.owner.userId, name: "o", workspaceId: X.workspaceId };
-    await svc.createProject(human, { name: "Secret project", key: "SEC" });
+    await svc.createTeam(human, { name: "Secret team", key: "SEC" });
     const ticket = await svc.createTicket(human, "SEC", { title: `TOP-SECRET-TITLE-${RUN}`, body: `TOP-SECRET-BODY-${RUN}` });
     await svc.addComment(human, ticket.ref, `TOP-SECRET-COMMENT-${RUN}`);
     const everything = JSON.stringify([await listWorkspaces(admin), await getWorkspaceDetail(admin, X.workspaceId)]);
     assert.ok(!everything.includes("TOP-SECRET"), "metadata only");
-    assert.ok(!everything.includes("Secret project"), "not even project names");
+    assert.ok(!everything.includes("Secret team"), "not even team names");
   });
 
   test("the detail lists members, invites with their status, and API keys without the key itself", async () => {

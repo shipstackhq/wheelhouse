@@ -1,13 +1,13 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../access";
-import { addComment, createRepository, emit, getProject, moveTicket, ServiceError } from "../service";
+import { addComment, createRepository, emit, requireTeam, moveTicket, ServiceError } from "../service";
 import { land } from "../sync";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { decideMove, ciState, type CheckState } from "./pr-rules";
-import { parseTicketRefs, refsForProject } from "./refs";
+import { parseTicketRefs, refsForTeam } from "./refs";
 
-const { githubDeliveries, githubInstallations, memberships, projects, pullRequests, pullRequestTickets, repositories, tickets, columns, events } = schema;
+const { githubDeliveries, githubInstallations, memberships, teams, pullRequests, pullRequestTickets, repositories, tickets, columns, events } = schema;
 
 /** Writes made because of something GitHub reported are attributed to this actor, like the claim sweep's "Wheelhouse". */
 export const GITHUB_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -47,13 +47,13 @@ export async function listInstallations(actor: Actor) {
 }
 
 /**
- * Connect one repository of one of the workspace's installations to a project. The repository's name and default branch are
+ * Connect one repository of one of the workspace's installations to a team. The repository's name and default branch are
  * read from GitHub, not taken from the request, so what is stored is what GitHub says about a repository the installation
  * can really see.
  */
 export async function connectGithubRepository(
   actor: Actor,
-  projectRef: string,
+  teamRef: string,
   i: { installationId: string; githubRepoId: string; role: string; pathLimit?: string | null },
   api: GithubApi | null,
 ) {
@@ -61,16 +61,16 @@ export async function connectGithubRepository(
   await requireOwner(actor.id, actor.workspaceId);
   if (!api) throw new ServiceError("invalid", "The GitHub App is not configured on this server");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   // The installation must be this workspace's own: otherwise a repository id from someone else's installation would feed their pushes here.
   const [inst] = await db.select().from(githubInstallations).where(and(eq(githubInstallations.installationId, i.installationId), eq(githubInstallations.workspaceId, actor.workspaceId)));
   if (!inst) throw new ServiceError("forbidden", "That GitHub installation is not connected to your workspace");
   const visible = await api.installationRepositories(i.installationId);
   const gh = visible.find((r) => r.id === i.githubRepoId);
   if (!gh) throw new ServiceError("not_found", "GitHub does not list that repository for this installation");
-  const [dup] = await db.select({ id: repositories.id }).from(repositories).where(and(eq(repositories.projectId, project.id), eq(repositories.githubRepoId, gh.id)));
-  if (dup) throw new ServiceError("conflict", `${gh.fullName} is already connected to this project`);
-  return createRepository(actor, projectRef, {
+  const [dup] = await db.select({ id: repositories.id }).from(repositories).where(and(eq(repositories.teamId, team.id), eq(repositories.githubRepoId, gh.id)));
+  if (dup) throw new ServiceError("conflict", `${gh.fullName} is already connected to this team`);
+  return createRepository(actor, teamRef, {
     displayName: gh.fullName.split("/").pop() || gh.fullName,
     role: i.role,
     provider: "github",
@@ -89,16 +89,16 @@ export type Outcome = { status: "handled" | "ignored" | "duplicate"; detail?: st
 
 /**
  * The repositories a webhook is about: connected through GitHub, with this exact installation and repository id, and whose
- * installation is registered to the same workspace as the project. A webhook can therefore only ever reach the workspace that
+ * installation is registered to the same workspace as the team. A webhook can therefore only ever reach the workspace that
  * proved it owns the installation.
  */
 export async function targetsFor(installationId: string, repoId: string) {
   const db = await getDb();
   return db
-    .select({ repo: repositories, project: projects })
+    .select({ repo: repositories, team: teams })
     .from(repositories)
-    .innerJoin(projects, eq(projects.id, repositories.projectId))
-    .innerJoin(githubInstallations, and(eq(githubInstallations.installationId, repositories.githubInstallationId), eq(githubInstallations.workspaceId, projects.workspaceId)))
+    .innerJoin(teams, eq(teams.id, repositories.teamId))
+    .innerJoin(githubInstallations, and(eq(githubInstallations.installationId, repositories.githubInstallationId), eq(githubInstallations.workspaceId, teams.workspaceId)))
     .where(and(eq(repositories.provider, "github"), eq(repositories.githubInstallationId, installationId), eq(repositories.githubRepoId, repoId), ne(repositories.lifecycle, "retired")));
 }
 
@@ -153,7 +153,7 @@ async function onPush(payload: Delivery["payload"], installationId: string | nul
 
   const after = String(payload.after);
   const before = payload.before ? String(payload.before) : null;
-  // Ask GitHub once, however many projects share the repository.
+  // Ask GitHub once, however many teams share the repository.
   let files: ChangedFile[];
   try {
     if (isZeroSha(before)) files = (await api.treeAt(installationId, repoId, after)).files;
@@ -166,27 +166,27 @@ async function onPush(payload: Delivery["payload"], installationId: string | nul
 
   const db = await getDb();
   for (const t of targets) {
-    const actor = githubActor(t.project.workspaceId);
+    const actor = githubActor(t.team.workspaceId);
     for (let i = 0; i < files.length || i === 0; i += LAND_CHUNK) {
       const chunk = Object.fromEntries(files.slice(i, i + LAND_CHUNK).map((f) => [f.path, f.hash]));
       if (!Object.keys(chunk).length) break;
-      await land(actor, t.project.key, { sha: after, branch, files: chunk, repository: t.repo.slug });
+      await land(actor, t.team.key, { sha: after, branch, files: chunk, repository: t.repo.slug });
     }
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
   }
   return { status: "handled", matched: targets.length, detail: `${files.length} file(s)` };
 }
 
-async function ticketsByRefs(projectId: string, projectKey: string, refs: { key: string; number: number }[]) {
-  const wanted = refsForProject(refs, projectKey);
+async function ticketsByRefs(teamId: string, teamKey: string, refs: { key: string; number: number }[]) {
+  const wanted = refsForTeam(refs, teamKey);
   if (!wanted.length) return [];
   const db = await getDb();
   const rows = await db
     .select({ t: tickets, column: columns.name })
     .from(tickets)
     .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(and(eq(tickets.projectId, projectId), inArray(tickets.number, wanted.map((w) => w.number))));
-  return rows.map((r) => ({ ...r.t, column: r.column, ref: `${projectKey}-${r.t.number}` }));
+    .where(and(eq(tickets.teamId, teamId), inArray(tickets.number, wanted.map((w) => w.number))));
+  return rows.map((r) => ({ ...r.t, column: r.column, ref: `${teamKey}-${r.t.number}` }));
 }
 
 async function onPullRequest(payload: Delivery["payload"], installationId: string | null): Promise<Outcome> {
@@ -226,16 +226,16 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
       .returning();
 
     const refs = parseTicketRefs(pr.title, headBranch);
-    const linked = await ticketsByRefs(t.project.id, t.project.key, refs);
+    const linked = await ticketsByRefs(t.team.id, t.team.key, refs);
     await db.delete(pullRequestTickets).where(eq(pullRequestTickets.pullRequestId, row.id));
     if (linked.length) await db.insert(pullRequestTickets).values(linked.map((x) => ({ pullRequestId: row.id, ticketId: x.id }))).onConflictDoNothing();
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
 
-    const actor = githubActor(t.project.workspaceId);
-    const boardColumns = await db.select({ id: columns.id, name: columns.name, role: columns.role }).from(columns).where(eq(columns.projectId, t.project.id)).orderBy(columns.position);
+    const actor = githubActor(t.team.workspaceId);
+    const boardColumns = await db.select({ id: columns.id, name: columns.name, role: columns.role }).from(columns).where(eq(columns.teamId, t.team.id)).orderBy(columns.position);
     for (const tk of linked) {
       if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
-        await emit(db, actor, t.project.id, {
+        await emit(db, actor, t.team.id, {
           type: "ticket.pull_request",
           entity: "ticket",
           entityId: tk.id,
@@ -289,13 +289,13 @@ async function onCheckRun(payload: Delivery["payload"], installationId: string |
       touched++;
       if (next !== pr.ciState && (next === "failure" || next === "success")) {
         const links = await db.select({ ticketId: pullRequestTickets.ticketId }).from(pullRequestTickets).where(eq(pullRequestTickets.pullRequestId, pr.id));
-        const actor = githubActor(t.project.workspaceId);
+        const actor = githubActor(t.team.workspaceId);
         for (const l of links) {
           const [tk] = await db.select().from(tickets).where(eq(tickets.id, l.ticketId));
           if (!tk) continue;
-          const ref = `${t.project.key}-${tk.number}`;
+          const ref = `${t.team.key}-${tk.number}`;
           const failed = Object.entries(checks).filter(([, c]) => c.status === "completed" && c.conclusion && c.conclusion !== "success" && c.conclusion !== "neutral" && c.conclusion !== "skipped").map(([n]) => n);
-          await emit(db, actor, t.project.id, {
+          await emit(db, actor, t.team.id, {
             type: "ticket.ci",
             entity: "ticket",
             entityId: tk.id,

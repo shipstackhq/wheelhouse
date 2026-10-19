@@ -2,38 +2,38 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { AuditEvent } from "@wheelhouse/api-client";
 import { failure } from "../lib/form-state";
-import { auditQuery, workspaceProjectsQuery } from "../lib/queries";
+import { auditQuery, workspaceTeamsQuery } from "../lib/queries";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 
-/** Every project of the workspace by name, with who administers it. An owner or admin joins one as its admin; nothing inside it is shown here. */
-export function ProjectsAccess() {
+/** Every team of the workspace by name, with who administers it. An owner or admin joins one as its admin; nothing inside it is shown here. */
+export function TeamsAccess() {
   const { api, queryClient } = useServices();
-  const query = useQuery(workspaceProjectsQuery(api));
+  const query = useQuery(workspaceTeamsQuery(api));
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState<string>();
   const join = async (key: string) => {
     setError(undefined);
     setBusy(key);
     try {
-      await api.projects.join(key);
+      await api.teams.join(key);
     } catch (e) {
       setError(failure(e)?.error);
     }
     setBusy(undefined);
     await refreshAll(queryClient);
   };
-  const projects = query.data ?? [];
+  const teams = query.data ?? [];
   return (
     <div className="card p-5">
-      <h2 className="font-medium">Projects</h2>
+      <h2 className="font-medium">Teams</h2>
       <p className="mt-1 text-sm text-muted">
-        Everyone in the workspace sees nothing of a project until they are added to it. You can see each project&apos;s name and admins, and join one as its admin. Joining is recorded in the access log and shown in the project&apos;s activity.
+        Everyone in the workspace sees nothing of a team until they are added to it. You can see each team&apos;s name and admins, and join one as its admin. Joining is recorded in the access log and shown in the team&apos;s activity.
       </p>
-      {query.isError && <p className="mt-3 text-sm text-danger" role="alert">Could not load the projects.</p>}
-      {query.isSuccess && projects.length === 0 && <p className="mt-3 text-sm text-muted">No projects yet.</p>}
+      {query.isError && <p className="mt-3 text-sm text-danger" role="alert">Could not load the teams.</p>}
+      {query.isSuccess && teams.length === 0 && <p className="mt-3 text-sm text-muted">No teams yet.</p>}
       <ul className="mt-3 divide-y divide-line">
-        {projects.map((p) => (
+        {teams.map((p) => (
           <li key={p.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
             <div className="min-w-40 flex-1">
               <span className="font-medium">{p.name}</span> <span className="font-mono text-xs text-muted">{p.key}</span>
@@ -57,12 +57,12 @@ export function ProjectsAccess() {
 }
 
 const LABEL: Record<string, string> = {
-  "project.created": "created project",
-  "project.member_added": "added to a project",
-  "project.member_removed": "removed from a project",
-  "project.member_left": "left a project",
-  "project.member_role_changed": "changed a project role",
-  "project.admin_joined": "joined a project as admin",
+  "team.created": "created team",
+  "team.member_added": "added to a team",
+  "team.member_removed": "removed from a team",
+  "team.member_left": "left a team",
+  "team.member_role_changed": "changed a team role",
+  "team.admin_joined": "joined a team as admin",
   "workspace.member_removed": "removed from the workspace",
   "workspace.role_changed": "changed a workspace role",
 };
@@ -82,14 +82,14 @@ export function AccessLog() {
   return (
     <div className="card p-5">
       <h2 className="font-medium">Access log</h2>
-      <p className="mt-1 text-sm text-muted">Who added, removed or re-roled people, and who joined a project as admin. It is never edited or deleted.</p>
+      <p className="mt-1 text-sm text-muted">Who added, removed or re-roled people, and who joined a team as admin. It is never edited or deleted.</p>
       {query.isError && <p className="mt-3 text-sm text-danger" role="alert">Could not load the access log.</p>}
       {query.isSuccess && events.length === 0 && <p className="mt-3 text-sm text-muted">Nothing yet.</p>}
       <ul className="mt-3 divide-y divide-line">
         {events.map((e) => (
           <li key={e.seq} className="py-2 text-sm">
             <span className="font-medium">{e.actorName}</span> {LABEL[e.action] ?? e.action}
-            {e.projectKey && <span className="font-mono text-xs text-muted"> {e.projectKey}</span>}
+            {e.teamKey && <span className="font-mono text-xs text-muted"> {e.teamKey}</span>}
             {detail(e) && <span className="text-muted"> ({detail(e)})</span>}
             <span className="ml-2 text-xs text-muted">{new Date(e.createdAt).toLocaleString()}</span>
           </li>

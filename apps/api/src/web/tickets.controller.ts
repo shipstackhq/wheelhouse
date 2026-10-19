@@ -5,7 +5,7 @@ import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-/** A ticket is addressed by its ref (WH-12), which already names its project. A ticket of another workspace is a 404. */
+/** A ticket is addressed by its ref (WH-12), which already names its team. A ticket of another workspace is a 404. */
 @Controller("api/app/tickets")
 @AppEndpoints()
 @UseGuards(SessionGuard)
@@ -47,7 +47,7 @@ export class TicketsController {
     return { comment: { id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt } };
   }
 
-  /** Link the ticket to a map node of its own project (an id or a name). */
+  /** Link the ticket to a map node of its own team (an id or a name). */
   @Put(":ref/nodes/:nodeId")
   @HttpCode(200)
   link(@Req() req: SessionRequest, @Param("ref") ref: string, @Param("nodeId") nodeId: string) {

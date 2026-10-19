@@ -25,17 +25,17 @@ export function githubNote(params: URLSearchParams): { text: string; bad: boolea
   if (error) return { bad: true, text: error === "connect_failed" && params.get("github_msg") ? params.get("github_msg")! : (MESSAGES[error] ?? MESSAGES.failed) };
   const ok = params.get("github");
   if (ok === "repo_connected") return { bad: false, text: "Repository connected." };
-  if (ok === "connected") return { bad: false, text: "GitHub connected. Choose the repositories this project uses." };
+  if (ok === "connected") return { bad: false, text: "GitHub connected. Choose the repositories this team uses." };
   return null;
 }
 
 /**
- * "Connect GitHub" for a project: installing the App (owners), then choosing which of the installation's repositories this project
+ * "Connect GitHub" for a team: installing the App (owners), then choosing which of the installation's repositories this team
  * uses. The list comes from GitHub through the server; everything that matters is checked again there when you press Connect.
  */
-export function GithubConnect({ projectKey }: { projectKey: string }) {
+export function GithubConnect({ teamKey }: { teamKey: string }) {
   const { api } = useServices();
-  const query = useQuery(githubQuery(api, projectKey));
+  const query = useQuery(githubQuery(api, teamKey));
   const [params] = useSearchParams();
   const note = githubNote(params);
   const status = query.data;
@@ -86,15 +86,15 @@ export function GithubConnect({ projectKey }: { projectKey: string }) {
       </div>
       {note && <p role="status" className={note.bad ? "text-sm text-danger" : "text-sm text-ok"}>{note.text}</p>}
       {!status.isOwner ? (
-        <p className="text-sm text-muted">A workspace owner connects GitHub for this project.</p>
+        <p className="text-sm text-muted">A workspace owner connects GitHub for this team.</p>
       ) : (
         <>
           {/* A full page load: this leaves the app for GitHub and comes back to the callback, which redirects here. */}
-          <a className="btn btn-primary inline-flex" href={`/api/github/install?project=${encodeURIComponent(projectKey)}`}>
+          <a className="btn btn-primary inline-flex" href={`/api/github/install?team=${encodeURIComponent(teamKey)}`}>
             {status.installations.length ? "Add or change repositories on GitHub" : "Connect GitHub"}
           </a>
           {status.installations.map((i) => (
-            <Installation key={i.installationId} projectKey={projectKey} installation={i} />
+            <Installation key={i.installationId} teamKey={teamKey} installation={i} />
           ))}
         </>
       )}
@@ -102,12 +102,12 @@ export function GithubConnect({ projectKey }: { projectKey: string }) {
   );
 }
 
-function Installation({ projectKey, installation: f }: { projectKey: string; installation: GithubStatus["installations"][number] }) {
+function Installation({ teamKey, installation: f }: { teamKey: string; installation: GithubStatus["installations"][number] }) {
   const { api, queryClient } = useServices();
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
   const connect = async (repoId: string, fd: FormData) => {
     try {
-      await api.repos.connectGithub(projectKey, {
+      await api.repos.connectGithub(teamKey, {
         installationId: f.installationId,
         repoId,
         role: String(fd.get("role") ?? "").trim() || undefined,

@@ -19,8 +19,8 @@ const lifecycleColor: Record<Repository["lifecycle"], string> = {
 type Draft = { displayName: string; role: string; provider: Repository["provider"]; defaultBranch: string; pathLimit: string; lifecycle: Repository["lifecycle"] };
 const emptyDraft: Draft = { displayName: "", role: "", provider: "local", defaultBranch: "main", pathLimit: "", lifecycle: "live" };
 
-/** The repositories behind a project: add one by hand, change it, retire it. `after` is rendered at the end (the Connect GitHub card). */
-export function Repos(props: { projectKey: string; repos: Repository[]; after?: React.ReactNode }) {
+/** The repositories behind a team: add one by hand, change it, retire it. `after` is rendered at the end (the Connect GitHub card). */
+export function Repos(props: { teamKey: string; repos: Repository[]; after?: React.ReactNode }) {
   const { api, queryClient } = useServices();
   const [editing, setEditing] = useState<string | null>(null); // repo id, or "new"
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -39,8 +39,8 @@ export function Repos(props: { projectKey: string; repos: Repository[]; after?: 
         lifecycle: draft.lifecycle,
       };
       try {
-        if (original) await api.repos.update(props.projectKey, original.id, patch);
-        else await api.repos.create(props.projectKey, patch);
+        if (original) await api.repos.update(props.teamKey, original.id, patch);
+        else await api.repos.create(props.teamKey, patch);
       } catch (e) {
         return setError(describeFailure(e));
       }
@@ -85,7 +85,7 @@ export function Repos(props: { projectKey: string; repos: Repository[]; after?: 
           <div>
             <h2 className="text-lg font-semibold">Repositories</h2>
             <p className="mt-1 text-sm text-muted">
-              Frontend, backend, admin… the repos behind this project. A monorepo path limit scopes landed changes and file reports to just that
+              Frontend, backend, admin… the repos behind this team. A monorepo path limit scopes landed changes and file reports to just that
               directory. Each repository adds a service node to the map.
             </p>
           </div>
@@ -138,7 +138,7 @@ export function Repos(props: { projectKey: string; repos: Repository[]; after?: 
                         if (!(await confirm({ title: `Retire "${r.displayName}"?`, confirmLabel: "Retire", danger: true }))) return;
                         start(async () => {
                           try {
-                            await api.repos.retire(props.projectKey, r.id);
+                            await api.repos.retire(props.teamKey, r.id);
                           } catch (e) {
                             setError(describeFailure(e));
                           }

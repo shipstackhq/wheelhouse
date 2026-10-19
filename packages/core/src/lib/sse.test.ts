@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { MemoryBus, type StreamEvent } from "./event-bus";
 import { eventStream, formatChange, formatHeartbeat, formatMarker, parseSince, REPLAY_CAP, type StreamDeps } from "./sse";
 
-const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T", projectId: "P", seq, type: "ticket.moved", summary: `s${seq}`, ...over });
+const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T", teamId: "P", seq, type: "ticket.moved", summary: `s${seq}`, ...over });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Read everything the stream has produced so far (and whatever arrives in the next few ms). */
@@ -30,7 +30,7 @@ function harness(over: Partial<StreamDeps> & { rows?: StreamEvent[]; latest?: nu
   const ctl = new AbortController();
   let closed = 0;
   const stream = eventStream({
-    subscribe: (fn) => bus.subscribe({ project: "P" }, fn),
+    subscribe: (fn) => bus.subscribe({ team: "P" }, fn),
     replay: async (since, limit) => (over.rows ?? []).filter((r) => r.seq! > since).slice(0, limit),
     latestSeq: async () => over.latest ?? 0,
     since: null,
@@ -246,7 +246,7 @@ describe("closing", () => {
     ctl.abort();
     const bus = new MemoryBus();
     let closed = 0;
-    const stream = eventStream({ subscribe: (fn) => bus.subscribe({ project: "P" }, fn), replay: async () => [], latestSeq: async () => 0, since: null, signal: ctl.signal, onClose: () => closed++ });
+    const stream = eventStream({ subscribe: (fn) => bus.subscribe({ team: "P" }, fn), replay: async () => [], latestSeq: async () => 0, since: null, signal: ctl.signal, onClose: () => closed++ });
     const out = collect(stream);
     await wait(10);
     assert.equal(bus.size(), 0);

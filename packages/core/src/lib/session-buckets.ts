@@ -38,6 +38,6 @@ export type SessionView = {
   reading: boolean;
   branch: string | null;
   ticket: string | null;
-  /** Set when the same key has sessions in several projects, so rows say which. */
-  projectKey?: string;
+  /** Set when the same key has sessions in several teams, so rows say which. */
+  teamKey?: string;
 };

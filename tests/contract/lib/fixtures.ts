@@ -5,7 +5,7 @@ export type WorkspaceFixture = {
   userId: string;
   email: string;
   memberEmail: string;
-  projectKey: string;
+  teamKey: string;
   /** A ticket tests may freely edit and move. */
   ticketRef: string;
   /** A ticket only the webhook tests touch (PR moves are blocked for ten minutes after someone else moves a ticket). */
@@ -27,7 +27,7 @@ export type GithubFixture = {
   /** Where the fake GitHub listens; the server under test must be configured with these. */
   apiUrl: string;
   webUrl: string;
-  /** Installation + repository connected for workspace A (project A) and, with the SAME repository id, for workspace B. */
+  /** Installation + repository connected for workspace A (team A) and, with the SAME repository id, for workspace B. */
   installationA: string;
   installationB: string;
   repoId: string;

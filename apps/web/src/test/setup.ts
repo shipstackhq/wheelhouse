@@ -36,7 +36,7 @@ import { FakeEventSource } from "./fake-event-source";
 import { beforeEach } from "vitest";
 beforeEach(() => {
   FakeEventSource.reset();
-  document.cookie = "wh_last_project=; path=/; max-age=0";
+  document.cookie = "wh_last_team=; path=/; max-age=0";
   try {
     localStorage.clear();
   } catch {

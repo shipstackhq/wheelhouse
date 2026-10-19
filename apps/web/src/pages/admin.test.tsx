@@ -7,7 +7,7 @@ import { adminWorkspace, adminWorkspaceDetail, invite } from "../test/data";
 const admin = (s: { me: unknown }) => (s.me = { ...ADA, isInstanceAdmin: true });
 
 describe("admin: workspaces", () => {
-  test("lists every workspace with owners, seats, projects and who invited them; yours and suspended ones are marked", async () => {
+  test("lists every workspace with owners, seats, teams and who invited them; yours and suspended ones are marked", async () => {
     renderApp("/admin/workspaces", (s) => {
       admin(s);
       s.on("GET /api/app/admin/workspaces", {
@@ -25,7 +25,7 @@ describe("admin: workspaces", () => {
     const theirs = screen.getByText("suspended").closest("a") as HTMLElement;
     expect(within(theirs).getByText(/charles@example.test · invited by ada@example.test/)).toBeTruthy();
     expect(within(theirs).getByText("4 of 5 seats (3 members, 1 pending)")).toBeTruthy();
-    expect(within(theirs).getByText("2 projects")).toBeTruthy();
+    expect(within(theirs).getByText("2 teams")).toBeTruthy();
     expect(within(theirs).getByText("just now")).toBeTruthy();
   });
 });

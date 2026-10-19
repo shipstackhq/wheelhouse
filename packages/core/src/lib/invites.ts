@@ -3,9 +3,9 @@ import bcrypt from "bcryptjs";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "../db";
 import { inviteTtlHours, isInstanceAdmin, maxWorkspaceMembers, passwordProblem } from "./auth-policy";
-import type { ProjectRole, WorkspaceRole } from "../db/schema";
-import { audit, canManagePeople, isWorkspaceRole } from "./project-access";
-import { getProject } from "./service";
+import type { TeamRole, WorkspaceRole } from "../db/schema";
+import { audit, canManagePeople, isWorkspaceRole } from "./team-access";
+import { requireTeam } from "./service";
 import { newWorkspaceSlug } from "./workspace-slug";
 
 /**
@@ -79,7 +79,7 @@ export async function seatInfo(workspaceId: string, now = new Date()) {
 /** Create an invite. Returns the plain token once; it cannot be recovered later. */
 export async function createInvite(
   issuer: Issuer,
-  input: { kind: "new_workspace" | "join_workspace"; email: string; role?: WorkspaceRole; tags?: string[]; workspaceName?: string; projects?: { project: string; role: ProjectRole }[] },
+  input: { kind: "new_workspace" | "join_workspace"; email: string; role?: WorkspaceRole; tags?: string[]; workspaceName?: string; teams?: { team: string; role: TeamRole }[] },
   now = new Date(),
 ): Promise<NewInvite> {
   const email = normalizeEmail(input.email);
@@ -92,20 +92,20 @@ export async function createInvite(
   const wanted = input.role ?? "member";
   if (!isWorkspaceRole(wanted)) throw new InviteError("invalid", "Choose a role: owner, admin, member, viewer or guest");
   if (input.kind === "join_workspace" && wanted === "owner" && issuer.role !== "owner") throw new InviteError("forbidden", "Only an owner can invite another owner");
-  // Projects to put the person into on accept (ADR-23). The issuer must be an admin of each one: you cannot give away a project you do not run.
-  const grants: { projectId: string; role: ProjectRole }[] = [];
-  if (input.kind === "join_workspace" && input.projects?.length) {
-    if (input.projects.length > 20) throw new InviteError("invalid", "An invite can add someone to at most 20 projects");
+  // Teams to put the person into on accept (ADR-23). The issuer must be an admin of each one: you cannot give away a team you do not run.
+  const grants: { teamId: string; role: TeamRole }[] = [];
+  if (input.kind === "join_workspace" && input.teams?.length) {
+    if (input.teams.length > 20) throw new InviteError("invalid", "An invite can add someone to at most 20 teams");
     const who = { kind: "human" as const, id: issuer.userId, name: issuer.email, workspaceId: issuer.workspaceId };
-    for (const g of input.projects) {
-      if (!(["admin", "editor", "viewer"] as const).includes(g.role)) throw new InviteError("invalid", "Choose a project role: admin, editor or viewer");
+    for (const g of input.teams) {
+      if (!(["admin", "editor", "viewer"] as const).includes(g.role)) throw new InviteError("invalid", "Choose a team role: admin, editor or viewer");
       let p;
       try {
-        p = await getProject(who, g.project, "admin");
+        p = await requireTeam(who, g.team, "admin");
       } catch {
-        throw new InviteError("forbidden", `You can only add people to projects you administer (${g.project})`);
+        throw new InviteError("forbidden", `You can only add people to teams you administer (${g.team})`);
       }
-      if (!grants.some((x) => x.projectId === p.id)) grants.push({ projectId: p.id, role: g.role });
+      if (!grants.some((x) => x.teamId === p.id)) grants.push({ teamId: p.id, role: g.role });
     }
   }
   const workspaceName = input.kind === "new_workspace" ? (input.workspaceName ?? "").trim().slice(0, 100) || null : null;
@@ -153,7 +153,7 @@ export async function createInvite(
         workspaceName,
         role,
         tags,
-        projects: grants,
+        teams: grants,
         tokenHash: sha256(token),
         createdBy: issuer.userId,
         expiresAt,
@@ -171,8 +171,8 @@ export type PendingInvite = {
   email: string;
   role: WorkspaceRole;
   workspaceName: string | null;
-  /** The projects they join on accepting, by key. */
-  projects: { key: string; name: string; role: ProjectRole }[];
+  /** The teams they join on accepting, by key. */
+  teams: { key: string; name: string; role: TeamRole }[];
   createdAt: Date;
   expiresAt: Date;
 };
@@ -191,7 +191,7 @@ export async function listInvites(issuer: Issuer, now = new Date()): Promise<Pen
       email: invites.email,
       role: invites.role,
       workspaceName: invites.workspaceName,
-      grants: invites.projects,
+      grants: invites.teams,
       createdAt: invites.createdAt,
       expiresAt: invites.expiresAt,
     })
@@ -199,12 +199,12 @@ export async function listInvites(issuer: Issuer, now = new Date()): Promise<Pen
     .where(and(pending(now), or(...scopes)))
     .orderBy(invites.createdAt)
     .then(async (rows) => {
-      const ids = [...new Set(rows.flatMap((r) => r.grants.map((g) => g.projectId)))];
-      const named = ids.length ? await db.select({ id: schema.projects.id, key: schema.projects.key, name: schema.projects.name }).from(schema.projects).where(inArray(schema.projects.id, ids)) : [];
+      const ids = [...new Set(rows.flatMap((r) => r.grants.map((g) => g.teamId)))];
+      const named = ids.length ? await db.select({ id: schema.teams.id, key: schema.teams.key, name: schema.teams.name }).from(schema.teams).where(inArray(schema.teams.id, ids)) : [];
       return rows.map(({ grants, ...r }) => ({
         ...r,
-        projects: grants.flatMap((g) => {
-          const p = named.find((n) => n.id === g.projectId);
+        teams: grants.flatMap((g) => {
+          const p = named.find((n) => n.id === g.teamId);
           return p ? [{ key: p.key, name: p.name, role: g.role }] : [];
         }),
       }));
@@ -247,17 +247,17 @@ export async function peekInvite(token: string, now = new Date()) {
 }
 
 /**
- * Put the person into the projects the inviter chose, as long as each still belongs to the workspace. One audit line each, in the
+ * Put the person into the teams the inviter chose, as long as each still belongs to the workspace. One audit line each, in the
  * inviter's name. Shared by a new account accepting and an existing account accepting.
  */
-async function grantInviteProjects(tx: Tx, inv: typeof invites.$inferSelect, userId: string, workspaceId: string) {
-  if (!inv.projects.length) return;
+async function grantInviteTeams(tx: Tx, inv: typeof invites.$inferSelect, userId: string, workspaceId: string) {
+  if (!inv.teams.length) return;
   const [issuer] = inv.createdBy ? await tx.select({ name: users.name }).from(users).where(eq(users.id, inv.createdBy)) : [];
-  for (const g of inv.projects) {
-    const [p] = await tx.select({ id: schema.projects.id }).from(schema.projects).where(and(eq(schema.projects.id, g.projectId), eq(schema.projects.workspaceId, workspaceId)));
+  for (const g of inv.teams) {
+    const [p] = await tx.select({ id: schema.teams.id }).from(schema.teams).where(and(eq(schema.teams.id, g.teamId), eq(schema.teams.workspaceId, workspaceId)));
     if (!p) continue;
-    await tx.insert(schema.projectMembers).values({ projectId: p.id, userId, workspaceId, role: g.role, addedBy: inv.createdBy }).onConflictDoNothing();
-    await audit(tx, { kind: "human", id: inv.createdBy ?? userId, name: issuer?.name ?? "An invite", workspaceId }, { action: "project.member_added", targetType: "user", targetId: userId, projectId: p.id, after: { role: g.role, via: "invite" } });
+    await tx.insert(schema.teamMembers).values({ teamId: p.id, userId, workspaceId, role: g.role, addedBy: inv.createdBy }).onConflictDoNothing();
+    await audit(tx, { kind: "human", id: inv.createdBy ?? userId, name: issuer?.name ?? "An invite", workspaceId }, { action: "team.member_added", targetType: "user", targetId: userId, teamId: p.id, after: { role: g.role, via: "invite" } });
   }
 }
 
@@ -314,7 +314,7 @@ export async function acceptInvite(input: { token: string; name: string; passwor
       } else {
         await tx.insert(memberships).values({ userId: u.id, workspaceId: workspaceId!, role: inv.role, tags: inv.tags });
       }
-      if (inv.kind === "join_workspace") await grantInviteProjects(tx, inv, u.id, workspaceId!);
+      if (inv.kind === "join_workspace") await grantInviteTeams(tx, inv, u.id, workspaceId!);
       await tx.update(invites).set({ usedBy: u.id }).where(eq(invites.id, inv.id));
       console.info(`[invite] accepted ${inv.id} kind=${inv.kind}`);
       return { userId: u.id, workspaceId: workspaceId!, kind: inv.kind };
@@ -338,15 +338,15 @@ export async function peekInviteAsMember(user: { email: string }, token: string,
   if (!row || row.kind !== "join_workspace" || !row.workspaceId || row.email !== normalizeEmail(user.email)) return null;
   const [t] = await db.select({ name: workspaces.name, suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, row.workspaceId));
   if (!t || t.suspendedAt) return null;
-  const named = row.projects.length
-    ? await db.select({ id: schema.projects.id, key: schema.projects.key, name: schema.projects.name }).from(schema.projects).where(inArray(schema.projects.id, row.projects.map((g) => g.projectId)))
+  const named = row.teams.length
+    ? await db.select({ id: schema.teams.id, key: schema.teams.key, name: schema.teams.name }).from(schema.teams).where(inArray(schema.teams.id, row.teams.map((g) => g.teamId)))
     : [];
   return {
     email: row.email,
     workspaceName: t.name,
     role: row.role,
-    projects: row.projects.flatMap((g) => {
-      const p = named.find((n) => n.id === g.projectId);
+    teams: row.teams.flatMap((g) => {
+      const p = named.find((n) => n.id === g.teamId);
       return p ? [{ key: p.key, name: p.name, role: g.role }] : [];
     }),
   };
@@ -354,7 +354,7 @@ export async function peekInviteAsMember(user: { email: string }, token: string,
 
 /**
  * A signed-in person with an account accepts a join invite sent to their own email: they become a member of that workspace
- * (and of the projects chosen) and keep their account, so one person can work in several workspaces. Throws InviteFailure
+ * (and of the teams chosen) and keep their account, so one person can work in several workspaces. Throws InviteFailure
  * for every problem with the invite, and "already_member" for someone who is in the workspace already (the invite stays unused).
  */
 export async function acceptInviteAsMember(user: { id: string; email: string }, token: string, now = new Date()) {
@@ -371,7 +371,7 @@ export async function acceptInviteAsMember(user: { id: string; email: string }, 
     const claimed = await tx.update(invites).set({ usedAt: now, usedBy: user.id }).where(and(eq(invites.id, inv.id), pending(now))).returning({ id: invites.id });
     if (!claimed.length) throw new InviteFailure("invalid");
     await tx.insert(memberships).values({ userId: user.id, workspaceId: inv.workspaceId, role: inv.role, tags: inv.tags });
-    await grantInviteProjects(tx, inv, user.id, inv.workspaceId);
+    await grantInviteTeams(tx, inv, user.id, inv.workspaceId);
     console.info(`[invite] accepted ${inv.id} kind=join_workspace by an existing account`);
     return { workspaceId: inv.workspaceId };
   });

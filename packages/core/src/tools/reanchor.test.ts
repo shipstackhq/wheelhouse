@@ -25,7 +25,7 @@ const write = (f: string, content: string) => {
 };
 
 const rules: Rules = {
-  project: "WH",
+  team: "WH",
   repository: ["wheelhouse"],
   anchors: { "src/app/**": ["apps/web/**"], "src/app/page.tsx": ["apps/web/src/page.tsx"], "gone/**": ["nowhere/**"] },
 };
@@ -57,13 +57,13 @@ before(async () => {
   conn = await openConn(path.join(work, "db"), { migrate: true, create: true });
   const q = conn.query;
   const [workspace] = await q(`insert into workspaces (name) values ('t') returning id`);
-  const [p1] = await q(`insert into projects (workspace_id, key, name) values ($1, 'WH', 'W') returning id`, [workspace.id]);
-  const [p2] = await q(`insert into projects (workspace_id, key, name) values ($1, 'OT', 'O') returning id`, [workspace.id]);
+  const [p1] = await q(`insert into teams (workspace_id, key, name) values ($1, 'WH', 'W') returning id`, [workspace.id]);
+  const [p2] = await q(`insert into teams (workspace_id, key, name) values ($1, 'OT', 'O') returning id`, [workspace.id]);
   wh = String(p1.id);
   other = String(p2.id);
-  const node = async (project: unknown, name: string, anchors: string[], hashes: Record<string, string> = {}, extra: { drift?: string[]; reason?: string } = {}) =>
-    (await q(`insert into nodes (project_id, layer, kind, name, anchors, described_hashes, drift_paths, stale, stale_reason) values ($1, 'system', 'service', $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7) returning id`, [
-      project, name, JSON.stringify(anchors), JSON.stringify(hashes), JSON.stringify(extra.drift ?? []), !!extra.reason, extra.reason ?? null,
+  const node = async (team: unknown, name: string, anchors: string[], hashes: Record<string, string> = {}, extra: { drift?: string[]; reason?: string } = {}) =>
+    (await q(`insert into nodes (team_id, layer, kind, name, anchors, described_hashes, drift_paths, stale, stale_reason) values ($1, 'system', 'service', $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7) returning id`, [
+      team, name, JSON.stringify(anchors), JSON.stringify(hashes), JSON.stringify(extra.drift ?? []), !!extra.reason, extra.reason ?? null,
     ]))[0].id;
   await node(p1.id, "Lib", ["src/lib/a.ts", "src/lib/b.ts", "src/lib/keep.ts"], { "src/lib/a.ts": "h-a", "src/lib/b.ts": "h-b", "src/lib/keep.ts": "h-k" }, { drift: ["src/lib/b.ts"], reason: "src/lib/b.ts changed in abc1234" });
   await node(p1.id, "Data", ["src/db/**", "drizzle/**", "src/db/schema.ts#docs"], { "src/db/schema.ts": "h-s", "drizzle/0000_init.sql": "h-d" });
@@ -71,9 +71,9 @@ before(async () => {
   await node(p1.id, "Whole", ["wheelhouse:**", "backend:src/**", "cli:src/**"]);
   await node(p1.id, "Lost", ["no/such/**", "gone/**"], { "no/such/x.ts": "h-x" });
   await node(other, "Elsewhere", ["src/lib/a.ts", "src/db/**"], { "src/lib/a.ts": "h-o" });
-  await q(`insert into docs (project_id, slug, title, created_by_kind, updated_by_kind, anchors, described_hashes) values ($1, 'd', 'Doc', 'human', 'human', $2::jsonb, $3::jsonb)`, [wh, JSON.stringify(["src/lib/a.ts"]), JSON.stringify({ "src/lib/a.ts": "h-doc" })]);
+  await q(`insert into docs (team_id, slug, title, created_by_kind, updated_by_kind, anchors, described_hashes) values ($1, 'd', 'Doc', 'human', 'human', $2::jsonb, $3::jsonb)`, [wh, JSON.stringify(["src/lib/a.ts"]), JSON.stringify({ "src/lib/a.ts": "h-doc" })]);
   const [n1] = await q(`select id from nodes where name = 'Lib'`);
-  await q(`insert into node_drafts (project_id, node_id, author_name, author_kind, patch) values ($1, $2, 'Claude', 'agent', $3::jsonb)`, [wh, n1.id, JSON.stringify({ anchors: ["src/lib/a.ts"], summary: "s" })]);
+  await q(`insert into node_drafts (team_id, node_id, author_name, author_kind, patch) values ($1, $2, 'Claude', 'agent', $3::jsonb)`, [wh, n1.id, JSON.stringify({ anchors: ["src/lib/a.ts"], summary: "s" })]);
 });
 
 after(async () => {
@@ -131,7 +131,7 @@ describe("one anchor", () => {
   });
 });
 
-describe("a project's nodes and docs", () => {
+describe("a team's nodes and docs", () => {
   const rowOf = async (name: string) => (await conn.query(`select anchors, described_hashes, drift_paths, stale_reason from nodes where name = $1`, [name]))[0];
 
   test("a dry run writes nothing and reports what it would do; the unresolved are named", async () => {
@@ -162,7 +162,7 @@ describe("a project's nodes and docs", () => {
     assert.deepEqual(pages.described_hashes, {});
   });
 
-  test("anchors of the whole repository and of other repositories are untouched; another project is never touched", async () => {
+  test("anchors of the whole repository and of other repositories are untouched; another team is never touched", async () => {
     assert.deepEqual((await rowOf("Whole")).anchors, ["wheelhouse:**", "backend:src/**", "cli:src/**"]);
     const elsewhere = await rowOf("Elsewhere");
     assert.deepEqual(elsewhere.anchors, ["src/lib/a.ts", "src/db/**"]);
@@ -185,8 +185,8 @@ describe("a project's nodes and docs", () => {
     assert.equal(JSON.stringify(await conn.query(`select * from nodes order by name`)), before);
   });
 
-  test("a project that does not exist is an error, not a silent success", async () => {
-    await assert.rejects(reanchor(conn.query, tree, { ...rules, project: "NOPE" }, { apply: false }), /no project "NOPE"/);
+  test("a team that does not exist is an error, not a silent success", async () => {
+    await assert.rejects(reanchor(conn.query, tree, { ...rules, team: "NOPE" }, { apply: false }), /no team "NOPE"/);
   });
 });
 void other;

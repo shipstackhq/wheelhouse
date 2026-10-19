@@ -1,5 +1,5 @@
 // A signed pull_request delivery for the connected repository, naming an open ticket, sent to the app running on the copy.
-// Signed with the real webhook secret from the environment (never printed). Proves the next webhook lands on the right project.
+// Signed with the real webhook secret from the environment (never printed). Proves the next webhook lands on the right team.
 import crypto from "node:crypto";
 const facts = JSON.parse(process.argv[2]);
 const base = process.argv[3];
@@ -26,5 +26,5 @@ const r = await fetch(base + "/api/webhooks/github", {
 });
 const text = await r.text();
 const good = r.status === 200 && /"status":"handled"/.test(text);
-console.log(`  ${good ? "ok  " : "FAIL"} a signed pull_request webhook for the connected repository of ${facts.repo.project}: HTTP ${r.status} ${text.slice(0, 140)}`);
+console.log(`  ${good ? "ok  " : "FAIL"} a signed pull_request webhook for the connected repository of ${facts.repo.team}: HTTP ${r.status} ${text.slice(0, 140)}`);
 process.exit(good ? 0 : 1);

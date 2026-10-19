@@ -18,7 +18,7 @@ export type Actor = {
   workspaceId: string;
   /**
    * Set only by Wheelhouse itself for work it does on a workspace's behalf, such as handling a GitHub webhook. A system actor is
-   * not a person and not a project member: like an agent key it reaches every project of its own workspace and nothing outside it.
+   * not a person and not a team member: like an agent key it reaches every team of its own workspace and nothing outside it.
    */
   system?: true;
   /** Agents only: the client session making the call (Claude Code session_id), when the call names one. */

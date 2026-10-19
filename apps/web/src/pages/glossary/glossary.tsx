@@ -9,10 +9,10 @@ import { useServices } from "../../lib/services";
 import { ArrowLeftIcon, EditIcon, SearchIcon, TermIcon } from "../../components/icons";
 
 /**
- * `/p/:key/glossary` is the project's vocabulary as a grid of cards (the layout of the docs home), each showing the term and the
- * concept it names; `/p/:key/glossary/:id` is one term, with its definition.
+ * `/t/:key/glossary` is the team's vocabulary as a grid of cards (the layout of the docs home), each showing the term and the
+ * concept it names; `/t/:key/glossary/:id` is one term, with its definition.
  */
-export function Glossary(props: { projectKey: string; termId?: string; terms: Term[]; nodes: { id: string; name: string }[] }) {
+export function Glossary(props: { teamKey: string; termId?: string; terms: Term[]; nodes: { id: string; name: string }[] }) {
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
   const [filter, setFilter] = useState("");
@@ -22,7 +22,7 @@ export function Glossary(props: { projectKey: string; termId?: string; terms: Te
   const [pending, start] = useTransition();
   const { confirm, dialogs } = useDialogs();
   const nodeName = new Map(props.nodes.map((n) => [n.id, n.name]));
-  const base = `/p/${props.projectKey}/glossary`;
+  const base = `/t/${props.teamKey}/glossary`;
   const selected = props.termId === undefined ? undefined : props.terms.find((t) => t.id === props.termId);
 
   const shown = props.terms.filter(
@@ -34,9 +34,9 @@ export function Glossary(props: { projectKey: string; termId?: string; terms: Te
       try {
         // Renaming = delete old + create new (terms are keyed by name).
         if (original && original.term.toLowerCase() !== draft.term.trim().toLowerCase()) {
-          await api.map.deleteTerm(props.projectKey, original.id);
+          await api.map.deleteTerm(props.teamKey, original.id);
         }
-        await api.map.upsertTerm(props.projectKey, draft.term.trim(), { definition: draft.definition, node: draft.nodeId || null });
+        await api.map.upsertTerm(props.teamKey, draft.term.trim(), { definition: draft.definition, node: draft.nodeId || null });
         if (original && original.term.toLowerCase() !== draft.term.trim().toLowerCase()) void navigate(base);
       } catch (e) {
         setError(describeFailure(e));
@@ -72,7 +72,7 @@ export function Glossary(props: { projectKey: string; termId?: string; terms: Te
     if (!(await confirm({ title: `Remove “${t.term}”?`, confirmLabel: "Remove", danger: true }))) return;
     start(async () => {
       try {
-        await api.map.deleteTerm(props.projectKey, t.id);
+        await api.map.deleteTerm(props.teamKey, t.id);
         if (props.termId === t.id) void navigate(base);
       } catch (e) {
         setError(describeFailure(e));
@@ -84,7 +84,7 @@ export function Glossary(props: { projectKey: string; termId?: string; terms: Te
     const name = t.nodeId ? nodeName.get(t.nodeId) : undefined;
     if (!t.nodeId || !name) return null;
     return link ? (
-      <Link to={`/p/${props.projectKey}/map?node=${t.nodeId}`} className="chip bg-accent/10 text-accent hover:bg-accent/20">
+      <Link to={`/t/${props.teamKey}/map?node=${t.nodeId}`} className="chip bg-accent/10 text-accent hover:bg-accent/20">
         <TermIcon /> {name}
       </Link>
     ) : (
@@ -106,7 +106,7 @@ export function Glossary(props: { projectKey: string; termId?: string; terms: Te
               </button>
             </div>
             <p className="mb-6 text-sm text-muted">
-              Project vocabulary a newcomer wouldn&apos;t know. Terms are underlined with a hover definition wherever they appear in map explainers and decisions.
+              Team vocabulary a newcomer wouldn&apos;t know. Terms are underlined with a hover definition wherever they appear in map explainers and decisions.
             </p>
             {props.terms.length > 0 && (
               <div className="relative mb-4">

@@ -67,7 +67,7 @@ Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Po
 ## Layout
 
 ```
-packages/core/src/db/schema.ts   Drizzle schema (users, workspaces, projects, tickets, nodes, edges, events, agent_cursors…)
+packages/core/src/db/schema.ts   Drizzle schema (users, workspaces, teams, tickets, nodes, edges, events, agent_cursors…)
 packages/core/drizzle/           migrations
 packages/core/src/lib/service.ts single write path: access checks, optimistic locking, event emission
 packages/core/src/lib/tools.ts   tool registry → exposed via /mcp and /api/v1/<tool>
@@ -84,4 +84,4 @@ The app used to be a single Next.js app. It is archived at the git tag `archive/
 
 ## Known limits
 
-No email is sent: an invite is a link the inviter shares. There is no password reset yet (WH-73). Live updates use server-sent events and need a single app process. A person can belong to several workspaces, and a project is visible only to its members.
+No email is sent: an invite is a link the inviter shares. There is no password reset yet (WH-73). Live updates use server-sent events and need a single app process. A person can belong to several workspaces, and a team is visible only to its members.

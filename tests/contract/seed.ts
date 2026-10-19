@@ -59,18 +59,18 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
     return k;
   };
   const actor: Actor = { kind: "human", id: owner.id, name: owner.name, workspaceId: t.id };
-  const projectKey = `CT${letter}`;
-  const project = await svc.createProject(actor, { name: `Contract ${letter}`, key: projectKey });
-  // A project is reachable only by its members (ADR-23): the owner got in by creating it, the workspace's other member is added here.
-  await db.insert(schema.projectMembers).values({ projectId: project.id, userId: member.id, workspaceId: t.id, role: "editor", addedBy: owner.id });
-  const ticket = await svc.createTicket(actor, projectKey, { title: `Contract ticket ${letter}` });
-  const webhookTicket = await svc.createTicket(actor, projectKey, { title: `Webhook ticket ${letter}` });
+  const teamKey = `CT${letter}`;
+  const team = await svc.createTeam(actor, { name: `Contract ${letter}`, key: teamKey });
+  // A team is reachable only by its members (ADR-23): the owner got in by creating it, the workspace's other member is added here.
+  await db.insert(schema.teamMembers).values({ teamId: team.id, userId: member.id, workspaceId: t.id, role: "editor", addedBy: owner.id });
+  const ticket = await svc.createTicket(actor, teamKey, { title: `Contract ticket ${letter}` });
+  const webhookTicket = await svc.createTicket(actor, teamKey, { title: `Webhook ticket ${letter}` });
   return {
     workspaceId: t.id,
     userId: owner.id,
     email: owner.email,
     memberEmail: member.email,
-    projectKey,
+    teamKey,
     ticketRef: ticket.ref,
     webhookTicketRef: webhookTicket.ref,
     apiKey: await key("contract key"),
@@ -103,7 +103,7 @@ async function main() {
   const [au] = await db.insert(schema.users).values({ email: ADMIN_EMAIL, name: "Contract admin", passwordHash }).returning();
   await db.insert(schema.memberships).values({ userId: au.id, workspaceId: at.id, role: "owner" });
 
-  // A workspace for the tests that connect GitHub repositories, so the seeded workspaces (and their project lists, webhooks and counts) stay as they are.
+  // A workspace for the tests that connect GitHub repositories, so the seeded workspaces (and their team lists, webhooks and counts) stay as they are.
   const [ct] = await db.insert(schema.workspaces).values({ name: "Contract connect workspace" }).returning();
   const [cu] = await db.insert(schema.users).values({ email: "ct-connect-owner@example.test", name: "Contract connect owner", passwordHash }).returning();
   const [cm] = await db.insert(schema.users).values({ email: "ct-connect-member@example.test", name: "Contract connect member", passwordHash }).returning();
@@ -139,11 +139,11 @@ async function main() {
     });
     // Both workspaces connect a repository with the SAME GitHub id, each through its own installation: a webhook for one must
     // never touch the other.
-    for (const [t, installationId, p, project] of [[a, github.installationA, "CTA", "A"], [b, github.installationB, "CTB", "B"]] as const) {
-      await db.insert(schema.githubInstallations).values({ installationId, workspaceId: t.workspaceId, accountLogin: `contract-${project}`, accountType: "Organization", connectedBy: t.userId });
-      const proj = (await db.select().from(schema.projects).where(eq(schema.projects.workspaceId, t.workspaceId)))[0];
+    for (const [t, installationId, p, team] of [[a, github.installationA, "CTA", "A"], [b, github.installationB, "CTB", "B"]] as const) {
+      await db.insert(schema.githubInstallations).values({ installationId, workspaceId: t.workspaceId, accountLogin: `contract-${team}`, accountType: "Organization", connectedBy: t.userId });
+      const proj = (await db.select().from(schema.teams).where(eq(schema.teams.workspaceId, t.workspaceId)))[0];
       await db.insert(schema.repositories).values({
-        projectId: proj.id,
+        teamId: proj.id,
         displayName: "app",
         role: "webapp",
         provider: "github",
@@ -155,10 +155,10 @@ async function main() {
       });
     }
     await db.insert(schema.githubInstallations).values({ installationId: github.installationC, workspaceId: ct.id, accountLogin: "contract-connect", accountType: "Organization", connectedBy: cu.id });
-    // A forged row: workspace B's project claims a repository through WORKSPACE A's installation. Webhooks must resolve an installation to
+    // A forged row: workspace B's team claims a repository through WORKSPACE A's installation. Webhooks must resolve an installation to
     // its own workspace (the join on github_installations.workspace_id), so this row must never be reached.
-    const projB = (await db.select().from(schema.projects).where(eq(schema.projects.workspaceId, b.workspaceId)))[0];
-    await db.insert(schema.repositories).values({ projectId: projB.id, displayName: "forged", role: "webapp", provider: "github", slug: "ct/forged", githubRepoId: github.repoId, githubInstallationId: github.installationA, githubFullName: "ct/app", defaultBranch: "main" });
+    const projB = (await db.select().from(schema.teams).where(eq(schema.teams.workspaceId, b.workspaceId)))[0];
+    await db.insert(schema.repositories).values({ teamId: projB.id, displayName: "forged", role: "webapp", provider: "github", slug: "ct/forged", githubRepoId: github.repoId, githubInstallationId: github.installationA, githubFullName: "ct/app", defaultBranch: "main" });
   } else {
     // Explicitly blank so a developer's own .env.local can never leak GitHub credentials into the server under test.
     for (const k of ["GITHUB_APP_ID", "GITHUB_APP_SLUG", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET", "GITHUB_API_URL", "GITHUB_WEB_URL"]) serverEnv[k] = "";

@@ -13,7 +13,7 @@ export const LANDED_FILE = "src/contract/landed.ts";
 /**
  * A stand-in for api.anthropic.com's streaming Messages call, which "Ask the map" makes from the server. It answers with text built
  * from what it was sent, so a test can see what the server asked and with what, without the answer ever containing the API key:
- * the project line of the map it was given, the question, the focus, and whether a key was sent at all.
+ * the team line of the map it was given, the question, the focus, and whether a key was sent at all.
  * Questions containing FAIL-RATE, FAIL-AUTH, FAIL-500 or TRUNCATE make it answer that way.
  */
 function anthropicAnswer(req: http.IncomingMessage, raw: string, res: http.ServerResponse) {
@@ -30,9 +30,9 @@ function anthropicAnswer(req: http.IncomingMessage, raw: string, res: http.Serve
   if (user.includes("FAIL-AUTH")) return error(401, "authentication_error", "invalid x-api-key");
   if (user.includes("FAIL-500")) return error(500, "api_error", "boom");
   const map = (body.system ?? []).map((b) => b.text).join("\n");
-  const project = /# Project ([A-Z0-9]+): ([^\n]*)/.exec(map)?.[0] ?? "no project line";
+  const team = /# Team ([A-Z0-9]+): ([^\n]*)/.exec(map)?.[0] ?? "no team line";
   const nodes = [...map.matchAll(/^#{3,6} (\w+:[^\n(]+) \(/gm)].map((m) => m[1].trim());
-  const text = `FAKE ANSWER. Map: ${project}. Nodes: ${nodes.join(", ") || "none"}. Asked: ${user.replace(/\n+/g, " ")}. Server-side key sent: yes. See [[system:Example]].`;
+  const text = `FAKE ANSWER. Map: ${team}. Nodes: ${nodes.join(", ") || "none"}. Asked: ${user.replace(/\n+/g, " ")}. Server-side key sent: yes. See [[system:Example]].`;
   res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
   sse("message_start", { type: "message_start", message: { id: "msg_fake", type: "message", role: "assistant", model: "claude-opus-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } } });
   sse("content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });

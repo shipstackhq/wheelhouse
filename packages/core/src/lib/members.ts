@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import { isUuid } from "./project-access";
+import { isUuid } from "./team-access";
 import { ServiceError } from "./service-error";
 import type { WorkspaceRole } from "../db/schema";
 
@@ -50,13 +50,13 @@ export async function updateMember(workspaceId: string, actingUserId: string, in
 }
 
 /**
- * Removes the person from the workspace and from every project of it. A project must keep one admin (ADR-23), so someone who is
- * the only admin of a project cannot be removed until another admin is named; the error says which projects.
+ * Removes the person from the workspace and from every team of it. A team must keep one admin (ADR-23), so someone who is
+ * the only admin of a team cannot be removed until another admin is named; the error says which teams.
  */
 export async function removeMember(workspaceId: string, actingUserId: string, userId: string) {
   if (userId === actingUserId || !isUuid(userId)) return false;
   const db = await getDb();
-  const { projectMembers: pm, projects } = schema;
+  const { teamMembers: pm, teams } = schema;
   return db.transaction(async (tx) => {
     const [exists] = await tx
       .select({ userId: schema.memberships.userId })
@@ -64,19 +64,19 @@ export async function removeMember(workspaceId: string, actingUserId: string, us
       .where(and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.userId, userId)));
     if (!exists) return false;
     const adminOf = await tx
-      .select({ id: pm.projectId, key: projects.key })
+      .select({ id: pm.teamId, key: teams.key })
       .from(pm)
-      .innerJoin(projects, eq(projects.id, pm.projectId))
+      .innerJoin(teams, eq(teams.id, pm.teamId))
       .where(and(eq(pm.workspaceId, workspaceId), eq(pm.userId, userId), eq(pm.role, "admin")));
     if (adminOf.length) {
       const others = await tx
-        .select({ id: pm.projectId })
+        .select({ id: pm.teamId })
         .from(pm)
-        .where(and(inArray(pm.projectId, adminOf.map((p) => p.id)), eq(pm.role, "admin"), sql`${pm.userId} <> ${userId}`));
+        .where(and(inArray(pm.teamId, adminOf.map((p) => p.id)), eq(pm.role, "admin"), sql`${pm.userId} <> ${userId}`));
       const covered = new Set(others.map((o) => o.id));
       const stranded = adminOf.filter((p) => !covered.has(p.id)).map((p) => p.key);
       if (stranded.length) {
-        throw new ServiceError("conflict", `They are the only admin of ${stranded.join(", ")}. Name another project admin first.`, { projects: stranded });
+        throw new ServiceError("conflict", `They are the only admin of ${stranded.join(", ")}. Name another team admin first.`, { teams: stranded });
       }
     }
     await tx.delete(pm).where(and(eq(pm.workspaceId, workspaceId), eq(pm.userId, userId)));

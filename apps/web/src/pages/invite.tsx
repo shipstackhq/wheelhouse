@@ -126,7 +126,7 @@ function JoinExisting({ invite, token }: { invite: InvitePeekExisting; token: st
     <form action={action} className="space-y-4">
       <p className="text-sm">
         You are signed in as <span className="font-medium">{invite.email}</span>. Join <span className="font-medium">{invite.workspaceName}</span> as {invite.role}
-        {invite.projects.length > 0 && <>, in {invite.projects.map((p) => `${p.name} (${p.role})`).join(", ")}</>}?
+        {invite.teams.length > 0 && <>, in {invite.teams.map((p) => `${p.name} (${p.role})`).join(", ")}</>}?
       </p>
       <p className="text-sm text-muted">You keep your account and your other workspaces; you can switch between them from the account menu.</p>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}

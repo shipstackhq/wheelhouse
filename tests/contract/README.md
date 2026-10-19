@@ -1,7 +1,7 @@
 # Contract tests
 
 Black-box HTTP tests for the part of Wheelhouse that other things depend on: `/mcp`, `/api/v1/*`, `/api/webhooks/github`,
-`/api/github/install`, `/api/github/callback`, `/api/stream`, `/api/projects/:key/stream`, `/api/health`, the `wh_session`
+`/api/github/install`, `/api/github/callback`, `/api/stream`, `/api/teams/:key/stream`, `/api/health`, the `wh_session`
 cookie and API-key authentication. The Claude Code plugin, the CLI, the GitHub App and existing API keys rely on these, so
 they are frozen during the NestJS + React migration (ADR-16, WH-87). The suite is the pass condition for the new API.
 
@@ -45,10 +45,10 @@ The server must use the seeded database (`PGLITE_DIR` or `DATABASE_URL` from the
 | `webhook.contract.test.ts` | signatures, framing, idempotency, push, pull request, CI, two workspaces sharing a repository id |
 | `github-connect.contract.test.ts` | install redirect, state cookie, callback checks, ownership, takeover |
 | `github-unconfigured.contract.test.ts` | the same routes on a server with no GitHub App |
-| `stream.contract.test.ts` | SSE headers and events, resume, workspace and project scoping, the 12-streams-per-person cap, no slot leaks |
+| `stream.contract.test.ts` | SSE headers and events, resume, workspace and team scoping, the 12-streams-per-person cap, no slot leaks |
 | `health.contract.test.ts` | liveness |
 | `csrf.app.contract.test.ts` | **suite `app`:** forged and cross-site requests to the web app's API are refused, tokens are bound to a session |
-| `web-api.app.contract.test.ts` | **suite `app`:** sign in, sign up, sign out, who am I, projects; cookie attributes; rate limits; error envelopes |
+| `web-api.app.contract.test.ts` | **suite `app`:** sign in, sign up, sign out, who am I, teams; cookie attributes; rate limits; error envelopes |
 | `client.app.contract.test.ts` | **suite `app`:** the typed client over real HTTP |
 
 The default is `--suite all`. `--suite frozen` runs only the external contract (`/mcp`, `/api/v1`, webhooks, GitHub connect, streams: what the plugin, the CLI and the GitHub App depend on). `--suite app` runs only the files named `*.app.contract.test.ts`, the web app's own API (`/api/app`). The Next app that used to meet the frozen contract is archived (tag `archive/next-app`).

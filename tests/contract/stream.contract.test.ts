@@ -7,23 +7,23 @@ import { shape } from "./lib/shape";
 const A = asKey(fx.a.apiKey);
 const B = asKey(fx.b.apiKey);
 
-describe("GET /api/stream and /api/projects/:key/stream", () => {
+describe("GET /api/stream and /api/teams/:key/stream", () => {
   test("not signed in: 401; an API key is refused with 403 (streams are for people)", async () => {
     const anon = await openSse("/api/stream");
     assert.equal(anon.status, 401);
     const key = await openSse("/api/stream", { key: fx.a.apiKey });
     assert.equal(key.status, 403);
-    const project = await openSse(`/api/projects/${fx.a.projectKey}/stream`, { key: fx.a.apiKey });
-    assert.equal(project.status, 403);
+    const team = await openSse(`/api/teams/${fx.a.teamKey}/stream`, { key: fx.a.apiKey });
+    assert.equal(team.status, 403);
   });
 
-  test("another workspace's project is a 404, not a stream", async () => {
-    const r = await openSse(`/api/projects/${fx.b.projectKey}/stream`, { cookie: fx.a.sessionToken });
+  test("another workspace's team is a 404, not a stream", async () => {
+    const r = await openSse(`/api/teams/${fx.b.teamKey}/stream`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 404);
   });
 
   test("a stream sends the SSE headers, a ready marker, and a change event when something is written", async () => {
-    const s = await openSse(`/api/projects/${fx.a.projectKey}/stream`, { cookie: fx.a.sessionToken });
+    const s = await openSse(`/api/teams/${fx.a.teamKey}/stream`, { cookie: fx.a.sessionToken });
     try {
       assert.equal(s.status, 200);
       assert.equal(s.headers.get("content-type"), "text/event-stream; charset=utf-8");
@@ -34,7 +34,7 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
       assert.equal(typeof ready.data.seq, "number");
 
       const title = unique("streamed");
-      await v1ok(A, "create_ticket", { project: fx.a.projectKey, title });
+      await v1ok(A, "create_ticket", { project: fx.a.teamKey, title });
       const change = await s.waitFor((e) => e.event === "change" && String(e.data?.summary).includes(title));
       assert.match(change.id ?? "", /^\d+$/, "a change from the log carries an id so the browser can resume");
       expectGolden("sse-change-event", shape(change.data));
@@ -45,12 +45,12 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
 
   test("resuming with Last-Event-ID or ?since= replays what was missed, in order", async () => {
     const title = unique("resume");
-    const made = await v1ok(A, "create_ticket", { project: fx.a.projectKey, title });
+    const made = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title });
     await v1ok(A, "comment", { ticket: made.ref, body: "second change" });
-    const all = await openSse(`/api/projects/${fx.a.projectKey}/stream?since=0`, { cookie: fx.a.sessionToken });
+    const all = await openSse(`/api/teams/${fx.a.teamKey}/stream?since=0`, { cookie: fx.a.sessionToken });
     try {
       const created = await all.waitFor((e) => e.event === "change" && String(e.data?.summary).includes(title));
-      const resumed = await openSse(`/api/projects/${fx.a.projectKey}/stream`, { cookie: fx.a.sessionToken, headers: { "last-event-id": String(Number(created.id) - 1) } });
+      const resumed = await openSse(`/api/teams/${fx.a.teamKey}/stream`, { cookie: fx.a.sessionToken, headers: { "last-event-id": String(Number(created.id) - 1) } });
       try {
         const first = await resumed.waitFor((e) => e.event === "change");
         assert.equal(first.id, created.id, "starts exactly after the id it was given");
@@ -66,20 +66,20 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
   test("a workspace never receives another workspace's events, on either stream", async () => {
     const workspaceA = await openSse("/api/stream", { cookie: fx.a.sessionToken });
     const workspaceB = await openSse("/api/stream", { cookie: fx.b.sessionToken });
-    const projB = await openSse(`/api/projects/${fx.b.projectKey}/stream`, { cookie: fx.b.sessionToken });
+    const projB = await openSse(`/api/teams/${fx.b.teamKey}/stream`, { cookie: fx.b.sessionToken });
     try {
       await workspaceA.waitFor((e) => e.event === "ready");
       await workspaceB.waitFor((e) => e.event === "ready");
       await projB.waitFor((e) => e.event === "ready");
       const a = unique("only-a");
       const b = unique("only-b");
-      await v1ok(A, "create_ticket", { project: fx.a.projectKey, title: a });
-      await v1ok(B, "create_ticket", { project: fx.b.projectKey, title: b });
+      await v1ok(A, "create_ticket", { project: fx.a.teamKey, title: a });
+      await v1ok(B, "create_ticket", { project: fx.b.teamKey, title: b });
       await workspaceA.waitFor((e) => String(e.data?.summary).includes(a));
       await workspaceB.waitFor((e) => String(e.data?.summary).includes(b));
       await projB.waitFor((e) => String(e.data?.summary).includes(b));
       await sleep(500);
-      for (const [name, s, other] of [["workspace A", workspaceA, b], ["workspace B", workspaceB, a], ["project B", projB, a]] as const) {
+      for (const [name, s, other] of [["workspace A", workspaceA, b], ["workspace B", workspaceB, a], ["team B", projB, a]] as const) {
         assert.ok(!s.events.some((e) => String(e.data?.summary).includes(other)), `${name} received another workspace's event`);
       }
     } finally {
@@ -119,7 +119,7 @@ describe("GET /api/stream and /api/projects/:key/stream", () => {
 
   test("opening and closing streams over and over never runs out of slots (no leak)", async () => {
     for (let i = 0; i < 30; i++) {
-      const s = await openSse(`/api/projects/${fx.a.projectKey}/stream`, { cookie: fx.a.memberSessionToken });
+      const s = await openSse(`/api/teams/${fx.a.teamKey}/stream`, { cookie: fx.a.memberSessionToken });
       assert.equal(s.status, 200, `stream ${i + 1}`);
       await s.waitFor((e) => e.event === "ready");
       s.close();

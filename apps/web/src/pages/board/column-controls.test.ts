@@ -106,7 +106,7 @@ describe("remembering a column's view", () => {
     expect(localStorage.getItem("wh:view:AA:c1")).toBeNull();
     expect(loadView("wh:view:AA:c1")).toEqual(EMPTY_VIEW);
   });
-  test("views are kept apart per project and column", () => {
+  test("views are kept apart per team and column", () => {
     saveView("wh:view:AA:c1", view({ label: ["bug"] }));
     expect(loadView("wh:view:AA:c2")).toEqual(EMPTY_VIEW);
     expect(loadView("wh:view:BB:c1")).toEqual(EMPTY_VIEW);

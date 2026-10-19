@@ -11,28 +11,28 @@ function deriveKey(name: string): string {
   return words.map((w) => w[0]).join("").slice(0, 6);
 }
 
-export function NewProjectPage() {
+export function NewTeamPage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-2xl px-6 py-10">
-        <h1 className="text-xl font-semibold">New project</h1>
-        <p className="mt-1 text-sm text-muted">Each project has a kanban board, a knowledge map, and an AI change queue.</p>
+        <h1 className="text-xl font-semibold">New team</h1>
+        <p className="mt-1 text-sm text-muted">Each team has a kanban board, a knowledge map, and an AI change queue.</p>
         <div className="card mt-6 p-5">
-          <NewProjectForm />
+          <NewTeamForm />
         </div>
       </div>
     </div>
   );
 }
 
-export function NewProjectForm() {
+export function NewTeamForm() {
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
   const [state, action] = useActionState<FormState, FormData>(async (_prev, fd) => {
     try {
-      const project = await api.projects.create({ name: field(fd, "name"), key: field(fd, "key") || undefined, description: field(fd, "description") });
-      await queryClient.invalidateQueries({ queryKey: ["projects"] }); // the sidebar's switcher lists it at once
-      await navigate(`/p/${project.key}/onboarding`);
+      const team = await api.teams.create({ name: field(fd, "name"), key: field(fd, "key") || undefined, description: field(fd, "description") });
+      await queryClient.invalidateQueries({ queryKey: ["teams"] }); // the sidebar's switcher lists it at once
+      await navigate(`/t/${team.key}/onboarding`);
       return undefined;
     } catch (e) {
       return failure(e);
@@ -66,11 +66,11 @@ export function NewProjectForm() {
       </div>
       <div className="sm:col-span-2">
         <label className="label" htmlFor="description">Description</label>
-        <textarea className="input" id="description" name="description" rows={2} placeholder="What is this project? Agents read this." />
+        <textarea className="input" id="description" name="description" rows={2} placeholder="What is this team? Agents read this." />
       </div>
       {state?.error && <p className="text-sm text-danger sm:col-span-2" role="alert">{state.error}</p>}
       <div className="sm:col-span-2">
-        <SubmitButton className="btn btn-primary">Create project</SubmitButton>
+        <SubmitButton className="btn btn-primary">Create team</SubmitButton>
       </div>
     </form>
   );

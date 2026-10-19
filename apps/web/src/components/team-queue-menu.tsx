@@ -10,13 +10,13 @@ export function BotsMenuFallback() {
 }
 
 /**
- * The bots menu with its queue numbers. It loads on its own, so the project header draws at once and this part fills in behind
+ * The bots menu with its queue numbers. It loads on its own, so the team header draws at once and this part fills in behind
  * a placeholder (the queue query is the slowest thing the header needs). If it cannot load, the rest of the page still works.
  */
-export function ProjectQueueMenu({ projectKey }: { projectKey: string }) {
+export function TeamQueueMenu({ teamKey }: { teamKey: string }) {
   const { api } = useServices();
-  const q = useQuery(queueQuery(api, projectKey));
+  const q = useQuery(queueQuery(api, teamKey));
   if (q.isPending) return <BotsMenuFallback />;
   if (q.isError) return null;
-  return <BotsMenu projectKey={projectKey} bots={q.data} />;
+  return <BotsMenu teamKey={teamKey} bots={q.data} />;
 }

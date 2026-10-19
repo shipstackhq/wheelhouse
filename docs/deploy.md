@@ -126,7 +126,7 @@ repository is the tested version of this (the standalone stack uses it as it is)
 ```
 wheelhouse.example.com {
     # Live updates are server-sent events: straight through, never buffered or compressed.
-    @streams path /api/stream /api/projects/*/stream
+    @streams path /api/stream /api/teams/*/stream
     handle @streams {
         reverse_proxy 127.0.0.1:3000 {
             flush_interval -1
@@ -181,7 +181,7 @@ do not send to the server, so it stays out of Caddy's access logs. New passwords
 
 ## Seeing and suspending workspaces
 
-Admins (`ADMIN_EMAILS`) get **Workspaces** in the sidebar: every workspace on the server with its owners, seats, project count
+Admins (`ADMIN_EMAILS`) get **Workspaces** in the sidebar: every workspace on the server with its owners, seats, team count
 and last activity, and a detail page with members, invites and API keys (the prefix only, never the key). You see
 names, emails and counts, **never what a workspace wrote** (tickets, comments, the map).
 
@@ -265,9 +265,9 @@ Then put these in `/opt/apps/wheelhouse/.env` and redeploy (see `.env.example`):
 | `GITHUB_WEBHOOK_SECRET` | the secret you chose |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the App's *Client ID* and a generated client secret |
 
-Leave all six empty to keep the integration off. Anyone who is a workspace **owner** then opens a project's
+Leave all six empty to keep the integration off. Anyone who is a workspace **owner** then opens a team's
 *Repositories* page, presses *Connect GitHub*, installs the App on the repositories they choose, and picks which of them
-this project uses (a monorepo can be limited to a path). Push, pull request and CI events then arrive at the webhook.
+this team uses (a monorepo can be limited to a path). Push, pull request and CI events then arrive at the webhook.
 
 What to know:
 
@@ -284,7 +284,7 @@ What to know:
 
 ## Live updates (server-sent events)
 
-Open pages learn about changes over a long-lived connection, `GET /api/projects/<key>/stream` (and `/api/stream` for
+Open pages learn about changes over a long-lived connection, `GET /api/teams/<key>/stream` (and `/api/stream` for
 the dashboard), instead of polling. It needs nothing beyond what is above, with two things to keep:
 
 - **Caddy**: keep `flush_interval -1` in the site block, so events are passed on as they happen, not buffered.
@@ -297,7 +297,7 @@ still open, makes a change, and sees the `change` event arrive on the same open 
 The stream is fed by an in-process event bus, so it works on one app container, which is also the only supported
 setup (migrations run at boot). It needs a long-running server like this one: serverless hosts that end a request after
 a few seconds cannot hold the connection, and pages would fall back to slower polling. A person can have 12 streams open
-at once (a project tab plus the dashboard each use one). If the stream cannot connect, pages poll every 10 seconds and
+at once (a team tab plus the dashboard each use one). If the stream cannot connect, pages poll every 10 seconds and
 keep retrying it with backoff.
 
 ## Rate limits and the proxy

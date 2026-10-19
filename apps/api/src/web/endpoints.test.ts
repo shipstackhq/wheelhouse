@@ -39,7 +39,7 @@ describe("CsrfGuard", () => {
   });
 
   test("reads an Array header (Node joins none for these) and a Referer when there is no Origin", () => {
-    const ctx = { switchToHttp: () => ({ getRequest: () => ({ method: "POST", headers: { host: "wh.example", referer: "https://wh.example/p/WH", "x-csrf-token": [ANONYMOUS_CSRF] } }) }) } as unknown as ExecutionContext;
+    const ctx = { switchToHttp: () => ({ getRequest: () => ({ method: "POST", headers: { host: "wh.example", referer: "https://wh.example/t/WH", "x-csrf-token": [ANONYMOUS_CSRF] } }) }) } as unknown as ExecutionContext;
     assert.equal(guard.canActivate(ctx), true);
   });
 });

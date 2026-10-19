@@ -36,7 +36,7 @@ describe("the account menu", () => {
       ],
     });
     two.on("POST /api/app/me/workspace", { workspace: { id: "t2", name: "Difference Engines" } });
-    const { server, services, router } = renderIn(menu(), "/p/AA", two);
+    const { server, services, router } = renderIn(menu(), "/t/AA", two);
     services.queryClient.setQueryData(["marker"], "from the old workspace");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
@@ -64,26 +64,26 @@ describe("the account menu", () => {
   test("signing out ends the session, forgets everything in memory, and goes to /login", async () => {
     const wipe = vi.fn();
     Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { getRegistration: async () => ({ active: { postMessage: wipe } }) } });
-    const { server, services, router } = renderIn(menu(), "/p/AA");
-    services.queryClient.setQueryData(["projects"], [{ key: "AA" }]);
+    const { server, services, router } = renderIn(menu(), "/t/AA");
+    services.queryClient.setQueryData(["teams"], [{ key: "AA" }]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(server.requests).toContain("POST /api/app/auth/logout");
     expect(wipe).toHaveBeenCalledWith("CLEAR_CACHES");
-    expect(services.queryClient.getQueryData(["projects"])).toBeUndefined();
+    expect(services.queryClient.getQueryData(["teams"])).toBeUndefined();
   });
 
   test("even if the server cannot be reached, the person is sent to /login and nothing stays in memory", async () => {
     const { server, services, router } = renderIn(menu(), "/");
     server.fail["/api/app/auth/logout"] = "network";
-    services.queryClient.setQueryData(["projects"], [{ key: "AA" }]);
+    services.queryClient.setQueryData(["teams"], [{ key: "AA" }]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
-    expect(services.queryClient.getQueryData(["projects"])).toBeUndefined();
+    expect(services.queryClient.getQueryData(["teams"])).toBeUndefined();
   });
 });
 

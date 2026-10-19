@@ -17,15 +17,15 @@ import { COLUMN_ROLES } from "../lib/column-roles";
 import { sql } from "drizzle-orm";
 
 /**
- * Workspace roles (ADR-23). A role decides what a person may do around projects (create them, manage people, pay); it never
- * opens a project by itself: that takes a row in `project_members`.
+ * Workspace roles (ADR-23). A role decides what a person may do around teams (create them, manage people, pay); it never
+ * opens a team by itself: that takes a row in `team_members`.
  */
 export const WORKSPACE_ROLES = ["owner", "admin", "member", "viewer", "guest"] as const;
 export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
 
-/** What a person can do inside one project. */
-export const PROJECT_ROLES = ["admin", "editor", "viewer"] as const;
-export type ProjectRole = (typeof PROJECT_ROLES)[number];
+/** What a person can do inside one team. */
+export const TEAM_ROLES = ["admin", "editor", "viewer"] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
@@ -76,39 +76,39 @@ export const memberships = pgTable(
 );
 
 /**
- * Who can open a project (ADR-23). A project is visible only to the people in this table; there is no open/private flag and
+ * Who can open a team (ADR-23). A team is visible only to the people in this table; there is no open/private flag and
  * no other way in. Only people are listed: agent keys still work across their whole workspace until scoped keys arrive.
- * `workspace_id` repeats the project's workspace so every row can be checked against it without a join.
+ * `workspace_id` repeats the team's workspace so every row can be checked against it without a join.
  */
-export const projectMembers = pgTable(
-  "project_members",
+export const teamMembers = pgTable(
+  "team_members",
   {
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    role: text("role", { enum: PROJECT_ROLES }).notNull().default("editor"),
+    role: text("role", { enum: TEAM_ROLES }).notNull().default("editor"),
     addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.userId] }), index("project_members_user_idx").on(t.userId, t.workspaceId)],
+  (t) => [primaryKey({ columns: [t.teamId, t.userId] }), index("team_members_user_idx").on(t.userId, t.workspaceId)],
 );
 
 /**
- * Append-only record of who changed access: members added, removed or re-roled, projects joined by an administrator. Separate
- * from `events`, which is the product activity feed that agent cursors read; never updated or deleted. `project_id` is null
- * for workspace-level actions and has no foreign key, so a deleted project keeps its history.
+ * Append-only record of who changed access: members added, removed or re-roled, teams joined by an administrator. Separate
+ * from `events`, which is the product activity feed that agent cursors read; never updated or deleted. `team_id` is null
+ * for workspace-level actions and has no foreign key, so a deleted team keeps its history.
  */
 export const auditEvents = pgTable(
   "audit_events",
   {
     seq: bigserial("seq", { mode: "number" }).primaryKey(),
     workspaceId: uuid("workspace_id").notNull(),
-    projectId: uuid("project_id"),
+    teamId: uuid("team_id"),
     actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
-    action: text("action").notNull(), // e.g. project.member_added, project.admin_joined, workspace.role_changed
-    targetType: text("target_type").notNull(), // user | project | membership
+    action: text("action").notNull(), // e.g. team.member_added, team.admin_joined, workspace.role_changed
+    targetType: text("target_type").notNull(), // user | team | membership
     targetId: text("target_id"),
     before: jsonb("before").$type<Record<string, unknown> | null>(),
     after: jsonb("after").$type<Record<string, unknown> | null>(),
@@ -129,8 +129,8 @@ export const invites = pgTable(
     workspaceName: text("workspace_name"), // new_workspace only (optional)
     role: text("role", { enum: WORKSPACE_ROLES }).notNull().default("member"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
-    // join_workspace only: the projects the person is put into when they accept, each with a project role (ADR-23).
-    projects: jsonb("projects").$type<{ projectId: string; role: ProjectRole }[]>().notNull().default([]),
+    // join_workspace only: the teams the person is put into when they accept, each with a team role (ADR-23).
+    teams: jsonb("teams").$type<{ teamId: string; role: TeamRole }[]>().notNull().default([]),
     tokenHash: text("token_hash").notNull().unique(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
@@ -161,7 +161,7 @@ export const apiKeys = pgTable("api_keys", {
 export const KEY_CAPABILITIES = ["docs:write"] as const;
 export type KeyCapability = (typeof KEY_CAPABILITIES)[number];
 
-export const projects = pgTable("projects", {
+export const teams = pgTable("teams", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   key: text("key").notNull(), // short prefix like "WH" for ticket refs
@@ -173,7 +173,7 @@ export const projects = pgTable("projects", {
 
 export const columns = pgTable("columns", {
   id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   position: doublePrecision("position").notNull(),
   // What stage of work this column stands for (WH-86); rules and reports use it, never the name. Null: a custom column.
@@ -186,7 +186,7 @@ export const tickets = pgTable(
   "tickets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     columnId: uuid("column_id").notNull().references(() => columns.id, { onDelete: "cascade" }),
     number: integer("number").notNull(),
     title: text("title").notNull(),
@@ -204,8 +204,8 @@ export const tickets = pgTable(
     updatedAt: updatedAt(),
   },
   (t) => [
-    index("tickets_project_idx").on(t.projectId),
-    uniqueIndex("tickets_project_number_idx").on(t.projectId, t.number),
+    index("tickets_team_idx").on(t.teamId),
+    uniqueIndex("tickets_team_number_idx").on(t.teamId, t.number),
   ],
 );
 
@@ -255,7 +255,7 @@ export type EdgeMeta = { fromColumn?: string; toColumn?: string; cardinality?: (
 
 export const nodes = pgTable("nodes", {
   id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
   parentId: uuid("parent_id"),
   layer: text("layer", { enum: LAYERS }).notNull().default("system"),
   kind: text("kind", { enum: NODE_KINDS }).notNull().default("service"),
@@ -297,7 +297,7 @@ export const nodes = pgTable("nodes", {
 
 export const edges = pgTable("edges", {
   id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
   fromNodeId: uuid("from_node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   toNodeId: uuid("to_node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   // depends: from uses/calls to (same layer). implements: from (lower layer) realizes to (higher layer).
@@ -312,7 +312,7 @@ export type FlowStep = { nodeId: string; title: string; detail: string };
 /** A named, ordered walk across nodes that explains how something works end to end. */
 export const flows = pgTable("flows", {
   id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   steps: jsonb("steps").$type<FlowStep[]>().notNull().default([]),
@@ -327,7 +327,7 @@ export const decisions = pgTable(
   "decisions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     number: integer("number").notNull(),
     title: text("title").notNull(),
     status: text("status", { enum: DECISION_STATUSES }).notNull().default("accepted"),
@@ -341,7 +341,7 @@ export const decisions = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("decisions_project_number_idx").on(t.projectId, t.number)],
+  (t) => [uniqueIndex("decisions_team_number_idx").on(t.teamId, t.number)],
 );
 
 /** Domain glossary; terms get hover cards wherever they appear in explainers. */
@@ -349,13 +349,13 @@ export const terms = pgTable(
   "terms",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     term: text("term").notNull(),
     definition: text("definition").notNull(),
     nodeId: uuid("node_id").references(() => nodes.id, { onDelete: "set null" }),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("terms_project_term_idx").on(t.projectId, t.term)],
+  (t) => [uniqueIndex("terms_team_term_idx").on(t.teamId, t.term)],
 );
 
 export const ticketNodes = pgTable(
@@ -373,12 +373,12 @@ export const events = pgTable(
   {
     seq: bigserial("seq", { mode: "number" }).primaryKey(),
     workspaceId: uuid("workspace_id").notNull(),
-    projectId: uuid("project_id").notNull(),
+    teamId: uuid("team_id").notNull(),
     actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
     type: text("type").notNull(), // e.g. ticket.created, ticket.moved, comment.created
-    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "project", "flow", "decision", "term", "doc"] }).notNull(),
+    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc"] }).notNull(),
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
@@ -387,7 +387,7 @@ export const events = pgTable(
     sessionId: text("session_id"),
     createdAt: createdAt(),
   },
-  (t) => [index("events_project_seq_idx").on(t.projectId, t.seq)],
+  (t) => [index("events_team_seq_idx").on(t.teamId, t.seq)],
 );
 
 // Per-agent read pointer into `events` (the AI queue).
@@ -395,10 +395,10 @@ export const agentCursors = pgTable(
   "agent_cursors",
   {
     apiKeyId: uuid("api_key_id").notNull().references(() => apiKeys.id, { onDelete: "cascade" }),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     lastSeq: bigint("last_seq", { mode: "number" }).notNull().default(0),
   },
-  (t) => [primaryKey({ columns: [t.apiKeyId, t.projectId] })],
+  (t) => [primaryKey({ columns: [t.apiKeyId, t.teamId] })],
 );
 
 /** Server's view of the default branch: content hash per file, updated when code lands. */
@@ -406,46 +406,46 @@ export const REPO_PROVIDERS = ["github", "local"] as const;
 export const REPO_LIFECYCLES = ["live", "being_replaced", "planned", "retired"] as const;
 
 /**
- * Multiple repositories per project (ADR-7, WH-68): a project can be served by
+ * Multiple repositories per team (ADR-7, WH-68): a team can be served by
  * several repos (frontend/backend/admin…) or share a monorepo with other
- * projects. Each project<->repo link is its own row (so the same physical repo
- * connected to two projects is two rows, each with its own `pathLimit`), which
- * avoids a many-to-many join table and matches "each project's link to it
+ * teams. Each team<->repo link is its own row (so the same physical repo
+ * connected to two teams is two rows, each with its own `pathLimit`), which
+ * avoids a many-to-many join table and matches "each team's link to it
  * carries its own path limit" in the ticket. `slug` is the natural
  * identifying key the CLI/wheelhouse.json reports for `provider: "local"`
  * (or the GitHub repo id once connected), used to find-or-create the right
- * row per project on each report.
+ * row per team on each report.
  */
 export const repositories = pgTable(
   "repositories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     displayName: text("display_name").notNull(),
     role: text("role").notNull(), // free text: workspaces name their own roles (frontend/backend/admin/…)
     provider: text("provider", { enum: REPO_PROVIDERS }).notNull().default("local"),
     // Natural identifying key for "same physical repo": the slug/name the CLI reports (provider=local),
-    // or the stringified GitHub repo id once connected (provider=github). Unique per project so
+    // or the stringified GitHub repo id once connected (provider=github). Unique per team so
     // find-or-create resolves to exactly one row.
     slug: text("slug").notNull(),
     githubRepoId: text("github_repo_id"),
     githubInstallationId: text("github_installation_id"),
     githubFullName: text("github_full_name"), // "owner/name", for display; the id is what identifies the repository
     defaultBranch: text("default_branch").notNull().default("main"),
-    // A monorepo directory this project's link is limited to, e.g. "packages/billing/". Null = whole repo.
+    // A monorepo directory this team's link is limited to, e.g. "packages/billing/". Null = whole repo.
     pathLimit: text("path_limit"),
     lifecycle: text("lifecycle", { enum: REPO_LIFECYCLES }).notNull().default("live"),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("repositories_project_idx").on(t.projectId), uniqueIndex("repositories_project_slug_idx").on(t.projectId, t.slug)],
+  (t) => [index("repositories_team_idx").on(t.teamId), uniqueIndex("repositories_team_slug_idx").on(t.teamId, t.slug)],
 );
 
-export const projectFiles = pgTable(
-  "project_files",
+export const teamFiles = pgTable(
+  "team_files",
   {
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     path: text("path").notNull(),
     hash: text("hash").notNull(),
     sha: text("sha"),
@@ -454,13 +454,13 @@ export const projectFiles = pgTable(
     repositoryId: uuid("repository_id").references(() => repositories.id, { onDelete: "cascade" }),
     updatedAt: updatedAt(),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.path] })],
+  (t) => [primaryKey({ columns: [t.teamId, t.path] })],
 );
 
 export type SessionFile = { hash: string | null; at: string; external?: boolean; repositoryId?: string | null }; // external: changed outside the agent (e.g. a human in the IDE)
 
 /**
- * A client session (e.g. one Claude Code session) working in a project: which
+ * A client session (e.g. one Claude Code session) working in a team: which
  * files it has changed but not landed, which ticket it's on, when it last
  * checked in. Drives "in flux" on the map and the reconciliation check.
  */
@@ -468,7 +468,7 @@ export const workSessions = pgTable(
   "work_sessions",
   {
     id: text("id").primaryKey(), // client-provided session id (Claude Code session_id)
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     actorName: text("actor_name").notNull(),
     client: text("client").notNull().default("unknown"),
@@ -487,7 +487,7 @@ export const workSessions = pgTable(
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
   },
-  (t) => [index("work_sessions_project_idx").on(t.projectId)],
+  (t) => [index("work_sessions_team_idx").on(t.teamId)],
 );
 
 /**
@@ -498,7 +498,7 @@ export const nodeDrafts = pgTable(
   "node_drafts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     nodeId: uuid("node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
     sessionId: text("session_id").references(() => workSessions.id, { onDelete: "set null" }),
     authorName: text("author_name").notNull(),
@@ -576,7 +576,7 @@ export const docs = pgTable(
   "docs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     parentId: uuid("parent_id"),
     slug: text("slug").notNull(),
     title: text("title").notNull(),
@@ -608,9 +608,9 @@ export const docs = pgTable(
     labels: jsonb("labels").$type<string[]>().notNull().default([]),
   },
   (t) => [
-    index("docs_project_idx").on(t.projectId),
-    // Unique per (project, parent, slug) among live docs. Partial index: deleted docs don't block reusing a slug.
-    uniqueIndex("docs_project_parent_slug_idx").on(t.projectId, t.parentId, t.slug).where(sql`deleted_at is null`),
+    index("docs_team_idx").on(t.teamId),
+    // Unique per (team, parent, slug) among live docs. Partial index: deleted docs don't block reusing a slug.
+    uniqueIndex("docs_team_parent_slug_idx").on(t.teamId, t.parentId, t.slug).where(sql`deleted_at is null`),
   ],
 );
 
@@ -627,7 +627,7 @@ export const docDrafts = pgTable(
   "doc_drafts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
     docId: uuid("doc_id").notNull().references(() => docs.id, { onDelete: "cascade" }),
     sessionId: text("session_id").references(() => workSessions.id, { onDelete: "set null" }),
     authorName: text("author_name").notNull(),

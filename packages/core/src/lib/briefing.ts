@@ -1,5 +1,5 @@
 import type { Actor } from "./access";
-import { getBoard, getChanges, getGraph, listRepositories, resolveTicket, getTicket, checklistForProject, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
+import { getBoard, getChanges, getGraph, listRepositories, resolveTicket, getTicket, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
 import { timeAgo } from "./time";
 import { checklistBriefingLine } from "./setup-checklist";
 
@@ -32,17 +32,17 @@ function budgeted(sections: (string | null)[], max: number) {
 
 // ───────── session briefing ─────────
 
-export async function briefing(actor: Actor, projectRef: string, opts: { maxChars?: number } = {}) {
+export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?: number } = {}) {
   const max = Math.min(Math.max(opts.maxChars ?? 6000, 1500), 20000);
   const [g, board, repos, checklist, docsIndex, staleDocs] = await Promise.all([
-    getGraph(actor, projectRef),
-    getBoard(actor, projectRef),
-    listRepositories(actor, projectRef),
-    checklistForProject(actor, projectRef),
-    listDocsIndex(actor, projectRef),
-    listStaleDocs(actor, projectRef),
+    getGraph(actor, teamRef),
+    getBoard(actor, teamRef),
+    listRepositories(actor, teamRef),
+    checklistForTeam(actor, teamRef),
+    listDocsIndex(actor, teamRef),
+    listStaleDocs(actor, teamRef),
   ]);
-  const p = g.project;
+  const p = g.team;
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const top = (layer: string) => g.nodes.filter((n) => n.layer === layer && !n.parentId).sort((a, b) => a.name.localeCompare(b.name));
   const colName = new Map(board.columns.map((c) => [c.id, c.name]));
@@ -99,7 +99,7 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
   // The agent is never asked to handle the session id: the plugin hooks attach it to every call (ADR-5).
   let since: string | null = null;
   if (actor.kind === "agent") {
-    const q = await getChanges(actor, projectRef, 10);
+    const q = await getChanges(actor, teamRef, 10);
     if (q.total) {
       const types: Record<string, number> = q.summary?.byType ?? q.changes.reduce<Record<string, number>>((m, c) => ((m[c.type] = (m[c.type] ?? 0) + 1), m), {});
       since = `## Since you last looked\n${q.total} change(s): ${Object.entries(types)
@@ -153,7 +153,7 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
         .join("\n")}\n`
     : `## Repositories\nNone connected: what landed and stale map nodes are not tracked.\n`;
 
-  // Setup checklist (WH-69): same computation as the project-page banner, so the two can't drift.
+  // Setup checklist (WH-69): same computation as the team-page banner, so the two can't drift.
   const setupLine = checklist.done ? null : `## Setup\n${checklistBriefingLine(checklist)}\n`;
 
   const markdown = budgeted([header, work + "\n", since, what, built, repoSection, setupLine, watch ? watch + "\n" : null, flows, docsSection, deeper, terms], max);
@@ -167,8 +167,8 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
 
 export async function ticketContext(actor: Actor, ticketRef: string, opts: { maxChars?: number } = {}) {
   const max = Math.min(Math.max(opts.maxChars ?? 8000, 1500), 30000);
-  const { project } = await resolveTicket(actor, ticketRef);
-  const [t, g] = await Promise.all([getTicket(actor, ticketRef), getGraph(actor, project.id)]);
+  const { team } = await resolveTicket(actor, ticketRef);
+  const [t, g] = await Promise.all([getTicket(actor, ticketRef), getGraph(actor, team.id)]);
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
 
   // Linked nodes, or a keyword guess when the ticket isn't linked yet.

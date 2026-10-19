@@ -6,22 +6,22 @@ import { Sidebar } from "./sidebar";
 import { NAV_ICONS } from "./icons";
 import { renderIn } from "../test/harness";
 
-const PROJECTS = [
+const TEAMS = [
   { key: "AA", name: "Alpha" },
   { key: "BB", name: "Beta" },
   { key: "CC", name: "Gamma" },
 ];
 const sidebar = (over: Partial<React.ComponentProps<typeof Sidebar>> = {}) => (
-  <Sidebar projects={PROJECTS} workspaceName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} />
+  <Sidebar teams={TEAMS} workspaceName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} />
 );
 const nav = () => screen.getByRole("navigation");
-const switcher = () => within(nav()).getByRole("button", { name: /Alpha|Beta|Gamma|Select a project/ });
+const switcher = () => within(nav()).getByRole("button", { name: /Alpha|Beta|Gamma|Select a team/ });
 
 describe("what the sidebar shows", () => {
-  test("a project's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
-    renderIn(sidebar(), "/p/AA/docs");
+  test("a team's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
+    renderIn(sidebar(), "/t/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", "Project members": "/p/AA/members", "Project settings": "/p/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
+    expect(links).toMatchObject({ Home: "/", Board: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", Repos: "/t/AA/repos", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
     expect(screen.getByText("Work")).toBeTruthy();
     expect(screen.getByText("Knowledge")).toBeTruthy();
     expect(screen.getByText("Code")).toBeTruthy();
@@ -31,9 +31,9 @@ describe("what the sidebar shows", () => {
     expect(screen.getByText("the profile")).toBeTruthy();
   });
 
-  test("with no project open there are no project sections and the switcher invites a choice", () => {
+  test("with no team open there are no team sections and the switcher invites a choice", () => {
     renderIn(sidebar(), "/workspace");
-    expect(switcher().textContent).toContain("Select a project");
+    expect(switcher().textContent).toContain("Select a team");
     expect(within(nav()).queryByRole("link", { name: "Board" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Members" }).classList.contains("bg-panel-2")).toBe(true);
   });
@@ -49,101 +49,101 @@ describe("what the sidebar shows", () => {
   });
 });
 
-describe("the project switcher", () => {
+describe("the team switcher", () => {
   test("opens from the button and with Cmd+K or Ctrl+K, and closes with Escape", async () => {
     const user = userEvent.setup();
-    renderIn(sidebar(), "/p/AA");
-    expect(screen.queryByPlaceholderText("Search projects…")).toBeNull();
+    renderIn(sidebar(), "/t/AA");
+    expect(screen.queryByPlaceholderText("Search teams…")).toBeNull();
     await user.click(switcher());
-    expect(screen.getByPlaceholderText("Search projects…")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search teams…")).toBeTruthy();
     await user.keyboard("{Escape}");
-    expect(screen.queryByPlaceholderText("Search projects…")).toBeNull();
+    expect(screen.queryByPlaceholderText("Search teams…")).toBeNull();
     await user.keyboard("{Meta>}k{/Meta}");
-    expect(screen.getByPlaceholderText("Search projects…")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search teams…")).toBeTruthy();
     await user.keyboard("{Meta>}k{/Meta}");
-    expect(screen.queryByPlaceholderText("Search projects…")).toBeNull();
+    expect(screen.queryByPlaceholderText("Search teams…")).toBeNull();
     await user.keyboard("{Control>}k{/Control}");
-    expect(screen.getByPlaceholderText("Search projects…")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Search teams…")).toBeTruthy();
   });
 
   test("searching filters by name or key and says when nothing matches", async () => {
     const user = userEvent.setup();
-    renderIn(sidebar(), "/p/AA");
+    renderIn(sidebar(), "/t/AA");
     await user.click(switcher());
     await user.keyboard("gam");
     expect(screen.getByRole("button", { name: /Gamma/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Beta/ })).toBeNull();
-    await user.clear(screen.getByPlaceholderText("Search projects…"));
+    await user.clear(screen.getByPlaceholderText("Search teams…"));
     await user.keyboard("bb");
     expect(screen.getByRole("button", { name: /Beta/ })).toBeTruthy();
-    await user.clear(screen.getByPlaceholderText("Search projects…"));
+    await user.clear(screen.getByPlaceholderText("Search teams…"));
     await user.keyboard("zzz");
-    expect(screen.getByText("No projects match.")).toBeTruthy();
+    expect(screen.getByText("No teams match.")).toBeTruthy();
   });
 
-  test("choosing a project keeps the section you are in", async () => {
+  test("choosing a team keeps the section you are in", async () => {
     const user = userEvent.setup();
-    const { router } = renderIn(sidebar(), "/p/AA/docs");
+    const { router } = renderIn(sidebar(), "/t/AA/docs");
     await user.click(switcher());
     await user.click(screen.getByRole("button", { name: /Beta/ }));
-    expect(router.state.location.pathname).toBe("/p/BB/docs");
-    expect(screen.queryByPlaceholderText("Search projects…")).toBeNull();
+    expect(router.state.location.pathname).toBe("/t/BB/docs");
+    expect(screen.queryByPlaceholderText("Search teams…")).toBeNull();
   });
 
-  test("from a page that is not a project's it goes to the project's board; an unknown section also falls back to the board", async () => {
+  test("from a page that is not a team's it goes to the team's board; an unknown section also falls back to the board", async () => {
     const user = userEvent.setup();
     const { router, unmount } = renderIn(sidebar(), "/workspace");
     await user.click(switcher());
     await user.click(screen.getByRole("button", { name: /Gamma/ }));
-    expect(router.state.location.pathname).toBe("/p/CC");
+    expect(router.state.location.pathname).toBe("/t/CC");
     unmount();
-    const second = renderIn(sidebar(), "/p/AA/onboarding"); // not a sidebar section
+    const second = renderIn(sidebar(), "/t/AA/onboarding"); // not a sidebar section
     await user.click(switcher());
     await user.click(screen.getByRole("button", { name: /Beta/ }));
-    expect(second.router.state.location.pathname).toBe("/p/BB");
+    expect(second.router.state.location.pathname).toBe("/t/BB");
   });
 
   test("the keyboard works: arrows move, Enter chooses", async () => {
     const user = userEvent.setup();
-    const { router } = renderIn(sidebar(), "/p/AA/map");
+    const { router } = renderIn(sidebar(), "/t/AA/map");
     await user.click(switcher());
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowUp}{Enter}");
-    expect(router.state.location.pathname).toBe("/p/BB/map");
+    expect(router.state.location.pathname).toBe("/t/BB/map");
   });
 
-  test("recent projects come first, under a heading, and viewing a project updates them", async () => {
-    localStorage.setItem("wh:recent-projects", JSON.stringify(["CC", "BB"]));
+  test("recent teams come first, under a heading, and viewing a team updates them", async () => {
+    localStorage.setItem("wh:recent-teams", JSON.stringify(["CC", "BB"]));
     const user = userEvent.setup();
-    renderIn(sidebar(), "/p/AA");
+    renderIn(sidebar(), "/t/AA");
     await user.click(switcher());
     expect(screen.getByText("Recent")).toBeTruthy();
     const order = screen.getAllByRole("button").map((b) => b.textContent ?? "").filter((t) => /Alpha|Beta|Gamma/.test(t) && !t.includes("⌘"));
     expect(order.map((t) => t.replace(/[A-Z]{2}$/, ""))).toEqual(["Alpha", "Gamma", "Beta"]);
-    expect(JSON.parse(localStorage.getItem("wh:recent-projects")!)).toEqual(["AA", "CC", "BB"]);
+    expect(JSON.parse(localStorage.getItem("wh:recent-teams")!)).toEqual(["AA", "CC", "BB"]);
   });
 
-  test("the new project link is in the switcher and closes it", async () => {
+  test("the new team link is in the switcher and closes it", async () => {
     const user = userEvent.setup();
-    const { router } = renderIn(sidebar(), "/p/AA");
+    const { router } = renderIn(sidebar(), "/t/AA");
     await user.click(switcher());
-    await user.click(screen.getByRole("link", { name: "+ New project" }));
-    expect(router.state.location.pathname).toBe("/projects/new");
-    expect(screen.queryByPlaceholderText("Search projects…")).toBeNull();
+    await user.click(screen.getByRole("link", { name: "+ New team" }));
+    expect(router.state.location.pathname).toBe("/teams/new");
+    expect(screen.queryByPlaceholderText("Search teams…")).toBeNull();
   });
 });
 
-describe("remembering the last project", () => {
-  test("viewing a project writes the cookie the Next app also uses", () => {
-    renderIn(sidebar(), "/p/BB/docs");
-    expect(document.cookie).toContain("wh_last_project=BB");
+describe("remembering the last team", () => {
+  test("viewing a team writes the cookie the Next app also uses", () => {
+    renderIn(sidebar(), "/t/BB/docs");
+    expect(document.cookie).toContain("wh_last_team=BB");
   });
 
-  test("the logo goes to the last project, or home if it is unknown", () => {
-    document.cookie = "wh_last_project=CC; path=/";
+  test("the logo goes to the last team, or home if it is unknown", () => {
+    document.cookie = "wh_last_team=CC; path=/";
     const { unmount } = renderIn(sidebar(), "/workspace");
-    expect(logo().getAttribute("href")).toBe("/p/CC");
+    expect(logo().getAttribute("href")).toBe("/t/CC");
     unmount();
-    document.cookie = "wh_last_project=GONE; path=/";
+    document.cookie = "wh_last_team=GONE; path=/";
     renderIn(sidebar(), "/workspace");
     expect(logo().getAttribute("href")).toBe("/");
   });
@@ -177,10 +177,10 @@ describe("icons: the place you are on is solid, the others are outline", () => {
   });
 
   test("on the Docs page, Docs has the solid icon and every other item the outline one", () => {
-    renderIn(sidebar({ isAdmin: true }), "/p/AA/docs");
+    renderIn(sidebar({ isAdmin: true }), "/t/AA/docs");
     const expected: Record<string, keyof typeof NAV_ICONS> = {
       Home: "home", Overview: "overview", Board: "board", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
-      Repos: "repos", "Project members": "projectMembers", "Project settings": "projectSettings", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
+      Repos: "repos", "Team members": "teamMembers", "Team settings": "teamSettings", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
     };
     for (const [label, key] of Object.entries(expected)) {
       const link = within(nav()).getByRole("link", { name: label });
@@ -191,7 +191,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
   });
 
   test("moving to another page moves the solid icon", () => {
-    const { unmount } = renderIn(sidebar(), "/p/AA");
+    const { unmount } = renderIn(sidebar(), "/t/AA");
     expect(iconOf(within(nav()).getByRole("link", { name: "Board" }))).toBe(pathOf(NAV_ICONS.board.fill as never));
     expect(iconOf(within(nav()).getByRole("link", { name: "Overview" }))).toBe(pathOf(NAV_ICONS.overview.line as never)); // /overview is its own address
     unmount();
@@ -202,7 +202,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
 
 describe("collapsing to the icon-only rail", () => {
   test("the toggle collapses and expands, says which, and the labels stay for screen readers", async () => {
-    renderIn(sidebar(), "/p/AA");
+    renderIn(sidebar(), "/t/AA");
     const user = userEvent.setup();
     const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
@@ -216,7 +216,7 @@ describe("collapsing to the icon-only rail", () => {
     // still reachable by name, with the text visible to screen readers only
     const board = within(nav()).getByRole("link", { name: "Board" });
     expect(board.querySelector("span")!.className).toContain("md:sr-only");
-    expect(board.getAttribute("href")).toBe("/p/AA");
+    expect(board.getAttribute("href")).toBe("/t/AA");
     expect(screen.getByText("Analytical Engines").className).toContain("md:hidden");
     expect(screen.getByText("Work").className).toContain("md:hidden"); // the title makes way for a thin rule
     await user.click(expand);
@@ -225,11 +225,11 @@ describe("collapsing to the icon-only rail", () => {
   });
 
   test("the choice is remembered: a fresh mount starts as it was left", async () => {
-    const first = renderIn(sidebar(), "/p/AA");
+    const first = renderIn(sidebar(), "/t/AA");
     await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(localStorage.getItem("wh:sidebar-collapsed")).toBe("1");
     first.unmount();
-    renderIn(sidebar(), "/p/AA");
+    renderIn(sidebar(), "/t/AA");
     expect(aside().getAttribute("data-collapsed")).toBe("true");
     await userEvent.setup().click(screen.getByRole("button", { name: "Expand sidebar" }));
     expect(localStorage.getItem("wh:sidebar-collapsed")).toBe("0");
@@ -243,7 +243,7 @@ describe("collapsing to the icon-only rail", () => {
       throw new Error("blocked");
     });
     try {
-      renderIn(sidebar(), "/p/AA");
+      renderIn(sidebar(), "/t/AA");
       expect(aside().getAttribute("data-collapsed")).toBe("false");
       await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
       expect(aside().getAttribute("data-collapsed")).toBe("true");
@@ -255,37 +255,37 @@ describe("collapsing to the icon-only rail", () => {
 
   test("a tooltip names each icon when collapsed: shown when the link is focused, as a keyboard user would", async () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
-    renderIn(sidebar(), "/p/AA");
+    renderIn(sidebar(), "/t/AA");
     const docs = within(nav()).getByRole("link", { name: "Docs" });
     act(() => docs.focus());
     expect((await screen.findByRole("tooltip")).textContent).toBe("Docs");
   });
 
   test("expanded, there are no tooltips and no hidden labels", () => {
-    renderIn(sidebar(), "/p/AA");
+    renderIn(sidebar(), "/t/AA");
     const board = within(nav()).getByRole("link", { name: "Board" });
     expect(board.querySelector("span")!.className).not.toContain("md:sr-only");
   });
 
-  test("the project switcher still works as a rail: it opens, searches and moves to the chosen project", async () => {
+  test("the team switcher still works as a rail: it opens, searches and moves to the chosen team", async () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
-    const { router } = renderIn(sidebar(), "/p/AA/docs");
+    const { router } = renderIn(sidebar(), "/t/AA/docs");
     const user = userEvent.setup();
-    await user.click(within(nav()).getByRole("button", { name: "Project: Alpha" }));
-    await user.type(await screen.findByPlaceholderText("Search projects…"), "gam");
+    await user.click(within(nav()).getByRole("button", { name: "Team: Alpha" }));
+    await user.type(await screen.findByPlaceholderText("Search teams…"), "gam");
     await user.click(screen.getByRole("button", { name: /Gamma/ }));
-    expect(router.state.location.pathname).toBe("/p/CC/docs"); // keeps the section
-    expect(within(nav()).getByRole("button", { name: "Project: Gamma" })).toBeTruthy();
+    expect(router.state.location.pathname).toBe("/t/CC/docs"); // keeps the section
+    expect(within(nav()).getByRole("button", { name: "Team: Gamma" })).toBeTruthy();
   });
 
-  test("with no project open the collapsed switcher still invites a choice", () => {
+  test("with no team open the collapsed switcher still invites a choice", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     renderIn(sidebar(), "/workspace");
-    expect(within(nav()).getByRole("button", { name: "Select a project" })).toBeTruthy();
+    expect(within(nav()).getByRole("button", { name: "Select a team" })).toBeTruthy();
   });
 
   test("the account menu is told whether the rail is collapsed", async () => {
-    renderIn(sidebar({ profile: (collapsed: boolean) => <div>{collapsed ? "compact profile" : "full profile"}</div> }), "/p/AA");
+    renderIn(sidebar({ profile: (collapsed: boolean) => <div>{collapsed ? "compact profile" : "full profile"}</div> }), "/t/AA");
     expect(screen.getByText("full profile")).toBeTruthy();
     await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
     expect(screen.getByText("compact profile")).toBeTruthy();
@@ -293,8 +293,8 @@ describe("collapsing to the icon-only rail", () => {
 
   test("the sections, workspace and admin links all keep working when collapsed", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
-    renderIn(sidebar({ isAdmin: true }), "/p/AA");
-    for (const [name, href] of [["Home", "/"], ["Overview", "/p/AA/overview"], ["Map", "/p/AA/map"], ["Members", "/workspace"], ["Agents & API keys", "/agents"], ["Workspaces", "/admin/workspaces"], ["Invite a new workspace", "/admin/invites"]]) {
+    renderIn(sidebar({ isAdmin: true }), "/t/AA");
+    for (const [name, href] of [["Home", "/"], ["Overview", "/t/AA/overview"], ["Map", "/t/AA/map"], ["Members", "/workspace"], ["Agents & API keys", "/agents"], ["Workspaces", "/admin/workspaces"], ["Invite a new workspace", "/admin/invites"]]) {
       expect(within(nav()).getByRole("link", { name }).getAttribute("href")).toBe(href);
     }
   });

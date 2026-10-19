@@ -38,7 +38,7 @@ before(async () => {
   const [user] = await db.insert(schema.users).values({ email: "move@example.test", name: "Mo", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
   const actor: Actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
-  await svc.createProject(actor, { name: "Move", key: "MV", description: TRICKY });
+  await svc.createTeam(actor, { name: "Move", key: "MV", description: TRICKY });
   const t = await svc.createTicket(actor, "MV", { title: TRICKY, body: "body" });
   await svc.addComment(actor, t.id, "a comment");
   const a = await svc.upsertNode(actor, "MV", { name: "API", layer: "system", summary: TRICKY, anchors: ["src/a.ts"] });
@@ -49,12 +49,12 @@ before(async () => {
   await svc.upsertTerm(actor, "MV", { term: "Thing", definition: "a thing" });
   await svc.upsertFlow(actor, "MV", { name: "Go", steps: [{ node: a.id, title: "start" }] });
   const [key] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
-  const [project] = await db.select().from(schema.projects);
-  await db.insert(schema.agentCursors).values({ apiKeyId: key.id, projectId: project.id, lastSeq: 3 });
+  const [team] = await db.select().from(schema.teams);
+  await db.insert(schema.agentCursors).values({ apiKeyId: key.id, teamId: team.id, lastSeq: 3 });
   await db.insert(schema.sessions).values({ id: "b".repeat(64), userId: user.id, expiresAt: new Date(Date.now() + 864e5) });
   await db.insert(schema.githubInstallations).values({ installationId: "4242", workspaceId: workspace.id, accountLogin: "acme", accountType: "Organization", connectedBy: user.id });
-  await db.insert(schema.repositories).values({ projectId: project.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
-  await db.insert(schema.workSessions).values({ id: "sess-1", projectId: project.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
+  await db.insert(schema.repositories).values({ teamId: team.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
+  await db.insert(schema.workSessions).values({ id: "sess-1", teamId: team.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
   // Values that a careless copy gets wrong: the newest event's number past 2^53, a double that is not exact, a microsecond timestamp, an empty string beside a null.
   await db.execute(sql`update work_sessions set resume_from_seq = 2, resume_removed_at = '2026-10-17T12:34:56.789123+00:00' where id = 'sess-1'`);
   await db.execute(sql`update events set seq = ${BIG}::bigint where seq = (select max(seq) from events)`); // the newest event's number is past 2^53
@@ -131,7 +131,7 @@ describe("export and import between PGlite directories", () => {
   test("a failure part-way leaves the target empty, so the import can simply be run again", async () => {
     const broken = path.join(work, "export-broken");
     fs.cpSync(exportDir, broken, { recursive: true });
-    fs.appendFileSync(path.join(broken, "tickets.ndjson"), '{"id":"not-a-uuid"}\n'); // users, workspaces, projects… load first; this fails later
+    fs.appendFileSync(path.join(broken, "tickets.ndjson"), '{"id":"not-a-uuid"}\n'); // users, workspaces, teams… load first; this fails later
     const dst = await fresh("dst-7");
     await assert.rejects(importData(dst, broken));
     assert.equal((await snapshot(dst.query)).tables.every((t) => t.rows === 0), true);
@@ -170,7 +170,7 @@ describe("verification notices a mistake", () => {
     assert.ok((await errors(dst)).some((e) => e.check === "table api_keys"));
     await dst.query(`delete from agent_cursors`);
     assert.ok((await errors(dst)).some((e) => e.check === "table agent_cursors" && /1 rows expected, 0 found/.test(e.detail)));
-    await dst.query(`insert into terms (project_id, term, definition) select id, 'extra', 'x' from projects`);
+    await dst.query(`insert into terms (team_id, term, definition) select id, 'extra', 'x' from teams`);
     assert.ok((await errors(dst)).some((e) => e.check === "table terms" && /expected, .* found/.test(e.detail)));
     await dst.query(`select setval('events_seq_seq', 5)`);
     assert.ok((await errors(dst)).some((e) => e.check === "sequence events_seq_seq"));

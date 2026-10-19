@@ -8,7 +8,7 @@ import { Repos } from "../repos/repos";
 import { OnboardingWizard } from "./wizard";
 
 /**
- * `/p/:key/onboarding`: the guided steps after "New project". The wizard never traps anyone: "Skip to board" is always there.
+ * `/t/:key/onboarding`: the guided steps after "New team". The wizard never traps anyone: "Skip to board" is always there.
  * The code-location step hosts the same GitHub card and repository list as the Repos page.
  */
 export function OnboardingPage() {
@@ -20,12 +20,12 @@ export function OnboardingPage() {
     <Loaded query={query} label="Loading the setup">
       {(page) => (
         <OnboardingWizard
-          projectKey={page.project.key}
-          projectName={page.project.name}
+          teamKey={page.team.key}
+          teamName={page.team.name}
           hasRepos={page.hasRepos}
           cmd={page.setup}
-          githubConnect={<GithubConnect projectKey={key} />}
-          localRepos={repos.data ? <Repos projectKey={key} repos={repos.data} /> : null}
+          githubConnect={<GithubConnect teamKey={key} />}
+          localRepos={repos.data ? <Repos teamKey={key} repos={repos.data} /> : null}
         />
       )}
     </Loaded>

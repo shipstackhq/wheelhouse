@@ -1,40 +1,40 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { listProjectsWithRole } from "@wheelhouse/core/lib/project-members";
-import { createProject, removeSession, updateProject } from "@wheelhouse/core/lib/service";
+import { listTeamsWithRole } from "@wheelhouse/core/lib/team-members";
+import { createTeam, removeSession, updateTeam } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
 const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date; role?: string }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt, ...(p.role ? { role: p.role } : {}) });
 
-@Controller("api/app/projects")
+@Controller("api/app/teams")
 @AppEndpoints()
-export class ProjectsController {
-  /** The workspace's projects, oldest first. The workspace is the signed-in person's own; it is never taken from the request. */
+export class TeamsController {
+  /** The workspace's teams, oldest first. The workspace is the signed-in person's own; it is never taken from the request. */
   @Get()
   @UseGuards(SessionGuard)
   async list(@Req() req: SessionRequest) {
-    return { projects: (await listProjectsWithRole(req.human.actor)).map(view) };
+    return { teams: (await listTeamsWithRole(req.human.actor)).map(view) };
   }
 
-  /** `{ name, key?, description? }`. The key defaults from the name. 201 with the project; a taken key is a 409. */
+  /** `{ name, key?, description? }`. The key defaults from the name. 201 with the team; a taken key is a 409. */
   @Post()
   @UseGuards(SessionGuard)
   @HttpCode(201)
   async create(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
-    return { project: view(await createProject(req.human.actor, { name: str(b.name), key: str(b.key) || undefined, description: str(b.description) })) };
+    return { team: view(await createTeam(req.human.actor, { name: str(b.name), key: str(b.key) || undefined, description: str(b.description) })) };
   }
 
-  /** `{ name?, description? }`: project settings. Project admins only (403 otherwise); the key does not change. */
+  /** `{ name?, description? }`: team settings. Team admins only (403 otherwise); the key does not change. */
   @Patch(":key")
   @UseGuards(SessionGuard)
   async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
     const b = jsonBody(req);
-    return { project: view(await updateProject(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined })) };
+    return { team: view(await updateTeam(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined })) };
   }
 
-  /** Teammates remove an agent session from a project (soft delete: if it reconnects it starts at the top of the queue). */
+  /** Teammates remove an agent session from a team (soft delete: if it reconnects it starts at the top of the queue). */
   @Delete(":key/sessions/:sessionId")
   @UseGuards(SessionGuard)
   @HttpCode(200)

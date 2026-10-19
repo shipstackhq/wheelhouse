@@ -3,7 +3,7 @@
  * doc, for humans ("New doc" picker in docs-explorer.tsx) and agents (`list_doc_templates`,
  * or `upsert_doc`'s `template` arg). Each is just a `body` string handed to `createDoc` on
  * creation — no schema, no DB access, nothing persisted here. Keep this list static and
- * small; per-project customization (the ticket's "editable later") can layer on top
+ * small; per-team customization (the ticket's "editable later") can layer on top
  * without changing this module's shape.
  */
 
@@ -111,10 +111,10 @@ export const DOC_TEMPLATES: DocTemplate[] = [
   {
     id: "onboarding",
     name: "Onboarding",
-    description: "What this project is, how to run it, where things are, who to ask.",
+    description: "What this team is, how to run it, where things are, who to ask.",
     body: `# Onboarding: <title>
 
-## What this project is
+## What this team is
 *A short orientation for someone new.*
 
 ## How to run it

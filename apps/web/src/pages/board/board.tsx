@@ -31,8 +31,8 @@ import { AgentIcon, CloseIcon, CommentIcon, NodeIcon } from "../../components/ic
  * copy replaces it whenever nothing is being dragged (that is how a teammate's or an agent's change shows up), and again, with the
  * real positions, when a drop has been saved.
  */
-export function Board(props: { projectKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[] }) {
-  const { projectKey, columns, nodes, members } = props;
+export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[] }) {
+  const { teamKey, columns, nodes, members } = props;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
   const [items, setItems] = useState<Items>(() => group(columns, props.tickets));
@@ -42,26 +42,26 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
   const dragFrom = useRef<string | null>(null);
   const [views, setViews] = useState<Record<string, View>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const viewKey = (colId: string) => `wh:view:${projectKey}:${colId}`;
+  const viewKey = (colId: string) => `wh:view:${teamKey}:${colId}`;
   const viewOf = (colId: string) => views[colId] ?? EMPTY_VIEW;
   // ?t= is the source of truth for the open ticket; a value that isn't a ticket ref is ignored.
   const openRef = parseTicketParam(search.get("t"));
 
-  const refreshBoard = () => queryClient.invalidateQueries({ queryKey: ["board", projectKey] });
+  const refreshBoard = () => queryClient.invalidateQueries({ queryKey: ["board", teamKey] });
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {
     if (!dragging.current) setItems(group(columns, props.tickets));
   }, [columns, props.tickets]);
 
-  // Restore each column's filter/sort when the project or its columns change.
+  // Restore each column's filter/sort when the team or its columns change.
   // Keyed on the column ids, not the array: a refresh hands over a new array, and reloading here would give each Column a fresh
   // view object and un-pin tickets it just added.
   const columnIds = columns.map((c) => c.id).join(",");
   useEffect(() => {
     setViews(Object.fromEntries(columns.map((c) => [c.id, loadView(viewKey(c.id))])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectKey, columnIds]);
+  }, [teamKey, columnIds]);
 
   useEffect(() => {
     if (!notice) return;
@@ -176,7 +176,7 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
                 nodes={nodes}
                 onOpen={openTicket}
                 selected={openRef}
-                projectKey={projectKey}
+                teamKey={teamKey}
                 onCreated={() => void refreshBoard()}
               />
             ))}
@@ -188,7 +188,7 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
         <TicketDialog
           key={openRef}
           ticketRef={openRef}
-          projectKey={projectKey}
+          teamKey={teamKey}
           columns={columns}
           nodes={nodes}
           members={members}
@@ -210,7 +210,7 @@ function Column(props: {
   labels: string[];
   nodes: NodeLite[];
   selected: string | null;
-  projectKey: string;
+  teamKey: string;
   onOpen: (ref: string) => void;
   onCreated: () => void;
 }) {
@@ -240,7 +240,7 @@ function Column(props: {
     if (!keepOpen) setAdding(false);
     void (async () => {
       try {
-        await api.tickets.create(props.projectKey, { title: value, column: col.id });
+        await api.tickets.create(props.teamKey, { title: value, column: col.id });
         props.onCreated();
       } catch {
         props.onCreated(); // whatever happened, show the board as the server has it

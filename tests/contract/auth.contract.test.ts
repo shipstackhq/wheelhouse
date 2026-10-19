@@ -11,7 +11,7 @@ describe("session cookie (wh_session)", () => {
   test("a valid cookie signs a person in to the REST API and MCP", async () => {
     const r = await v1(asCookie(fx.a.sessionToken), "list_projects");
     assert.equal(r.status, 200);
-    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.projectKey));
+    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.teamKey));
     assert.equal((await mcp(asCookie(fx.a.sessionToken), "tools/list")).status, 200);
   });
 
@@ -47,15 +47,15 @@ describe("API keys (Authorization: Bearer)", () => {
     const r = await v1({ key: fx.b.apiKey, cookie: fx.a.sessionToken }, "list_projects");
     assert.equal(r.status, 200);
     const keys = r.json.data.map((p: { key: string }) => p.key);
-    assert.ok(keys.includes(fx.b.projectKey));
-    assert.ok(!keys.includes(fx.a.projectKey));
+    assert.ok(keys.includes(fx.b.teamKey));
+    assert.ok(!keys.includes(fx.a.teamKey));
   });
 
   test("using a key records when it was last used", async () => {
     const before = Date.now() - 5_000;
     await v1ok(asKey(fx.a.apiKey2), "list_projects");
     // The key list is a page of the app, not an API; the contract here is only that the call succeeds and is attributed.
-    const t = await v1ok(asKey(fx.a.apiKey2), "create_ticket", { project: fx.a.projectKey, title: `attrib ${before}` });
+    const t = await v1ok(asKey(fx.a.apiKey2), "create_ticket", { project: fx.a.teamKey, title: `attrib ${before}` });
     assert.equal(t.createdByKind, "agent");
   });
 });

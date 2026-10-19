@@ -5,12 +5,12 @@ export const HOSTED_URL = "https://wheelhouse.shipstack.run";
  * Every command the Agents page asks someone to paste. Kept apart from the page so a test can check them: none may carry
  * an API key (shell history, screen shares), and the project key and server URL must be the real ones.
  */
-export function onboarding({ origin, projectKey }: { origin: string; projectKey?: string | null }) {
-  const key = projectKey?.trim() || "KEY";
+export function onboarding({ origin, teamKey }: { origin: string; teamKey?: string | null }) {
+  const key = teamKey?.trim() || "KEY";
   const url = origin.replace(/\/+$/, "");
   const urlFlag = url === HOSTED_URL ? "" : ` --url ${url}`;
   return {
-    projectKey: key,
+    teamKey: key,
     url,
     /** The terminal's text commands. The VS Code extension has no `/plugin`: it uses the `/plugins` dialog or this link. */
     installPlugin: "/plugin marketplace add shipstackhq/wheelhouse-cli\n/plugin install wheelhouse@shipstack",

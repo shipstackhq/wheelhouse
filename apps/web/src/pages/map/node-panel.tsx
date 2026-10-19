@@ -37,7 +37,7 @@ const SECTIONS = [
 export function NodePanel(props: {
   node: GNode;
   graph: Graph;
-  projectKey: string;
+  teamKey: string;
   onClose: () => void;
   onSelect: (id: string) => void;
   onAddChild: () => void;
@@ -396,7 +396,7 @@ export function NodePanel(props: {
           <section>
             <span className="label">Decisions</span>
             {decisions.map((d) => (
-              <Link key={d.id} to={`/p/${props.projectKey}/decisions#adr-${d.number}`} className="flex gap-2 rounded px-1.5 py-1 hover:bg-panel-2">
+              <Link key={d.id} to={`/t/${props.teamKey}/decisions#adr-${d.number}`} className="flex gap-2 rounded px-1.5 py-1 hover:bg-panel-2">
                 <span className="font-mono text-xs text-muted">ADR-{d.number}</span>
                 <span className={clsx(d.status === "superseded" || d.status === "rejected" ? "text-muted line-through" : "")}>{d.title}</span>
               </Link>
@@ -410,7 +410,7 @@ export function NodePanel(props: {
             <p className="text-xs text-muted">None linked.</p>
           ) : (
             tickets.map((t) => (
-              <Link key={t.ticketId} className="block rounded px-1.5 py-1 hover:bg-panel-2" to={`/p/${props.projectKey}?t=${t.ref}`}>
+              <Link key={t.ticketId} className="block rounded px-1.5 py-1 hover:bg-panel-2" to={`/t/${props.teamKey}?t=${t.ref}`}>
                 <span className="font-mono text-xs text-muted">{t.ref}</span> {t.title}
               </Link>
             ))

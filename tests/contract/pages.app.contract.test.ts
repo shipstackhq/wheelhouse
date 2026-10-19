@@ -4,7 +4,7 @@ import { fx, freshIp, v1 } from "./lib/http";
 import { anon, app, login, newEmail, sessionFrom, signIn, type Sess } from "./lib/app";
 
 /**
- * The endpoints behind the dashboard, workspace, agents, admin, new-project, sign-in and invite pages (WH-95): each one's happy path,
+ * The endpoints behind the dashboard, workspace, agents, admin, new-team, sign-in and invite pages (WH-95): each one's happy path,
  * signed out, another workspace's data, a forged request, and the rules the old server actions had (owner-only, limits, one-time secrets).
  * Anything that changes data does it in an account made for the test, so the seeded workspaces stay as they were.
  */
@@ -49,8 +49,8 @@ describe("every endpoint needs a signed-in person", () => {
     ["GET", `/api/app/admin/workspaces/${sid}`],
     ["POST", `/api/app/admin/workspaces/${sid}/suspend`, { confirm: "x" }],
     ["POST", `/api/app/admin/workspaces/${sid}/restore`, {}],
-    ["POST", "/api/app/projects", { name: "x" }],
-    ["DELETE", `/api/app/projects/${fx.a.projectKey}/sessions/${sid}`],
+    ["POST", "/api/app/teams", { name: "x" }],
+    ["DELETE", `/api/app/teams/${fx.a.teamKey}/sessions/${sid}`],
     ["GET", "/api/app/dashboard/kpis"],
   ];
   for (const [method, path, body] of table) {
@@ -63,7 +63,7 @@ describe("every endpoint needs a signed-in person", () => {
 });
 
 describe("a forged request is refused before anything happens", () => {
-  test("a key cannot be created, a member removed or a project made from another site or without the token", async () => {
+  test("a key cannot be created, a member removed or a team made from another site or without the token", async () => {
     const o = await signUp();
     const m = await addMember(o);
     const forged = [
@@ -75,7 +75,7 @@ describe("a forged request is refused before anything happens", () => {
       for (const [method, path, body] of [
         ["POST", "/api/app/keys", { name: "forged" }],
         ["DELETE", `/api/app/workspace/members/${m.me.user.id}`, undefined],
-        ["POST", "/api/app/projects", { name: "Forged" }],
+        ["POST", "/api/app/teams", { name: "Forged" }],
         ["POST", "/api/app/me/password", { current: PW, next: PW + "!" }],
       ] as const) {
         const r = await app(method, path, o.sess, { ...f, body });
@@ -86,7 +86,7 @@ describe("a forged request is refused before anything happens", () => {
     const workspace = await app("GET", "/api/app/workspace", o.sess);
     assert.equal(workspace.json.members.length, 2, "nobody was removed");
     assert.equal((await app("GET", "/api/app/agents", o.sess)).json.keys.length, 0, "no key was made");
-    assert.deepEqual((await app("GET", "/api/app/projects", o.sess)).json, { projects: [] });
+    assert.deepEqual((await app("GET", "/api/app/teams", o.sess)).json, { teams: [] });
     assert.equal((await login(o.email)).status, 401, "the password was not changed");
     assert.equal((await login(o.email, PW)).status, 200);
   });
@@ -225,20 +225,20 @@ describe("API keys and the Agents page", () => {
     const { json } = await app("POST", "/api/app/keys", p.sess, { body: { name: "agent" } });
     const before = await v1({ key: json.secret }, "list_projects");
     assert.equal(before.status, 200);
-    assert.deepEqual(before.json.data, [], "the new workspace has no projects, and sees none of workspace A's");
+    assert.deepEqual(before.json.data, [], "the new workspace has no teams, and sees none of workspace A's");
     assert.deepEqual((await app("DELETE", `/api/app/keys/${json.key.id}`, p.sess)).json, { ok: true });
     assert.equal((await v1({ key: json.secret }, "list_projects")).status, 401);
     const listed = (await app("GET", "/api/app/agents", p.sess)).json.keys[0];
     assert.ok(listed.revokedAt);
   });
 
-  test("a blank name gets a default; the Agents page's commands carry the project key when there is exactly one project", async () => {
+  test("a blank name gets a default; the Agents page's commands carry the team key when there is exactly one team", async () => {
     const p = await signUp();
     assert.equal((await app("POST", "/api/app/keys", p.sess, { body: { name: "  " } })).json.key.name, "Claude agent");
-    assert.equal((await app("GET", "/api/app/agents", p.sess)).json.setup.projectKey, "KEY");
-    await app("POST", "/api/app/projects", p.sess, { body: { name: "Rocket", key: "RKT" } });
+    assert.equal((await app("GET", "/api/app/agents", p.sess)).json.setup.teamKey, "KEY");
+    await app("POST", "/api/app/teams", p.sess, { body: { name: "Rocket", key: "RKT" } });
     const setup = (await app("GET", "/api/app/agents", p.sess)).json.setup;
-    assert.equal(setup.projectKey, "RKT");
+    assert.equal(setup.teamKey, "RKT");
     assert.ok(setup.linkRepo.includes("RKT"));
     assert.ok(!/wh_[A-Za-z0-9_-]{10}/.test(JSON.stringify(setup)), "no key in any command");
   });
@@ -465,7 +465,7 @@ describe("the instance admin's workspaces pages", () => {
     const a = list.json.workspaces.find((t: { id: string }) => t.id === fx.a.workspaceId);
     assert.equal(a.isYours, false);
     assert.equal(a.members, 2);
-    assert.equal(a.projects, 1);
+    assert.equal(a.teams, 1);
     assert.ok(list.json.workspaces.find((t: { id: string }) => t.id === fx.admin.workspaceId).isYours);
     assert.ok(list.json.workspaces.find((t: { name: string }) => t.name === "Contract suspended workspace").suspendedAt);
 
@@ -515,42 +515,42 @@ describe("the instance admin's workspaces pages", () => {
   });
 });
 
-describe("POST /api/app/projects", () => {
-  test("creates a project with the five columns, derives a key from the name, and answers 201", async () => {
+describe("POST /api/app/teams", () => {
+  test("creates a team with the five columns, derives a key from the name, and answers 201", async () => {
     const p = await signUp();
-    const r = await app("POST", "/api/app/projects", p.sess, { body: { name: "Rocket Launcher", description: "Agents read this." } });
+    const r = await app("POST", "/api/app/teams", p.sess, { body: { name: "Rocket Launcher", description: "Agents read this." } });
     assert.equal(r.status, 201);
-    assert.deepEqual(Object.keys(r.json.project).sort(), ["createdAt", "description", "id", "key", "name"]);
-    assert.equal(r.json.project.name, "Rocket Launcher");
-    assert.equal(r.json.project.key, "ROC");
-    assert.equal(r.json.project.description, "Agents read this.");
-    assert.deepEqual((await app("GET", "/api/app/projects", p.sess)).json.projects.map((x: { key: string }) => x.key), ["ROC"]);
+    assert.deepEqual(Object.keys(r.json.team).sort(), ["createdAt", "description", "id", "key", "name"]);
+    assert.equal(r.json.team.name, "Rocket Launcher");
+    assert.equal(r.json.team.key, "ROC");
+    assert.equal(r.json.team.description, "Agents read this.");
+    assert.deepEqual((await app("GET", "/api/app/teams", p.sess)).json.teams.map((x: { key: string }) => x.key), ["ROC"]);
   });
 
   test("a chosen key is upper-cased and cut to six; a taken key is a 409; a blank name is a 400", async () => {
     const p = await signUp();
-    assert.equal((await app("POST", "/api/app/projects", p.sess, { body: { name: "One", key: "abcdefgh" } })).json.project.key, "ABCDEF");
-    const dup = await app("POST", "/api/app/projects", p.sess, { body: { name: "Two", key: "ABCDEF" } });
+    assert.equal((await app("POST", "/api/app/teams", p.sess, { body: { name: "One", key: "abcdefgh" } })).json.team.key, "ABCDEF");
+    const dup = await app("POST", "/api/app/teams", p.sess, { body: { name: "Two", key: "ABCDEF" } });
     assert.equal(dup.status, 409);
-    assert.equal(dup.json.error.message, "Project key ABCDEF already in use");
-    const blank = await app("POST", "/api/app/projects", p.sess, { body: { name: "  " } });
+    assert.equal(dup.json.error.message, "Team key ABCDEF already in use");
+    const blank = await app("POST", "/api/app/teams", p.sess, { body: { name: "  " } });
     assert.equal(blank.status, 400);
-    assert.equal(blank.json.error.message, "Project name is required");
+    assert.equal(blank.json.error.message, "Team name is required");
   });
 
-  test("keys are per workspace: another workspace can use a key that is taken elsewhere, and neither sees the other's project", async () => {
+  test("keys are per workspace: another workspace can use a key that is taken elsewhere, and neither sees the other's team", async () => {
     const x = await signUp();
     const y = await signUp("Other");
-    assert.equal((await app("POST", "/api/app/projects", x.sess, { body: { name: "Shared", key: "SHR" } })).status, 201);
-    assert.equal((await app("POST", "/api/app/projects", y.sess, { body: { name: "Shared too", key: "SHR" } })).status, 201);
-    assert.equal((await app("GET", "/api/app/projects", x.sess)).json.projects[0].name, "Shared");
+    assert.equal((await app("POST", "/api/app/teams", x.sess, { body: { name: "Shared", key: "SHR" } })).status, 201);
+    assert.equal((await app("POST", "/api/app/teams", y.sess, { body: { name: "Shared too", key: "SHR" } })).status, 201);
+    assert.equal((await app("GET", "/api/app/teams", x.sess)).json.teams[0].name, "Shared");
   });
 
-  test("an agent session can be removed by a teammate of that project's workspace only", async () => {
+  test("an agent session can be removed by a teammate of that team's workspace only", async () => {
     const owner = await signIn(fx.a.email);
-    const unknown = await app("DELETE", `/api/app/projects/${fx.a.projectKey}/sessions/nonexistent`, owner);
+    const unknown = await app("DELETE", `/api/app/teams/${fx.a.teamKey}/sessions/nonexistent`, owner);
     assert.equal(unknown.status, 404);
-    const crossWorkspace = await app("DELETE", `/api/app/projects/${fx.b.projectKey}/sessions/nonexistent`, owner);
+    const crossWorkspace = await app("DELETE", `/api/app/teams/${fx.b.teamKey}/sessions/nonexistent`, owner);
     assert.equal(crossWorkspace.status, 404);
     assert.equal(crossWorkspace.json.error.code, "not_found");
   });
@@ -567,10 +567,10 @@ describe("the dashboard", () => {
       return r.json;
     };
     const kpis = await get("kpis");
-    assert.deepEqual(Object.keys(kpis).sort(), ["agentShare7d", "agents", "agentsActive7d", "completed7d", "completedPrev7d", "events7d", "inProgress", "inReview", "mapNodes", "open", "projects", "staleDocs", "staleNodes"]);
-    assert.equal(kpis.projects, 1);
+    assert.deepEqual(Object.keys(kpis).sort(), ["agentShare7d", "agents", "agentsActive7d", "completed7d", "completedPrev7d", "events7d", "inProgress", "inReview", "mapNodes", "open", "staleDocs", "staleNodes", "teams"]);
+    assert.equal(kpis.teams, 1);
     const progress = await get("progress");
-    assert.deepEqual(progress.map((p: { key: string }) => p.key), [fx.a.projectKey], "workspace A's project, never workspace B's");
+    assert.deepEqual(progress.map((p: { key: string }) => p.key), [fx.a.teamKey], "workspace A's team, never workspace B's");
     assert.deepEqual(Object.keys(progress[0]).sort(), ["agentReady", "done", "id", "key", "lastActivity", "mapNodes", "name", "pct", "stages", "staleDocs", "staleNodes", "total", "urgent"]);
     assert.equal(progress[0].stages.length, 5);
     for (const w of ["throughput", "activity-split"]) {
@@ -583,13 +583,13 @@ describe("the dashboard", () => {
     assert.deepEqual(Object.keys(await get("sync")).sort(), ["drafts", "quiet", "untracked"]);
     const recent = await get("recent");
     assert.ok(recent.length > 0);
-    assert.deepEqual(Object.keys(recent[0]).sort(), ["actorKind", "actorName", "createdAt", "projectKey", "seq", "summary"], "only what a row shows: no ids or internals");
-    assert.ok(recent.every((e: { projectKey: string }) => e.projectKey === fx.a.projectKey));
+    assert.deepEqual(Object.keys(recent[0]).sort(), ["actorKind", "actorName", "createdAt", "seq", "summary", "teamKey"], "only what a row shows: no ids or internals");
+    assert.ok(recent.every((e: { teamKey: string }) => e.teamKey === fx.a.teamKey));
   });
 
   test("workspace B sees its own numbers, and a new workspace starts empty", async () => {
     const b = await app("GET", "/api/app/dashboard/progress", await signIn(fx.b.email));
-    assert.deepEqual(b.json.map((p: { key: string }) => p.key), [fx.b.projectKey]);
+    assert.deepEqual(b.json.map((p: { key: string }) => p.key), [fx.b.teamKey]);
     const fresh = await signUp();
     assert.deepEqual((await app("GET", "/api/app/dashboard/progress", fresh.sess)).json, []);
     assert.deepEqual((await app("GET", "/api/app/dashboard/recent", fresh.sess)).json, []);
@@ -609,6 +609,6 @@ describe("the dashboard", () => {
   test("a workspaceId in the query or a header changes nothing", async () => {
     const s = await signIn(fx.a.email);
     const r = await app("GET", `/api/app/dashboard/progress?workspaceId=${fx.b.workspaceId}`, s, { headers: { "x-workspace-id": fx.b.workspaceId } });
-    assert.deepEqual(r.json.map((p: { key: string }) => p.key), [fx.a.projectKey]);
+    assert.deepEqual(r.json.map((p: { key: string }) => p.key), [fx.a.teamKey]);
   });
 });

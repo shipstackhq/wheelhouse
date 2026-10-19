@@ -135,11 +135,11 @@ describe("me()", () => {
 });
 
 describe("requests", () => {
-  test("a base URL is a prefix, JSON bodies are JSON, and projects.list unwraps the list", async () => {
-    const s = script([{ json: { projects: [{ id: "1", key: "WH", name: "Wheelhouse", description: "", createdAt: "2026-10-16T00:00:00Z" }] } }]);
+  test("a base URL is a prefix, JSON bodies are JSON, and teams.list unwraps the list", async () => {
+    const s = script([{ json: { teams: [{ id: "1", key: "WH", name: "Wheelhouse", description: "", createdAt: "2026-10-16T00:00:00Z" }] } }]);
     const api = createApiClient({ baseUrl: "https://wh.example/", fetch: s.f });
-    const list = await api.projects.list();
-    assert.equal(s.calls[0].url, "https://wh.example/api/app/projects");
+    const list = await api.teams.list();
+    assert.equal(s.calls[0].url, "https://wh.example/api/app/teams");
     assert.equal(s.calls[0].headers.accept, "application/json");
     assert.deepEqual(list.map((p) => p.key), ["WH"]);
   });
@@ -198,13 +198,13 @@ describe("the page endpoints (WH-95)", () => {
     assert.deepEqual(await sent((a) => a.invites.revoke("i1")), { method: "DELETE", url: "/api/app/invites/i1", body: undefined });
   });
 
-  test("admin, projects and dashboard", async () => {
+  test("admin, teams and dashboard", async () => {
     assert.deepEqual(await sent((a) => a.admin.suspend("t1", { confirm: "Acme", reason: "x" }), { json: { name: "Acme", sessionsEnded: 0 } }), { method: "POST", url: "/api/app/admin/workspaces/t1/suspend", body: { confirm: "Acme", reason: "x" } });
     assert.deepEqual(await sent((a) => a.admin.restore("t1")), { method: "POST", url: "/api/app/admin/workspaces/t1/restore", body: {} });
     assert.deepEqual(await sent((a) => a.admin.workspaces(), { json: { workspaces: [] } }), { method: "GET", url: "/api/app/admin/workspaces", body: undefined });
     assert.deepEqual(await sent((a) => a.admin.workspace("t1"), { json: { workspace: {} } }), { method: "GET", url: "/api/app/admin/workspaces/t1", body: undefined });
-    assert.deepEqual(await sent((a) => a.projects.create({ name: "Rocket" }), { status: 201, json: { project: {} } }), { method: "POST", url: "/api/app/projects", body: { name: "Rocket" } });
-    assert.deepEqual(await sent((a) => a.projects.removeSession("WH", "s/1")), { method: "DELETE", url: "/api/app/projects/WH/sessions/s%2F1", body: undefined });
+    assert.deepEqual(await sent((a) => a.teams.create({ name: "Rocket" }), { status: 201, json: { team: {} } }), { method: "POST", url: "/api/app/teams", body: { name: "Rocket" } });
+    assert.deepEqual(await sent((a) => a.teams.removeSession("WH", "s/1")), { method: "DELETE", url: "/api/app/teams/WH/sessions/s%2F1", body: undefined });
     assert.deepEqual(await sent((a) => a.dashboard.widget("activity-split"), { json: [] }), { method: "GET", url: "/api/app/dashboard/activity-split", body: undefined });
   });
 });
@@ -219,16 +219,16 @@ describe("the board endpoints (WH-96)", () => {
     return { method, url, body };
   };
 
-  test("the board and the queue are reads, with the project key escaped; the queue comes out of its envelope", async () => {
-    assert.deepEqual(await sent((a) => a.projects.board("W H"), { json: {} }), { method: "GET", url: "/api/app/projects/W%20H/board", body: undefined });
+  test("the board and the queue are reads, with the team key escaped; the queue comes out of its envelope", async () => {
+    assert.deepEqual(await sent((a) => a.teams.board("W H"), { json: {} }), { method: "GET", url: "/api/app/teams/W%20H/board", body: undefined });
     const s = script([{ json: { bots: [{ id: "k1" }] } }]);
-    assert.deepEqual(await createApiClient({ fetch: s.f }).projects.queue("WH"), [{ id: "k1" }]);
-    assert.equal(s.calls[0].url, "/api/app/projects/WH/queue");
+    assert.deepEqual(await createApiClient({ fetch: s.f }).teams.queue("WH"), [{ id: "k1" }]);
+    assert.equal(s.calls[0].url, "/api/app/teams/WH/queue");
   });
 
   test("tickets: create, read, edit, move, delete, comment, link and unlink, each at its address with the ref escaped", async () => {
     const t = { ticket: { ref: "WH-1" } };
-    assert.deepEqual(await sent((a) => a.tickets.create("WH", { title: "x", column: "review" }), { status: 201, json: t }), { method: "POST", url: "/api/app/projects/WH/tickets", body: { title: "x", column: "review" } });
+    assert.deepEqual(await sent((a) => a.tickets.create("WH", { title: "x", column: "review" }), { status: 201, json: t }), { method: "POST", url: "/api/app/teams/WH/tickets", body: { title: "x", column: "review" } });
     assert.deepEqual(await sent((a) => a.tickets.get("WH-1"), { json: {} }), { method: "GET", url: "/api/app/tickets/WH-1", body: undefined });
     assert.deepEqual(await sent((a) => a.tickets.update("WH-1", { title: "y", version: 3 }), { json: t }), { method: "PATCH", url: "/api/app/tickets/WH-1", body: { title: "y", version: 3 } });
     assert.deepEqual(await sent((a) => a.tickets.move("WH-1", { column: "Done", index: 0 }), { json: t }), { method: "POST", url: "/api/app/tickets/WH-1/move", body: { column: "Done", index: 0 } });
@@ -260,31 +260,31 @@ describe("the map endpoints (WH-97)", () => {
   };
 
   test("the graph is a read; nodes, layout and edges go to their addresses with ids escaped, and the node comes out of its envelope", async () => {
-    assert.deepEqual(await sent((a) => a.map.graph("W H"), { json: {} }), { method: "GET", url: "/api/app/projects/W%20H/graph", body: undefined });
-    assert.deepEqual(await sent((a) => a.map.upsertNode("WH", { id: "n1", summary: "s", version: 3 }), { json: { node: {} } }), { method: "PUT", url: "/api/app/projects/WH/nodes", body: { id: "n1", summary: "s", version: 3 } });
-    assert.deepEqual(await sent((a) => a.map.deleteNode("WH", "n/1")), { method: "DELETE", url: "/api/app/projects/WH/nodes/n%2F1", body: undefined });
-    assert.deepEqual(await sent((a) => a.map.markFresh("WH", "n1"), { json: { node: {} } }), { method: "POST", url: "/api/app/projects/WH/nodes/n1/fresh", body: {} });
-    assert.deepEqual(await sent((a) => a.map.saveLayout("WH", [{ id: "n1", x: 1, y: 2 }], { placed: false })), { method: "PUT", url: "/api/app/projects/WH/layout", body: { positions: [{ id: "n1", x: 1, y: 2 }], placed: false } });
-    assert.deepEqual(await sent((a) => a.map.connect("WH", { from: "a", to: "b", kind: "implements" }), { json: { edge: {} } }), { method: "POST", url: "/api/app/projects/WH/edges", body: { from: "a", to: "b", kind: "implements" } });
-    assert.deepEqual(await sent((a) => a.map.deleteEdge("WH", "e1")), { method: "DELETE", url: "/api/app/projects/WH/edges/e1", body: undefined });
+    assert.deepEqual(await sent((a) => a.map.graph("W H"), { json: {} }), { method: "GET", url: "/api/app/teams/W%20H/graph", body: undefined });
+    assert.deepEqual(await sent((a) => a.map.upsertNode("WH", { id: "n1", summary: "s", version: 3 }), { json: { node: {} } }), { method: "PUT", url: "/api/app/teams/WH/nodes", body: { id: "n1", summary: "s", version: 3 } });
+    assert.deepEqual(await sent((a) => a.map.deleteNode("WH", "n/1")), { method: "DELETE", url: "/api/app/teams/WH/nodes/n%2F1", body: undefined });
+    assert.deepEqual(await sent((a) => a.map.markFresh("WH", "n1"), { json: { node: {} } }), { method: "POST", url: "/api/app/teams/WH/nodes/n1/fresh", body: {} });
+    assert.deepEqual(await sent((a) => a.map.saveLayout("WH", [{ id: "n1", x: 1, y: 2 }], { placed: false })), { method: "PUT", url: "/api/app/teams/WH/layout", body: { positions: [{ id: "n1", x: 1, y: 2 }], placed: false } });
+    assert.deepEqual(await sent((a) => a.map.connect("WH", { from: "a", to: "b", kind: "implements" }), { json: { edge: {} } }), { method: "POST", url: "/api/app/teams/WH/edges", body: { from: "a", to: "b", kind: "implements" } });
+    assert.deepEqual(await sent((a) => a.map.deleteEdge("WH", "e1")), { method: "DELETE", url: "/api/app/teams/WH/edges/e1", body: undefined });
     const s = script([{ json: { node: { id: "n1", version: 2 } } }]);
     assert.deepEqual(await createApiClient({ fetch: s.f }).map.upsertNode("WH", { name: "x" }), { id: "n1", version: 2 });
   });
 
   test("flows, decisions and terms: the term is in the path (escaped), the rest in the body", async () => {
-    assert.deepEqual(await sent((a) => a.map.upsertFlow("WH", { name: "F", steps: [{ node: "n1", title: "t" }], version: 1 }), { json: { flow: {} } }), { method: "PUT", url: "/api/app/projects/WH/flows", body: { name: "F", steps: [{ node: "n1", title: "t" }], version: 1 } });
-    assert.deepEqual(await sent((a) => a.map.deleteFlow("WH", "f1")), { method: "DELETE", url: "/api/app/projects/WH/flows/f1", body: undefined });
-    assert.deepEqual(await sent((a) => a.map.upsertDecision("WH", { number: 2, status: "accepted", version: 4 }), { json: { decision: {} } }), { method: "PUT", url: "/api/app/projects/WH/decisions", body: { number: 2, status: "accepted", version: 4 } });
-    assert.deepEqual(await sent((a) => a.map.upsertTerm("WH", "CI/CD pipeline", { definition: "d", node: null }), { json: { term: {} } }), { method: "PUT", url: "/api/app/projects/WH/terms/CI%2FCD%20pipeline", body: { definition: "d", node: null } });
-    assert.deepEqual(await sent((a) => a.map.deleteTerm("WH", "Work item")), { method: "DELETE", url: "/api/app/projects/WH/terms/Work%20item", body: undefined });
+    assert.deepEqual(await sent((a) => a.map.upsertFlow("WH", { name: "F", steps: [{ node: "n1", title: "t" }], version: 1 }), { json: { flow: {} } }), { method: "PUT", url: "/api/app/teams/WH/flows", body: { name: "F", steps: [{ node: "n1", title: "t" }], version: 1 } });
+    assert.deepEqual(await sent((a) => a.map.deleteFlow("WH", "f1")), { method: "DELETE", url: "/api/app/teams/WH/flows/f1", body: undefined });
+    assert.deepEqual(await sent((a) => a.map.upsertDecision("WH", { number: 2, status: "accepted", version: 4 }), { json: { decision: {} } }), { method: "PUT", url: "/api/app/teams/WH/decisions", body: { number: 2, status: "accepted", version: 4 } });
+    assert.deepEqual(await sent((a) => a.map.upsertTerm("WH", "CI/CD pipeline", { definition: "d", node: null }), { json: { term: {} } }), { method: "PUT", url: "/api/app/teams/WH/terms/CI%2FCD%20pipeline", body: { definition: "d", node: null } });
+    assert.deepEqual(await sent((a) => a.map.deleteTerm("WH", "Work item")), { method: "DELETE", url: "/api/app/teams/WH/terms/Work%20item", body: undefined });
   });
 
   test("drafts, ask and activity", async () => {
-    assert.deepEqual(await sent((a) => a.map.resolveDraft("WH", "d1", "publish")), { method: "POST", url: "/api/app/projects/WH/drafts/d1/resolve", body: { action: "publish" } });
-    assert.deepEqual(await sent((a) => a.map.ask("WH", "Why?", "n1"), { json: { answer: "a", truncated: false } }), { method: "POST", url: "/api/app/projects/WH/ask", body: { question: "Why?", focus: "n1" } });
+    assert.deepEqual(await sent((a) => a.map.resolveDraft("WH", "d1", "publish")), { method: "POST", url: "/api/app/teams/WH/drafts/d1/resolve", body: { action: "publish" } });
+    assert.deepEqual(await sent((a) => a.map.ask("WH", "Why?", "n1"), { json: { answer: "a", truncated: false } }), { method: "POST", url: "/api/app/teams/WH/ask", body: { question: "Why?", focus: "n1" } });
     assert.deepEqual((await sent((a) => a.map.ask("WH", "Why?"), { json: { answer: "a", truncated: false } })).body, { question: "Why?" }, "no focus, no focus field");
-    assert.deepEqual(await sent((a) => a.map.activity("WH", "agent"), { json: { events: [] } }), { method: "GET", url: "/api/app/projects/WH/activity?who=agent", body: undefined });
-    assert.equal((await sent((a) => a.map.activity("WH"), { json: { events: [] } })).url, "/api/app/projects/WH/activity");
+    assert.deepEqual(await sent((a) => a.map.activity("WH", "agent"), { json: { events: [] } }), { method: "GET", url: "/api/app/teams/WH/activity?who=agent", body: undefined });
+    assert.equal((await sent((a) => a.map.activity("WH"), { json: { events: [] } })).url, "/api/app/teams/WH/activity");
     const s = script([{ json: { events: [{ seq: 1 }] } }]);
     assert.deepEqual(await createApiClient({ fetch: s.f }).map.activity("WH"), [{ seq: 1 }]);
   });
@@ -309,15 +309,15 @@ describe("the docs, repositories and onboarding endpoints (WH-98)", () => {
   };
 
   test("docs: each call goes to its address with the ref escaped, and the doc comes out of its envelope", async () => {
-    assert.deepEqual(await sent((a) => a.docs.index("WH"), { json: { docs: [] } }), { method: "GET", url: "/api/app/projects/WH/docs", body: undefined });
-    assert.deepEqual(await sent((a) => a.docs.get("WH", "a b"), { json: { doc: {}, nodes: [] } }), { method: "GET", url: "/api/app/projects/WH/docs/a%20b", body: undefined });
-    assert.deepEqual(await sent((a) => a.docs.create("WH", { title: "T", template: "spec", parent: null }), { json: { doc: {} } }), { method: "POST", url: "/api/app/projects/WH/docs", body: { title: "T", template: "spec", parent: null } });
-    assert.deepEqual(await sent((a) => a.docs.update("WH", "d1", { body: "x", version: 3 }), { json: { doc: {} } }), { method: "PATCH", url: "/api/app/projects/WH/docs/d1", body: { body: "x", version: 3 } });
-    assert.deepEqual(await sent((a) => a.docs.markFresh("WH", "d1"), { json: { doc: {} } }), { method: "POST", url: "/api/app/projects/WH/docs/d1/fresh", body: {} });
-    assert.deepEqual(await sent((a) => a.docs.move("WH", "d1", { parent: null, version: 2 }), { json: { doc: {} } }), { method: "POST", url: "/api/app/projects/WH/docs/d1/move", body: { parent: null, version: 2 } });
-    assert.deepEqual(await sent((a) => a.docs.delete("WH", "d1")), { method: "DELETE", url: "/api/app/projects/WH/docs/d1", body: undefined });
-    assert.deepEqual(await sent((a) => a.docs.linkNode("WH", "d1", "n/1")), { method: "PUT", url: "/api/app/projects/WH/docs/d1/nodes/n%2F1", body: {} });
-    assert.deepEqual(await sent((a) => a.docs.unlinkNode("WH", "d1", "n1")), { method: "DELETE", url: "/api/app/projects/WH/docs/d1/nodes/n1", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.index("WH"), { json: { docs: [] } }), { method: "GET", url: "/api/app/teams/WH/docs", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.get("WH", "a b"), { json: { doc: {}, nodes: [] } }), { method: "GET", url: "/api/app/teams/WH/docs/a%20b", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.create("WH", { title: "T", template: "spec", parent: null }), { json: { doc: {} } }), { method: "POST", url: "/api/app/teams/WH/docs", body: { title: "T", template: "spec", parent: null } });
+    assert.deepEqual(await sent((a) => a.docs.update("WH", "d1", { body: "x", version: 3 }), { json: { doc: {} } }), { method: "PATCH", url: "/api/app/teams/WH/docs/d1", body: { body: "x", version: 3 } });
+    assert.deepEqual(await sent((a) => a.docs.markFresh("WH", "d1"), { json: { doc: {} } }), { method: "POST", url: "/api/app/teams/WH/docs/d1/fresh", body: {} });
+    assert.deepEqual(await sent((a) => a.docs.move("WH", "d1", { parent: null, version: 2 }), { json: { doc: {} } }), { method: "POST", url: "/api/app/teams/WH/docs/d1/move", body: { parent: null, version: 2 } });
+    assert.deepEqual(await sent((a) => a.docs.delete("WH", "d1")), { method: "DELETE", url: "/api/app/teams/WH/docs/d1", body: undefined });
+    assert.deepEqual(await sent((a) => a.docs.linkNode("WH", "d1", "n/1")), { method: "PUT", url: "/api/app/teams/WH/docs/d1/nodes/n%2F1", body: {} });
+    assert.deepEqual(await sent((a) => a.docs.unlinkNode("WH", "d1", "n1")), { method: "DELETE", url: "/api/app/teams/WH/docs/d1/nodes/n1", body: undefined });
     const s = script([{ json: { anchors: ["src/a.ts"] } }]);
     assert.deepEqual(await createApiClient({ fetch: s.f }).docs.anchorSuggestions("WH", "d1"), ["src/a.ts"]);
   });
@@ -333,16 +333,16 @@ describe("the docs, repositories and onboarding endpoints (WH-98)", () => {
   test("repositories: list and retire unwrap; GitHub connect sends the repository's GitHub id as repoId", async () => {
     const s = script([{ json: { repositories: [{ id: "r1" }] } }]);
     assert.deepEqual(await createApiClient({ fetch: s.f }).repos.list("WH"), [{ id: "r1" }]);
-    assert.deepEqual(await sent((a) => a.repos.create("WH", { displayName: "API", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/projects/WH/repositories", body: { displayName: "API", role: "backend" } });
-    assert.deepEqual(await sent((a) => a.repos.update("WH", "r1", { pathLimit: null }), { json: { repository: {} } }), { method: "PATCH", url: "/api/app/projects/WH/repositories/r1", body: { pathLimit: null } });
-    assert.deepEqual(await sent((a) => a.repos.retire("WH", "r1"), { json: { repository: {} } }), { method: "POST", url: "/api/app/projects/WH/repositories/r1/retire", body: {} });
-    assert.deepEqual(await sent((a) => a.repos.tree("WH", "r1"), { json: { files: [], truncated: false } }), { method: "GET", url: "/api/app/projects/WH/repositories/r1/tree", body: undefined });
-    assert.deepEqual(await sent((a) => a.repos.github("WH"), { json: { configured: false } }), { method: "GET", url: "/api/app/projects/WH/repositories/github", body: undefined });
-    assert.deepEqual(await sent((a) => a.repos.connectGithub("WH", { installationId: "1", repoId: "5", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/projects/WH/repositories/github", body: { installationId: "1", repoId: "5", role: "backend" } });
+    assert.deepEqual(await sent((a) => a.repos.create("WH", { displayName: "API", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/teams/WH/repositories", body: { displayName: "API", role: "backend" } });
+    assert.deepEqual(await sent((a) => a.repos.update("WH", "r1", { pathLimit: null }), { json: { repository: {} } }), { method: "PATCH", url: "/api/app/teams/WH/repositories/r1", body: { pathLimit: null } });
+    assert.deepEqual(await sent((a) => a.repos.retire("WH", "r1"), { json: { repository: {} } }), { method: "POST", url: "/api/app/teams/WH/repositories/r1/retire", body: {} });
+    assert.deepEqual(await sent((a) => a.repos.tree("WH", "r1"), { json: { files: [], truncated: false } }), { method: "GET", url: "/api/app/teams/WH/repositories/r1/tree", body: undefined });
+    assert.deepEqual(await sent((a) => a.repos.github("WH"), { json: { configured: false } }), { method: "GET", url: "/api/app/teams/WH/repositories/github", body: undefined });
+    assert.deepEqual(await sent((a) => a.repos.connectGithub("WH", { installationId: "1", repoId: "5", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/teams/WH/repositories/github", body: { installationId: "1", repoId: "5", role: "backend" } });
   });
 
   test("onboarding: the page is a read, and the description goes in the body", async () => {
-    assert.deepEqual(await sent((a) => a.onboarding.page("WH"), { json: {} }), { method: "GET", url: "/api/app/projects/WH/onboarding", body: undefined });
-    assert.deepEqual(await sent((a) => a.onboarding.startMap("WH", "A tool")), { method: "POST", url: "/api/app/projects/WH/onboarding/concept", body: { description: "A tool" } });
+    assert.deepEqual(await sent((a) => a.onboarding.page("WH"), { json: {} }), { method: "GET", url: "/api/app/teams/WH/onboarding", body: undefined });
+    assert.deepEqual(await sent((a) => a.onboarding.startMap("WH", "A tool")), { method: "POST", url: "/api/app/teams/WH/onboarding/concept", body: { description: "A tool" } });
   });
 });

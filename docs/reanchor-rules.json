@@ -1,5 +1,5 @@
 {
-  "project": "WH",
+  "team": "WH",
   "repository": ["wheelhouse"],
   "anchors": {
     "public/sw.js": ["apps/web/public/sw.js"],

@@ -11,7 +11,7 @@ import type { WorkspaceRole } from "../db/schema";
  * auth.ts and invites.ts refuse the workspace while the flag is set. Restoring clears the flag.
  */
 
-const { workspaces, memberships, users, invites, projects, events, apiKeys, sessions } = schema;
+const { workspaces, memberships, users, invites, teams, events, apiKeys, sessions } = schema;
 
 export type Admin = { userId: string; email: string; workspaceId: string };
 
@@ -38,7 +38,7 @@ export type WorkspaceSummary = {
   pendingInvites: number;
   seatsUsed: number;
   maxSeats: number;
-  projects: number;
+  teams: number;
   lastActivity: Date | null;
   invitedBy: { name: string; email: string } | null;
   isYours: boolean;
@@ -47,7 +47,7 @@ export type WorkspaceSummary = {
 export async function listWorkspaces(admin: Admin, now = new Date()): Promise<WorkspaceSummary[]> {
   requireAdmin(admin);
   const db = await getDb();
-  const [workspaceRows, memberRows, pendingRows, projectRows, eventRows, keyRows, founderRows] = await Promise.all([
+  const [workspaceRows, memberRows, pendingRows, teamRows, eventRows, keyRows, founderRows] = await Promise.all([
     db.select().from(workspaces).orderBy(workspaces.createdAt),
     db
       .select({ workspaceId: memberships.workspaceId, role: memberships.role, name: users.name, email: users.email })
@@ -58,7 +58,7 @@ export async function listWorkspaces(admin: Admin, now = new Date()): Promise<Wo
       .from(invites)
       .where(and(eq(invites.kind, "join_workspace"), isNull(invites.usedAt), isNull(invites.revokedAt), gt(invites.expiresAt, now)))
       .groupBy(invites.workspaceId),
-    db.select({ workspaceId: projects.workspaceId, n: sql<number>`count(*)::int` }).from(projects).groupBy(projects.workspaceId),
+    db.select({ workspaceId: teams.workspaceId, n: sql<number>`count(*)::int` }).from(teams).groupBy(teams.workspaceId),
     db.select({ workspaceId: events.workspaceId, at: sql<string | null>`max(${events.createdAt})` }).from(events).groupBy(events.workspaceId),
     db.select({ workspaceId: apiKeys.workspaceId, at: sql<string | null>`max(${apiKeys.lastUsedAt})` }).from(apiKeys).groupBy(apiKeys.workspaceId),
     // who sent the new-workspace invite each founder used
@@ -82,7 +82,7 @@ export async function listWorkspaces(admin: Admin, now = new Date()): Promise<Wo
     if (t) invitedBy.set(t, { name: f.name, email: f.email });
   }
   const pending = new Map(pendingRows.map((r) => [r.workspaceId, r.n]));
-  const projCount = new Map(projectRows.map((r) => [r.workspaceId, r.n]));
+  const projCount = new Map(teamRows.map((r) => [r.workspaceId, r.n]));
   const lastEvent = new Map(eventRows.map((r) => [r.workspaceId, asDate(r.at)]));
   const lastKey = new Map(keyRows.map((r) => [r.workspaceId, asDate(r.at)]));
   const max = maxWorkspaceMembers();
@@ -102,7 +102,7 @@ export async function listWorkspaces(admin: Admin, now = new Date()): Promise<Wo
       pendingInvites: p,
       seatsUsed: ms.length + p,
       maxSeats: max,
-      projects: projCount.get(t.id) ?? 0,
+      teams: projCount.get(t.id) ?? 0,
       lastActivity: times.length ? new Date(Math.max(...times.map((d) => d.getTime()))) : null,
       invitedBy: invitedBy.get(t.id) ?? null,
       isYours: t.id === admin.workspaceId,

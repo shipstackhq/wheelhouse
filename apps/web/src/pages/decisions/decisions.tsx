@@ -24,10 +24,10 @@ const STATUS: Record<Decision["status"], string> = {
 };
 
 /**
- * `/p/:key/decisions` is the project's ADRs as a grid of cards, each showing only its title (the layout of the docs home);
- * `/p/:key/decisions/:number` is one decision, with its three sections and the map nodes it applies to.
+ * `/t/:key/decisions` is the team's ADRs as a grid of cards, each showing only its title (the layout of the docs home);
+ * `/t/:key/decisions/:number` is one decision, with its three sections and the map nodes it applies to.
  */
-export function Decisions(props: { projectKey: string; number?: number; decisions: Decision[]; nodes: NodeLite[]; terms: GlossaryTerm[] }) {
+export function Decisions(props: { teamKey: string; number?: number; decisions: Decision[]; nodes: NodeLite[]; terms: GlossaryTerm[] }) {
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
   const { hash } = useLocation();
@@ -38,7 +38,7 @@ export function Decisions(props: { projectKey: string; number?: number; decision
   const byId = new Map(props.nodes.map((n) => [n.id, n]));
   const q = query.trim().toLowerCase();
   const shown = [...props.decisions].reverse().filter((d) => !q || d.title.toLowerCase().includes(q));
-  const base = `/p/${props.projectKey}/decisions`;
+  const base = `/t/${props.teamKey}/decisions`;
   const selected = props.number === undefined ? undefined : props.decisions.find((d) => d.number === props.number);
 
   // A link made when decisions were one long page (`#adr-4`, from the activity feed and the docs) opens that decision.
@@ -50,7 +50,7 @@ export function Decisions(props: { projectKey: string; number?: number; decision
   const save = (d: Draft) =>
     start(async () => {
       try {
-        await api.map.upsertDecision(props.projectKey, {
+        await api.map.upsertDecision(props.teamKey, {
           number: d.number,
           version: d.version,
           title: d.title,
@@ -147,7 +147,7 @@ export function Decisions(props: { projectKey: string; number?: number; decision
             </nav>
             <section className="min-h-0 flex-1 overflow-y-auto">
               {!selected ? (
-                <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">No decision ADR-{props.number} in this project.</p>
+                <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">No decision ADR-{props.number} in this team.</p>
               ) : (
                 <article className="mx-auto w-full max-w-3xl space-y-5 px-4 py-8 sm:px-8 lg:py-10">
                   <div className="flex items-start justify-between gap-3">
@@ -178,7 +178,7 @@ export function Decisions(props: { projectKey: string; number?: number; decision
                     {selected.nodeIds.map((id) => {
                       const n = byId.get(id);
                       return n ? (
-                        <Link key={id} to={`/p/${props.projectKey}/map?node=${id}`} className="chip bg-accent/10 py-1 text-accent hover:bg-accent/20">
+                        <Link key={id} to={`/t/${props.teamKey}/map?node=${id}`} className="chip bg-accent/10 py-1 text-accent hover:bg-accent/20">
                           <NodeIcon /> {n.name} <span className="ml-1 opacity-60">{n.layer}</span>
                         </Link>
                       ) : null;

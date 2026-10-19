@@ -3,7 +3,7 @@ import { useMe } from "../../lib/session";
 import { WIDGETS, SPAN_CLASS } from "./registry";
 import { DashboardRefresh } from "./refresh";
 
-/** The home page: how the workspace's projects are moving and what its agents are up to. Each widget loads on its own. */
+/** The home page: how the workspace's teams are moving and what its agents are up to. Each widget loads on its own. */
 export function Dashboard() {
   const me = useMe().data;
   if (!me) return null;
@@ -18,9 +18,9 @@ export function Dashboard() {
             <h1 className="text-xl font-semibold">
               {greeting}, {me.user.name.split(" ")[0]}
             </h1>
-            <p className="mt-1 text-sm text-muted">How {me.workspace.name}&apos;s projects are moving, and what the agents are up to.</p>
+            <p className="mt-1 text-sm text-muted">How {me.workspace.name}&apos;s teams are moving, and what the agents are up to.</p>
           </div>
-          <Link to="/projects/new" className="btn">+ New project</Link>
+          <Link to="/teams/new" className="btn">+ New team</Link>
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           {WIDGETS.map(({ id, span, Component }) => (

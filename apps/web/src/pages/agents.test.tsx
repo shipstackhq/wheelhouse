@@ -82,7 +82,7 @@ describe("the Agents page", () => {
   });
 
   test("the setup guide carries the commands from the server, and none of them holds a key", async () => {
-    renderApp("/agents", (s) => s.on("GET /api/app/agents", agentsPage([key()], { projectKey: "WH", linkRepo: "/wheelhouse:setup WH" })));
+    renderApp("/agents", (s) => s.on("GET /api/app/agents", agentsPage([key()], { teamKey: "WH", linkRepo: "/wheelhouse:setup WH" })));
     await screen.findByText("2. Pick your setup");
     expect(document.body.textContent).toContain("/wheelhouse:setup WH");
     expect(document.body.textContent).toContain("https://wh.example.test/mcp");

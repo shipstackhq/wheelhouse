@@ -10,17 +10,17 @@ import { GlossaryPage } from "../pages/glossary";
 import { OnboardingPage } from "../pages/onboarding";
 import { ReposPage } from "../pages/repos";
 import { MapPage } from "../pages/map";
-import { ProjectMembersPage } from "../pages/members";
-import { ProjectOverviewPage } from "../pages/overview";
-import { ProjectSettingsPage } from "../pages/project-settings";
+import { TeamMembersPage } from "../pages/members";
+import { TeamOverviewPage } from "../pages/overview";
+import { TeamSettingsPage } from "../pages/team-settings";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
 import { InvitePage } from "../pages/invite";
-import { NewProjectPage } from "../pages/new-project";
+import { NewTeamPage } from "../pages/new-team";
 import { WorkspacePage } from "../pages/workspace";
 import { NotFound, RouteError } from "./errors";
 import { redirectIfSignedIn, requireSignedIn } from "./guards";
-import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, ProjectLayout, RequireAdmin, RootLayout } from "./layouts";
+import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, TeamLayout, RequireAdmin, RootLayout } from "./layouts";
 import { OfflinePage } from "./offline";
 
 /**
@@ -50,7 +50,7 @@ export function buildRoutes(services: Services): RouteObject[] {
           loader: requireSignedIn(services),
           children: [
             { index: true, Component: Dashboard },
-            { path: "projects/new", Component: NewProjectPage },
+            { path: "teams/new", Component: NewTeamPage },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
             {
@@ -62,11 +62,11 @@ export function buildRoutes(services: Services): RouteObject[] {
               ],
             },
             {
-              path: "p/:key",
-              Component: ProjectLayout,
+              path: "t/:key",
+              Component: TeamLayout,
               children: [
                 { index: true, Component: BoardPage },
-                { path: "overview", Component: ProjectOverviewPage },
+                { path: "overview", Component: TeamOverviewPage },
                 { path: "activity", Component: ActivityPage },
                 { path: "map", Component: MapPage },
                 { path: "docs", Component: DocsPage },
@@ -76,8 +76,8 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "glossary", Component: GlossaryPage },
                 { path: "glossary/:termId", Component: GlossaryPage },
                 { path: "repos", Component: ReposPage },
-                { path: "members", Component: ProjectMembersPage },
-                { path: "settings", Component: ProjectSettingsPage },
+                { path: "members", Component: TeamMembersPage },
+                { path: "settings", Component: TeamSettingsPage },
                 { path: "onboarding", Component: OnboardingPage },
               ],
             },

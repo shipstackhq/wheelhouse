@@ -2,7 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { nextProgress, PROGRESS_CEILING, PROGRESS_START, startsNavigation } from "./nav-progress";
 
-const here = "https://wheelhouse.shipstack.run/p/WH";
+const here = "https://wheelhouse.shipstack.run/t/WH";
 const click = (href: string, over: Record<string, unknown> = {}) => ({
   button: 0,
   metaKey: false,
@@ -29,12 +29,12 @@ test("the bar moves forward on every tick, slows down, and never reaches the end
 });
 
 test("a plain click on a link to another page of the app starts the bar", () => {
-  assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/p/WH/map"), here), true);
+  assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/t/WH/map"), here), true);
   assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/workspace"), here), true);
 });
 
 test("changing only the query counts, because opening a ticket is a navigation", () => {
-  assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/p/WH?t=WH-12"), here), true);
+  assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/t/WH?t=WH-12"), here), true);
 });
 
 test("clicks that do not navigate in this tab do not start it", () => {

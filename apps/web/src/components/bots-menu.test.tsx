@@ -4,12 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { apiError, renderApp } from "../test/harness";
 import { bot } from "../test/data";
 
-const queue = (bots: ReturnType<typeof bot>[]) => (s: { on: (r: string, a: unknown) => unknown }) => s.on("GET /api/app/projects/AA/queue", { bots });
+const queue = (bots: ReturnType<typeof bot>[]) => (s: { on: (r: string, a: unknown) => unknown }) => s.on("GET /api/app/teams/AA/queue", { bots });
 const trigger = (name: RegExp) => screen.findByRole("button", { name });
 
-describe("the Bots menu in the project header", () => {
+describe("the Bots menu in the team header", () => {
   test("says there are none when no agent is connected, and points to creating a key", async () => {
-    renderApp("/p/AA", queue([]));
+    renderApp("/t/AA", queue([]));
     const t = await trigger(/^Bots: none connected$/);
     expect(t.getAttribute("title")).toBe("No bots connected");
     await userEvent.setup().click(t);
@@ -18,7 +18,7 @@ describe("the Bots menu in the project header", () => {
   });
 
   test("with a queue it shows the total, and in the menu who is behind", async () => {
-    renderApp("/p/AA", queue([bot({ id: "k1", name: "Ada's agent", pending: 3 }), bot({ id: "k2", name: "CI bot", pending: 0 })]));
+    renderApp("/t/AA", queue([bot({ id: "k1", name: "Ada's agent", pending: 3 }), bot({ id: "k2", name: "CI bot", pending: 0 })]));
     const t = await trigger(/^Bots: 3 queued change\(s\)$/);
     expect(t.getAttribute("title")).toBe("3 queued");
     await userEvent.setup().click(t);
@@ -31,14 +31,14 @@ describe("the Bots menu in the project header", () => {
   });
 
   test("when everyone is caught up it says all in sync", async () => {
-    renderApp("/p/AA", queue([bot({ pending: 0 })]));
+    renderApp("/t/AA", queue([bot({ pending: 0 })]));
     const t = await trigger(/^Bots: all in sync$/);
     await userEvent.setup().click(t);
     expect(await screen.findByText("All caught up")).toBeTruthy();
   });
 
-  test("'mark all seen' resets that agent's queue in this project only, and reads the queue again", async () => {
-    const { server } = renderApp("/p/AA", (s) => {
+  test("'mark all seen' resets that agent's queue in this team only, and reads the queue again", async () => {
+    const { server } = renderApp("/t/AA", (s) => {
       queue([bot({ id: "k1", name: "Ada's agent", pending: 2 })])(s);
       s.on("POST /api/app/agents/mark-all-seen", { ok: true });
     });
@@ -47,28 +47,28 @@ describe("the Bots menu in the project header", () => {
     const row = (await screen.findByText("Ada's agent")).closest("li") as HTMLElement;
     await user.click(within(row).getByRole("button", { name: "mark all seen" }));
     await waitFor(() => expect(server.sent("POST /api/app/agents/mark-all-seen")).toHaveLength(1));
-    expect(server.sent("POST /api/app/agents/mark-all-seen")[0].body).toEqual({ keyId: "k1", projectKey: "AA" });
-    await waitFor(() => expect(server.sent("GET /api/app/projects/AA/queue").length).toBeGreaterThan(1));
+    expect(server.sent("POST /api/app/agents/mark-all-seen")[0].body).toEqual({ keyId: "k1", teamKey: "AA" });
+    await waitFor(() => expect(server.sent("GET /api/app/teams/AA/queue").length).toBeGreaterThan(1));
   });
 
-  test("a session can be removed from the menu, for its own project", async () => {
+  test("a session can be removed from the menu, for its own team", async () => {
     const session = { id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", ticket: null };
-    const { server } = renderApp("/p/AA", (s) => {
+    const { server } = renderApp("/t/AA", (s) => {
       queue([bot({ pending: 0, sessions: [session] })])(s);
-      s.on("DELETE /api/app/projects/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd", { ok: true });
+      s.on("DELETE /api/app/teams/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd", { ok: true });
     });
     const user = userEvent.setup();
     await user.click(await trigger(/^Bots: all in sync$/));
     const remove = await screen.findByRole("button", { name: "Remove session 11111111" });
     window.confirm = () => true;
     await user.click(remove);
-    await waitFor(() => expect(server.sent("DELETE /api/app/projects/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd")).toHaveLength(1));
+    await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd")).toHaveLength(1));
   });
 
   test("it is a skeleton while the queue loads, and simply absent if the queue cannot be read (the board still works)", async () => {
     let release!: () => void;
-    renderApp("/p/AA", (s) =>
-      s.on("GET /api/app/projects/AA/queue", () => new Promise((r) => (release = () => r({ bots: [] })))),
+    renderApp("/t/AA", (s) =>
+      s.on("GET /api/app/teams/AA/queue", () => new Promise((r) => (release = () => r({ bots: [] })))),
     );
     await screen.findByText("Write the plan");
     expect(screen.queryByRole("button", { name: /^Bots:/ })).toBeNull();
@@ -76,7 +76,7 @@ describe("the Bots menu in the project header", () => {
     release();
     await trigger(/^Bots: none connected$/);
 
-    const failing = renderApp("/p/BB", (s) => s.on("GET /api/app/projects/BB/queue", apiError(500, "internal", "Internal error")));
+    const failing = renderApp("/t/BB", (s) => s.on("GET /api/app/teams/BB/queue", apiError(500, "internal", "Internal error")));
     expect(failing).toBeTruthy();
     await waitFor(() => expect(screen.getAllByRole("heading", { level: 1, name: "Beta" }).length).toBeGreaterThan(0), { timeout: 8000 });
   }, 20_000);

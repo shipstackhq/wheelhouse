@@ -4,7 +4,7 @@
  *   const api = createApiClient();                       // same origin, as the React app is served
  *   const me = await api.me();                           // null when signed out
  *   await api.auth.login({ email, password });
- *   const projects = await api.projects.list();
+ *   const teams = await api.teams.list();
  *
  * It does two things every caller would otherwise get wrong:
  *  - the CSRF token: sent as X-CSRF-Token on every state-changing request ("anonymous" before sign-in; the token from
@@ -20,9 +20,9 @@ import type {
   InvitePeekExisting,
   WorkspaceChoice,
   AuditEvent,
-  ProjectMembers,
-  ProjectRole,
-  WorkspaceProject,
+  TeamMembers,
+  TeamRole,
+  WorkspaceTeam,
   AskAnswer,
   Decision,
   DecisionInput,
@@ -80,8 +80,8 @@ export type Me = {
   csrfToken: string;
 };
 
-export type Project = { id: string; key: string; name: string; description: string; createdAt: string; /** The caller's own role in it. */ role?: ProjectRole };
-export type CreateProjectInput = { name: string; key?: string; description?: string };
+export type Team = { id: string; key: string; name: string; description: string; createdAt: string; /** The caller's own role in it. */ role?: TeamRole };
+export type CreateTeamInput = { name: string; key?: string; description?: string };
 
 export type LoginInput = { email: string; password: string };
 export type SignupInput = { name: string; email: string; password: string; workspace?: string };
@@ -131,7 +131,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   const doFetch = options.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
   let csrf = ANONYMOUS;
 
-  const project = (key: string) => `/api/app/projects/${encodeURIComponent(key)}`;
+  const team = (key: string) => `/api/app/teams/${encodeURIComponent(key)}`;
 
   async function request<T>(method: string, path: string, body?: unknown, retried = false): Promise<T> {
     const m = method.toUpperCase();
@@ -217,44 +217,44 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     /** Workspace-level views of access (owners and admins). */
     access: {
-      projects: async () => (await request<{ projects: WorkspaceProject[] }>("GET", "/api/app/access/projects")).projects,
-      audit: async (opts: { project?: string; limit?: number } = {}) => {
+      teams: async () => (await request<{ teams: WorkspaceTeam[] }>("GET", "/api/app/access/teams")).teams,
+      audit: async (opts: { team?: string; limit?: number } = {}) => {
         const q = new URLSearchParams();
-        if (opts.project) q.set("project", opts.project);
+        if (opts.team) q.set("team", opts.team);
         if (opts.limit) q.set("limit", String(opts.limit));
         return (await request<{ events: AuditEvent[] }>("GET", `/api/app/access/audit${q.size ? `?${q}` : ""}`)).events;
       },
     },
 
-    projects: {
-      list: async () => (await request<{ projects: Project[] }>("GET", "/api/app/projects")).projects,
-      create: async (input: CreateProjectInput) => (await request<{ project: Project }>("POST", "/api/app/projects", input)).project,
-      /** Project settings: rename it or change its description (project admins). */
-      update: async (projectKey: string, input: { name?: string; description?: string }) =>
-        (await request<{ project: Project }>("PATCH", `/api/app/projects/${encodeURIComponent(projectKey)}`, input)).project,
-      /** The project page in one read: columns, tickets, map nodes, members and the setup checklist. */
-      board: (projectKey: string) => request<BoardView>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/board`),
-      /** The Bots menu: each agent key with its queue in this project. */
-      queue: async (projectKey: string) => (await request<{ bots: Bot[] }>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/queue`)).bots,
-      /** Who is in the project, and the caller's own role in it. */
-      members: (projectKey: string) => request<ProjectMembers>("GET", `${project(projectKey)}/members`),
-      /** Workspace members who could still be added (project admins). */
-      addableMembers: async (projectKey: string) => (await request<{ people: AddableMember[] }>("GET", `${project(projectKey)}/members/addable`)).people,
-      addMember: (projectKey: string, input: { userId: string; role: ProjectRole }) => request<{ member: { userId: string; role: ProjectRole } }>("POST", `${project(projectKey)}/members`, input),
-      setMemberRole: (projectKey: string, userId: string, role: ProjectRole) =>
-        request<{ member: { userId: string; role: ProjectRole } }>("PATCH", `${project(projectKey)}/members/${encodeURIComponent(userId)}`, { role }),
-      /** Remove someone from the project, or leave it yourself. */
-      removeMember: (projectKey: string, userId: string) => request<{ ok: true }>("DELETE", `${project(projectKey)}/members/${encodeURIComponent(userId)}`),
-      /** A workspace owner or admin joins the project as its admin (audited). */
-      join: (projectKey: string) => request<{ project: { id: string; key: string; name: string } }>("POST", `${project(projectKey)}/join`, {}),
-      /** Teammates remove an agent session from a project. */
-      removeSession: (projectKey: string, sessionId: string) =>
-        request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/sessions/${encodeURIComponent(sessionId)}`),
+    teams: {
+      list: async () => (await request<{ teams: Team[] }>("GET", "/api/app/teams")).teams,
+      create: async (input: CreateTeamInput) => (await request<{ team: Team }>("POST", "/api/app/teams", input)).team,
+      /** Team settings: rename it or change its description (team admins). */
+      update: async (teamKey: string, input: { name?: string; description?: string }) =>
+        (await request<{ team: Team }>("PATCH", `/api/app/teams/${encodeURIComponent(teamKey)}`, input)).team,
+      /** The team page in one read: columns, tickets, map nodes, members and the setup checklist. */
+      board: (teamKey: string) => request<BoardView>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/board`),
+      /** The Bots menu: each agent key with its queue in this team. */
+      queue: async (teamKey: string) => (await request<{ bots: Bot[] }>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/queue`)).bots,
+      /** Who is in the team, and the caller's own role in it. */
+      members: (teamKey: string) => request<TeamMembers>("GET", `${team(teamKey)}/members`),
+      /** Workspace members who could still be added (team admins). */
+      addableMembers: async (teamKey: string) => (await request<{ people: AddableMember[] }>("GET", `${team(teamKey)}/members/addable`)).people,
+      addMember: (teamKey: string, input: { userId: string; role: TeamRole }) => request<{ member: { userId: string; role: TeamRole } }>("POST", `${team(teamKey)}/members`, input),
+      setMemberRole: (teamKey: string, userId: string, role: TeamRole) =>
+        request<{ member: { userId: string; role: TeamRole } }>("PATCH", `${team(teamKey)}/members/${encodeURIComponent(userId)}`, { role }),
+      /** Remove someone from the team, or leave it yourself. */
+      removeMember: (teamKey: string, userId: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/members/${encodeURIComponent(userId)}`),
+      /** A workspace owner or admin joins the team as its admin (audited). */
+      join: (teamKey: string) => request<{ team: { id: string; key: string; name: string } }>("POST", `${team(teamKey)}/join`, {}),
+      /** Teammates remove an agent session from a team. */
+      removeSession: (teamKey: string, sessionId: string) =>
+        request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/sessions/${encodeURIComponent(sessionId)}`),
     },
 
     tickets: {
-      create: async (projectKey: string, input: NewTicket) =>
-        (await request<{ ticket: TicketView & { column: string | undefined } }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/tickets`, input)).ticket,
+      create: async (teamKey: string, input: NewTicket) =>
+        (await request<{ ticket: TicketView & { column: string | undefined } }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/tickets`, input)).ticket,
       get: (ref: string) => request<TicketDetail>("GET", `/api/app/tickets/${encodeURIComponent(ref)}`),
       /** With `version`, a stale edit rejects with an ApiError whose `current` is the ticket as it is now. */
       update: async (ref: string, patch: TicketPatch) => (await request<{ ticket: TicketView }>("PATCH", `/api/app/tickets/${encodeURIComponent(ref)}`, patch)).ticket,
@@ -268,74 +268,74 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     map: {
       /** The whole map in one read; also what the decisions and glossary pages draw. */
-      graph: (projectKey: string) => request<GraphView>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/graph`),
+      graph: (teamKey: string) => request<GraphView>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/graph`),
       /** Create (no `id`) or change (`id`) a node. With `version`, a stale change rejects with an ApiError whose `current` is the node now. */
-      upsertNode: async (projectKey: string, patch: NodePatch) =>
-        (await request<{ node: MapNode }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/nodes`, patch)).node,
-      deleteNode: (projectKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/nodes/${encodeURIComponent(id)}`),
-      markFresh: async (projectKey: string, id: string) =>
-        (await request<{ node: MapNode }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/nodes/${encodeURIComponent(id)}/fresh`, {})).node,
-      saveLayout: (projectKey: string, positions: NodePosition[], opts: { placed?: boolean } = {}) =>
-        request<{ ok: true }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/layout`, { positions, ...opts }),
-      connect: async (projectKey: string, input: { from: string; to: string; label?: string; kind?: "depends" | "implements" }) =>
-        (await request<{ edge: MapEdge }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/edges`, input)).edge,
-      deleteEdge: (projectKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/edges/${encodeURIComponent(id)}`),
-      upsertFlow: async (projectKey: string, input: FlowInput) => (await request<{ flow: Flow }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/flows`, input)).flow,
-      deleteFlow: (projectKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/flows/${encodeURIComponent(id)}`),
-      upsertDecision: async (projectKey: string, input: DecisionInput) =>
-        (await request<{ decision: Decision }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/decisions`, input)).decision,
-      upsertTerm: async (projectKey: string, term: string, input: { definition: string; node?: string | null }) =>
-        (await request<{ term: Term }>("PUT", `/api/app/projects/${encodeURIComponent(projectKey)}/terms/${encodeURIComponent(term)}`, input)).term,
-      deleteTerm: (projectKey: string, term: string) => request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/terms/${encodeURIComponent(term)}`),
-      resolveDraft: (projectKey: string, id: string, action: "publish" | "discard") =>
-        request<{ ok: true }>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/drafts/${encodeURIComponent(id)}/resolve`, { action }),
+      upsertNode: async (teamKey: string, patch: NodePatch) =>
+        (await request<{ node: MapNode }>("PUT", `/api/app/teams/${encodeURIComponent(teamKey)}/nodes`, patch)).node,
+      deleteNode: (teamKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/nodes/${encodeURIComponent(id)}`),
+      markFresh: async (teamKey: string, id: string) =>
+        (await request<{ node: MapNode }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/nodes/${encodeURIComponent(id)}/fresh`, {})).node,
+      saveLayout: (teamKey: string, positions: NodePosition[], opts: { placed?: boolean } = {}) =>
+        request<{ ok: true }>("PUT", `/api/app/teams/${encodeURIComponent(teamKey)}/layout`, { positions, ...opts }),
+      connect: async (teamKey: string, input: { from: string; to: string; label?: string; kind?: "depends" | "implements" }) =>
+        (await request<{ edge: MapEdge }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/edges`, input)).edge,
+      deleteEdge: (teamKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/edges/${encodeURIComponent(id)}`),
+      upsertFlow: async (teamKey: string, input: FlowInput) => (await request<{ flow: Flow }>("PUT", `/api/app/teams/${encodeURIComponent(teamKey)}/flows`, input)).flow,
+      deleteFlow: (teamKey: string, id: string) => request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/flows/${encodeURIComponent(id)}`),
+      upsertDecision: async (teamKey: string, input: DecisionInput) =>
+        (await request<{ decision: Decision }>("PUT", `/api/app/teams/${encodeURIComponent(teamKey)}/decisions`, input)).decision,
+      upsertTerm: async (teamKey: string, term: string, input: { definition: string; node?: string | null }) =>
+        (await request<{ term: Term }>("PUT", `/api/app/teams/${encodeURIComponent(teamKey)}/terms/${encodeURIComponent(term)}`, input)).term,
+      deleteTerm: (teamKey: string, term: string) => request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/terms/${encodeURIComponent(term)}`),
+      resolveDraft: (teamKey: string, id: string, action: "publish" | "discard") =>
+        request<{ ok: true }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/drafts/${encodeURIComponent(id)}/resolve`, { action }),
       /** Answered by Claude on the server, from the map. */
-      ask: (projectKey: string, question: string, focus?: string) =>
-        request<AskAnswer>("POST", `/api/app/projects/${encodeURIComponent(projectKey)}/ask`, { question, ...(focus ? { focus } : {}) }),
-      activity: async (projectKey: string, who?: "agent" | "human") =>
-        (await request<{ events: ActivityEvent2[] }>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/activity${who ? `?who=${who}` : ""}`)).events,
+      ask: (teamKey: string, question: string, focus?: string) =>
+        request<AskAnswer>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/ask`, { question, ...(focus ? { focus } : {}) }),
+      activity: async (teamKey: string, who?: "agent" | "human") =>
+        (await request<{ events: ActivityEvent2[] }>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/activity${who ? `?who=${who}` : ""}`)).events,
     },
 
     docs: {
       /** The tree, and what the page's side panels offer. */
-      index: (projectKey: string) => request<DocsIndex>("GET", `${project(projectKey)}/docs`),
-      get: (projectKey: string, ref: string) => request<DocDetail>("GET", `${project(projectKey)}/docs/${encodeURIComponent(ref)}`),
-      create: async (projectKey: string, input: NewDoc) => (await request<{ doc: Doc }>("POST", `${project(projectKey)}/docs`, input)).doc,
+      index: (teamKey: string) => request<DocsIndex>("GET", `${team(teamKey)}/docs`),
+      get: (teamKey: string, ref: string) => request<DocDetail>("GET", `${team(teamKey)}/docs/${encodeURIComponent(ref)}`),
+      create: async (teamKey: string, input: NewDoc) => (await request<{ doc: Doc }>("POST", `${team(teamKey)}/docs`, input)).doc,
       /** With `version`, a doc changed since rejects with an ApiError whose `current` is the doc now. */
-      update: async (projectKey: string, ref: string, patch: DocPatch) => (await request<{ doc: Doc }>("PATCH", `${project(projectKey)}/docs/${encodeURIComponent(ref)}`, patch)).doc,
-      markFresh: async (projectKey: string, ref: string) => (await request<{ doc: Doc }>("POST", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/fresh`, {})).doc,
-      anchorSuggestions: async (projectKey: string, ref: string) =>
-        (await request<{ anchors: string[] }>("GET", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/anchor-suggestions`)).anchors,
-      move: async (projectKey: string, ref: string, to: { parent?: string | null; index?: number; version?: number }) =>
-        (await request<{ doc: Doc }>("POST", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/move`, to)).doc,
-      delete: (projectKey: string, ref: string) => request<{ ok: true }>("DELETE", `${project(projectKey)}/docs/${encodeURIComponent(ref)}`),
-      linkNode: (projectKey: string, ref: string, nodeId: string) =>
-        request<{ ok: true }>("PUT", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
-      unlinkNode: (projectKey: string, ref: string, nodeId: string) =>
-        request<{ ok: true }>("DELETE", `${project(projectKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
+      update: async (teamKey: string, ref: string, patch: DocPatch) => (await request<{ doc: Doc }>("PATCH", `${team(teamKey)}/docs/${encodeURIComponent(ref)}`, patch)).doc,
+      markFresh: async (teamKey: string, ref: string) => (await request<{ doc: Doc }>("POST", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/fresh`, {})).doc,
+      anchorSuggestions: async (teamKey: string, ref: string) =>
+        (await request<{ anchors: string[] }>("GET", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/anchor-suggestions`)).anchors,
+      move: async (teamKey: string, ref: string, to: { parent?: string | null; index?: number; version?: number }) =>
+        (await request<{ doc: Doc }>("POST", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/move`, to)).doc,
+      delete: (teamKey: string, ref: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/docs/${encodeURIComponent(ref)}`),
+      linkNode: (teamKey: string, ref: string, nodeId: string) =>
+        request<{ ok: true }>("PUT", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
+      unlinkNode: (teamKey: string, ref: string, nodeId: string) =>
+        request<{ ok: true }>("DELETE", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
     },
 
     repos: {
-      list: async (projectKey: string) => (await request<{ repositories: Repository[] }>("GET", `${project(projectKey)}/repositories`)).repositories,
-      create: async (projectKey: string, input: RepositoryInput & { displayName: string; role: string }) =>
-        (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories`, input)).repository,
-      update: async (projectKey: string, id: string, patch: RepositoryInput) =>
-        (await request<{ repository: Repository }>("PATCH", `${project(projectKey)}/repositories/${encodeURIComponent(id)}`, patch)).repository,
-      retire: async (projectKey: string, id: string) =>
-        (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories/${encodeURIComponent(id)}/retire`, {})).repository,
+      list: async (teamKey: string) => (await request<{ repositories: Repository[] }>("GET", `${team(teamKey)}/repositories`)).repositories,
+      create: async (teamKey: string, input: RepositoryInput & { displayName: string; role: string }) =>
+        (await request<{ repository: Repository }>("POST", `${team(teamKey)}/repositories`, input)).repository,
+      update: async (teamKey: string, id: string, patch: RepositoryInput) =>
+        (await request<{ repository: Repository }>("PATCH", `${team(teamKey)}/repositories/${encodeURIComponent(id)}`, patch)).repository,
+      retire: async (teamKey: string, id: string) =>
+        (await request<{ repository: Repository }>("POST", `${team(teamKey)}/repositories/${encodeURIComponent(id)}/retire`, {})).repository,
       /** The file paths of a connected GitHub repository's default branch. */
-      tree: (projectKey: string, id: string) =>
-        request<{ files: string[]; truncated: boolean }>("GET", `${project(projectKey)}/repositories/${encodeURIComponent(id)}/tree`),
+      tree: (teamKey: string, id: string) =>
+        request<{ files: string[]; truncated: boolean }>("GET", `${team(teamKey)}/repositories/${encodeURIComponent(id)}/tree`),
       /** Is GitHub set up here, and (owners) which repositories of the workspace's installations could still be connected. */
-      github: (projectKey: string) => request<GithubStatus>("GET", `${project(projectKey)}/repositories/github`),
-      connectGithub: async (projectKey: string, input: { installationId: string; repoId: string; role?: string; pathLimit?: string | null }) =>
-        (await request<{ repository: Repository }>("POST", `${project(projectKey)}/repositories/github`, input)).repository,
+      github: (teamKey: string) => request<GithubStatus>("GET", `${team(teamKey)}/repositories/github`),
+      connectGithub: async (teamKey: string, input: { installationId: string; repoId: string; role?: string; pathLimit?: string | null }) =>
+        (await request<{ repository: Repository }>("POST", `${team(teamKey)}/repositories/github`, input)).repository,
     },
 
     onboarding: {
-      page: (projectKey: string) => request<OnboardingPage>("GET", `${project(projectKey)}/onboarding`),
+      page: (teamKey: string) => request<OnboardingPage>("GET", `${team(teamKey)}/onboarding`),
       /** The "no code yet" path: a few sentences become the map's first concept. */
-      startMap: (projectKey: string, description: string) => request<{ ok: true }>("POST", `${project(projectKey)}/onboarding/concept`, { description }),
+      startMap: (teamKey: string, description: string) => request<{ ok: true }>("POST", `${team(teamKey)}/onboarding/concept`, { description }),
     },
 
     /** Change your own password. */
@@ -352,8 +352,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
     agents: {
       /** The workspace's keys (never their values) and the commands for connecting an agent. */
       page: () => request<AgentsPage>("GET", "/api/app/agents"),
-      /** Reset an agent's queue: one key and/or one project, or everything. */
-      markAllSeen: (input: { keyId?: string; projectKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/agents/mark-all-seen", input),
+      /** Reset an agent's queue: one key and/or one team, or everything. */
+      markAllSeen: (input: { keyId?: string; teamKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/agents/mark-all-seen", input),
     },
 
     keys: {
@@ -389,8 +389,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     dashboard: {
       /** One widget's data. */
-      widget: <W extends keyof DashboardWidgets>(widget: W, project?: string) =>
-        request<DashboardWidgets[W]>("GET", `/api/app/dashboard/${widget}${project ? `?project=${encodeURIComponent(project)}` : ""}`),
+      widget: <W extends keyof DashboardWidgets>(widget: W, team?: string) =>
+        request<DashboardWidgets[W]>("GET", `/api/app/dashboard/${widget}${team ? `?team=${encodeURIComponent(team)}` : ""}`),
     },
   };
 }

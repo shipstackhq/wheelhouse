@@ -76,13 +76,13 @@ describe("working in one workspace at a time", () => {
     assert.equal((await humanFromSession(token))!.workspace.id, A.id);
   });
 
-  test("projects belong to the workspace you are in: the other one's are not found", async () => {
+  test("teams belong to the workspace you are in: the other one's are not found", async () => {
     const a = (await humanFromSession(token))!;
-    const pa = await svc.createProject(a.actor, { name: "In Alpha", key: `IA${L}` });
+    const pa = await svc.createTeam(a.actor, { name: "In Alpha", key: `IA${L}` });
     await switchWorkspace(token, pat.id, B.id);
     const b = (await humanFromSession(token))!;
-    await assert.rejects(() => svc.getProject(b.actor, pa.key), (e) => e instanceof svc.ServiceError && e.code === "not_found");
-    assert.deepEqual(await svc.listProjects(b.actor), []);
+    await assert.rejects(() => svc.requireTeam(b.actor, pa.key), (e) => e instanceof svc.ServiceError && e.code === "not_found");
+    assert.deepEqual(await svc.listTeams(b.actor), []);
     await switchWorkspace(token, pat.id, A.id);
   });
 
@@ -127,21 +127,21 @@ describe("joining another workspace with the account you already have", () => {
     await join(ownerC.id, C.id, "owner");
   });
 
-  test("an invite sent to your own address is previewed and accepted: you become a member, with its projects, and keep your account", async () => {
+  test("an invite sent to your own address is previewed and accepted: you become a member, with its teams, and keep your account", async () => {
     const actor = { kind: "human" as const, id: ownerC.id, name: "Gamma owner", workspaceId: C.id };
-    const proj = await svc.createProject(actor, { name: "Shared", key: `SH${L}` });
-    const inv = await createInvite(issuer(C.id, ownerC.id), { kind: "join_workspace", email: pat.email, role: "viewer", projects: [{ project: proj.key, role: "editor" }] });
+    const proj = await svc.createTeam(actor, { name: "Shared", key: `SH${L}` });
+    const inv = await createInvite(issuer(C.id, ownerC.id), { kind: "join_workspace", email: pat.email, role: "viewer", teams: [{ team: proj.key, role: "editor" }] });
     // pat is not signed out of anything: the public flow does not apply to an existing account, the signed-in one does
     await assert.rejects(() => import("./invites").then((m) => m.acceptInvite({ token: inv.token, name: "Pat", password: "correct horse battery" })), (e) => e instanceof InviteFailure);
     const peek = await peekInviteAsMember(pat, inv.token);
-    assert.deepEqual([peek?.workspaceName, peek?.role, peek?.projects.map((p) => [p.key, p.role])], [`Gamma ${RUN}`, "viewer", [[proj.key, "editor"]]]);
+    assert.deepEqual([peek?.workspaceName, peek?.role, peek?.teams.map((p) => [p.key, p.role])], [`Gamma ${RUN}`, "viewer", [[proj.key, "editor"]]]);
     const { workspaceId } = await acceptInviteAsMember(pat, inv.token);
     assert.equal(workspaceId, C.id);
     assert.deepEqual((await listWorkspaces(pat.id, null)).map((w) => w.name), [`Alpha ${RUN}`, `Beta ${RUN}`, `Gamma ${RUN}`]);
     await switchWorkspace(token, pat.id, C.id);
     const h = (await humanFromSession(token))!;
     assert.equal(h.membership.role, "viewer");
-    assert.deepEqual((await svc.listProjects(h.actor)).map((p) => p.key), [proj.key]);
+    assert.deepEqual((await svc.listTeams(h.actor)).map((p) => p.key), [proj.key]);
     await assert.rejects(() => acceptInviteAsMember(pat, inv.token), (e) => e instanceof InviteFailure); // used once
     await switchWorkspace(token, pat.id, A.id);
   });

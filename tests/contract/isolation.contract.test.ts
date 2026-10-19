@@ -10,14 +10,14 @@ const A = asKey(fx.a.apiKey);
 const B = asKey(fx.b.apiKey);
 
 describe("one workspace cannot reach another's data over HTTP", () => {
-  test("reading another workspace's project, board, ticket, changes and activity is not_found", async () => {
+  test("reading another workspace's team, board, ticket, changes and activity is not_found", async () => {
     const attempts: [string, Record<string, unknown>][] = [
-      ["get_board", { project: fx.a.projectKey }],
+      ["get_board", { project: fx.a.teamKey }],
       ["get_ticket", { ticket: fx.a.ticketRef }],
-      ["get_changes", { project: fx.a.projectKey }],
-      ["get_activity", { project: fx.a.projectKey }],
-      ["get_graph", { project: fx.a.projectKey }],
-      ["get_briefing", { project: fx.a.projectKey }],
+      ["get_changes", { project: fx.a.teamKey }],
+      ["get_activity", { project: fx.a.teamKey }],
+      ["get_graph", { project: fx.a.teamKey }],
+      ["get_briefing", { project: fx.a.teamKey }],
     ];
     for (const [tool, args] of attempts) {
       const r = await v1(B, tool, args);
@@ -31,15 +31,15 @@ describe("one workspace cannot reach another's data over HTTP", () => {
     assert.equal((await v1(B, "get_ticket", { ticket: id })).status, 404);
   });
 
-  test("writing to another workspace's project or ticket is refused and changes nothing", async () => {
+  test("writing to another workspace's team or ticket is refused and changes nothing", async () => {
     const before = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket;
     const writes: [string, Record<string, unknown>][] = [
-      ["create_ticket", { project: fx.a.projectKey, title: "intruder" }],
+      ["create_ticket", { project: fx.a.teamKey, title: "intruder" }],
       ["update_ticket", { ticket: fx.a.ticketRef, title: "hijacked" }],
       ["move_ticket", { ticket: fx.a.ticketRef, column: "Done" }],
       ["comment", { ticket: fx.a.ticketRef, body: "intruder" }],
       ["claim_ticket", { ticket: fx.a.ticketRef }],
-      ["upsert_node", { project: fx.a.projectKey, name: "intruder node" }],
+      ["upsert_node", { project: fx.a.teamKey, name: "intruder node" }],
     ];
     for (const [tool, args] of writes) {
       const r = await v1(B, tool, args);
@@ -51,10 +51,10 @@ describe("one workspace cannot reach another's data over HTTP", () => {
     assert.equal(after.columnId, before.columnId);
   });
 
-  test("a workspace's project list holds only its own projects", async () => {
+  test("a workspace's team list holds only its own teams", async () => {
     const a = (await v1ok(A, "list_projects")).map((p: { key: string }) => p.key);
     const b = (await v1ok(B, "list_projects")).map((p: { key: string }) => p.key);
-    assert.deepEqual(a, [fx.a.projectKey]);
-    assert.deepEqual(b, [fx.b.projectKey]);
+    assert.deepEqual(a, [fx.a.teamKey]);
+    assert.deepEqual(b, [fx.b.teamKey]);
   });
 });

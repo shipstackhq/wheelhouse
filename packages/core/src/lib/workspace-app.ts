@@ -8,8 +8,8 @@ import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listI
 import * as members from "./members";
 import { onboarding } from "./onboarding";
 import { minutes, rateLimit } from "./rate-limit";
-import { canManagePeople, isWorkspaceRole } from "./project-access";
-import { listProjects, ServiceError } from "./service";
+import { canManagePeople, isWorkspaceRole } from "./team-access";
+import { listTeams, ServiceError } from "./service";
 import type { WorkspaceRole } from "../db/schema";
 
 /**
@@ -27,13 +27,13 @@ function requireManager(h: Human) {
   if (!canManagePeople(h.membership.role)) throw new ServiceError("forbidden", "Only workspace owners and admins can do that");
 }
 
-/** `[{ project: "WH", role: "editor" }, ...]` from a request body; anything else is dropped here and judged for real in createInvite. */
-export function parseGrants(v: unknown): { project: string; role: "admin" | "editor" | "viewer" }[] {
+/** `[{ team: "WH", role: "editor" }, ...]` from a request body; anything else is dropped here and judged for real in createInvite. */
+export function parseGrants(v: unknown): { team: string; role: "admin" | "editor" | "viewer" }[] {
   if (!Array.isArray(v)) return [];
   return v.flatMap((g) => {
-    const o = g as { project?: unknown; role?: unknown };
+    const o = g as { team?: unknown; role?: unknown };
     const role = o?.role === "admin" || o?.role === "editor" || o?.role === "viewer" ? o.role : null;
-    return typeof o?.project === "string" && o.project && role ? [{ project: o.project, role }] : [];
+    return typeof o?.team === "string" && o.team && role ? [{ team: o.team, role }] : [];
   });
 }
 
@@ -126,10 +126,10 @@ export async function listKeys(h: Human): Promise<KeyView[]> {
   return rows.map(keyView);
 }
 
-/** The Agents page: the keys and the commands to paste. With one project its real key goes in the commands, with several a KEY placeholder. */
+/** The Agents page: the keys and the commands to paste. With one team its real key goes in the commands, with several a KEY placeholder. */
 export async function agentsPage(h: Human, origin: string) {
-  const workspaceProjects = (await listProjects(h.actor)).map((p) => ({ key: p.key }));
-  return { keys: await listKeys(h), setup: onboarding({ origin, projectKey: workspaceProjects.length === 1 ? workspaceProjects[0].key : null }) };
+  const workspaceTeams = (await listTeams(h.actor)).map((p) => ({ key: p.key }));
+  return { keys: await listKeys(h), setup: onboarding({ origin, teamKey: workspaceTeams.length === 1 ? workspaceTeams[0].key : null }) };
 }
 
 /** Create a key. The secret is returned here and nowhere else; only its hash is stored. 10 an hour per person. */
@@ -178,7 +178,7 @@ export async function pendingInvites(h: Human, kind: "join_workspace" | "new_wor
  */
 export async function createInviteAs(
   h: Human,
-  input: { kind: unknown; email: string; role?: unknown; tags?: unknown; workspace?: string; projects?: unknown },
+  input: { kind: unknown; email: string; role?: unknown; tags?: unknown; workspace?: string; teams?: unknown },
   origin: string,
 ) {
   const hit = rateLimit(`invite-create:${h.user.id}`, 20, 60 * 60_000);
@@ -190,7 +190,7 @@ export async function createInviteAs(
     role: isWorkspaceRole(input.role) ? input.role : "member",
     tags: parseTags(input.tags),
     workspaceName: String(input.workspace ?? ""),
-    projects: parseGrants(input.projects),
+    teams: parseGrants(input.teams),
   });
   return { id: inv.id, email: inv.email, kind: inv.kind, expiresAt: inv.expiresAt, link: `${origin.replace(/\/+$/, "")}/invite#${inv.token}` };
 }

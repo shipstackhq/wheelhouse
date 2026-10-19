@@ -45,7 +45,7 @@ export function ActiveKeys({
           <span className="ml-auto text-xs text-muted">{k.lastUsedAt ? `used ${timeAgo(k.lastUsedAt)}` : "never used"}</span>
           <form action={markAllSeen}>
             <input type="hidden" name="keyId" value={k.id} />
-            <SubmitButton className="btn btn-ghost py-1 text-xs" title="Reset this agent's queue in every project">Mark all seen</SubmitButton>
+            <SubmitButton className="btn btn-ghost py-1 text-xs" title="Reset this agent's queue in every team">Mark all seen</SubmitButton>
           </form>
           <form action={revoke}>
             <input type="hidden" name="id" value={k.id} />

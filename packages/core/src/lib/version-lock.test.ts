@@ -27,7 +27,7 @@ before(async () => {
   const [user] = await db.insert(schema.users).values({ email: `lock-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Lena", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
   actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
-  await svc.createProject(actor, { name: "Lock", key: "LK" });
+  await svc.createTeam(actor, { name: "Lock", key: "LK" });
 });
 
 /** Run both at once; report which were applied and which were refused as conflicts. */

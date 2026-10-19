@@ -5,7 +5,7 @@ import { appJwt, GithubApi, GithubApiError, isZeroSha } from "./api";
 import { githubConfig, githubMissing, type GithubConfig } from "./config";
 import { roleFromText, type RoleColumn } from "../column-roles";
 import { ciState, decideMove, RECENT_MOVE_MS } from "./pr-rules";
-import { parseTicketRefs, refsForProject } from "./refs";
+import { parseTicketRefs, refsForTeam } from "./refs";
 import { signBody, verifySignature } from "./signature";
 import { makeState, readState, STATE_TTL_MS } from "./state";
 
@@ -35,14 +35,14 @@ describe("ticket references", () => {
     assert.deepEqual(parseTicketRefs("[WH-9] polish", "wh-9/polish"), [{ key: "WH", number: 9 }]);
   });
   test("things that only look like references are not", () => {
-    assert.deepEqual(parseTicketRefs("Bump utf-8 handling", "v1-2", "ABCDEFG-1", "WH-0", "WH-", "-12", "x1WH-5", "WH-1234567"), [{ key: "UTF", number: 8 }], "only well-formed ones, still unresolved until a project key matches");
+    assert.deepEqual(parseTicketRefs("Bump utf-8 handling", "v1-2", "ABCDEFG-1", "WH-0", "WH-", "-12", "x1WH-5", "WH-1234567"), [{ key: "UTF", number: 8 }], "only well-formed ones, still unresolved until a team key matches");
     assert.deepEqual(parseTicketRefs(null, undefined, ""), []);
   });
-  test("only the project's own key counts, so a shared repository does not link another project's tickets", () => {
+  test("only the team's own key counts, so a shared repository does not link another team's tickets", () => {
     const refs = parseTicketRefs("WH-12 and API-7 and UTF-8");
-    assert.deepEqual(refsForProject(refs, "WH"), [{ key: "WH", number: 12 }]);
-    assert.deepEqual(refsForProject(refs, "wh"), [{ key: "WH", number: 12 }]);
-    assert.deepEqual(refsForProject(refs, "API"), [{ key: "API", number: 7 }]);
+    assert.deepEqual(refsForTeam(refs, "WH"), [{ key: "WH", number: 12 }]);
+    assert.deepEqual(refsForTeam(refs, "wh"), [{ key: "WH", number: 12 }]);
+    assert.deepEqual(refsForTeam(refs, "API"), [{ key: "API", number: 7 }]);
   });
 });
 
@@ -150,21 +150,21 @@ describe("combining checks", () => {
 describe("the signed connect link", () => {
   const t0 = 1_800_000_000_000;
   test("a fresh link comes back as it was made", () => {
-    const { state, nonce } = makeState("k", { user: "u1", project: "WH" }, t0);
-    assert.deepEqual(readState("k", state, t0 + 1000), { user: "u1", project: "WH", nonce, exp: t0 + STATE_TTL_MS });
+    const { state, nonce } = makeState("k", { user: "u1", team: "WH" }, t0);
+    assert.deepEqual(readState("k", state, t0 + 1000), { user: "u1", team: "WH", nonce, exp: t0 + STATE_TTL_MS });
   });
   test("a link that expired, was tampered with, was signed with another key, or is garbage is refused", () => {
-    const { state } = makeState("k", { user: "u1", project: "WH" }, t0);
+    const { state } = makeState("k", { user: "u1", team: "WH" }, t0);
     assert.equal(readState("k", state, t0 + STATE_TTL_MS + 1), null, "expired");
     assert.equal(readState("other", state, t0 + 1), null, "another key");
     const [body, sig] = state.split(".");
-    const forged = Buffer.from(JSON.stringify({ user: "attacker", project: "WH", nonce: "x", exp: t0 + 99999999 })).toString("base64url");
+    const forged = Buffer.from(JSON.stringify({ user: "attacker", team: "WH", nonce: "x", exp: t0 + 99999999 })).toString("base64url");
     assert.equal(readState("k", `${forged}.${sig}`, t0 + 1), null, "body changed");
     assert.equal(readState("k", `${body}.${sig.slice(0, -2)}xx`, t0 + 1), null, "signature changed");
     for (const junk of [null, undefined, "", "abc", "a.b", "a.b.c", "."]) assert.equal(readState("k", junk as string, t0), null, String(junk));
   });
   test("every link has its own nonce", () => {
-    assert.notEqual(makeState("k", { user: "u", project: "WH" }, t0).nonce, makeState("k", { user: "u", project: "WH" }, t0).nonce);
+    assert.notEqual(makeState("k", { user: "u", team: "WH" }, t0).nonce, makeState("k", { user: "u", team: "WH" }, t0).nonce);
   });
 });
 

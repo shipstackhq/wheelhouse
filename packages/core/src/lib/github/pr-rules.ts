@@ -23,7 +23,7 @@ export type MoveInput = {
   draft: boolean;
   /** The column the ticket is in now. */
   column: RoleColumn;
-  /** The project's columns in board order, so "earlier than the review column" can be decided. */
+  /** The team's columns in board order, so "earlier than the review column" can be decided. */
   columns: RoleColumn[];
   /** When someone other than GitHub last moved this ticket, and who. */
   lastMove?: { at: Date; by: string } | null;

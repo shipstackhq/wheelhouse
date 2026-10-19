@@ -27,7 +27,7 @@ import { AgentIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, NodeIcon } fro
  */
 export function TicketDialog(props: {
   ticketRef: string;
-  projectKey: string;
+  teamKey: string;
   columns: Col[];
   nodes: NodeLite[];
   members: Member[];
@@ -111,7 +111,7 @@ export function TicketDialog(props: {
 
   /** Read the ticket and the board again: after a change, and after a refusal (which shows what is true now). */
   const reload = async () => {
-    await Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: ["board", props.projectKey] })]);
+    await Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: ["board", props.teamKey] })]);
   };
 
   /**
@@ -347,7 +347,7 @@ export function TicketDialog(props: {
                   <div className="flex flex-wrap gap-1.5">
                     {data!.nodes.map((n) => (
                       <span key={n.id} className="chip gap-1 bg-accent/10 py-1 text-accent">
-                        <Link className="hover:underline" to={`/p/${props.projectKey}/map?node=${n.id}`}>
+                        <Link className="hover:underline" to={`/t/${props.teamKey}/map?node=${n.id}`}>
                           <NodeIcon /> {nodeLabel(nodes.find((x) => x.id === n.id) ?? { ...n, layer: "" })}
                         </Link>
                         <button className="text-accent/60 hover:text-accent" aria-label={`Unlink ${n.name}`} onClick={() => void mutate(() => api.tickets.unlink(t.ref, n.id))}>
@@ -383,7 +383,7 @@ export function TicketDialog(props: {
                       try {
                         await api.tickets.remove(t.ref);
                         onClose();
-                        await queryClient.invalidateQueries({ queryKey: ["board", props.projectKey] });
+                        await queryClient.invalidateQueries({ queryKey: ["board", props.teamKey] });
                       } catch (e) {
                         setError(describeFailure(e));
                         setBusy(false);

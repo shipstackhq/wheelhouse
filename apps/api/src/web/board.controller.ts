@@ -5,11 +5,11 @@ import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-@Controller("api/app/projects")
+@Controller("api/app/teams")
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class BoardController {
-  /** The project page in one read: columns, tickets, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
+  /** The team page in one read: columns, tickets, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
   @Get(":key/board")
   board(@Req() req: SessionRequest, @Param("key") key: string) {
     return boardView(req.human.actor, key);
@@ -24,7 +24,7 @@ export class BoardController {
     return { ticket: await createTicketAs(req.human.actor, key, input, columnField(b, false)) };
   }
 
-  /** The Bots menu: each agent key with its queue depth and live sessions in this project. */
+  /** The Bots menu: each agent key with its queue depth and live sessions in this team. */
   @Get(":key/queue")
   async queue(@Req() req: SessionRequest, @Param("key") key: string) {
     return { bots: await queueStatus(req.human.actor, key) };

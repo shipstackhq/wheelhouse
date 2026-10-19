@@ -9,7 +9,7 @@ const location = (r: { headers: Headers }) => r.headers.get("location") ?? "";
 
 /** Start the flow as an owner of workspace `t` and return what GitHub would get back to the callback. */
 async function start(t: typeof fx.a) {
-  const r = await call(`/api/github/install?project=${t.projectKey}`, { cookie: t.sessionToken });
+  const r = await call(`/api/github/install?team=${t.teamKey}`, { cookie: t.sessionToken });
   const state = new URL(location(r)).searchParams.get("state")!;
   const nonce = valueOf(cookieOf(r, "wh_gh_state")!);
   return { r, state, nonce };
@@ -19,7 +19,7 @@ const callback = (t: typeof fx.a, q: Record<string, string>, nonce: string | nul
 
 describe("GET /api/github/install", () => {
   test("signed out: sent to the login page", async () => {
-    const r = await call(`/api/github/install?project=${fx.a.projectKey}`);
+    const r = await call(`/api/github/install?team=${fx.a.teamKey}`);
     assert.ok(r.status >= 300 && r.status < 400);
     assert.equal(new URL(location(r), "http://x").pathname, "/login");
   });
@@ -42,14 +42,14 @@ describe("GET /api/github/install", () => {
   });
 
   test("a member who is not an owner is sent back with owner_only", async () => {
-    const r = await call(`/api/github/install?project=${fx.a.projectKey}`, { cookie: fx.a.memberSessionToken });
+    const r = await call(`/api/github/install?team=${fx.a.teamKey}`, { cookie: fx.a.memberSessionToken });
     assert.equal(r.status, 307);
     assert.equal(new URL(location(r), "http://x").searchParams.get("github_error"), "owner_only");
-    assert.equal(new URL(location(r), "http://x").pathname, `/p/${fx.a.projectKey}/repos`);
+    assert.equal(new URL(location(r), "http://x").pathname, `/t/${fx.a.teamKey}/repos`);
   });
 
-  test("another workspace's project is a plain 404", async () => {
-    const r = await call(`/api/github/install?project=${fx.b.projectKey}`, { cookie: fx.a.sessionToken });
+  test("another workspace's team is a plain 404", async () => {
+    const r = await call(`/api/github/install?team=${fx.b.teamKey}`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 404);
   });
 });
@@ -87,7 +87,7 @@ describe("GET /api/github/callback", () => {
     const r = await callback(fx.a, { state: s.state, installation_id: gh.connectInstallationId, code: "good" }, s.nonce);
     assert.equal(r.status, 307);
     const to = new URL(location(r), "http://x");
-    assert.equal(to.pathname, `/p/${fx.a.projectKey}/repos`);
+    assert.equal(to.pathname, `/t/${fx.a.teamKey}/repos`);
     assert.equal(to.searchParams.get("github"), "connected");
     const cleared = cookieOf(r, "wh_gh_state");
     assert.ok(cleared && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(cleared), "the state cookie is deleted");

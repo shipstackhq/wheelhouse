@@ -5,7 +5,7 @@ import { useBoard } from "../../lib/queries";
 import { Board } from "./board";
 import { BoardFilterBar } from "./filter-bar";
 
-/** `/p/:key`: the project's kanban board. */
+/** `/t/:key`: the team's kanban board. */
 export function BoardPage() {
   const { key = "" } = useParams();
   const query = useBoard(key);
@@ -27,7 +27,7 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
         <BoardFilterBar labels={labels} selected={selected} onChange={setSelected} />
       </div>
       <div className="min-h-0 flex-1">
-        <Board projectKey={board.project.key} columns={columns} tickets={board.tickets} nodes={board.nodes} members={board.members} />
+        <Board teamKey={board.team.key} columns={columns} tickets={board.tickets} nodes={board.nodes} members={board.members} />
       </div>
     </div>
   );

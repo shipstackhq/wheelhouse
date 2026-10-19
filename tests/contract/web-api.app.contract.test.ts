@@ -41,7 +41,7 @@ describe("POST /api/app/auth/login", () => {
     const s = await signIn(fx.a.email);
     const r = await v1({ cookie: s.cookie }, "list_projects");
     assert.equal(r.status, 200);
-    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.projectKey));
+    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.teamKey));
     await app("POST", "/api/app/auth/logout", s);
   });
 
@@ -106,8 +106,8 @@ describe("POST /api/app/auth/signup", () => {
     const s = sessionFrom(r);
     const me = await app("GET", "/api/app/me", s);
     assert.equal(me.json.workspace.id, r.json.workspace.id);
-    const projects = await app("GET", "/api/app/projects", s);
-    assert.deepEqual(projects.json, { projects: [] }, "a new workspace starts empty");
+    const teams = await app("GET", "/api/app/teams", s);
+    assert.deepEqual(teams.json, { teams: [] }, "a new workspace starts empty");
     assert.notEqual(r.json.workspace.id, fx.a.workspaceId);
     await app("POST", "/api/app/auth/logout", s);
   });
@@ -181,35 +181,35 @@ describe("POST /api/app/auth/logout", () => {
   });
 });
 
-describe("GET /api/app/projects", () => {
-  test("lists only the signed-in person's own workspace's projects", async () => {
-    const a = await app("GET", "/api/app/projects", await signIn(fx.a.email));
-    const b = await app("GET", "/api/app/projects", await signIn(fx.b.email));
-    assert.deepEqual(a.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey]);
-    assert.deepEqual(b.json.projects.map((p: { key: string }) => p.key), [fx.b.projectKey]);
-    assert.deepEqual(Object.keys(a.json.projects[0]).sort(), ["createdAt", "description", "id", "key", "name", "role"]);
+describe("GET /api/app/teams", () => {
+  test("lists only the signed-in person's own workspace's teams", async () => {
+    const a = await app("GET", "/api/app/teams", await signIn(fx.a.email));
+    const b = await app("GET", "/api/app/teams", await signIn(fx.b.email));
+    assert.deepEqual(a.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
+    assert.deepEqual(b.json.teams.map((p: { key: string }) => p.key), [fx.b.teamKey]);
+    assert.deepEqual(Object.keys(a.json.teams[0]).sort(), ["createdAt", "description", "id", "key", "name", "role"]);
   });
 
   test("the workspace cannot be chosen by the request", async () => {
     const s = await signIn(fx.a.email);
-    for (const path of [`/api/app/projects?workspaceId=${fx.b.workspaceId}`, `/api/app/projects?workspace=${fx.b.workspaceId}&project=${fx.b.projectKey}`]) {
+    for (const path of [`/api/app/teams?workspaceId=${fx.b.workspaceId}`, `/api/app/teams?workspace=${fx.b.workspaceId}&team=${fx.b.teamKey}`]) {
       const r = await app("GET", path, s);
-      assert.deepEqual(r.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey], path);
+      assert.deepEqual(r.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey], path);
     }
-    const header = await app("GET", "/api/app/projects", s, { headers: { "x-workspace-id": fx.b.workspaceId } });
-    assert.deepEqual(header.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey]);
+    const header = await app("GET", "/api/app/teams", s, { headers: { "x-workspace-id": fx.b.workspaceId } });
+    assert.deepEqual(header.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
   });
 
   test("signed out is a 401", async () => {
-    assert.equal((await app("GET", "/api/app/projects")).status, 401);
+    assert.equal((await app("GET", "/api/app/teams")).status, 401);
   });
 
   test("a new workspace sees none of another workspace's work", async () => {
     const made = await app("POST", "/api/app/auth/signup", anon(), { body: { name: unique("iso"), email: newEmail(), password: "a-long-enough-password" } });
     const s = sessionFrom(made);
-    const list = await app("GET", "/api/app/projects", s);
-    assert.deepEqual(list.json.projects, []);
-    const board = await v1({ cookie: s.cookie }, "get_board", { project: fx.a.projectKey });
+    const list = await app("GET", "/api/app/teams", s);
+    assert.deepEqual(list.json.teams, []);
+    const board = await v1({ cookie: s.cookie }, "get_board", { project: fx.a.teamKey });
     assert.equal(board.status, 404);
     await app("POST", "/api/app/auth/logout", s);
   });

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import { actorForKey, AuthError, sessionForToken, sha256, type Actor } from "./access";
-import { isUuid } from "./project-access";
+import { isUuid } from "./team-access";
 
 /**
  * Who is calling, from the raw credentials of a request. Framework-free so the Next app and the API share one

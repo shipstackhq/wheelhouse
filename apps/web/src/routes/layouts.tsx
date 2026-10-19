@@ -5,15 +5,15 @@ import { NavigationProgress } from "../components/navigation-progress";
 import { SearchIcon } from "../components/icons";
 import { NotificationsMenu } from "../components/notifications-menu";
 import { ProfileMenu } from "../components/profile-menu";
-import { ProjectQueueMenu } from "../components/project-queue-menu";
+import { TeamQueueMenu } from "../components/team-queue-menu";
 import { PwaRegister } from "../components/pwa";
-import { ProjectLiveRefresh } from "../components/live-refresh";
+import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
-import { useMe, useProjects } from "../lib/session";
+import { useMe, useTeams } from "../lib/session";
 import { NotFound } from "./errors";
 
-/** Shown by the router while the first screen's data (who you are, your projects) loads. */
+/** Shown by the router while the first screen's data (who you are, your teams) loads. */
 export function FullPageSkeleton() {
   return (
     <div className="h-dvh">
@@ -83,15 +83,15 @@ export function InviteLayout() {
 /** The signed-in app: the sidebar around whichever page the address calls for. */
 export function AppLayout() {
   const me = useMe().data;
-  const projects = useProjects().data;
+  const teams = useTeams().data;
   // The session ended while the page was open (signed out in another tab, expired): the cache says so, go and sign in.
   if (me === null) return <Navigate to="/login" replace />;
-  if (!me || !projects) return <FullPageSkeleton />;
+  if (!me || !teams) return <FullPageSkeleton />;
   return (
     <div className="flex h-dvh">
       <NavigationProgress />
       <Sidebar
-        projects={projects.map((p) => ({ key: p.key, name: p.name }))}
+        teams={teams.map((p) => ({ key: p.key, name: p.name }))}
         workspaceName={me.workspace.name}
         isAdmin={me.isInstanceAdmin}
         profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} compact={collapsed} />}
@@ -103,17 +103,17 @@ export function AppLayout() {
   );
 }
 
-/** One project: its header, live updates for it, and its page. A project that is not this workspace's is simply not found. */
-export function ProjectLayout() {
+/** One team: its header, live updates for it, and its page. A team that is not this workspace's is simply not found. */
+export function TeamLayout() {
   const { key = "" } = useParams();
-  const project = useProjects().data?.find((p) => p.key === key);
-  if (!project) return <NotFound />;
+  const team = useTeams().data?.find((p) => p.key === key);
+  if (!team) return <NotFound />;
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="truncate font-semibold">{project.name}</h1>
+            <h1 className="truncate font-semibold">{team.name}</h1>
           </div>
         </div>
         {/* Dummy for now: the one search across tickets, docs and notes (WH-66) is not wired up yet. */}
@@ -128,10 +128,10 @@ export function ProjectLayout() {
         </div>
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <NotificationsMenu />
-          <ProjectQueueMenu projectKey={project.key} />
+          <TeamQueueMenu teamKey={team.key} />
         </div>
       </header>
-      <ProjectLiveRefresh projectKey={project.key} />
+      <TeamLiveRefresh teamKey={team.key} />
       <div className="min-h-0 flex-1">
         <Outlet />
       </div>

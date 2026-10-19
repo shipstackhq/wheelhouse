@@ -64,8 +64,8 @@ test("a row is two lines: lead and title, then the muted who/when; long text is 
 });
 
 test("a row with a destination is a link", () => {
-  const html = renderToStaticMarkup(<TwoLineRow href="/p/WH?t=WH-12" lead="WH-12" title="x" meta="y" tip="z" />);
-  assert.match(html, /<a [^>]*href="\/p\/WH\?t=WH-12"/);
+  const html = renderToStaticMarkup(<TwoLineRow href="/t/WH?t=WH-12" lead="WH-12" title="x" meta="y" tip="z" />);
+  assert.match(html, /<a [^>]*href="\/t\/WH\?t=WH-12"/);
 });
 
 test("the lists on the dashboard are striped lists: compact rows that run edge to edge of the card", () => {

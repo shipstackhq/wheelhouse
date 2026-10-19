@@ -43,7 +43,7 @@ before(async () => {
   key = await mkKey("laptop");
   otherKey = await mkKey("ci");
   human = { kind: "human", id: user.id, name: "Tess", workspaceId: workspace.id };
-  await svc.createProject(human, { name: "Queue test", key: "QQ" });
+  await svc.createTeam(human, { name: "Queue test", key: "QQ" });
   ticketRef = (await svc.createTicket(human, "QQ", { title: "Shared ticket" })).ref;
 });
 
@@ -107,7 +107,7 @@ describe("per-session queue cursors", () => {
   });
 
   test("mark all seen resets every session cursor of the key", async () => {
-    await svc.markAllSeen(human, { keyId: key.id, projectRef: "QQ" });
+    await svc.markAllSeen(human, { keyId: key.id, teamRef: "QQ" });
     for (const s of ["sess-A", "sess-B", "sess-C"]) assert.equal((await changes(key, s)).total, 0, `${s} is caught up`);
   });
 });
@@ -129,7 +129,7 @@ describe("session breakdown (WH-45)", () => {
 
     const row = (await agentQueues(human)).find((a) => a.id === key.id)!;
     assert.equal(row.sessions.length, 2, "the dashboard gets the active sessions (B and C), not just the key's total");
-    assert.ok(row.sessions.every((s) => s.projectKey === "QQ" && typeof s.lastSeenAt === "string"), "serialisable, tagged with the project");
+    assert.ok(row.sessions.every((s) => s.teamKey === "QQ" && typeof s.lastSeenAt === "string"), "serialisable, tagged with the team");
     assert.deepEqual(
       row.sessions.map((s) => s.lastSeenAt),
       [...row.sessions.map((s) => s.lastSeenAt)].sort().reverse(),
@@ -171,12 +171,12 @@ const D = 24 * H;
 type Resumable = Changes & { session_removed?: { removedAt: string | null; missedChanges: number; next: string } };
 
 describe("session recency, removal and reconnect (WH-48)", () => {
-  let projectId: string;
+  let teamId: string;
   const insert = async (id: string, over: { lastSeenAgo?: number; lastSeq?: number | null; removedAgo?: number } = {}) => {
     const db = await getDb();
     await db.insert(schema.workSessions).values({
       id,
-      projectId,
+      teamId,
       apiKeyId: key.id,
       actorName: "laptop",
       lastSeq: over.lastSeq === undefined ? 0 : over.lastSeq,
@@ -189,7 +189,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
 
   before(async () => {
     const db = await getDb();
-    [{ id: projectId }] = await db.select({ id: schema.projects.id }).from(schema.projects).where(eq(schema.projects.key, "QQ"));
+    [{ id: teamId }] = await db.select({ id: schema.teams.id }).from(schema.teams).where(eq(schema.teams.key, "QQ"));
   });
 
   test("every call that names a session counts as activity, reads included", async () => {
@@ -227,7 +227,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
 
   test("mark all seen leaves a removed session's cursor alone, so replay still works", async () => {
     const before = (await row("s-day")).lastSeq;
-    await svc.markAllSeen(human, { keyId: key.id, projectRef: "QQ" });
+    await svc.markAllSeen(human, { keyId: key.id, teamRef: "QQ" });
     assert.equal((await row("s-day")).lastSeq, before);
   });
 

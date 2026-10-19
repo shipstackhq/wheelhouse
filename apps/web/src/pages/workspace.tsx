@@ -1,7 +1,7 @@
 import { useActionState, useState } from "react";
 import type { Role, WorkspaceMember } from "@wheelhouse/api-client";
 import { InviteForm } from "../components/invite-form";
-import { AccessLog, ProjectsAccess } from "../components/workspace-access";
+import { AccessLog, TeamsAccess } from "../components/workspace-access";
 import { PendingInvites } from "../components/pending-invites";
 import { Loaded } from "../components/query-state";
 import { SubmitButton } from "../components/submit-button";
@@ -9,13 +9,13 @@ import { Select } from "../components/ui";
 import { failure, field, type FormState } from "../lib/form-state";
 import { useWorkspace } from "../lib/queries";
 import { asRole, assignableRoles, canManagePeople } from "../lib/roles";
-import { useMe, useProjects } from "../lib/session";
+import { useMe, useTeams } from "../lib/session";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 
 export function WorkspacePage() {
   const query = useWorkspace();
-  const adminOf = (useProjects().data ?? []).filter((p) => p.role === "admin");
+  const adminOf = (useTeams().data ?? []).filter((p) => p.role === "admin");
   const youId = useMe().data?.user.id;
   return (
     <Loaded query={query} label="Loading the workspace">
@@ -26,7 +26,7 @@ export function WorkspacePage() {
             <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
               <div>
                 <h1 className="text-xl font-semibold">{t.workspace.name}</h1>
-                <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around projects; they reach a project only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
+                <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
               </div>
 
               <div className="card divide-y divide-line">
@@ -49,13 +49,13 @@ export function WorkspacePage() {
                   {t.seats.full && (
                     <p className="mt-2 text-sm text-warn">Your workspace is full. Revoke a pending invite or remove a member to free a seat.</p>
                   )}
-                  <InviteForm kind="join_workspace" disabled={t.seats.full} roles={assignableRoles(t.role)} projects={adminOf} />
+                  <InviteForm kind="join_workspace" disabled={t.seats.full} roles={assignableRoles(t.role)} teams={adminOf} />
                   <h3 className="mt-6 text-sm font-medium">Pending invites</h3>
                   <PendingInvites invites={t.pendingInvites} />
                 </div>
               )}
 
-              {canManage && <ProjectsAccess />}
+              {canManage && <TeamsAccess />}
               {canManage && <AccessLog />}
 
               <div className="card p-5">

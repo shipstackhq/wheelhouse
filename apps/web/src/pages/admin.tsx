@@ -41,7 +41,7 @@ export function AdminWorkspacesPage() {
                     </div>
                   </div>
                   <div className="text-xs text-muted">{t.seatsUsed} of {t.maxSeats} seats ({t.members} members, {t.pendingInvites} pending)</div>
-                  <div className="text-xs text-muted">{t.projects} project{t.projects === 1 ? "" : "s"}</div>
+                  <div className="text-xs text-muted">{t.teams} team{t.teams === 1 ? "" : "s"}</div>
                   <div className="w-24 text-right text-xs text-muted">{t.lastActivity ? timeAgo(t.lastActivity) : "no activity"}</div>
                 </Link>
               ))}
@@ -69,7 +69,7 @@ export function AdminWorkspacePage() {
                 {t.suspendedAt && <span className="chip ml-3 bg-danger/15 align-middle text-danger">suspended</span>}
               </h1>
               <p className="mt-1 text-sm text-muted">
-                Created {day(t.createdAt)} · {t.projects} project{t.projects === 1 ? "" : "s"} · last activity {t.lastActivity ? timeAgo(t.lastActivity) : "none"}
+                Created {day(t.createdAt)} · {t.teams} team{t.teams === 1 ? "" : "s"} · last activity {t.lastActivity ? timeAgo(t.lastActivity) : "none"}
                 {t.invitedBy && <> · invited by {t.invitedBy.email}</>}
               </p>
             </div>

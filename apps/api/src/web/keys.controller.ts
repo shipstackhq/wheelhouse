@@ -17,12 +17,12 @@ export class KeysController {
     return agentsPage(req.human, requestOrigin(req));
   }
 
-  /** Reset an agent's queue (`keyId`), in one project (`projectKey`) or everywhere. */
+  /** Reset an agent's queue (`keyId`), in one team (`teamKey`) or everywhere. */
   @Post("agents/mark-all-seen")
   @HttpCode(200)
   async markAllSeen(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
-    await markAllSeen(req.human.actor, { keyId: str(b.keyId) || undefined, projectRef: str(b.projectKey) || undefined });
+    await markAllSeen(req.human.actor, { keyId: str(b.keyId) || undefined, teamRef: str(b.teamKey) || undefined });
     return { ok: true };
   }
 

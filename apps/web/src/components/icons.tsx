@@ -195,8 +195,8 @@ export const DecisionsFillIcon = icon(RiScales3Fill);
 export const TermFillIcon = icon(RiBookmarkFill);
 export const ReposIcon = icon(RiGitRepositoryLine);
 export const ReposFillIcon = icon(RiGitRepositoryFill);
-export const ProjectMembersIcon = icon(RiTeamLine);
-export const ProjectMembersFillIcon = icon(RiTeamFill);
+export const TeamMembersIcon = icon(RiTeamLine);
+export const TeamMembersFillIcon = icon(RiTeamFill);
 export const SettingsIcon = icon(RiSettings3Line);
 export const SettingsFillIcon = icon(RiSettings3Fill);
 export const PeopleIcon = icon(RiGroup2Line);
@@ -221,8 +221,8 @@ export const NAV_ICONS = {
   decisions: { line: DecisionsIcon, fill: DecisionsFillIcon },
   glossary: { line: TermIcon, fill: TermFillIcon },
   repos: { line: ReposIcon, fill: ReposFillIcon },
-  projectMembers: { line: ProjectMembersIcon, fill: ProjectMembersFillIcon },
-  projectSettings: { line: SettingsIcon, fill: SettingsFillIcon },
+  teamMembers: { line: TeamMembersIcon, fill: TeamMembersFillIcon },
+  teamSettings: { line: SettingsIcon, fill: SettingsFillIcon },
   people: { line: PeopleIcon, fill: PeopleFillIcon },
   agents: { line: AgentIcon, fill: AgentFillIcon },
   workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },

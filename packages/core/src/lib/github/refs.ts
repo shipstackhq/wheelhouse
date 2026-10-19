@@ -21,5 +21,5 @@ export function parseTicketRefs(...texts: (string | null | undefined)[]): Ticket
   return out;
 }
 
-/** Only the references that belong to this project: the same repository can serve several projects, and "UTF-8" is not a ticket. */
-export const refsForProject = (refs: TicketRef[], projectKey: string) => refs.filter((r) => r.key === projectKey.toUpperCase());
+/** Only the references that belong to this team: the same repository can serve several teams, and "UTF-8" is not a ticket. */
+export const refsForTeam = (refs: TicketRef[], teamKey: string) => refs.filter((r) => r.key === teamKey.toUpperCase());

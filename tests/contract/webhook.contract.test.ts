@@ -24,7 +24,7 @@ const pr = (o: { action: string; number: number; title: string; sha?: string; in
 });
 
 const ticket = (as: ReturnType<typeof asKey>, ref: string) => v1ok(as, "get_ticket", { ticket: ref });
-const eventTypes = async (as: ReturnType<typeof asKey>, project: string) => JSON.stringify(await v1ok(as, "get_activity", { project, limit: 60 }));
+const eventTypes = async (as: ReturnType<typeof asKey>, team: string) => JSON.stringify(await v1ok(as, "get_activity", { project: team, limit: 60 }));
 
 describe("POST /api/webhooks/github: signature and framing", () => {
   test("a missing, wrong or malformed signature is one plain 401, and nothing is processed", async () => {
@@ -81,7 +81,7 @@ describe("POST /api/webhooks/github: pushes", () => {
     const r = await deliver("push", push());
     assert.equal(r.status, 200);
     assert.deepEqual(r.json, { status: "handled", matched: 1, detail: "1 file(s)" });
-    assert.match(await eventTypes(A, fx.a.projectKey), /code\.landed/);
+    assert.match(await eventTypes(A, fx.a.teamKey), /code\.landed/);
   });
 
   test("pushes to other branches, branch deletions, unknown repositories and unknown installations are ignored", async () => {
@@ -107,7 +107,7 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
     assert.equal(t.pullRequests[0].number, 7);
     assert.equal(t.pullRequests[0].state, "open");
     assert.ok(t.comments.some((c: { authorName: string; body: string }) => c.authorName === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
-    assert.match(await eventTypes(A, fx.a.projectKey), /ticket\.pull_request/);
+    assert.match(await eventTypes(A, fx.a.teamKey), /ticket\.pull_request/);
   });
 
   test("a failing check on the head commit marks the pull request failed and raises ticket.ci", async () => {
@@ -123,7 +123,7 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
     assert.deepEqual(r.json, { status: "handled", matched: 1 });
     const t = await ticket(A, ref);
     assert.equal(t.pullRequests[0].ciState, "failure");
-    assert.match(await eventTypes(A, fx.a.projectKey), /ticket\.ci/);
+    assert.match(await eventTypes(A, fx.a.teamKey), /ticket\.ci/);
     assert.ok(t.comments.some((c: { body: string }) => /CI failed on pull request/.test(c.body)));
   });
 

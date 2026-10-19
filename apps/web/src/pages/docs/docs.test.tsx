@@ -8,13 +8,13 @@ import { FakeEventSource } from "../../test/fake-event-source";
 
 afterEach(() => localStorage.clear());
 
-const HOME = "/p/AA/docs";
+const HOME = "/t/AA/docs";
 const DOC = `${HOME}/d-plan`;
 const open = (path = DOC, setup: (s: FakeServer) => unknown = () => {}) => renderApp(path, setup);
 const row = async (title: string) => screen.findByRole("button", { name: new RegExp(`^${title}$`) });
 /** The doc's own title (the page's h1; the text can have an h1 of its own too). */
 const heading = (title: string) => waitFor(() => expect(document.querySelector("h1.text-3xl")?.textContent).toBe(title));
-const url = (path: string) => `/api/app/projects/AA/${path}`;
+const url = (path: string) => `/api/app/teams/AA/${path}`;
 /** Serve a doc (and the index with it), so a test can make it a different one. */
 const serve = (s: FakeServer, docs = DOCS, nodes: Parameters<typeof docDetail>[1] = []) => {
   s.on(`GET ${url("docs")}`, docsIndex(docs));
@@ -41,7 +41,7 @@ describe("the docs home", () => {
     await user.click(await row("Phase 1"));
     await heading("Phase 1");
     expect(await screen.findByText("Phase one.")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/p/AA/docs");
+    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/t/AA/docs");
   });
 
   test("with no docs it says so, and offers to create one", async () => {
@@ -101,7 +101,7 @@ describe("the doc tree sheet", () => {
     open(`${HOME}/d-sub`);
     await heading("Phase 1");
     const nav = screen.getByRole("navigation", { name: "Doc navigation" });
-    expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/p/AA/docs/d-plan");
+    expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/t/AA/docs/d-plan");
   });
 
   test("the 'About this doc' column sits beside the doc while reading and while editing", async () => {
@@ -295,10 +295,10 @@ describe("editing", () => {
 
   test("WH-104: a doc opened by its uuid address, as the real data has it (untitled slug, no text, no labels), opens in the editor under its own title", async () => {
     const id = "6d9e6f95-3187-433d-9935-e936100655c6";
-    const real = doc({ id, slug: "untitled-doc", title: "Project Documentation", body: "", version: 2, labels: [] });
+    const real = doc({ id, slug: "untitled-doc", title: "Team Documentation", body: "", version: 2, labels: [] });
     open(`${HOME}/${id}`, (s) => serve(s, [real]));
     expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
-    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Project Documentation");
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Team Documentation");
     expect(screen.getByText(/untitled-doc · v2/)).toBeTruthy();
   });
 
@@ -466,7 +466,7 @@ describe("decision records", () => {
     const user = userEvent.setup();
     await createRecord(user);
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
-    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/p/AA/decisions");
+    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/t/AA/decisions");
     await user.click(within(section).getByRole("button", { name: "+ Create ADR from this doc" }));
     await waitFor(() => expect(server.sent(`PUT ${url("decisions")}`)).toHaveLength(1));
     expect(server.sent(`PUT ${url("decisions")}`)[0].body).toEqual({
@@ -476,7 +476,7 @@ describe("decision records", () => {
       decision: "REST over HTTP.",
       consequences: "No streaming.",
     });
-    await waitFor(() => expect(at()).toBe("/p/AA/decisions"));
+    await waitFor(() => expect(at()).toBe("/t/AA/decisions"));
   });
 
   test("an existing ADR can be linked instead", async () => {
@@ -489,7 +489,7 @@ describe("decision records", () => {
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
     await user.click(within(section).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "ADR-1: Use REST" }));
-    await waitFor(() => expect(at()).toBe("/p/AA/decisions/1")); // the linked decision opens
+    await waitFor(() => expect(at()).toBe("/t/AA/decisions/1")); // the linked decision opens
   });
 
   test("an ordinary doc does not offer it", async () => {
@@ -577,8 +577,8 @@ describe("live", () => {
     expect(await screen.findByRole("button", { name: "Runbook" })).toBeTruthy();
   });
 
-  test("another workspace's project has no docs page", async () => {
-    renderApp("/p/ZZ/docs");
+  test("another workspace's team has no docs page", async () => {
+    renderApp("/t/ZZ/docs");
     expect(await screen.findByText(/not found|can.t find|doesn.t exist/i)).toBeTruthy();
   });
 });

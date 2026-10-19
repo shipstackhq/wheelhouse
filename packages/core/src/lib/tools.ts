@@ -45,13 +45,13 @@ export const tools = {
     description: "List projects (boards) in your team.",
     input: z.object({}),
     readOnly: true,
-    run: (a) => svc.listProjects(a),
+    run: (a) => svc.listTeams(a),
   }),
 
   create_project: tool({
     description: "Create a project with default columns: Backlog, Todo, In Progress, Review, Done.",
     input: z.object({ name: z.string(), key: z.string().max(6).optional(), description: z.string().optional() }),
-    run: (a, i) => svc.createProject(a, i),
+    run: (a, i) => svc.createTeam(a, i),
   }),
 
   get_board: tool({
@@ -61,7 +61,7 @@ export const tools = {
     run: async (a, i) => {
       const b = await svc.getBoard(a, i.project);
       return {
-        project: { key: b.project.key, name: b.project.name, description: b.project.description },
+        project: { key: b.team.key, name: b.team.name, description: b.team.description },
         columns: b.columns.map((c) => ({
           name: c.name,
           tickets: b.tickets
@@ -341,7 +341,7 @@ For enums, list each value as a column (name only). Set \`anchors\` to the schem
     description: "Teammates only: permanently delete a project and everything in it.",
     hidden: true,
     input: z.object({ project }),
-    run: (a, i) => svc.deleteProject(a, i.project),
+    run: (a, i) => svc.deleteTeam(a, i.project),
   }),
 
   // ───────── sync plumbing (used by the wheelhouse CLI / hooks) ─────────
@@ -666,13 +666,22 @@ export function listToolDefs(opts: { includeHidden?: boolean } = {}) {
 }
 
 /**
- * `/api/v1` and the MCP keep the wire shape agents and the plugin were built against, which still says `teamId` where the
- * schema now says `workspaceId` (WH-111). The new MCP replaces this; until then the rename happens here, once, on the way out.
+ * `/api/v1` and the MCP keep the wire shape agents and the plugin were built against: the tenant is still `teamId` and
+ * what is now a team is still a `project` (WH-111, WH-112). The new MCP replaces this; until then the words are mapped
+ * here, once, on the way out: `workspaceId` becomes `teamId`, and every other key or stored word saying team says project.
  */
+const legacyKey = (k: string) => (k === "workspaceId" ? "teamId" : k.replace(/team/g, "project").replace(/Team/g, "Project").replace(/TEAM/g, "PROJECT"));
+const legacyWord = (k: string, v: unknown) => {
+  if (typeof v !== "string") return v;
+  if ((k === "entity" || k === "targetType") && v === "team") return "project";
+  if ((k === "type" || k === "action") && v.startsWith("team.")) return `project.${v.slice(5)}`;
+  return v;
+};
+
 function toLegacyWire(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(toLegacyWire);
   if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k === "workspaceId" ? "teamId" : k, toLegacyWire(v)]));
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [legacyKey(k), legacyWord(k, toLegacyWire(v))]));
   }
   return value;
 }

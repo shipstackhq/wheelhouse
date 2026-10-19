@@ -12,7 +12,7 @@ try {
 } catch (e) {
   if (e instanceof ApiError && e.fields) showFieldErrors(e.fields);
 }
-const projects = await api.projects.list();
+const teams = await api.teams.list();
 ```
 
 It sends the CSRF token on every state-changing request and refreshes it once if the server says it went stale; every failure is an `ApiError` (`status`, `code`, `message`, `fields`, `current` for conflicts, `retryAfter`). Conventions: `docs/ui-api.md`. Add a method here with each new endpoint.

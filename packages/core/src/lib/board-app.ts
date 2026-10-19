@@ -7,7 +7,7 @@ import type { ChecklistState } from "./setup-checklist";
 
 /**
  * What the web app's board and ticket dialog read and write (WH-96), as functions of the signed-in person. The API's controllers
- * call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another workspace's project or
+ * call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another workspace's team or
  * ticket is simply "not found". Responses carry only what the screens use, never raw rows.
  */
 
@@ -55,7 +55,7 @@ export const ticketView = (t: TicketRow): TicketView => ({
 export type BoardTicket = TicketView & { nodeIds: string[]; commentCount: number };
 
 export type BoardView = {
-  project: { id: string; key: string; name: string; description: string };
+  team: { id: string; key: string; name: string; description: string };
   columns: { id: string; name: string; role: string | null; position: number }[];
   tickets: BoardTicket[];
   /** Just enough of the map to show and link nodes. The map itself is another page. */
@@ -64,15 +64,15 @@ export type BoardView = {
   checklist: ChecklistState;
 };
 
-/** The project page: its columns, every ticket, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
-export async function boardView(actor: Actor, projectKey: string): Promise<BoardView> {
-  const [board, checklist] = await Promise.all([svc.getBoard(actor, projectKey), svc.checklistForProject(actor, projectKey)]);
+/** The team page: its columns, every ticket, the map nodes a ticket can link to, the workspace's members and the setup checklist. */
+export async function boardView(actor: Actor, teamKey: string): Promise<BoardView> {
+  const [board, checklist] = await Promise.all([svc.getBoard(actor, teamKey), svc.checklistForTeam(actor, teamKey)]);
   const db = await getDb();
   const [nodes, members] = await Promise.all([
     db
       .select({ id: schema.nodes.id, name: schema.nodes.name, kind: schema.nodes.kind, parentId: schema.nodes.parentId, layer: schema.nodes.layer })
       .from(schema.nodes)
-      .where(eq(schema.nodes.projectId, board.project.id)),
+      .where(eq(schema.nodes.teamId, board.team.id)),
     db
       .select({ id: schema.users.id, name: schema.users.name })
       .from(schema.memberships)
@@ -80,7 +80,7 @@ export async function boardView(actor: Actor, projectKey: string): Promise<Board
       .where(eq(schema.memberships.workspaceId, actor.workspaceId)),
   ]);
   return {
-    project: { id: board.project.id, key: board.project.key, name: board.project.name, description: board.project.description },
+    team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
     columns: board.columns.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
     tickets: board.tickets.map((t) => ({ ...ticketView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
     nodes,
@@ -91,7 +91,7 @@ export async function boardView(actor: Actor, projectKey: string): Promise<Board
 
 export type TicketDetail = {
   ticket: TicketView & { column: string | undefined };
-  project: { key: string; name: string };
+  team: { key: string; name: string };
   comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
@@ -103,7 +103,7 @@ export async function ticketDetail(actor: Actor, ref: string): Promise<TicketDet
   const d = await svc.getTicket(actor, ref);
   return {
     ticket: { ...ticketView(d.ticket), column: d.ticket.column },
-    project: { key: d.project.key, name: d.project.name },
+    team: { key: d.team.key, name: d.team.name },
     comments: d.comments.map((c) => ({ id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt })),
     nodes: d.nodes,
     history: d.history.map((e) => ({ seq: e.seq, actorKind: e.actorKind, actorName: e.actorName, summary: e.summary, createdAt: e.createdAt })),
@@ -159,7 +159,7 @@ export function ticketInput(b: Record<string, unknown>, o: { create: boolean }):
   return out;
 }
 
-/** The column of a move or a new ticket: an id, a name or a role ("review"); the service finds it in this ticket's own project. */
+/** The column of a move or a new ticket: an id, a name or a role ("review"); the service finds it in this ticket's own team. */
 export function columnField(b: Record<string, unknown>, required: boolean): string | undefined {
   const v = b.column;
   if (v === undefined || v === null) return required ? bad("column", "column is required") : undefined;
@@ -185,8 +185,8 @@ async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>):
   }
 }
 
-export async function createTicketAs(actor: Actor, projectKey: string, input: svc.TicketInput & { title: string }, column?: string) {
-  const t = await svc.createTicket(actor, projectKey, { ...input, column });
+export async function createTicketAs(actor: Actor, teamKey: string, input: svc.TicketInput & { title: string }, column?: string) {
+  const t = await svc.createTicket(actor, teamKey, { ...input, column });
   return { ...ticketView(t), column: t.column };
 }
 

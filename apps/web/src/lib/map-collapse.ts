@@ -1,8 +1,8 @@
 // Collapse/expand state for container nodes on the map (WH-22), persisted per browser following
 // the exact loadView/saveView localStorage pattern from column-controls.tsx. No new DB schema.
 
-export function collapseKey(projectKey: string, lens: string) {
-  return `wh:map-collapsed:${projectKey}:${lens}`;
+export function collapseKey(teamKey: string, lens: string) {
+  return `wh:map-collapsed:${teamKey}:${lens}`;
 }
 
 export function loadCollapsed(storageKey: string): Set<string> {
@@ -26,8 +26,8 @@ export function saveCollapsed(storageKey: string, ids: Set<string>) {
  * on the next render. We store both sets: `collapsed` (currently collapsed) and `seen` (ever toggled),
  * so "default collapsed" only applies to containers nobody has touched yet.
  */
-export function seenKey(projectKey: string, lens: string) {
-  return `wh:map-collapsed-seen:${projectKey}:${lens}`;
+export function seenKey(teamKey: string, lens: string) {
+  return `wh:map-collapsed-seen:${teamKey}:${lens}`;
 }
 
 type CollapseEdge = { id: string; fromNodeId: string; toNodeId: string; kind: string; label?: string | null };

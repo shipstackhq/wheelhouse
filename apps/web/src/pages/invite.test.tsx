@@ -143,7 +143,7 @@ describe("the invite page", () => {
 
 describe("the invite page, for someone who already has an account", () => {
   const notNew = () => apiError(400, "invalid", "This invite link is invalid or has expired."); // a fresh Response each time: a body can be read once
-  const existing = { invite: { email: "ada@example.test", workspaceName: "Difference Engines", role: "viewer", projects: [{ key: "DE", name: "Engine", role: "editor" }] } };
+  const existing = { invite: { email: "ada@example.test", workspaceName: "Difference Engines", role: "viewer", teams: [{ key: "DE", name: "Engine", role: "editor" }] } };
 
   test("signed in as the invited address, they are offered to join and keep their account; joining moves them in and forgets the old workspace", async () => {
     at(`#${TOKEN}`);

@@ -20,11 +20,11 @@ import { briefing } from "./briefing";
 
 let human: Actor;
 let agent: Actor;
-let projectId: string;
+let teamId: string;
 
 const rename = async (from: string, to: string) => {
   const db = await getDb();
-  await db.update(schema.columns).set({ name: to }).where(and(eq(schema.columns.projectId, projectId), eq(schema.columns.name, from)));
+  await db.update(schema.columns).set({ name: to }).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, from)));
 };
 const columnOf = async (ref: string) => (await svc.getTicket(human, ref)).ticket.column;
 
@@ -36,11 +36,11 @@ before(async () => {
   const [k] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "worker", prefix: "wh_", keyHash: "worker" }).returning();
   human = { kind: "human", id: user.id, name: "Rae", workspaceId: workspace.id };
   agent = { kind: "agent", id: k.id, name: "worker", workspaceId: workspace.id };
-  projectId = (await svc.createProject(human, { name: "Roles", key: "RR" })).id;
+  teamId = (await svc.createTeam(human, { name: "Roles", key: "RR" })).id;
 });
 
 describe("column roles", () => {
-  test("a new project's five columns each have their role", async () => {
+  test("a new team's five columns each have their role", async () => {
     const { columns } = await svc.getBoard(human, "RR");
     assert.deepEqual(columns.map((c) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
   });
@@ -57,9 +57,9 @@ describe("column roles", () => {
 
     // A column that is literally called "review" but has no role beats the role alias on an exact name match.
     const db = await getDb();
-    await db.insert(schema.columns).values({ projectId, name: "review", position: 99, role: null });
+    await db.insert(schema.columns).values({ teamId, name: "review", position: 99, role: null });
     assert.equal((await svc.moveTicket(human, t.ref, "review")).column, "review");
-    await db.delete(schema.columns).where(and(eq(schema.columns.projectId, projectId), eq(schema.columns.name, "review")));
+    await db.delete(schema.columns).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, "review")));
   });
 
   test("moves record the roles, so history survives a later rename", async () => {

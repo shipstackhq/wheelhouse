@@ -84,9 +84,9 @@ describe("the workspace page, for an owner", () => {
     expect(server.sent("POST /api/app/invites")[0].body).toEqual({ kind: "join_workspace", email: "new@example.test", role: "member", tags: "design", workspace: "" });
   });
 
-  test("the invite form offers only the projects you administer, and sends the ones ticked with a project role", async () => {
+  test("the invite form offers only the teams you administer, and sends the ones ticked with a team role", async () => {
     const { server } = renderApp("/workspace", (s) => {
-      s.projects = [
+      s.teams = [
         { id: "p1", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "admin" },
         { id: "p2", key: "BB", name: "Beta", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "editor" },
       ];
@@ -99,11 +99,11 @@ describe("the workspace page, for an owner", () => {
     await user.click(screen.getByLabelText(/Alpha/));
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
     await waitFor(() => expect(server.sent("POST /api/app/invites")).toHaveLength(1));
-    expect((server.sent("POST /api/app/invites")[0].body as { projects: unknown }).projects).toEqual([{ project: "AA", role: "editor" }]);
+    expect((server.sent("POST /api/app/invites")[0].body as { teams: unknown }).teams).toEqual([{ team: "AA", role: "editor" }]);
   });
 
-  test("a pending invite says which projects it adds the person to", async () => {
-    renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ pendingInvites: [invite({ projects: [{ key: "AA", name: "Alpha", role: "viewer" }] })] })));
+  test("a pending invite says which teams it adds the person to", async () => {
+    renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ pendingInvites: [invite({ teams: [{ key: "AA", name: "Alpha", role: "viewer" }] })] })));
     expect(await screen.findByText(/joins AA as viewer/)).toBeTruthy();
   });
 
@@ -187,7 +187,7 @@ describe("loading and failing", () => {
   });
 });
 
-describe("the workspace page and project access (ADR-23)", () => {
+describe("the workspace page and team access (ADR-23)", () => {
   test("an admin edits members and invites, but cannot touch an owner or hand out the owner role", async () => {
     renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ role: "admin" })));
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
@@ -221,47 +221,47 @@ describe("the workspace page and project access (ADR-23)", () => {
     expect(server.sent("PATCH /api/app/workspace/members/u2")[0].body).toMatchObject({ role: "viewer" });
   });
 
-  test("a plain member sees the list read only, with no invite form, project list or access log, and asks for neither", async () => {
+  test("a plain member sees the list read only, with no invite form, team list or access log, and asks for neither", async () => {
     const { server } = renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ role: "member", pendingInvites: [] })));
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     expect(screen.queryByRole("button", { name: "Create invite link" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Projects" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Teams" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Access log" })).toBeNull();
-    expect(server.sent("GET /api/app/access/projects")).toHaveLength(0);
+    expect(server.sent("GET /api/app/access/teams")).toHaveLength(0);
     expect(server.sent("GET /api/app/access/audit")).toHaveLength(0);
   });
 
-  test("owners see every project by name and admins, and can join one as admin", async () => {
+  test("owners see every team by name and admins, and can join one as admin", async () => {
     const { server } = renderApp("/workspace", (s) => {
-      s.on("GET /api/app/access/projects", {
-        projects: [
+      s.on("GET /api/app/access/teams", {
+        teams: [
           { id: "p1", key: "AA", name: "Analytical Engine", admins: ["Ada Lovelace"], memberCount: 3, isMember: true },
           { id: "p2", key: "BB", name: "Difference Engine", admins: ["Charles Babbage"], memberCount: 1, isMember: false },
         ],
       });
-      s.on("POST /api/app/projects/BB/join", { project: { id: "p2", key: "BB", name: "Difference Engine" } });
+      s.on("POST /api/app/teams/BB/join", { team: { id: "p2", key: "BB", name: "Difference Engine" } });
     });
-    const projects = (await screen.findByRole("heading", { name: "Projects" })).closest(".card") as HTMLElement;
-    expect(await within(projects).findByText("Difference Engine")).toBeTruthy();
-    expect(within(projects).getByText(/1 member · admin: Charles Babbage/)).toBeTruthy();
-    expect(within(projects).getByText("you are in")).toBeTruthy(); // for the project they are already in
-    expect(within(projects).queryByRole("button", { name: "Join Analytical Engine as admin" })).toBeNull();
-    await userEvent.setup().click(within(projects).getByRole("button", { name: "Join Difference Engine as admin" }));
-    await waitFor(() => expect(server.sent("POST /api/app/projects/BB/join")).toHaveLength(1));
+    const teams = (await screen.findByRole("heading", { name: "Teams" })).closest(".card") as HTMLElement;
+    expect(await within(teams).findByText("Difference Engine")).toBeTruthy();
+    expect(within(teams).getByText(/1 member · admin: Charles Babbage/)).toBeTruthy();
+    expect(within(teams).getByText("you are in")).toBeTruthy(); // for the team they are already in
+    expect(within(teams).queryByRole("button", { name: "Join Analytical Engine as admin" })).toBeNull();
+    await userEvent.setup().click(within(teams).getByRole("button", { name: "Join Difference Engine as admin" }));
+    await waitFor(() => expect(server.sent("POST /api/app/teams/BB/join")).toHaveLength(1));
   });
 
   test("the access log lists who changed access, newest first", async () => {
     renderApp("/workspace", (s) =>
       s.on("GET /api/app/access/audit", {
         events: [
-          { seq: 2, actorName: "Ada Lovelace", action: "project.admin_joined", targetType: "user", targetId: "u1", projectKey: "BB", before: null, after: { role: "admin" }, createdAt: "2026-10-18T10:00:00.000Z" },
-          { seq: 1, actorName: "Grace Hopper", action: "project.member_role_changed", targetType: "user", targetId: "u3", projectKey: "AA", before: { role: "viewer" }, after: { role: "editor" }, createdAt: "2026-10-17T10:00:00.000Z" },
+          { seq: 2, actorName: "Ada Lovelace", action: "team.admin_joined", targetType: "user", targetId: "u1", teamKey: "BB", before: null, after: { role: "admin" }, createdAt: "2026-10-18T10:00:00.000Z" },
+          { seq: 1, actorName: "Grace Hopper", action: "team.member_role_changed", targetType: "user", targetId: "u3", teamKey: "AA", before: { role: "viewer" }, after: { role: "editor" }, createdAt: "2026-10-17T10:00:00.000Z" },
         ],
       }),
     );
     const log = (await screen.findByRole("heading", { name: "Access log" })).closest(".card") as HTMLElement;
     const items = await within(log).findAllByRole("listitem");
-    expect(items[0].textContent).toContain("Ada Lovelace joined a project as admin");
+    expect(items[0].textContent).toContain("Ada Lovelace joined a team as admin");
     expect(items[0].textContent).toContain("BB");
     expect(items[1].textContent).toContain("viewer → editor");
   });

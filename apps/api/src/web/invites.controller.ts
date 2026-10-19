@@ -32,7 +32,7 @@ export class InvitesController {
   @HttpCode(201)
   create(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
-    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, workspace: str(b.workspace), projects: b.projects }, requestOrigin(req));
+    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, workspace: str(b.workspace), teams: b.teams }, requestOrigin(req));
   }
 
   /** Signed in with an existing account: what an invite sent to your own address would add you to. Anything else is the usual invalid-link answer. */

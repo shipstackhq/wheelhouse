@@ -29,7 +29,7 @@ before(async () => {
   const [user] = await db.insert(schema.users).values({ email: "map@example.test", name: "Mia", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
   actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
-  await svc.createProject(actor, { name: "Wheelhouse", key: P });
+  await svc.createTeam(actor, { name: "Wheelhouse", key: P });
   const n = (name: string, layer: schema.Layer, extra: Partial<svc.NodeInput> = {}) => svc.upsertNode(actor, P, { name, layer, forcePublish: true, ...extra });
   await n("web", "system", { kind: "service", summary: "Next.js app: UI, server actions, MCP + REST, installable as a PWA" });
   await n("MCP server", "system", { kind: "module", parent: "web", details: "- `src/app/mcp/route.ts`\n- tools in `src/lib/tools.ts`" });

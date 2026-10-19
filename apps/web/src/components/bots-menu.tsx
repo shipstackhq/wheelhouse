@@ -10,8 +10,8 @@ import { AgentIcon, ArrowRightIcon } from "./icons";
 
 export type { Bot } from "./bots-list";
 
-/** Header button: summary dot + count, popover with every agent and its sync status for this project. */
-export function BotsMenu({ projectKey, bots }: { projectKey: string; bots: Bot[] }) {
+/** Header button: summary dot + count, popover with every agent and its sync status for this team. */
+export function BotsMenu({ teamKey, bots }: { teamKey: string; bots: Bot[] }) {
   const { api, queryClient } = useServices();
   const queued = bots.filter((b) => b.pending > 0);
   const total = queued.reduce((n, b) => n + b.pending, 0);
@@ -38,20 +38,20 @@ export function BotsMenu({ projectKey, bots }: { projectKey: string; bots: Bot[]
           className="z-50 w-80 max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-line bg-panel text-fg shadow-xl"
         >
           <div className="border-b border-line px-4 py-3">
-            <div className="text-sm font-medium">Bots in {projectKey}</div>
+            <div className="text-sm font-medium">Bots in {teamKey}</div>
             <div className="text-xs text-muted">
               {state === "none" ? "No agents connected yet." : state === "queued" ? `${queued.length} of ${bots.length} behind` : "All caught up"}
             </div>
           </div>
           {bots.length > 0 && (
             <BotsList
-              projectKey={projectKey}
+              teamKey={teamKey}
               bots={bots}
               markAllSeen={async (fd) => {
-                await api.agents.markAllSeen({ keyId: field(fd, "keyId"), projectKey: field(fd, "project") || projectKey });
+                await api.agents.markAllSeen({ keyId: field(fd, "keyId"), teamKey: field(fd, "team") || teamKey });
                 await refreshAll(queryClient);
               }}
-              sessionAction={(x) => <SessionRemoveButton projectKey={x.projectKey ?? projectKey} sessionId={x.id} />}
+              sessionAction={(x) => <SessionRemoveButton teamKey={x.teamKey ?? teamKey} sessionId={x.id} />}
             />
           )}
           <div className="border-t border-line px-4 py-2.5 text-xs">

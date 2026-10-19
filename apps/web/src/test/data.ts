@@ -1,10 +1,10 @@
 import type {
-  Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminWorkspace, AdminWorkspaceDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, ProjectMembers, SetupCommands, WorkspaceOverview } from "@wheelhouse/api-client";
+  Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminWorkspace, AdminWorkspaceDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, TeamMembers, SetupCommands, WorkspaceOverview } from "@wheelhouse/api-client";
 
 /** Believable answers from the page endpoints, for tests to start from and bend. */
 
 export const SETUP: SetupCommands = {
-  projectKey: "KEY",
+  teamKey: "KEY",
   url: "https://wh.example.test",
   installPlugin: "/plugin marketplace add shipstackhq/wheelhouse-cli\n/plugin install wheelhouse@shipstack",
   marketplace: "shipstackhq/wheelhouse-cli",
@@ -15,7 +15,7 @@ export const SETUP: SetupCommands = {
   refreshMap: "/wheelhouse:refresh-map KEY",
   mcpBuildMap: "/mcp__wheelhouse__map_codebase KEY\n/mcp__wheelhouse__map_schema KEY",
   mcpRefreshMap: "/mcp__wheelhouse__refresh_map KEY",
-  cli: "npm install -g @shipstack/wheelhouse-cli\nwheelhouse login --url https://wh.example.test\nwheelhouse init --project KEY --url https://wh.example.test",
+  cli: "npm install -g @shipstack/wheelhouse-cli\nwheelhouse login --url https://wh.example.test\nwheelhouse init --team KEY --url https://wh.example.test",
   mcp: "read -rs WHEELHOUSE_KEY; export WHEELHOUSE_KEY\nclaude mcp add --transport http wheelhouse https://wh.example.test/mcp --header \"Authorization: Bearer $WHEELHOUSE_KEY\"",
   rest: "curl -X POST https://wh.example.test/api/v1/create_ticket \\\n  -H \"Authorization: Bearer $WHEELHOUSE_KEY\"",
 };
@@ -39,7 +39,7 @@ export const invite = (over: Partial<PendingInvite> = {}): PendingInvite => ({
   email: "grace@example.test",
   role: "member",
   workspaceName: null,
-  projects: [],
+  teams: [],
   createdAt: "2026-10-16T00:00:00.000Z",
   expiresAt: "2026-10-23T00:00:00.000Z",
   ...over,
@@ -68,7 +68,7 @@ export const adminWorkspace = (over: Partial<AdminWorkspace> = {}): AdminWorkspa
   pendingInvites: 1,
   seatsUsed: 4,
   maxSeats: 5,
-  projects: 2,
+  teams: 2,
   lastActivity: null,
   invitedBy: { name: "Ada", email: "ada@example.test" },
   isYours: false,
@@ -87,7 +87,7 @@ export const adminWorkspaceDetail = (over: Partial<AdminWorkspaceDetail> = {}): 
 const days = (n: number) => Array.from({ length: n }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`);
 
 export const widgets = (): DashboardWidgets => ({
-  kpis: { projects: 2, open: 14, inProgress: 3, inReview: 2, completed7d: 5, completedPrev7d: 3, agentShare7d: 0.4, events7d: 20, staleNodes: 1, mapNodes: 12, staleDocs: 2, agents: 2, agentsActive7d: 1 },
+  kpis: { teams: 2, open: 14, inProgress: 3, inReview: 2, completed7d: 5, completedPrev7d: 3, agentShare7d: 0.4, events7d: 20, staleNodes: 1, mapNodes: 12, staleDocs: 2, agents: 2, agentsActive7d: 1 },
   progress: [
     {
       id: "p1",
@@ -114,24 +114,24 @@ export const widgets = (): DashboardWidgets => ({
   throughput: days(14).map((day, i) => ({ day, created: i % 3, completed: i % 2 })),
   "activity-split": days(14).map((day, i) => ({ day, human: i % 4, agent: i % 3 })),
   agents: [
-    { id: "k1", name: "Claude — Ada's laptop", lastUsedAt: new Date().toISOString(), pending: 3, byProject: [{ key: "AA", pending: 3 }], sessions: [], actions7d: 9 },
-    { id: "k2", name: "CI bot", lastUsedAt: null, pending: 0, byProject: [], sessions: [], actions7d: 0 },
+    { id: "k1", name: "Claude — Ada's laptop", lastUsedAt: new Date().toISOString(), pending: 3, byTeam: [{ key: "AA", pending: 3 }], sessions: [], actions7d: 9 },
+    { id: "k2", name: "CI bot", lastUsedAt: null, pending: 0, byTeam: [], sessions: [], actions7d: 0 },
   ],
   attention: {
-    review: [{ ref: "AA-7", title: "Add the login page", projectKey: "AA", byAgent: true, updatedAt: new Date().toISOString() }],
-    urgent: [{ ref: "AA-9", title: "Fix the crash", projectKey: "AA", column: "In Progress" }],
-    stale: [{ id: "n1", name: "Service layer", layer: "system", reason: "src/lib/service.ts changed", projectKey: "AA" }],
-    staleDocs: [{ id: "d1", slug: "runbook", title: "Runbook", reason: "code changed", projectKey: "AA" }],
+    review: [{ ref: "AA-7", title: "Add the login page", teamKey: "AA", byAgent: true, updatedAt: new Date().toISOString() }],
+    urgent: [{ ref: "AA-9", title: "Fix the crash", teamKey: "AA", column: "In Progress" }],
+    stale: [{ id: "n1", name: "Service layer", layer: "system", reason: "src/lib/service.ts changed", teamKey: "AA" }],
+    staleDocs: [{ id: "d1", slug: "runbook", title: "Runbook", reason: "code changed", teamKey: "AA" }],
   },
   recent: [
-    { seq: 3, projectKey: "AA", actorKind: "agent", actorName: "Claude — Ada's laptop", summary: "moved AA-7 from In Progress → Review", createdAt: new Date().toISOString() },
-    { seq: 2, projectKey: "AA", actorKind: "human", actorName: "Ada Lovelace", summary: "created AA-9", createdAt: new Date().toISOString() },
+    { seq: 3, teamKey: "AA", actorKind: "agent", actorName: "Claude — Ada's laptop", summary: "moved AA-7 from In Progress → Review", createdAt: new Date().toISOString() },
+    { seq: 2, teamKey: "AA", actorKind: "human", actorName: "Ada Lovelace", summary: "created AA-9", createdAt: new Date().toISOString() },
   ],
-  sync: { untracked: [], quiet: [{ ref: "AA-4", title: "Refactor auth", projectKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }], drafts: [] },
+  sync: { untracked: [], quiet: [{ ref: "AA-4", title: "Refactor auth", teamKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }], drafts: [] },
   focus: {
     aging: [{ ref: "AA-4", title: "Refactor auth", column: "In Progress", priority: "high", days: 9, byAgent: true }],
     waitingReview: [{ ref: "AA-6", title: "Add rate limiting", column: "Review", priority: "medium", days: 4, byAgent: false }],
-    quiet: [{ ref: "AA-4", title: "Refactor auth", projectKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }],
+    quiet: [{ ref: "AA-4", title: "Refactor auth", teamKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }],
     proposedDecisions: 2,
     members: { count: 3, myRole: "admin" },
     tickets: 12,
@@ -182,7 +182,7 @@ export const ticket = (over: Partial<BoardTicket> = {}): BoardTicket => {
 };
 
 export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => ({
-  project: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
+  team: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
   columns: COLUMNS,
   tickets: [
     ticket({ number: 1, title: "Write the plan", columnId: "c-backlog", priority: "high", labels: ["docs"] }),
@@ -200,10 +200,10 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
   ],
   checklist: {
     items: [
-      { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/p/${key}/repos` },
-      { id: "machines", label: "Machines", done: true, status: "linked", href: `/p/${key}` },
+      { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/t/${key}/repos` },
+      { id: "machines", label: "Machines", done: true, status: "linked", href: `/t/${key}` },
       { id: "agents", label: "Agents", done: true, status: "1 key", href: "/agents" },
-      { id: "map", label: "Map", done: true, status: "built", href: `/p/${key}/map` },
+      { id: "map", label: "Map", done: true, status: "built", href: `/t/${key}/map` },
       { id: "teammates", label: "Teammates", done: true, status: "invited", href: "/workspace" },
     ],
     done: true,
@@ -215,7 +215,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
 
 export const detail = (t: BoardTicket, over: Partial<TicketDetail> = {}): TicketDetail => ({
   ticket: { ...t, column: COLUMNS.find((c) => c.id === t.columnId)?.name },
-  project: { key: "AA", name: "Alpha" },
+  team: { key: "AA", name: "Alpha" },
   comments: [],
   nodes: [],
   history: [{ seq: 1, actorKind: "human", actorName: "Ada Lovelace", summary: `created ${t.ref} "${t.title}" in Backlog`, createdAt: "2026-10-10T00:00:00.000Z" }],
@@ -311,7 +311,7 @@ export const MAP_TERMS: Term[] = [
 ];
 
 export const graph = (key = "AA", over: Partial<GraphView> = {}): GraphView => ({
-  project: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
+  team: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
   nodes: MAP_NODES,
   edges: MAP_EDGES,
   ticketLinks: [{ nodeId: "s-api", ticketId: "t-1", number: 1, title: "Write the plan", columnId: "c-backlog", ref: `${key}-1` }],
@@ -413,15 +413,15 @@ export const githubStatus = (over: Partial<GithubStatus> = {}): GithubStatus => 
 });
 
 export const onboardingPage = (key = "AA", over: Partial<OnboardingPage> = {}): OnboardingPage => ({
-  project: { key, name: key === "AA" ? "Alpha" : "Beta" },
+  team: { key, name: key === "AA" ? "Alpha" : "Beta" },
   hasRepos: false,
-  setup: { ...SETUP, projectKey: key, linkRepo: `/wheelhouse:setup ${key}`, buildMap: `/wheelhouse:map-codebase ${key}\n/wheelhouse:map-schema ${key}` },
+  setup: { ...SETUP, teamKey: key, linkRepo: `/wheelhouse:setup ${key}`, buildMap: `/wheelhouse:map-codebase ${key}\n/wheelhouse:map-schema ${key}` },
   ...over,
 });
 
-/** Who is in project AA: Ada (workspace owner, project admin), Grace (editor) and Alan (workspace member, project viewer). */
-export const projectMembers = (over: Partial<ProjectMembers> = {}): ProjectMembers => ({
-  project: { id: "p1", key: "AA", name: "Analytical Engine" },
+/** Who is in team AA: Ada (workspace owner, team admin), Grace (editor) and Alan (workspace member, team viewer). */
+export const teamMembers = (over: Partial<TeamMembers> = {}): TeamMembers => ({
+  team: { id: "p1", key: "AA", name: "Analytical Engine" },
   myRole: "admin",
   members: [
     { userId: "u1", name: "Ada Lovelace", email: "ada@example.test", role: "admin", workspaceRole: "owner", addedAt: "2026-10-01T00:00:00.000Z" },

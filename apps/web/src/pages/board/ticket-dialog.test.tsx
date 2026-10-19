@@ -17,7 +17,7 @@ function serve(s: FakeServer, over: Partial<typeof T2> = {}) {
   return state;
 }
 const dialog = async () => screen.findByRole("dialog");
-const open = async (setup: (s: FakeServer) => unknown = () => {}, path = "/p/AA?t=AA-2") => {
+const open = async (setup: (s: FakeServer) => unknown = () => {}, path = "/t/AA?t=AA-2") => {
   let state!: ReturnType<typeof serve>;
   const r = renderApp(path, (s) => {
     state = serve(s);
@@ -33,7 +33,7 @@ const descriptionBox = (d: HTMLElement) => d.querySelector("textarea.font-mono")
 
 describe("opening a ticket", () => {
   test("the card opens it, ?t= names it, and the dialog is labelled for screen readers", async () => {
-    const r = renderApp("/p/AA", (s) => void serve(s));
+    const r = renderApp("/t/AA", (s) => void serve(s));
     await userEvent.setup().click((await screen.findByText("Build the board")).closest("[data-ticket]") as HTMLElement);
     const d = await dialog();
     expect(r.router.state.location.search).toBe("?t=AA-2");
@@ -46,7 +46,7 @@ describe("opening a ticket", () => {
   test("a shared link opens straight onto it; a value that is not a ticket ref opens nothing", async () => {
     await open();
     expect(screen.getByRole("dialog")).toBeTruthy();
-    const { unmount } = renderApp("/p/AA?t=<script>", (s) => void serve(s));
+    const { unmount } = renderApp("/t/AA?t=<script>", (s) => void serve(s));
     await screen.findAllByText("Write the plan");
     expect(screen.queryAllByRole("dialog").length).toBe(1); // only the first render's
     unmount();
@@ -70,12 +70,12 @@ describe("opening a ticket", () => {
   });
 
   test("an agent-made ticket says so", async () => {
-    const { d } = await open(() => {}, "/p/AA?t=AA-3");
+    const { d } = await open(() => {}, "/t/AA?t=AA-3");
     expect(within(d).getByText("created by agent")).toBeTruthy();
   });
 
   test("a ticket that cannot be loaded says why instead of staying blank", async () => {
-    renderApp("/p/AA?t=AA-2", (s) => s.on("GET /api/app/tickets/AA-2", apiError(404, "not_found", "Ticket AA-2 not found")));
+    renderApp("/t/AA?t=AA-2", (s) => s.on("GET /api/app/tickets/AA-2", apiError(404, "not_found", "Ticket AA-2 not found")));
     expect(await screen.findByText("Ticket AA-2 not found")).toBeTruthy();
   });
 
@@ -219,7 +219,7 @@ describe("the properties", () => {
     await pick(userEvent.setup(), d, "Status", "Review");
     await waitFor(() => expect(server.sent("POST /api/app/tickets/AA-2/move")).toHaveLength(1));
     expect(server.sent("POST /api/app/tickets/AA-2/move")[0].body).toEqual({ column: "c-review" });
-    await waitFor(() => expect(server.sent("GET /api/app/projects/AA/board").length).toBeGreaterThan(1));
+    await waitFor(() => expect(server.sent("GET /api/app/teams/AA/board").length).toBeGreaterThan(1));
   });
 
   test("Priority and Assignee are saved with the version", async () => {
@@ -275,7 +275,7 @@ describe("the architecture links", () => {
     });
     const user = userEvent.setup();
     const link = within(d).getByRole("link", { name: "system: API" });
-    expect(link.getAttribute("href")).toBe("/p/AA/map?node=n-api");
+    expect(link.getAttribute("href")).toBe("/t/AA/map?node=n-api");
     await user.click(within(d).getByRole("button", { name: "Unlink API" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/tickets/AA-2/nodes/n-api")).toHaveLength(1));
     await user.click((within(d).getByText("+ link node").closest("button") ?? within(d).getByText("+ link node")) as HTMLElement);

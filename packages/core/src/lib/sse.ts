@@ -4,7 +4,7 @@ import type { StreamEvent } from "./event-bus";
 export const HEARTBEAT_MS = 25_000;
 /** More missed events than this and the browser is told to reload what it shows instead of being sent each one. */
 export const REPLAY_CAP = 200;
-/** How often an open stream asks whether its person may still hear it (removed from a project, say). Short enough that it does not matter. */
+/** How often an open stream asks whether its person may still hear it (removed from a team, say). Short enough that it does not matter. */
 export const RECHECK_MS = 15_000;
 
 const enc = new TextEncoder();

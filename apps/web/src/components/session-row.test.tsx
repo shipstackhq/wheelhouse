@@ -18,14 +18,14 @@ const visible = (html: string) => html.replace(/<[^>]+>/g, "|").replace(/\|+/g, 
 
 const FULL = "6c8d2637-dfcb-41b7-bcfd-b868fced8b27";
 
-test("a session is one line: short id and its queue; ticket, project, branch and time are not on screen", () => {
-  const html = renderToStaticMarkup(<SessionRow s={view(FULL, { pending: 3, branch: "main", ticket: "WH-45", projectKey: "WH" })} />);
+test("a session is one line: short id and its queue; ticket, team, branch and time are not on screen", () => {
+  const html = renderToStaticMarkup(<SessionRow s={view(FULL, { pending: 3, branch: "main", ticket: "WH-45", teamKey: "WH" })} />);
   assert.equal(visible(html), "|6c8d2637|3 queued|");
   for (const clutter of ["main", "just now", "WH", "dfcb-41b7"]) assert.ok(!visible(html).includes(clutter), `${clutter} stays out of the row`);
 });
 
-test("everything the row leaves out is in its details: full id, ticket, project, branch, time, queue", () => {
-  const lines = sessionDetails(view(FULL, { pending: 3, branch: "main", ticket: "WH-45", projectKey: "WH" }));
+test("everything the row leaves out is in its details: full id, ticket, team, branch, time, queue", () => {
+  const lines = sessionDetails(view(FULL, { pending: 3, branch: "main", ticket: "WH-45", teamKey: "WH" }));
   assert.deepEqual(lines, [`Session ${FULL}`, "Working on WH-45", "WH · branch main", "Active just now", "3 changes queued"]);
   assert.deepEqual(sessionDetails(view("abc")), ["Session abc", "Active just now", "Caught up"], "no ticket or branch: no empty lines");
   assert.equal(sessionDetails(view("abc", { pending: 1 })).at(-1), "1 change queued");
@@ -33,7 +33,7 @@ test("everything the row leaves out is in its details: full id, ticket, project,
 });
 
 test("the details are also the row's accessible label, so keyboard and screen reader users get them", () => {
-  const html = renderToStaticMarkup(<SessionRow s={view(FULL, { pending: 3, branch: "main", ticket: "WH-45", projectKey: "WH" })} />);
+  const html = renderToStaticMarkup(<SessionRow s={view(FULL, { pending: 3, branch: "main", ticket: "WH-45", teamKey: "WH" })} />);
   assert.ok(html.includes('tabindex="0"'), "focusable");
   assert.ok(html.includes("Working on WH-45") && html.includes("WH · branch main"), "in the aria-label");
 });

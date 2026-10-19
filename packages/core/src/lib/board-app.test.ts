@@ -52,7 +52,7 @@ describe("ticketInput", () => {
   });
 
   test("unknown fields are ignored, not passed on", () => {
-    assert.deepEqual(ticketInput({ title: "x", projectId: "other", version: 3, createdById: "z" }, { create: true }), { title: "x" });
+    assert.deepEqual(ticketInput({ title: "x", teamId: "other", version: 3, createdById: "z" }, { create: true }), { title: "x" });
   });
 });
 

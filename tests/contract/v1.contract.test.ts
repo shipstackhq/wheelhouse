@@ -57,8 +57,8 @@ describe("POST /api/v1/:tool: errors", () => {
 describe("POST /api/v1/:tool: tickets", () => {
   test("create, read, edit with optimistic locking, move by name and by role, comment, claim", async () => {
     const title = unique("v1 flow");
-    const made = await v1ok(A, "create_ticket", { project: fx.a.projectKey, title, body: "body", priority: "high", labels: ["contract"] });
-    assert.match(made.ref, new RegExp(`^${fx.a.projectKey}-\\d+$`));
+    const made = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title, body: "body", priority: "high", labels: ["contract"] });
+    assert.match(made.ref, new RegExp(`^${fx.a.teamKey}-\\d+$`));
     assert.equal(made.column, "Backlog");
     assert.equal(made.version, 1);
 
@@ -84,7 +84,7 @@ describe("POST /api/v1/:tool: tickets", () => {
     assert.ok(got.history.some((e: { type: string }) => e.type === "ticket.moved"));
 
     // Only one agent can hold a claim.
-    const claimable = await v1ok(A, "create_ticket", { project: fx.a.projectKey, title: unique("claim me") });
+    const claimable = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title: unique("claim me") });
     assert.equal((await v1ok(A, "claim_ticket", { ticket: claimable.ref })).claimedByKeyId.length > 0, true);
     const second = await v1(A2, "claim_ticket", { ticket: claimable.ref });
     assert.equal(second.status, 409);
@@ -92,20 +92,20 @@ describe("POST /api/v1/:tool: tickets", () => {
   });
 
   test("response shapes of the core tools are recorded", async () => {
-    const created = await v1ok(A, "create_ticket", { project: fx.a.projectKey, title: unique("shape"), labels: ["x"] });
+    const created = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title: unique("shape"), labels: ["x"] });
     const shapes = {
       list_projects: shape(await v1ok(A, "list_projects")),
-      get_board: shape(await v1ok(A, "get_board", { project: fx.a.projectKey })),
+      get_board: shape(await v1ok(A, "get_board", { project: fx.a.teamKey })),
       create_ticket: shape(created),
       get_ticket: shape(await v1ok(A, "get_ticket", { ticket: created.ref })),
-      get_changes: shape(await v1ok(A, "get_changes", { project: fx.a.projectKey })),
-      get_activity: shape(await v1ok(A, "get_activity", { project: fx.a.projectKey })),
+      get_changes: shape(await v1ok(A, "get_changes", { project: fx.a.teamKey })),
+      get_activity: shape(await v1ok(A, "get_activity", { project: fx.a.teamKey })),
     };
     expectGolden("v1-shapes", shapes);
   });
 
   test("a new project's board has the five workflow columns in order", async () => {
-    const board = await v1ok(A, "get_board", { project: fx.a.projectKey });
+    const board = await v1ok(A, "get_board", { project: fx.a.teamKey });
     assert.deepEqual(
       board.columns.map((c: { name: string }) => c.name),
       ["Backlog", "Todo", "In Progress", "Review", "Done"],
@@ -116,24 +116,24 @@ describe("POST /api/v1/:tool: tickets", () => {
 describe("POST /api/v1/:tool: sessions (ADR-4, ADR-5)", () => {
   test("a call that names a session is attributed to it, and another key cannot take that session over", async () => {
     const session = unique("ct-session");
-    const mine = await v1ok(A, "get_changes", { project: fx.a.projectKey, session });
+    const mine = await v1ok(A, "get_changes", { project: fx.a.teamKey, session });
     assert.equal(mine.session, session);
-    const other = await v1(A2, "get_changes", { project: fx.a.projectKey, session });
+    const other = await v1(A2, "get_changes", { project: fx.a.teamKey, session });
     assert.equal(other.status, 403);
     assert.equal(other.json.error.code, "forbidden");
-    assert.equal((await v1ok(A, "get_changes", { project: fx.a.projectKey })).session, null, "without a session the key-level queue is used");
+    assert.equal((await v1ok(A, "get_changes", { project: fx.a.teamKey })).session, null, "without a session the key-level queue is used");
   });
 
   test("each session has its own queue cursor; acking in one leaves the other's unread", async () => {
     const s1 = unique("ct-s1");
     const s2 = unique("ct-s2");
     // A teammate (a person's session cookie is not needed: a second key stands in) makes a change both sessions have not seen.
-    await v1ok(A2, "create_ticket", { project: fx.a.projectKey, title: unique("queue") });
-    const first = await v1ok(A, "get_changes", { project: fx.a.projectKey, session: s1 });
-    const second = await v1ok(A, "get_changes", { project: fx.a.projectKey, session: s2 });
+    await v1ok(A2, "create_ticket", { project: fx.a.teamKey, title: unique("queue") });
+    const first = await v1ok(A, "get_changes", { project: fx.a.teamKey, session: s1 });
+    const second = await v1ok(A, "get_changes", { project: fx.a.teamKey, session: s2 });
     assert.ok(first.latestSeq >= 1);
-    await v1ok(A, "ack_changes", { project: fx.a.projectKey, session: s1, seq: first.latestSeq });
-    assert.equal((await v1ok(A, "get_changes", { project: fx.a.projectKey, session: s1 })).total, 0);
-    assert.equal((await v1ok(A, "get_changes", { project: fx.a.projectKey, session: s2 })).total, second.total);
+    await v1ok(A, "ack_changes", { project: fx.a.teamKey, session: s1, seq: first.latestSeq });
+    assert.equal((await v1ok(A, "get_changes", { project: fx.a.teamKey, session: s1 })).total, 0);
+    assert.equal((await v1ok(A, "get_changes", { project: fx.a.teamKey, session: s2 })).total, second.total);
   });
 });

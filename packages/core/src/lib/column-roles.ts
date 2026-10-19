@@ -11,7 +11,7 @@ export type ColumnRole = (typeof COLUMN_ROLES)[number];
 
 export type RoleColumn = { id?: string; name: string; role: ColumnRole | null };
 
-/** What a new project's board starts with. */
+/** What a new team's board starts with. */
 export const DEFAULT_COLUMN_DEFS: { name: string; role: ColumnRole }[] = [
   { name: "Backlog", role: "backlog" },
   { name: "Todo", role: "todo" },

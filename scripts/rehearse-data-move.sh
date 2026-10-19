@@ -92,21 +92,21 @@ start_app "$W/pglite-app" "" && ok "the new app started on the copy (migrations:
 curl -fsS "$BASE/login" | grep -q '<div id="root">' && ok "the same process serves the React app (one port, as it will on cutover)" || bad "the React app is not served (build apps/web first)"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/app/me")" = 401 ] && ok "and the web API answers signed out (401)" || bad "the web API did not answer"
 KEY="$(node -e 'const c=JSON.parse(require("fs").readFileSync(process.env.HOME+"/.config/wheelhouse/credentials.json","utf8")); process.stdout.write(Object.values(c)[0])')"
-code="$(curl -s -o "$W/projects.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{}' "$BASE/api/v1/list_projects")"
-[ "$code" = 200 ] && ok "the existing API key authenticates ($(node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log((p.data??[]).map(x=>x.key).join(", "))' "$W/projects.json"))" || bad "the existing API key was refused ($code)"
+code="$(curl -s -o "$W/teams.json" -w '%{http_code}' -X POST -H "Authorization: Bearer $KEY" -H 'content-type: application/json' -d '{}' "$BASE/api/v1/list_projects")"
+[ "$code" = 200 ] && ok "the existing API key authenticates ($(node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log((p.data??[]).map(x=>x.key).join(", "))' "$W/teams.json"))" || bad "the existing API key was refused ($code)"
 node --input-type=module -e '
   const f = JSON.parse(process.argv[1]); const base = process.argv[2]; const key = process.argv[3];
   if (!f.mine) { console.log("  skip the API key in ~/.config/wheelhouse/credentials.json is not in this data"); process.exit(0); }
   let bad = 0;
-  for (const p of f.mine.projects) {
-    const r = await fetch(base + "/api/v1/get_changes", { method: "POST", headers: { authorization: "Bearer " + key, "content-type": "application/json" }, body: JSON.stringify({ project: p.project }) });
+  for (const p of f.mine.teams) {
+    const r = await fetch(base + "/api/v1/get_changes", { method: "POST", headers: { authorization: "Bearer " + key, "content-type": "application/json" }, body: JSON.stringify({ team: p.team }) });
     const c = (await r.json()).data ?? {}; // the /api/v1 envelope
     const same = r.status === 200 && c.cursor === p.cursor && c.total === p.waiting;
     if (!same) bad++;
-    console.log(`  ${same ? "ok  " : "FAIL"} ${p.project}: the key resumes at its cursor ${p.cursor} (the server says ${c.cursor}) with ${p.waiting} change(s) waiting (the server says ${c.total}); newest event ${f.maxSeq}`);
+    console.log(`  ${same ? "ok  " : "FAIL"} ${p.team}: the key resumes at its cursor ${p.cursor} (the server says ${c.cursor}) with ${p.waiting} change(s) waiting (the server says ${c.total}); newest event ${f.maxSeq}`);
   }
   process.exit(bad ? 1 : 0)' "$FACTS" "$BASE" "$KEY" || fail=1
-# The next webhook lands on the right project: a pull request naming an open ticket, from the connected repository, signed with the real secret.
+# The next webhook lands on the right team: a pull request naming an open ticket, from the connected repository, signed with the real secret.
 ( set -a; [ -f .env.local ] && . ./.env.local; set +a; node scripts/rehearsal/webhook.mjs "$FACTS" "$BASE" ) || fail=1
 stop_app
 done_step

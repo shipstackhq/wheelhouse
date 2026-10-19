@@ -49,7 +49,7 @@ describe("the field readers", () => {
 
 describe("nodeInput", () => {
   test("takes what the panel sets, and only that: unknown fields (including ones that would skip the safeguards) are ignored", () => {
-    const out = nodeInput({ name: "A", summary: "s", status: "live", anchors: [" a ", ""], parent: null, forcePublish: true, markFresh: true, describedHashes: { a: "b" }, projectId: "x", id: "ignored-here" });
+    const out = nodeInput({ name: "A", summary: "s", status: "live", anchors: [" a ", ""], parent: null, forcePublish: true, markFresh: true, describedHashes: { a: "b" }, teamId: "x", id: "ignored-here" });
     assert.deepEqual(out, { name: "A", summary: "s", status: "live", anchors: ["a"], parent: null });
   });
   test("every wrong type is a field error naming it", () => {

@@ -6,7 +6,7 @@ import { NavLink } from "./nav-link";
 import { CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, FolderIcon, MenuIcon, NAV_ICONS, type IconPair } from "./icons";
 import { Tip } from "./tip";
 
-type ProjectItem = { key: string; name: string };
+type TeamItem = { key: string; name: string };
 
 const SECTIONS: { group: string; items: { path: string; label: string; icon: IconPair }[] }[] = [
   {
@@ -28,15 +28,15 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
   },
   { group: "Code", items: [{ path: "/repos", label: "Repos", icon: NAV_ICONS.repos }] },
   {
-    group: "Project",
+    group: "Team",
     items: [
-      { path: "/members", label: "Project members", icon: NAV_ICONS.projectMembers },
-      { path: "/settings", label: "Project settings", icon: NAV_ICONS.projectSettings },
+      { path: "/members", label: "Team members", icon: NAV_ICONS.teamMembers },
+      { path: "/settings", label: "Team settings", icon: NAV_ICONS.teamSettings },
     ],
   },
 ];
 
-const RECENT_KEY = "wh:recent-projects";
+const RECENT_KEY = "wh:recent-teams";
 const COLLAPSED_KEY = "wh:sidebar-collapsed";
 
 /** Whether the person last left the sidebar as the icon-only rail. Storage can be blocked or empty: then it is open. */
@@ -47,10 +47,10 @@ function readCollapsed(): boolean {
     return false;
   }
 }
-const LAST_COOKIE = "wh_last_project";
+const LAST_COOKIE = "wh_last_team";
 
-/** The project last viewed, from the cookie this sidebar writes (the Next app read the same cookie on the server). */
-export function readLastProject(): string | null {
+/** The team last viewed, from the cookie this sidebar writes (the Next app read the same cookie on the server). */
+export function readLastTeam(): string | null {
   const m = document.cookie.match(new RegExp(`(?:^|; )${LAST_COOKIE}=([^;]*)`));
   if (!m) return null;
   try {
@@ -69,31 +69,31 @@ function readRecent(): string[] {
 }
 
 function currentSection(path: string, key: string): string {
-  const rest = path.slice(`/p/${key}`.length);
+  const rest = path.slice(`/t/${key}`.length);
   const first = rest.split("/").filter(Boolean)[0];
   return first ? `/${first}` : "";
 }
 
 export function Sidebar({
-  projects,
+  teams,
   workspaceName,
   isAdmin,
-  lastProject,
+  lastTeam,
   profile,
 }: {
-  projects: ProjectItem[];
+  teams: TeamItem[];
   workspaceName: string;
   isAdmin: boolean;
-  /** The project to open from the logo; read from the cookie when not given. */
-  lastProject?: string | null;
+  /** The team to open from the logo; read from the cookie when not given. */
+  lastTeam?: string | null;
   /** The account menu; a function gets whether the sidebar is the icon-only rail, so it can draw itself compact. */
   profile: React.ReactNode | ((collapsed: boolean) => React.ReactNode);
 }) {
   const { pathname: path } = useLocation();
   const navigate = useNavigate();
-  const match = path.match(/^\/p\/([^/]+)/);
+  const match = path.match(/^\/t\/([^/]+)/);
   const currentKey = match ? decodeURIComponent(match[1]) : null;
-  const current = projects.find((p) => p.key === currentKey) ?? null;
+  const current = teams.find((p) => p.key === currentKey) ?? null;
   const [open, setOpen] = useState(false); // mobile drawer
   const [collapsed, setCollapsed] = useState(readCollapsed); // the icon-only rail, tablet and up
   const toggleCollapsed = () =>
@@ -111,7 +111,7 @@ export function Sidebar({
   const [recent, setRecent] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Remember the project being viewed (recents + cookie), and close the drawer after navigating.
+  // Remember the team being viewed (recents + cookie), and close the drawer after navigating.
   useEffect(() => {
     setOpen(false);
     if (!currentKey || !current) return;
@@ -146,22 +146,22 @@ export function Sidebar({
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q) return projects.filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().includes(q));
-    const byKey = new Map(projects.map((p) => [p.key, p]));
-    const rec = recent.map((k) => byKey.get(k)).filter((p): p is ProjectItem => !!p);
-    return [...rec, ...projects.filter((p) => !rec.includes(p))];
-  }, [query, projects, recent]);
+    if (q) return teams.filter((p) => p.name.toLowerCase().includes(q) || p.key.toLowerCase().includes(q));
+    const byKey = new Map(teams.map((p) => [p.key, p]));
+    const rec = recent.map((k) => byKey.get(k)).filter((p): p is TeamItem => !!p);
+    return [...rec, ...teams.filter((p) => !rec.includes(p))];
+  }, [query, teams, recent]);
 
-  function go(p: ProjectItem) {
-    // Keep the current section when the new project has it; every section exists for every project today.
+  function go(p: TeamItem) {
+    // Keep the current section when the new team has it; every section exists for every team today.
     const section = currentKey ? currentSection(path, currentKey) : "";
     const known = SECTIONS.some((g) => g.items.some((i) => i.path === section));
     setSwitcher(false);
-    navigate(`/p/${p.key}${known ? section : ""}`);
+    navigate(`/t/${p.key}${known ? section : ""}`);
   }
 
-  const last = lastProject === undefined ? readLastProject() : lastProject; // re-read on each render: viewing a project writes the cookie
-  const home = last && projects.some((p) => p.key === last) ? `/p/${last}` : "/";
+  const last = lastTeam === undefined ? readLastTeam() : lastTeam; // re-read on each render: viewing a team writes the cookie
+  const home = last && teams.some((p) => p.key === last) ? `/t/${last}` : "/";
 
   return (
     <>
@@ -213,19 +213,19 @@ export function Sidebar({
                 <button
                   type="button"
                   onClick={() => setSwitcher(true)}
-                  aria-label={collapsed ? (current ? `Project: ${current.name}` : "Select a project") : undefined}
+                  aria-label={collapsed ? (current ? `Team: ${current.name}` : "Select a team") : undefined}
                   className={clsx(
                     "flex w-full items-center justify-between gap-2 rounded-md border border-line px-2 py-1.5 text-left outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50",
                     collapsed && "md:justify-center md:px-0 md:py-2",
                   )}
                 >
                   {collapsed && <FolderIcon className="hidden shrink-0 text-xl md:block" />}
-                  <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{current ? current.name : "Select a project"}</span>
+                  <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{current ? current.name : "Select a team"}</span>
                   <kbd className={clsx("font-mono text-[11px] text-muted", collapsed && "md:hidden")}>⌘K</kbd>
                 </button>
               );
               return collapsed ? (
-                <Tip content={current ? `${current.name} (⌘K)` : "Select a project (⌘K)"} side="right" align="center">
+                <Tip content={current ? `${current.name} (⌘K)` : "Select a team (⌘K)"} side="right" align="center">
                   {trigger}
                 </Tip>
               ) : (
@@ -252,7 +252,7 @@ export function Sidebar({
                         setCursor((c) => Math.max(c - 1, 0));
                       } else if (e.key === "Enter" && results[cursor]) go(results[cursor]);
                     }}
-                    placeholder="Search projects…"
+                    placeholder="Search teams…"
                     className="mb-1 w-full rounded bg-panel-2 px-2 py-1 text-sm outline-none"
                   />
                   <div className="max-h-64 overflow-y-auto">
@@ -269,14 +269,14 @@ export function Sidebar({
                         <span className="font-mono text-[11px] text-muted">{p.key}</span>
                       </button>
                     ))}
-                    {results.length === 0 && <div className="px-2 py-1.5 text-muted">No projects match.</div>}
+                    {results.length === 0 && <div className="px-2 py-1.5 text-muted">No teams match.</div>}
                   </div>
                   <Link
-                    to="/projects/new"
+                    to="/teams/new"
                     onClick={() => setSwitcher(false)}
                     className="mt-1 block rounded border-t border-line px-2 py-1.5 text-muted hover:bg-panel-2 hover:text-fg"
                   >
-                    + New project
+                    + New team
                   </Link>
                 </div>
               </>
@@ -286,7 +286,7 @@ export function Sidebar({
             SECTIONS.map((g) => (
               <Group key={g.group} title={g.group} collapsed={collapsed} gap="mt-4">
                 {g.items.map((i) => (
-                  <NavLink key={i.path} href={`/p/${current.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
+                  <NavLink key={i.path} href={`/t/${current.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
                     {i.label}
                   </NavLink>
                 ))}

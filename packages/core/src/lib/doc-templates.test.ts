@@ -21,7 +21,7 @@ import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, li
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;
-let projectKey: string;
+let teamKey: string;
 
 before(async () => {
   const db = await getDb();
@@ -29,8 +29,8 @@ before(async () => {
   const [owner] = await db.insert(schema.users).values({ email: `doc-templates-owner-${RUN}@example.com`, name: "Owner", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: owner.id, workspaceId: workspace.id, role: "owner" });
   human = { kind: "human", id: owner.id, name: "Owner", workspaceId: workspace.id };
-  const project = await svc.createProject(human, { name: "Templates project", key: "TP" });
-  projectKey = project.key;
+  const team = await svc.createTeam(human, { name: "Templates team", key: "TP" });
+  teamKey = team.key;
 });
 
 describe("doc templates: definitions", () => {
@@ -47,7 +47,7 @@ describe("doc templates: definitions", () => {
     "decision-record": ["Context", "Options considered", "Decision", "Consequences"],
     runbook: ["When to use this", "Steps", "How to verify", "How to roll back", "Owner"],
     "meeting-notes": ["Who", "Decisions", "Action items"],
-    onboarding: ["What this project is", "How to run it", "Where things are", "Who to ask"],
+    onboarding: ["What this team is", "How to run it", "Where things are", "Who to ask"],
   };
 
   for (const t of DOC_TEMPLATES) {
@@ -76,22 +76,22 @@ describe("doc templates: definitions", () => {
 
 describe("createDoc + template", () => {
   test("a `template` id seeds the body when no explicit body is given", async () => {
-    const d = await svc.createDoc(human, projectKey, { title: "Our runbook", template: "runbook" });
+    const d = await svc.createDoc(human, teamKey, { title: "Our runbook", template: "runbook" });
     assert.equal(d.body, getDocTemplate("runbook")!.body);
   });
 
   test("an explicit body overrides the template", async () => {
-    const d = await svc.createDoc(human, projectKey, { title: "Custom", template: "runbook", body: "# Just this" });
+    const d = await svc.createDoc(human, teamKey, { title: "Custom", template: "runbook", body: "# Just this" });
     assert.equal(d.body, "# Just this");
   });
 
   test("no template and no body creates an empty doc (unchanged behavior)", async () => {
-    const d = await svc.createDoc(human, projectKey, { title: "Blank" });
+    const d = await svc.createDoc(human, teamKey, { title: "Blank" });
     assert.equal(d.body, "");
   });
 
   test("an unknown template id is ignored, leaving the doc blank", async () => {
-    const d = await svc.createDoc(human, projectKey, { title: "Bad template", template: "nonsense" });
+    const d = await svc.createDoc(human, teamKey, { title: "Bad template", template: "nonsense" });
     assert.equal(d.body, "");
   });
 });
@@ -108,7 +108,7 @@ describe("tools: list_doc_templates", () => {
 
 describe("tools: upsert_doc with template", () => {
   test("create path seeds body from `template` when no body is passed", async () => {
-    const created = (await runTool(human, "upsert_doc", { project: projectKey, title: "Spec via tool", template: "spec" })) as { body: string };
+    const created = (await runTool(human, "upsert_doc", { project: teamKey, title: "Spec via tool", template: "spec" })) as { body: string };
     assert.equal(created.body, getDocTemplate("spec")!.body);
   });
 });

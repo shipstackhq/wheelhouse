@@ -4,13 +4,13 @@ import { useRepos } from "../../lib/queries";
 import { GithubConnect } from "./github-connect";
 import { Repos } from "./repos";
 
-/** `/p/:key/repos`: the repositories behind the project, and connecting GitHub. */
+/** `/t/:key/repos`: the repositories behind the team, and connecting GitHub. */
 export function ReposPage() {
   const { key = "" } = useParams();
   const query = useRepos(key);
   return (
     <Loaded query={query} label="Loading repositories">
-      {(repos) => <Repos projectKey={key} repos={repos} after={<GithubConnect projectKey={key} />} />}
+      {(repos) => <Repos teamKey={key} repos={repos} after={<GithubConnect teamKey={key} />} />}
     </Loaded>
   );
 }

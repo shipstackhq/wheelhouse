@@ -2,7 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { arrowStep, isDirty, neighbours, parseTicketParam, singleLine, usesArrowKeys } from "./ticket-nav";
 
-test("?t= accepts a project key and number, upper-cases the key, and ignores anything else", () => {
+test("?t= accepts a team key and number, upper-cases the key, and ignores anything else", () => {
   assert.equal(parseTicketParam("WH-49"), "WH-49");
   assert.equal(parseTicketParam(" wh-7 "), "WH-7");
   assert.equal(parseTicketParam("AB12-3"), "AB12-3");

@@ -62,7 +62,7 @@ async function makeWorkspace(name: string, key: string, installation: string, gi
   };
   const owner = await mkUser("owner", `${name} owner`);
   const member = await mkUser("member", `${name} member`);
-  await svc.createProject(owner, { name: `${name} project`, key });
+  await svc.createTeam(owner, { name: `${name} team`, key });
   fakeGithub.state.repos.set(installation, [{ id: githubRepoId, fullName: `acme/${key.toLowerCase()}-app`, defaultBranch: "main", private: true }]);
   await registerInstallation(owner, { installationId: installation, accountLogin: "acme", accountType: "Organization" });
   const repo = await connectGithubRepository(owner, key, { installationId: installation, githubRepoId, role: "backend" }, fakeGithub.api);
@@ -130,7 +130,7 @@ describe("connecting", () => {
     assert.equal(row.provider, "github");
   });
 
-  test("the same repository cannot be connected twice to a project, and connecting needs the App to be configured", async () => {
+  test("the same repository cannot be connected twice to a team, and connecting needs the App to be configured", async () => {
     await assert.rejects(connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /already connected/);
     await assert.rejects(connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, null), /not configured/);
   });
@@ -140,8 +140,8 @@ describe("who a webhook can reach", () => {
   test("it resolves through the installation and repository id to exactly the workspace that owns that installation", async () => {
     const a = await targetsFor(A.installation, SAME_GITHUB_REPO);
     const b = await targetsFor(B.installation, SAME_GITHUB_REPO);
-    assert.deepEqual(a.map((t) => t.project.key), ["AA"]);
-    assert.deepEqual(b.map((t) => t.project.key), ["BB"]);
+    assert.deepEqual(a.map((t) => t.team.key), ["AA"]);
+    assert.deepEqual(b.map((t) => t.team.key), ["BB"]);
   });
 
   test("an unknown installation or repository reaches nothing", async () => {
@@ -151,10 +151,10 @@ describe("who a webhook can reach", () => {
 
   test("a repository row that claims another workspace's installation is never reached, even if someone forged it", async () => {
     const db = await getDb();
-    // Workspace B's project gets a row pointing at WORKSPACE A's installation, as an owner editing the fields by hand could try.
+    // Workspace B's team gets a row pointing at WORKSPACE A's installation, as an owner editing the fields by hand could try.
     const [forged] = await db
       .insert(schema.repositories)
-      .values({ projectId: (await svc.getProject(B.owner, "BB")).id, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
+      .values({ teamId: (await svc.requireTeam(B.owner, "BB")).id, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
       .returning();
     assert.deepEqual(await targetsFor(A.installation, "31337"), [], "the join on the installation's owning workspace excludes it");
     await db.delete(schema.repositories).where(eq(schema.repositories.id, forged.id));
@@ -261,7 +261,7 @@ describe("pull requests", () => {
     assert.equal(detail.pullRequests.length, 1, "getTicket carries them for the ticket view and agents");
   });
 
-  test("the branch name links a ticket too, and another project's key in the same title does not", async () => {
+  test("the branch name links a ticket too, and another team's key in the same title does not", async () => {
     const t = await ticketIn(A, "AA", "Linked by branch", "Todo");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 12, title: "Unrelated words BB-1 and API-9", head: { ref: `feature/aa-${num}-by-branch`, sha: "e".repeat(40) } }));
@@ -393,14 +393,14 @@ describe("other events", () => {
     assert.equal((await listInstallations(workspace.owner)).length, 0);
   });
 
-  test("deleting a project removes its pull requests along with it", async () => {
+  test("deleting a team removes its pull requests along with it", async () => {
     const db = await getDb();
     const workspace = await makeWorkspace("Delta", "DD", "9004", "909090");
     const t = await ticketIn(workspace, "DD", "Doomed", "In Progress");
     const num = t.ref.split("-")[1];
     await handleDelivery({ event: "pull_request", deliveryId: `d-${uniq()}`, payload: { action: "opened", repository: { id: 909090 }, installation: { id: 9004 }, pull_request: { number: 1, title: `DD-${num} x`, html_url: "u", user: { login: "d" }, state: "open", head: { ref: "x", sha: "7".repeat(40) } } } }, fakeGithub.api);
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 1);
-    await svc.deleteProject(workspace.owner, "DD");
+    await svc.deleteTeam(workspace.owner, "DD");
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 0);
   });
 });
