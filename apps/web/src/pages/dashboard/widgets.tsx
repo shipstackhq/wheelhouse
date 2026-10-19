@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Popover } from "radix-ui";
 import { Link } from "react-router";
 import clsx from "clsx";
 import type { UseQueryResult } from "@tanstack/react-query";
@@ -18,7 +20,7 @@ import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { useDashboardProject } from "../../lib/dashboard-scope";
 import { useWidget } from "../../lib/queries";
-import { AgentIcon, ArrowRightIcon, TrendUpIcon, WarningIcon } from "../../components/icons";
+import { AgentIcon, ArrowRightIcon, FilterIcon, SearchIcon, TrendUpIcon, WarningIcon } from "../../components/icons";
 
 /**
  * Dashboard widgets. Each one reads its own data (GET /api/app/dashboard/:widget) and draws itself inside <Widget>, so a slow
@@ -249,69 +251,106 @@ function AttentionSection({ title, count, children }: { title: string; count: nu
   );
 }
 
+type AttentionKind = "review" | "urgent" | "stale" | "staleDocs";
+type AttentionItem = { key: string; kind: AttentionKind; to: string; text: string; ref?: string; meta?: string; title?: string; byAgent?: boolean };
+
+/** Every kind of thing waiting on a human, with the label its rows carry and the colour of that label. */
+const ATTENTION_LABELS: { kind: AttentionKind; label: string; chip: string }[] = [
+  { kind: "review", label: "Review", chip: "bg-accent/15 text-accent" },
+  { kind: "urgent", label: "Urgent", chip: "bg-danger/15 text-danger" },
+  { kind: "stale", label: "Stale explanation", chip: "bg-warn/15 text-warn" },
+  { kind: "staleDocs", label: "Stale doc", chip: "bg-warn/15 text-warn" },
+];
+
 export function NeedsAttention() {
   const q = useWidget("attention");
+  const [search, setSearch] = useState("");
+  const [hidden, setHidden] = useState<AttentionKind[]>([]);
   if (q.isPending) return <WidgetSkeleton title="Needs attention" height={220} />;
   if (q.isError) return <Failed title="Needs attention" query={q} />;
   const a = q.data;
-  const empty = !a.review.length && !a.urgent.length && !a.stale.length && !a.staleDocs.length;
+  const items: AttentionItem[] = [
+    ...a.review.map((t) => ({ key: `r-${t.ref}`, kind: "review" as const, to: `/p/${t.projectKey}?t=${t.ref}`, ref: t.ref, text: t.title, byAgent: t.byAgent })),
+    ...a.urgent.map((t) => ({ key: `u-${t.ref}`, kind: "urgent" as const, to: `/p/${t.projectKey}?t=${t.ref}`, ref: t.ref, text: t.title, meta: t.column })),
+    ...a.stale.map((n) => ({ key: `n-${n.id}`, kind: "stale" as const, to: `/p/${n.projectKey}/map?node=${n.id}`, text: n.name, meta: `${n.projectKey} · ${n.layer}`, title: n.reason ?? undefined })),
+    ...a.staleDocs.map((d) => ({ key: `d-${d.id}`, kind: "staleDocs" as const, to: `/p/${d.projectKey}/docs?doc=${d.id}`, text: d.title, meta: d.projectKey, title: d.reason ?? undefined })),
+  ];
+  const term = search.trim().toLowerCase();
+  const shown = items.filter(
+    (i) => !hidden.includes(i.kind) && (!term || `${i.ref ?? ""} ${i.text} ${i.meta ?? ""} ${labelOf(i.kind).label}`.toLowerCase().includes(term)),
+  );
+  const toggle = (kind: AttentionKind) => setHidden((h) => (h.includes(kind) ? h.filter((k) => k !== kind) : [...h, kind]));
   return (
     <Widget title="Needs attention" subtitle="Where a human is the bottleneck">
-      {empty ? (
+      {items.length === 0 ? (
         <Empty>Nothing waiting on you.</Empty>
       ) : (
-        <div className="space-y-4">
-          <AttentionSection title="Waiting for review" count={a.review.length}>
-            {a.review.map((t) => (
-              <li key={t.ref}>
-                <Link to={`/p/${t.projectKey}?t=${t.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
-                  <span className="shrink-0 font-mono text-xs text-muted">{t.ref}</span>
-                  <span className="truncate">{t.title}</span>
-                  {t.byAgent && <span className="ml-auto shrink-0 text-xs text-agent" title="Agent work"><AgentIcon /></span>}
-                </Link>
-              </li>
-            ))}
-          </AttentionSection>
-          <AttentionSection title="Urgent" count={a.urgent.length}>
-            {a.urgent.map((t) => (
-              <li key={t.ref}>
-                <Link to={`/p/${t.projectKey}?t=${t.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
-                  <span className="shrink-0 font-mono text-xs text-muted">{t.ref}</span>
-                  <span className="truncate">{t.title}</span>
-                  <span className="ml-auto shrink-0 text-xs text-muted">{t.column}</span>
-                </Link>
-              </li>
-            ))}
-          </AttentionSection>
-          <AttentionSection title="Stale explanations" count={a.stale.length}>
-            {a.stale.map((n) => (
-              <li key={n.id}>
-                <Link to={`/p/${n.projectKey}/map?node=${n.id}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={n.reason ?? undefined}>
-                  <span className="shrink-0 text-xs text-warn"><WarningIcon /></span>
-                  <span className="truncate">{n.name}</span>
-                  <span className="ml-auto shrink-0 text-xs uppercase text-muted">
-                    {n.projectKey} · {n.layer}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </AttentionSection>
-          <AttentionSection title="Stale docs" count={a.staleDocs.length}>
-            {a.staleDocs.map((d) => (
-              <li key={d.id}>
-                <Link to={`/p/${d.projectKey}/docs?doc=${d.id}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={d.reason ?? undefined}>
-                  <span className="shrink-0 text-xs text-warn"><WarningIcon /></span>
-                  <span className="truncate">{d.title}</span>
-                  <span className="ml-auto shrink-0 text-xs uppercase text-muted">{d.projectKey}</span>
-                </Link>
-              </li>
-            ))}
-          </AttentionSection>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <input
+                type="search"
+                className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
+                placeholder="Search…"
+                aria-label="Search what needs attention"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
+            </div>
+            <Popover.Root>
+              <Popover.Trigger className="btn shrink-0 gap-1.5" aria-label="Filter by label">
+                <FilterIcon />
+                {hidden.length > 0 && <span className="text-xs text-accent">{ATTENTION_LABELS.length - hidden.length}/{ATTENTION_LABELS.length}</span>}
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content align="end" sideOffset={6} collisionPadding={8} className="z-50 w-56 rounded-lg border border-line bg-panel p-2 text-sm text-fg shadow-xl">
+                  <div className="label px-1">Show</div>
+                  {ATTENTION_LABELS.map(({ kind, label, chip }) => {
+                    const count = items.filter((i) => i.kind === kind).length;
+                    return (
+                      <label key={kind} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-panel-2">
+                        <input type="checkbox" checked={!hidden.includes(kind)} onChange={() => toggle(kind)} />
+                        <span className={clsx("chip", chip)}>{label}</span>
+                        <span className="ml-auto text-xs text-muted">{count}</span>
+                      </label>
+                    );
+                  })}
+                  {hidden.length > 0 && (
+                    <button type="button" className="mt-1 w-full rounded px-1 py-1.5 text-left text-xs text-accent hover:bg-panel-2" onClick={() => setHidden([])}>
+                      Show all
+                    </button>
+                  )}
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          </div>
+          {shown.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">Nothing matches.</p>
+          ) : (
+            <div className="-mx-4 min-h-[12.5rem] max-h-[25rem] overflow-y-auto" data-testid="attention-list">
+            <List inset="flush" className="text-sm">
+              {shown.map((i) => (
+                <li key={i.key}>
+                  <Link to={i.to} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-panel-2" title={i.title}>
+                    <span className={clsx("chip shrink-0", labelOf(i.kind).chip)}>{labelOf(i.kind).label}</span>
+                    {i.ref && <span className="shrink-0 font-mono text-xs text-muted">{i.ref}</span>}
+                    <span className="truncate">{i.text}</span>
+                    {i.byAgent && <span className="ml-auto shrink-0 text-xs text-agent" title="Agent work"><AgentIcon /></span>}
+                    {i.meta && <span className="ml-auto shrink-0 text-xs text-muted">{i.meta}</span>}
+                  </Link>
+                </li>
+              ))}
+            </List>
+            </div>
+          )}
         </div>
       )}
     </Widget>
   );
 }
+
+const labelOf = (kind: AttentionKind) => ATTENTION_LABELS.find((l) => l.kind === kind)!;
 
 export function RecentActivity() {
   const q = useWidget("recent");

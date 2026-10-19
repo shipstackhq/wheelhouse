@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { Navigate, Outlet, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
+import { SearchIcon } from "../components/icons";
+import { NotificationsMenu } from "../components/notifications-menu";
 import { ProfileMenu } from "../components/profile-menu";
 import { ProjectQueueMenu } from "../components/project-queue-menu";
 import { PwaRegister } from "../components/pwa";
@@ -108,14 +110,24 @@ export function ProjectLayout() {
   if (!project) return <NotFound />;
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-4 border-b border-line px-5 py-3">
+      <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="chip bg-accent/15 font-mono text-accent">{project.key}</span>
             <h1 className="truncate font-semibold">{project.name}</h1>
           </div>
         </div>
-        <div className="ml-auto">
+        {/* Dummy for now: the one search across tickets, docs and notes (WH-66) is not wired up yet. */}
+        <div className="relative mx-auto hidden w-full max-w-md sm:block">
+          <input
+            type="search"
+            className="input !rounded-full !border-line !bg-panel-2 !py-1.5 !pl-9 text-sm focus:!border-accent"
+            placeholder="Search docs, tickets, notes"
+            aria-label="Search docs, tickets, notes"
+          />
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted" />
+        </div>
+        <div className="ml-auto flex items-center gap-2 sm:ml-0">
+          <NotificationsMenu />
           <ProjectQueueMenu projectKey={project.key} />
         </div>
       </header>

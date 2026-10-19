@@ -21,7 +21,7 @@ describe("what the sidebar shows", () => {
   test("a project's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
     renderIn(sidebar(), "/p/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", "Project members": "/p/AA/members", Members: "/team", "Agents & API keys": "/agents" });
+    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", "Project members": "/p/AA/members", "Project settings": "/p/AA/settings", Members: "/team", "Agents & API keys": "/agents" });
     expect(screen.getByText("Work")).toBeTruthy();
     expect(screen.getByText("Knowledge")).toBeTruthy();
     expect(screen.getByText("Code")).toBeTruthy();
@@ -180,7 +180,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
     renderIn(sidebar({ isAdmin: true }), "/p/AA/docs");
     const expected: Record<string, keyof typeof NAV_ICONS> = {
       Home: "home", Overview: "overview", Board: "board", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
-      Repos: "repos", "Project members": "projectMembers", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
+      Repos: "repos", "Project members": "projectMembers", "Project settings": "projectSettings", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
     };
     for (const [label, key] of Object.entries(expected)) {
       const link = within(nav()).getByRole("link", { name: label });

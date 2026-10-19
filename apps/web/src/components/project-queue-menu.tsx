@@ -6,7 +6,7 @@ import { Skeleton } from "./skeleton";
 
 /** The header's bots menu while its numbers are still being worked out. */
 export function BotsMenuFallback() {
-  return <Skeleton className="h-8 w-24" />;
+  return <Skeleton className="h-8 w-8 !rounded-full" />;
 }
 
 /**

@@ -20,17 +20,15 @@ export function BotsMenu({ projectKey, bots }: { projectKey: string; bots: Bot[]
   return (
     <Popover.Root>
       <Popover.Trigger
-        className="btn gap-2 py-1 text-xs data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2"
+        className="btn relative h-8 w-8 shrink-0 !rounded-full p-0 text-base data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2"
         aria-label={`Bots: ${state === "none" ? "none connected" : state === "queued" ? `${total} queued change(s)` : "all in sync"}`}
+        title={state === "none" ? "No bots connected" : state === "queued" ? `${total} queued` : `${bots.length} in sync`}
       >
+        <AgentIcon />
         <span
-          className={clsx("h-2 w-2 rounded-full", state === "queued" ? "bg-agent" : state === "synced" ? "bg-ok" : "bg-muted/50")}
+          className={clsx("absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full", state === "queued" ? "bg-agent" : state === "synced" ? "bg-ok" : "bg-muted/50")}
           aria-hidden
         />
-        <AgentIcon /> Bots
-        <span className={clsx("tabular-nums", state === "queued" ? "text-agent" : "text-muted")}>
-          {state === "none" ? "0" : state === "queued" ? `${total} queued` : bots.length}
-        </span>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

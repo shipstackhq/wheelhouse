@@ -21,6 +21,7 @@ const PROJECT_PAGES: [path: string, find: () => Promise<unknown>][] = [
   ["/p/AA/glossary", () => screen.findByRole("heading", { level: 1, name: "Glossary" })],
   ["/p/AA/docs", () => screen.findByRole("button", { name: "Plan" })],
   ["/p/AA/members", () => screen.findByRole("heading", { level: 1, name: "Project members" })],
+  ["/p/AA/settings", () => screen.findByRole("heading", { level: 1, name: "Project settings" })],
   ["/p/AA/repos", () => screen.findByRole("heading", { level: 2, name: "Repositories" })],
   ["/p/AA/onboarding", () => screen.findByRole("heading", { level: 2, name: "Where does your code live?" })],
 ];
@@ -64,7 +65,7 @@ describe("signed in: every page is in the shell", () => {
   test("a project page has the project's header and its sections in the sidebar", async () => {
     renderApp("/p/BB/docs");
     await screen.findByRole("button", { name: "Plan" });
-    expect(screen.getAllByText("BB").length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 1, name: "Beta" })).toBeTruthy(); // the header names the project, without its key
     const sidebar = screen.getByRole("navigation");
     for (const name of ["Board", "Activity", "Map", "Docs", "Decisions", "Glossary", "Repos"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
     expect(within(sidebar).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true); // the current section is marked

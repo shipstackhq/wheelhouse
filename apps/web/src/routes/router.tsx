@@ -12,6 +12,7 @@ import { ReposPage } from "../pages/repos";
 import { MapPage } from "../pages/map";
 import { ProjectMembersPage } from "../pages/members";
 import { ProjectOverviewPage } from "../pages/overview";
+import { ProjectSettingsPage } from "../pages/project-settings";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
 import { InvitePage } from "../pages/invite";
@@ -76,6 +77,7 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "glossary/:termId", Component: GlossaryPage },
                 { path: "repos", Component: ReposPage },
                 { path: "members", Component: ProjectMembersPage },
+                { path: "settings", Component: ProjectSettingsPage },
                 { path: "onboarding", Component: OnboardingPage },
               ],
             },

@@ -59,6 +59,7 @@ import {
   RiParagraph,
   RiRobot2Line,
   RiSearchLine,
+  RiFilter3Line,
   RiMailLine,
   RiLockLine,
   RiEyeLine,
@@ -85,6 +86,8 @@ import {
   RiGitRepositoryFill,
   RiTeamLine,
   RiTeamFill,
+  RiSettings3Line,
+  RiSettings3Fill,
   RiGroup2Line,
   RiGroup2Fill,
   RiRobot2Fill,
@@ -93,6 +96,7 @@ import {
   RiMailAddLine,
   RiMailAddFill,
   RiSidebarFoldLine,
+  RiNotification3Line,
   RiSidebarUnfoldLine,
 } from "@remixicon/react";
 import type { RemixiconComponentType } from "@remixicon/react";
@@ -113,7 +117,9 @@ export const EditIcon = icon(RiEditLine);
 export const MenuIcon = icon(RiMenuLine);
 export const MoreIcon = icon(RiMoreLine);
 export const SearchIcon = icon(RiSearchLine);
+export const FilterIcon = icon(RiFilter3Line);
 export const MailIcon = icon(RiMailLine);
+export const NotificationsIcon = icon(RiNotification3Line);
 export const LockIcon = icon(RiLockLine);
 export const EyeIcon = icon(RiEyeLine);
 export const EyeOffIcon = icon(RiEyeOffLine);
@@ -191,6 +197,8 @@ export const ReposIcon = icon(RiGitRepositoryLine);
 export const ReposFillIcon = icon(RiGitRepositoryFill);
 export const ProjectMembersIcon = icon(RiTeamLine);
 export const ProjectMembersFillIcon = icon(RiTeamFill);
+export const SettingsIcon = icon(RiSettings3Line);
+export const SettingsFillIcon = icon(RiSettings3Fill);
 export const PeopleIcon = icon(RiGroup2Line);
 export const PeopleFillIcon = icon(RiGroup2Fill);
 export const AgentFillIcon = icon(RiRobot2Fill);
@@ -214,6 +222,7 @@ export const NAV_ICONS = {
   glossary: { line: TermIcon, fill: TermFillIcon },
   repos: { line: ReposIcon, fill: ReposFillIcon },
   projectMembers: { line: ProjectMembersIcon, fill: ProjectMembersFillIcon },
+  projectSettings: { line: SettingsIcon, fill: SettingsFillIcon },
   people: { line: PeopleIcon, fill: PeopleFillIcon },
   agents: { line: AgentIcon, fill: AgentFillIcon },
   workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },

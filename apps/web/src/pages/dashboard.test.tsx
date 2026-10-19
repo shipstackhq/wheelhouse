@@ -84,6 +84,22 @@ describe("the dashboard", () => {
     expect(within(card).getByTitle("Agent work")).toBeTruthy();
   });
 
+  test("needs attention is one list: each row carries its label, the search narrows it and the filter hides a label", async () => {
+    const user = userEvent.setup();
+    renderApp("/");
+    const card = await widget("Needs attention");
+    await within(card).findByRole("link", { name: /AA-7/ });
+    expect(within(card).getAllByRole("link").length).toBe(4);
+    expect(within(card).getByText("Review")).toBeTruthy();
+    await user.type(within(card).getByRole("searchbox", { name: "Search what needs attention" }), "runbook");
+    expect(within(card).getAllByRole("link").length).toBe(1);
+    await user.clear(within(card).getByRole("searchbox"));
+    await user.click(within(card).getByRole("button", { name: "Filter by label" }));
+    await user.click(await screen.findByRole("checkbox", { name: /Review/ }));
+    expect(within(card).queryByRole("link", { name: /AA-7/ })).toBeNull();
+    expect(within(card).getAllByRole("link").length).toBe(3);
+  });
+
   test("when nothing needs attention it says so", async () => {
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), attention: { review: [], urgent: [], stale: [], staleDocs: [] } }));
     expect(await within(await widget("Needs attention")).findByText("Nothing waiting on you.")).toBeTruthy();

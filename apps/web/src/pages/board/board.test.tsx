@@ -47,6 +47,19 @@ describe("the board", () => {
     expect(within(card).getByText("API")).toBeTruthy();
   });
 
+  test("the filter row: pick labels from the Filter button and they appear as chips (not applied to the board yet)", async () => {
+    const user = userEvent.setup();
+    await open();
+    await user.type(screen.getByRole("searchbox", { name: "Search tickets" }), "login");
+    expect((screen.getByRole("searchbox", { name: "Search tickets" }) as HTMLInputElement).value).toBe("login");
+    await user.click(screen.getByRole("button", { name: "Filter tickets by label" }));
+    const boxes = await screen.findAllByRole("checkbox");
+    await user.click(boxes[0]);
+    expect(document.querySelectorAll("[data-filter-chip]").length).toBe(1);
+    await user.click(screen.getByRole("button", { name: /^Remove filter / }));
+    expect(document.querySelectorAll("[data-filter-chip]").length).toBe(0);
+  });
+
   test("while the board loads there is a busy skeleton; if it cannot load there is a message with Try again", async () => {
     let release!: () => void;
     const first = renderApp("/p/AA", (s) => {

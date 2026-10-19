@@ -27,7 +27,13 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
     ],
   },
   { group: "Code", items: [{ path: "/repos", label: "Repos", icon: NAV_ICONS.repos }] },
-  { group: "Access", items: [{ path: "/members", label: "Project members", icon: NAV_ICONS.projectMembers }] },
+  {
+    group: "Project",
+    items: [
+      { path: "/members", label: "Project members", icon: NAV_ICONS.projectMembers },
+      { path: "/settings", label: "Project settings", icon: NAV_ICONS.projectSettings },
+    ],
+  },
 ];
 
 const RECENT_KEY = "wh:recent-projects";

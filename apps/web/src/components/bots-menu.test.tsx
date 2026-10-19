@@ -11,7 +11,7 @@ describe("the Bots menu in the project header", () => {
   test("says there are none when no agent is connected, and points to creating a key", async () => {
     renderApp("/p/AA", queue([]));
     const t = await trigger(/^Bots: none connected$/);
-    expect(within(t).getByText("0")).toBeTruthy();
+    expect(t.getAttribute("title")).toBe("No bots connected");
     await userEvent.setup().click(t);
     expect(await screen.findByText("No agents connected yet.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Create an API key" }).getAttribute("href")).toBe("/agents");
@@ -20,7 +20,7 @@ describe("the Bots menu in the project header", () => {
   test("with a queue it shows the total, and in the menu who is behind", async () => {
     renderApp("/p/AA", queue([bot({ id: "k1", name: "Ada's agent", pending: 3 }), bot({ id: "k2", name: "CI bot", pending: 0 })]));
     const t = await trigger(/^Bots: 3 queued change\(s\)$/);
-    expect(within(t).getByText("3 queued")).toBeTruthy();
+    expect(t.getAttribute("title")).toBe("3 queued");
     await userEvent.setup().click(t);
     expect(await screen.findByText("Bots in AA")).toBeTruthy();
     expect(screen.getByText("1 of 2 behind")).toBeTruthy();
