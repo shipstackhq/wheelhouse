@@ -22,10 +22,11 @@ import { DocsController } from "./web/docs.controller";
 import { MapController } from "./web/map.controller";
 import { RepositoriesController } from "./web/repositories.controller";
 import { MeController } from "./web/me.controller";
+import { ProjectMembersController } from "./web/project-members.controller";
 import { ProjectsController } from "./web/projects.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ProjectsController, AdminController, DashboardController, InvitesController, KeysController, TeamController, BoardController, TicketsController, MapController, DocsController, RepositoriesController],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ProjectsController, ProjectMembersController, AdminController, DashboardController, InvitesController, KeysController, TeamController, BoardController, TicketsController, MapController, DocsController, RepositoriesController],
   providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard],
 })
 export class AppModule {}

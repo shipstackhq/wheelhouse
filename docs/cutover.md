@@ -1,24 +1,25 @@
 # Moving the data and cutting over (WH-100)
 
-> **Migration 0014 (WH-103, `docs.labels`) was added after the freeze, and `db:import` refuses a target whose migrations differ from the export's.**
-> Before exporting, bring the source database to 0014 with the new code's migrator (it is one additive column with a default, so the
-> old app keeps working on it), or rehearse and cut over with that in the plan. Otherwise the import stops with "the target's migrations (15)
-> are not the export's (14)".
+> **Four additive migrations came after the freeze: 0014 (WH-103, `docs.labels`) and, for WH-105, 0015 (project members and the access audit log), 0016 (`invites.projects`) and 0017 (`sessions.active_team_id`), and `db:import` refuses a target whose migrations differ from the export's.**
+> Before exporting, bring a **copy** of the source database to this code's migrations with `pnpm db:migrate --to <copy>` (all are additive; 0015 also gives every current member access to the projects they could already see,
+> so the old app keeps working on a database that has them). Otherwise the import stops with "the target's migrations (18) are not the export's (14)".
 
-The schema is frozen (migrations 0000 to 0013, plus the additive 0014 above), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
+The schema is frozen (migrations 0000 to 0013, plus the additive 0014 to 0017 above), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
 transform. The tools below copy it exactly, prove they did, and never write to the original. They also move data between PGlite and Postgres in
 either direction, so the same procedure covers the local control plane (PGlite, port 3456) and a server (Postgres, `docs/deploy.md`).
 
 ## The tools
 
 ```bash
+pnpm db:migrate --to <PGlite directory | postgres://…>                       # a COPY of the source, brought to this code's migrations (see below)
 pnpm db:export --from <PGlite directory | postgres://…> --out <folder>
 pnpm db:import --in <folder> --to <PGlite directory | postgres://…>
 pnpm db:verify --in <folder> --to <target>            # the target against what the export said the source held
 pnpm db:verify --from <source> --to <target>          # two databases directly
 ```
 
-- **Export** reads every table (29, in dependency order) as one JSON line per row, as of one moment, plus a `manifest.json`: rows and a content checksum per
+- **Migrate (WH-105)** applies this code's migrations to a database. The export keeps the source's migrations and the import refuses a target at different ones, so a source made by older code is **copied, and the copy migrated**, before it is exported. Never run it on the live database. Migration 0015 (WH-105) also **backfills project access**: every current member becomes an editor of every project of their team and each team owner its project admin, so nobody loses access on the day (ADR-23). `scripts/rehearse-data-move.sh` does this as its step 0.
+- **Export** reads every table (31, in dependency order) as one JSON line per row, as of one moment, plus a `manifest.json`: rows and a content checksum per
   table, the sequences, the applied migrations. Rows are `to_jsonb(row)` text and are never parsed in JavaScript, so a bigint past 2^53, a double, a
   microsecond timestamp or an emoji comes out as it went in. A PGlite source directory is **copied first and the copy is opened**: the original is
   never opened, so nothing in it can change (a test checks this). Postgres is read in one read-only transaction.
@@ -26,7 +27,7 @@ pnpm db:verify --from <source> --to <target>          # two databases directly
   with data in it, or at different migrations. It is one transaction, so a failure leaves the target empty and the import can simply be run again. Then
   every sequence is set exactly where the source had it (so `events.seq`, which every agent cursor depends on, never reuses a number).
 - **Verify** recomputes the checksums on the target and compares them with the manifest (or with a second database), then checks things that must be true of
-  any Wheelhouse database: every one of the 47 foreign keys resolves, `events_seq_seq` is not behind the newest event, no agent or session cursor is ahead
+  any Wheelhouse database: every foreign key resolves, `events_seq_seq` is not behind the newest event, no agent or session cursor is ahead
   of the newest event, every API key hash and session id is a sha256, and it reports the users, teams and memberships. Exit status 0 means
   "everything agrees"; anything else is non-zero and names the table.
 

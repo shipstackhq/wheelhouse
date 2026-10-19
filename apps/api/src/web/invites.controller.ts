@@ -1,11 +1,12 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
+import { SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
 import { ServiceError } from "@wheelhouse/core/lib/service";
-import { acceptInviteAs, createInviteAs, pendingInvites, peekInviteAs, revokeInviteAs } from "@wheelhouse/core/lib/team-app";
+import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "@wheelhouse/core/lib/team-app";
 import type { RawTextRequest } from "../http/raw-text";
-import { toHeaders } from "../http/util";
+import { cookieValue, toHeaders } from "../http/util";
 import { jsonBody, str } from "./body";
 import { beginSession } from "./begin";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
@@ -31,7 +32,23 @@ export class InvitesController {
   @HttpCode(201)
   create(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
-    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, team: str(b.team) }, requestOrigin(req));
+    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, team: str(b.team), projects: b.projects }, requestOrigin(req));
+  }
+
+  /** Signed in with an existing account: what an invite sent to your own address would add you to. Anything else is the usual invalid-link answer. */
+  @Post("peek-existing")
+  @UseGuards(SessionGuard)
+  @HttpCode(200)
+  async peekExisting(@Req() req: SessionRequest & RawTextRequest) {
+    return { invite: await peekInviteAsMemberAs(req.human, str(jsonBody(req).token)) };
+  }
+
+  /** Signed in with an existing account: join the workspace an invite for your own address names, then this session works in it. */
+  @Post("accept-existing")
+  @UseGuards(SessionGuard)
+  @HttpCode(200)
+  acceptExisting(@Req() req: SessionRequest & RawTextRequest) {
+    return acceptInviteAsMemberAs(req.human, str(jsonBody(req).token), cookieValue(req.headers.cookie, SESSION_COOKIE)!);
   }
 
   /** Public, rate limited per address. POST so the token never sits in a URL or a log. The same answer for every bad link. */

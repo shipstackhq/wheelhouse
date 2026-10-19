@@ -19,6 +19,8 @@ export function Select(props: {
   triggerClassName?: string;
   placeholder?: string;
   disabled?: boolean;
+  /** The trigger's accessible name, for a select with no visible label. */
+  ariaLabel?: string;
 }) {
   // "" maps to the sentinel only when it's a real option; otherwise it means "nothing selected" (shows placeholder).
   const hasEmpty = props.options.some((o) => o.value === "");
@@ -33,6 +35,7 @@ export function Select(props: {
       disabled={props.disabled}
     >
       <RSelect.Trigger
+        aria-label={props.ariaLabel}
         className={clsx(
           "input flex items-center justify-between gap-2 py-1.5 text-left data-[placeholder]:text-muted",
           props.className,

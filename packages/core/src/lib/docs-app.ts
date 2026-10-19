@@ -252,7 +252,7 @@ export async function onboardingPage(actor: Actor, projectKey: string, origin: s
 export async function createConceptAs(actor: Actor, projectKey: string, b: Body) {
   const description = text(b, "description", { max: 20_000, trim: true });
   if (!description) bad("description", "Write a few sentences about what you're building.");
-  const project = await svc.getProject(actor, projectKey);
+  const project = await svc.getProject(actor, projectKey, "edit");
   await svc.upsertNode(actor, projectKey, { name: project.name, layer: "concept", kind: "concept", summary: description!.slice(0, 200), purpose: description });
   return { ok: true as const };
 }

@@ -94,7 +94,7 @@ export function AppLayout() {
         projects={projects.map((p) => ({ key: p.key, name: p.name }))}
         teamName={me.team.name}
         isAdmin={me.isInstanceAdmin}
-        profile={<ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} team={me.team.name} />}
+        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} team={me.team.name} compact={collapsed} />}
       />
       <main className="min-w-0 flex-1 overflow-hidden pt-10 md:pt-0">
         <Outlet />

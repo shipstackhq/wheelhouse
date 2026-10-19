@@ -3,7 +3,7 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { createApiClient, type Me, type Project } from "@wheelhouse/api-client";
 import { createServices, ServicesProvider } from "../lib/services";
-import { activityEvent, adminTeam, adminTeamDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, repo, serveWidgets, team } from "./data";
+import { activityEvent, adminTeam, adminTeamDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, projectMembers, repo, serveWidgets, team } from "./data";
 import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
@@ -82,6 +82,10 @@ export function serverWithData() {
   server.on("GET /api/app/team", team());
   server.on("GET /api/app/agents", agentsPage());
   server.on("GET /api/app/invites", { invites: [] });
+  server.on("GET /api/app/projects/AA/members", projectMembers());
+  server.on("GET /api/app/me/workspaces", { workspaces: [{ id: "t1", name: "Analytical Engines", role: "owner", active: true }] });
+  server.on("GET /api/app/access/projects", { projects: [] });
+  server.on("GET /api/app/access/audit", { events: [] });
   server.on("GET /api/app/admin/teams", { teams: [adminTeam()] });
   server.on("GET /api/app/admin/teams/t2", { team: adminTeamDetail() });
   serveWidgets(server);

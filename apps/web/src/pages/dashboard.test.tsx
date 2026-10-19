@@ -58,7 +58,8 @@ describe("the dashboard", () => {
     const card = await widget("Project progress");
     expect(await within(card).findByText("40%")).toBeTruthy();
     expect(within(card).getByText(/done · 4\/10/)).toBeTruthy();
-    expect(within(card).getByRole("link", { name: /Alpha/ }).getAttribute("href")).toBe("/p/AA");
+    expect(within(card).getByRole("link", { name: /^AA\s*Alpha$/ }).getAttribute("href")).toBe("/p/AA");
+    expect(within(card).getByRole("link", { name: "Overview of Alpha" }).getAttribute("href")).toBe("/p/AA/overview"); // the project's own dashboard
     expect(within(card).getByText("2 high/urgent")).toBeTruthy();
     expect(within(card).getByText("1 AI-ready")).toBeTruthy();
     expect(within(card).getByRole("link", { name: "1 stale" }).getAttribute("href")).toBe("/p/AA/map");
@@ -69,7 +70,7 @@ describe("the dashboard", () => {
   test("with no projects it points to creating one", async () => {
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), progress: [] }));
     const card = await widget("Project progress");
-    expect(await within(card).findByText(/No projects yet/)).toBeTruthy();
+    expect(await within(card).findByText(/not in any project yet/)).toBeTruthy();
     expect(within(card).getByRole("link", { name: "Create one" }).getAttribute("href")).toBe("/projects/new");
   });
 

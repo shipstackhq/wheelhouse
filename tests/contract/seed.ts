@@ -60,7 +60,9 @@ async function team(letter: "A" | "B", passwordHash: string): Promise<TeamFixtur
   };
   const actor: Actor = { kind: "human", id: owner.id, name: owner.name, teamId: t.id };
   const projectKey = `CT${letter}`;
-  await svc.createProject(actor, { name: `Contract ${letter}`, key: projectKey });
+  const project = await svc.createProject(actor, { name: `Contract ${letter}`, key: projectKey });
+  // A project is reachable only by its members (ADR-23): the owner got in by creating it, the team's other member is added here.
+  await db.insert(schema.projectMembers).values({ projectId: project.id, userId: member.id, teamId: t.id, role: "editor", addedBy: owner.id });
   const ticket = await svc.createTicket(actor, projectKey, { title: `Contract ticket ${letter}` });
   const webhookTicket = await svc.createTicket(actor, projectKey, { title: `Webhook ticket ${letter}` });
   return {

@@ -169,7 +169,7 @@ describe("the team page", () => {
     assert.equal(self.status, 400);
     const bad = await app("PATCH", `/api/app/team/members/${o.me.user.id}`, o.sess, { body: { role: "root", tags: [] } });
     assert.equal(bad.status, 400);
-    assert.deepEqual(bad.json.error.details, { fields: { role: "Choose owner or member" } });
+    assert.deepEqual(bad.json.error.details, { fields: { role: "Choose a role" } });
   });
 
   test("an owner removes a member, who can then no longer use the team", async () => {
@@ -374,7 +374,7 @@ describe("invites", () => {
     assert.equal(team.seats.full, true);
     const over = await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } });
     assert.equal(over.status, 409);
-    assert.match(over.json.error.message, /^Your team is full/);
+    assert.match(over.json.error.message, /^Your workspace is full/);
     assert.deepEqual((await app("DELETE", `/api/app/invites/${ids[0]}`, o.sess)).json, { ok: true });
     assert.equal((await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_team", email: newEmail() } })).status, 201);
   });
@@ -487,10 +487,10 @@ describe("the instance admin's teams pages", () => {
 
     const own = await app("POST", `/api/app/admin/teams/${fx.admin.teamId}/suspend`, admin, { body: { confirm: "Contract admin team" } });
     assert.equal(own.status, 409);
-    assert.equal(own.json.error.message, "You cannot suspend your own team");
+    assert.equal(own.json.error.message, "You cannot suspend your own workspace");
     const wrong = await app("POST", `/api/app/admin/teams/${id}/suspend`, admin, { body: { confirm: "victim team" } });
     assert.equal(wrong.status, 400);
-    assert.equal(wrong.json.error.message, "Type the team name exactly to confirm");
+    assert.equal(wrong.json.error.message, "Type the workspace name exactly to confirm");
     assert.equal((await app("GET", "/api/app/me", victim.sess)).status, 200, "still signed in");
 
     const done = await app("POST", `/api/app/admin/teams/${id}/suspend`, admin, { body: { confirm: "Victim team", reason: "contract test" } });
@@ -567,7 +567,7 @@ describe("the dashboard", () => {
       return r.json;
     };
     const kpis = await get("kpis");
-    assert.deepEqual(Object.keys(kpis).sort(), ["agentShare7d", "agents", "completed7d", "completedPrev7d", "events7d", "inProgress", "inReview", "mapNodes", "open", "projects", "staleDocs", "staleNodes"]);
+    assert.deepEqual(Object.keys(kpis).sort(), ["agentShare7d", "agents", "agentsActive7d", "completed7d", "completedPrev7d", "events7d", "inProgress", "inReview", "mapNodes", "open", "projects", "staleDocs", "staleNodes"]);
     assert.equal(kpis.projects, 1);
     const progress = await get("progress");
     assert.deepEqual(progress.map((p: { key: string }) => p.key), [fx.a.projectKey], "team A's project, never team B's");

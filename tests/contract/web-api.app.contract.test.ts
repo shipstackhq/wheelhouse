@@ -187,7 +187,7 @@ describe("GET /api/app/projects", () => {
     const b = await app("GET", "/api/app/projects", await signIn(fx.b.email));
     assert.deepEqual(a.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey]);
     assert.deepEqual(b.json.projects.map((p: { key: string }) => p.key), [fx.b.projectKey]);
-    assert.deepEqual(Object.keys(a.json.projects[0]).sort(), ["createdAt", "description", "id", "key", "name"]);
+    assert.deepEqual(Object.keys(a.json.projects[0]).sort(), ["createdAt", "description", "id", "key", "name", "role"]);
   });
 
   test("the team cannot be chosen by the request", async () => {

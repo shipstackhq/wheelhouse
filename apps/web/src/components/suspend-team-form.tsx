@@ -4,7 +4,7 @@ import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { SubmitButton } from "./submit-button";
 
-/** Suspending needs the team's exact name typed in, so it cannot happen by a stray click. */
+/** Suspending needs the workspace's exact name typed in, so it cannot happen by a stray click. */
 export function SuspendTeamForm({ teamId, teamName, members }: { teamId: string; teamName: string; members: number }) {
   const { api, queryClient } = useServices();
   const [state, action] = useActionState<FormState, FormData>(async (_prev, fd) => {
@@ -19,14 +19,14 @@ export function SuspendTeamForm({ teamId, teamName, members }: { teamId: string;
   return (
     <form action={action} className="mt-4 space-y-3">
       <p className="text-sm text-muted">
-        Signs out all {members} member{members === 1 ? "" : "s"} now, blocks their sign-in and every API key of this team,
-        and stops its invites. Nothing is deleted; you can restore the team at any time.
+        Signs out all {members} member{members === 1 ? "" : "s"} now, blocks their sign-in and every API key of this workspace,
+        and stops its invites. Nothing is deleted; you can restore the workspace at any time.
       </p>
       <input className="input" name="reason" placeholder="Reason (only you can see it)" maxLength={500} />
       <input className="input" name="confirm" placeholder={`Type "${teamName}" to confirm`} required autoComplete="off" />
       {state?.error && <p className="text-sm text-danger">{state.error}</p>}
       {state?.ok && <p className="text-sm text-ok">{state.ok}</p>}
-      <SubmitButton className="btn btn-danger">Suspend team</SubmitButton>
+      <SubmitButton className="btn btn-danger">Suspend workspace</SubmitButton>
     </form>
   );
 }

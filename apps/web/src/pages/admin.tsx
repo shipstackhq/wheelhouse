@@ -16,14 +16,14 @@ const day = (d: string | null) => (d ? d.slice(0, 10) : "never");
 export function AdminTeamsPage() {
   const query = useAdminTeams();
   return (
-    <Loaded query={query} label="Loading teams">
+    <Loaded query={query} label="Loading workspaces">
       {(teams) => (
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-4xl space-y-6 px-6 py-10">
             <div>
-              <h1 className="text-xl font-semibold">Teams on this server</h1>
+              <h1 className="text-xl font-semibold">Workspaces on this server</h1>
               <p className="mt-1 text-sm text-muted">
-                Who is here, and a way to suspend a whole team. You see names, emails and counts only, never what a team wrote.
+                Who is here, and a way to suspend a whole workspace. You see names, emails and counts only, never what a workspace wrote.
               </p>
             </div>
             <div className="card divide-y divide-line">
@@ -58,12 +58,12 @@ export function AdminTeamPage() {
   const { api, queryClient } = useServices();
   const query = useAdminTeam(id);
   return (
-    <Loaded query={query} label="Loading the team">
+    <Loaded query={query} label="Loading the workspace">
       {(t) => (
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
             <div>
-              <Link to="/admin/teams" className="text-sm text-muted hover:text-fg"><ArrowLeftIcon /> All teams</Link>
+              <Link to="/admin/teams" className="text-sm text-muted hover:text-fg"><ArrowLeftIcon /> All workspaces</Link>
               <h1 className="mt-2 text-xl font-semibold">
                 {t.name}
                 {t.suspendedAt && <span className="chip ml-3 bg-danger/15 align-middle text-danger">suspended</span>}
@@ -94,7 +94,7 @@ export function AdminTeamPage() {
               {t.inviteList.map((i) => (
                 <div key={i.id} className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
                   <div className="min-w-48 flex-1">{i.email}</div>
-                  <span className="text-xs text-muted">{i.kind === "new_team" ? "started this team" : i.role}</span>
+                  <span className="text-xs text-muted">{i.kind === "new_team" ? "started this workspace" : i.role}</span>
                   <span className="chip bg-panel-2 text-fg">{i.status}</span>
                   <span className="text-xs text-muted">{day(i.createdAt)}</span>
                 </div>
@@ -114,14 +114,14 @@ export function AdminTeamPage() {
               ))}
             </div>
 
-            <p className="text-xs text-muted">Tickets, comments and the map of this team are not shown here.</p>
+            <p className="text-xs text-muted">Tickets, comments and the map of this workspace are not shown here.</p>
 
             {t.suspendedAt ? (
               <div className="card border-danger/40 p-5">
                 <h2 className="font-medium">Suspended {day(t.suspendedAt)}{t.suspendedBy && <> by {t.suspendedBy.email}</>}</h2>
                 {t.suspendedReason && <p className="mt-1 text-sm text-muted">Reason: {t.suspendedReason}</p>}
                 <p className="mt-2 text-sm text-muted">
-                  Members cannot sign in and the team&apos;s API keys are refused. Restoring brings everything back; people sign in again.
+                  Members cannot sign in and the workspace&apos;s API keys are refused. Restoring brings everything back; people sign in again.
                 </p>
                 <form
                   action={async () => {
@@ -133,14 +133,14 @@ export function AdminTeamPage() {
                   }}
                   className="mt-4"
                 >
-                  <SubmitButton className="btn btn-primary">Restore team</SubmitButton>
+                  <SubmitButton className="btn btn-primary">Restore workspace</SubmitButton>
                 </form>
               </div>
             ) : t.isYours ? (
-              <div className="card p-5 text-sm text-muted">This is your own team, so it cannot be suspended.</div>
+              <div className="card p-5 text-sm text-muted">This is your own workspace, so it cannot be suspended.</div>
             ) : (
               <div className="card border-danger/40 p-5">
-                <h2 className="font-medium text-danger">Suspend this team</h2>
+                <h2 className="font-medium text-danger">Suspend this workspace</h2>
                 <SuspendTeamForm teamId={t.id} teamName={t.name} members={t.members} />
               </div>
             )}
@@ -160,9 +160,9 @@ export function AdminInvitesPage() {
         <div className="h-full overflow-y-auto">
           <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
             <div>
-              <h1 className="text-xl font-semibold">Invite a new team</h1>
+              <h1 className="text-xl font-semibold">Invite a new workspace</h1>
               <p className="mt-1 text-sm text-muted">
-                For people outside your team. They follow the link, choose a password and get their own team, which they own.
+                For people outside your workspace. They follow the link, choose a password and get their own workspace, which they own.
               </p>
             </div>
             <div className="card p-5">

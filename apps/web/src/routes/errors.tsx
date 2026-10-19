@@ -6,7 +6,7 @@ export function NotFound() {
   return (
     <main className="flex h-full min-h-60 flex-col items-center justify-center gap-2 p-6 text-center" data-testid="not-found">
       <h1 className="text-lg font-semibold">Page not found</h1>
-      <p className="max-w-sm text-sm text-muted">There is nothing at this address, or it belongs to another team.</p>
+      <p className="max-w-sm text-sm text-muted">There is nothing at this address, or it belongs to another workspace.</p>
       <Link to="/" className="btn mt-2">Go home</Link>
     </main>
   );

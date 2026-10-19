@@ -11,7 +11,7 @@ const { githubDeliveries, githubInstallations, memberships, projects, pullReques
 
 /** Writes made because of something GitHub reported are attributed to this actor, like the claim sweep's "Wheelhouse". */
 export const GITHUB_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
-export const githubActor = (teamId: string): Actor => ({ kind: "human", id: GITHUB_ACTOR_ID, name: "GitHub", teamId });
+export const githubActor = (teamId: string): Actor => ({ kind: "human", id: GITHUB_ACTOR_ID, name: "GitHub", teamId, system: true });
 
 /** Land at most this many files per call, like the baseline does. */
 const LAND_CHUNK = 2000;
@@ -21,7 +21,7 @@ const LAND_CHUNK = 2000;
 async function requireOwner(userId: string, teamId: string) {
   const db = await getDb();
   const [m] = await db.select({ role: memberships.role }).from(memberships).where(and(eq(memberships.userId, userId), eq(memberships.teamId, teamId)));
-  if (m?.role !== "owner") throw new ServiceError("forbidden", "Only team owners can connect GitHub");
+  if (m?.role !== "owner") throw new ServiceError("forbidden", "Only workspace owners can connect GitHub");
 }
 
 /**
@@ -33,7 +33,7 @@ export async function registerInstallation(actor: Actor, i: { installationId: st
   await requireOwner(actor.id, actor.teamId);
   const db = await getDb();
   const [existing] = await db.select().from(githubInstallations).where(eq(githubInstallations.installationId, i.installationId));
-  if (existing && existing.teamId !== actor.teamId) throw new ServiceError("conflict", "That GitHub installation is already connected to another team");
+  if (existing && existing.teamId !== actor.teamId) throw new ServiceError("conflict", "That GitHub installation is already connected to another workspace");
   await db
     .insert(githubInstallations)
     .values({ installationId: i.installationId, teamId: actor.teamId, accountLogin: i.accountLogin, accountType: i.accountType, connectedBy: actor.id })
@@ -64,7 +64,7 @@ export async function connectGithubRepository(
   const project = await getProject(actor, projectRef);
   // The installation must be this team's own: otherwise a repository id from someone else's installation would feed their pushes here.
   const [inst] = await db.select().from(githubInstallations).where(and(eq(githubInstallations.installationId, i.installationId), eq(githubInstallations.teamId, actor.teamId)));
-  if (!inst) throw new ServiceError("forbidden", "That GitHub installation is not connected to your team");
+  if (!inst) throw new ServiceError("forbidden", "That GitHub installation is not connected to your workspace");
   const visible = await api.installationRepositories(i.installationId);
   const gh = visible.find((r) => r.id === i.githubRepoId);
   if (!gh) throw new ServiceError("not_found", "GitHub does not list that repository for this installation");

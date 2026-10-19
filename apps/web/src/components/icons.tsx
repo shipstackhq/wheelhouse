@@ -64,6 +64,32 @@ import {
   RiStrikethrough,
   RiTable2,
   RiTicketLine,
+  RiHome4Line,
+  RiHome4Fill,
+  RiDashboardLine,
+  RiDashboardFill,
+  RiLayoutColumnLine,
+  RiLayoutColumnFill,
+  RiHistoryLine,
+  RiHistoryFill,
+  RiMapFill,
+  RiFileTextFill,
+  RiScales3Line,
+  RiScales3Fill,
+  RiBookmarkFill,
+  RiGitRepositoryLine,
+  RiGitRepositoryFill,
+  RiTeamLine,
+  RiTeamFill,
+  RiGroup2Line,
+  RiGroup2Fill,
+  RiRobot2Fill,
+  RiBuilding2Line,
+  RiBuilding2Fill,
+  RiMailAddLine,
+  RiMailAddFill,
+  RiSidebarFoldLine,
+  RiSidebarUnfoldLine,
 } from "@remixicon/react";
 import type { RemixiconComponentType } from "@remixicon/react";
 
@@ -137,3 +163,51 @@ export const RedoIcon = icon(RiArrowGoForwardLine);
 export const MarkdownIcon = icon(RiMarkdownLine);
 export const FullscreenIcon = icon(RiFullscreenLine);
 export const ExitFullscreenIcon = icon(RiFullscreenExitLine);
+
+// Navigation (the sidebar): each place has an outline icon and a solid one; the place you are on shows the solid one.
+export const HomeIcon = icon(RiHome4Line);
+export const HomeFillIcon = icon(RiHome4Fill);
+export const OverviewIcon = icon(RiDashboardLine);
+export const OverviewFillIcon = icon(RiDashboardFill);
+export const BoardIcon = icon(RiLayoutColumnLine);
+export const BoardFillIcon = icon(RiLayoutColumnFill);
+// History, not Pulse: Remix's Pulse has no distinct solid variant, so it could not show that Activity is selected.
+export const ActivityIcon = icon(RiHistoryLine);
+export const ActivityFillIcon = icon(RiHistoryFill);
+export const MapFillIcon = icon(RiMapFill);
+export const FileFillIcon = icon(RiFileTextFill);
+export const DecisionsIcon = icon(RiScales3Line);
+export const DecisionsFillIcon = icon(RiScales3Fill);
+export const TermFillIcon = icon(RiBookmarkFill);
+export const ReposIcon = icon(RiGitRepositoryLine);
+export const ReposFillIcon = icon(RiGitRepositoryFill);
+export const ProjectMembersIcon = icon(RiTeamLine);
+export const ProjectMembersFillIcon = icon(RiTeamFill);
+export const PeopleIcon = icon(RiGroup2Line);
+export const PeopleFillIcon = icon(RiGroup2Fill);
+export const AgentFillIcon = icon(RiRobot2Fill);
+export const WorkspacesIcon = icon(RiBuilding2Line);
+export const WorkspacesFillIcon = icon(RiBuilding2Fill);
+export const InviteWorkspaceIcon = icon(RiMailAddLine);
+export const InviteWorkspaceFillIcon = icon(RiMailAddFill);
+export const CollapseSidebarIcon = icon(RiSidebarFoldLine);
+export const ExpandSidebarIcon = icon(RiSidebarUnfoldLine);
+
+/** An outline icon and its solid twin. */
+export type IconPair = { line: ReturnType<typeof icon>; fill: ReturnType<typeof icon> };
+export const NAV_ICONS = {
+  home: { line: HomeIcon, fill: HomeFillIcon },
+  overview: { line: OverviewIcon, fill: OverviewFillIcon },
+  board: { line: BoardIcon, fill: BoardFillIcon },
+  activity: { line: ActivityIcon, fill: ActivityFillIcon },
+  map: { line: MapIcon, fill: MapFillIcon },
+  docs: { line: FileIcon, fill: FileFillIcon },
+  decisions: { line: DecisionsIcon, fill: DecisionsFillIcon },
+  glossary: { line: TermIcon, fill: TermFillIcon },
+  repos: { line: ReposIcon, fill: ReposFillIcon },
+  projectMembers: { line: ProjectMembersIcon, fill: ProjectMembersFillIcon },
+  people: { line: PeopleIcon, fill: PeopleFillIcon },
+  agents: { line: AgentIcon, fill: AgentFillIcon },
+  workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },
+  inviteWorkspace: { line: InviteWorkspaceIcon, fill: InviteWorkspaceFillIcon },
+} satisfies Record<string, IconPair>;

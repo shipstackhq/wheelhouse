@@ -1,7 +1,8 @@
 import { idsWithRole } from "./column-roles";
-import { and, asc, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
+import { roleOnProject, visibleProjectIds } from "./project-access";
 import { queueStatus } from "./service";
 import type { SessionView } from "./session-buckets";
 
@@ -27,17 +28,27 @@ export function lastNDays(n: number) {
  */
 type Memo = <A extends unknown[], R>(fn: (...args: A) => R) => (...args: A) => R;
 let memo: Memo = (fn) => fn;
-let memoised: ((teamId: string) => ReturnType<typeof loadSnapshot>) | null = null;
+let memoised: ((teamId: string, viewer: string, projectId: string) => ReturnType<typeof loadSnapshot>) | null = null;
 export function setRequestMemo(m: Memo) {
   memo = m;
   memoised = null;
 }
-const snapshot = (teamId: string) => (memoised ??= memo(loadSnapshot))(teamId);
+/** `viewer` is the person's user id, or "*" for an agent key or the system, who see the whole workspace (ADR-23). */
+const snapshot = (actor: Actor, projectId?: string) => (memoised ??= memo(loadSnapshot))(actor.teamId, actor.kind === "human" && !actor.system ? actor.id : "*", projectId ?? "*");
 
-/** Projects, columns, tickets, recent events for one team. */
-const loadSnapshot = async (teamId: string) => {
+/**
+ * Projects, columns, tickets, recent events for one team, limited to the projects `viewer` can open, and to one project when
+ * `projectId` is given (the caller has already resolved it through getProject, so it is one the viewer can open; it is
+ * intersected with what they can open anyway, so a stray id yields an empty snapshot rather than someone else's numbers).
+ */
+const loadSnapshot = async (teamId: string, viewer: string, projectId: string) => {
   const db = await getDb();
-  const ps = await db.select().from(projects).where(eq(projects.teamId, teamId)).orderBy(asc(projects.createdAt));
+  const visible = viewer === "*" ? null : await visibleProjectIds(db, { kind: "human", id: viewer, name: "", teamId });
+  const ps = await db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.teamId, teamId), visible ? inArray(projects.id, visible) : undefined, projectId === "*" ? undefined : eq(projects.id, projectId)))
+    .orderBy(asc(projects.createdAt));
   const pids = ps.map((p) => p.id);
   if (!pids.length) return { projects: ps, columns: [], tickets: [], events: [], nodes: [], docs: [] };
   const [cs, ts, es, ns, ds] = await Promise.all([
@@ -46,7 +57,7 @@ const loadSnapshot = async (teamId: string) => {
     db
       .select()
       .from(events)
-      .where(and(eq(events.teamId, teamId), gte(events.createdAt, new Date(Date.now() - 28 * DAY))))
+      .where(and(eq(events.teamId, teamId), inArray(events.projectId, pids), gte(events.createdAt, new Date(Date.now() - 28 * DAY))))
       .orderBy(desc(events.seq)),
     db
       .select({ id: nodes.id, projectId: nodes.projectId, name: nodes.name, layer: nodes.layer, stale: nodes.stale, staleReason: nodes.staleReason })
@@ -78,8 +89,8 @@ function completions(s: Snap) {
 
 // ───────── widgets ─────────
 
-export async function summary(actor: Actor) {
-  const s = await snapshot(actor.teamId);
+export async function summary(actor: Actor, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const roles = columnRoles(s);
   const open = s.tickets.filter((t) => !roles.doneIds.has(t.columnId));
   const now = Date.now();
@@ -109,11 +120,13 @@ export async function summary(actor: Actor) {
     mapNodes: s.nodes.length,
     staleDocs: s.docs.filter((d) => d.stale).length,
     agents: keys.length,
+    /** Different agents (API keys) that changed something in these projects in the last 7 days. */
+    agentsActive7d: new Set(week.filter((e) => e.actorKind === "agent").map((e) => e.actorId)).size,
   };
 }
 
-export async function projectProgress(actor: Actor) {
-  const s = await snapshot(actor.teamId);
+export async function projectProgress(actor: Actor, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const roles = columnRoles(s);
   return s.projects.map((p) => {
     const cols = roles.byProject.get(p.id) ?? [];
@@ -141,8 +154,8 @@ export async function projectProgress(actor: Actor) {
 }
 
 /** Tickets created vs completed per day. */
-export async function throughput(actor: Actor, days = 14) {
-  const s = await snapshot(actor.teamId);
+export async function throughput(actor: Actor, days = 14, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const keys = lastNDays(days);
   const created = new Map<string, number>();
   const completed = new Map<string, number>();
@@ -152,8 +165,8 @@ export async function throughput(actor: Actor, days = 14) {
 }
 
 /** All changes per day, split by who made them. */
-export async function activityByActor(actor: Actor, days = 14) {
-  const s = await snapshot(actor.teamId);
+export async function activityByActor(actor: Actor, days = 14, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const keys = lastNDays(days);
   const rows = new Map(keys.map((k) => [k, { day: k, human: 0, agent: 0 }]));
   for (const e of s.events) {
@@ -163,8 +176,8 @@ export async function activityByActor(actor: Actor, days = 14) {
   return [...rows.values()];
 }
 
-export async function agentQueues(actor: Actor) {
-  const s = await snapshot(actor.teamId);
+export async function agentQueues(actor: Actor, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const db = await getDb();
   const keys = await db
     .select({ id: apiKeys.id, name: apiKeys.name, lastUsedAt: apiKeys.lastUsedAt })
@@ -182,18 +195,20 @@ export async function agentQueues(actor: Actor) {
     }
   }
   const week = s.events.filter((e) => e.actorKind === "agent" && Date.now() - new Date(e.createdAt).getTime() < 7 * DAY);
-  return keys.map((k) => ({
+  const rows = keys.map((k) => ({
     ...k,
     pending: pending.get(k.id)?.total ?? 0,
     byProject: pending.get(k.id)?.byProject ?? [],
     sessions: (pending.get(k.id)?.sessions ?? []).sort((x, y) => y.lastSeenAt.localeCompare(x.lastSeenAt)),
     actions7d: week.filter((e) => e.actorId === k.id).length,
   }));
+  // For one project, only the agents that do something there: a workspace has keys that never touch this project.
+  return projectId ? rows.filter((r) => r.pending > 0 || r.actions7d > 0 || r.sessions.length > 0) : rows;
 }
 
 /** Things a human should look at: review queue, urgent work, stale explanations. */
-export async function needsAttention(actor: Actor) {
-  const s = await snapshot(actor.teamId);
+export async function needsAttention(actor: Actor, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const roles = columnRoles(s);
   const pkey = new Map(s.projects.map((p) => [p.id, p.key]));
   const doneIds = roles.doneIds;
@@ -220,8 +235,8 @@ export async function needsAttention(actor: Actor) {
   return { review, urgent, stale, staleDocs };
 }
 
-export async function recentActivity(actor: Actor, limit = 12) {
-  const s = await snapshot(actor.teamId);
+export async function recentActivity(actor: Actor, limit = 12, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const pkey = new Map(s.projects.map((p) => [p.id, p.key]));
   return s.events.slice(0, limit).map((e) => ({ ...e, projectKey: pkey.get(e.projectId) ?? "?" }));
 }
@@ -232,8 +247,8 @@ export async function recentActivity(actor: Actor, limit = 12) {
  * - agent-claimed tickets with no activity from that agent for a while
  * - map drafts waiting for their code to land
  */
-export async function syncHealth(actor: Actor) {
-  const s = await snapshot(actor.teamId);
+export async function syncHealth(actor: Actor, projectId?: string) {
+  const s = await snapshot(actor, projectId);
   const db = await getDb();
   const pids = s.projects.map((p) => p.id);
   if (!pids.length) return { untracked: [], quiet: [], drafts: [] };
@@ -276,4 +291,47 @@ export async function syncHealth(actor: Actor) {
   const nodeName = new Map(s.nodes.map((n) => [n.id, `${n.layer}:${n.name}`]));
   const drafts = pending.map((d) => ({ ...d, projectKey: pkey.get(d.projectId)!, node: nodeName.get(d.nodeId) ?? "?" }));
   return { untracked, quiet, drafts };
+}
+
+/**
+ * The most important things about ONE project, ranked for a quick look: work that has sat longest in progress, what has waited
+ * longest for review, agents that claimed a ticket and went quiet, decisions still only proposed, and who is in the project.
+ * "How long" is time since the ticket last moved into its current column (from the event log; a ticket that has not moved in the
+ * 28 days the snapshot reads is dated from its last update, which is never later than when it moved).
+ */
+export async function projectFocus(actor: Actor, projectId: string) {
+  const s = await snapshot(actor, projectId);
+  const p = s.projects[0];
+  if (!p) return { aging: [], waitingReview: [], quiet: [], proposedDecisions: 0, members: { count: 0, myRole: null as null | string }, tickets: 0 };
+  const roles = columnRoles(s);
+  const now = Date.now();
+  const colName = new Map(s.columns.map((c) => [c.id, c.name]));
+  const since = (t: Snap["tickets"][number]) => {
+    const moved = s.events.find((e) => e.entityId === t.id && e.type === "ticket.moved");
+    return new Date(moved?.createdAt ?? t.updatedAt).getTime();
+  };
+  const row = (t: Snap["tickets"][number]) => ({
+    ref: `${p.key}-${t.number}`,
+    title: t.title,
+    column: colName.get(t.columnId) ?? "",
+    priority: t.priority,
+    days: Math.max(0, Math.floor((now - since(t)) / DAY)),
+    byAgent: !!t.claimedByKeyId,
+  });
+  const oldestFirst = (a: { days: number }, b: { days: number }) => b.days - a.days;
+  const aging = s.tickets.filter((t) => roles.inProgress.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
+  const waitingReview = s.tickets.filter((t) => roles.review.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
+
+  const db = await getDb();
+  const [{ n: proposed }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.decisions).where(and(eq(schema.decisions.projectId, p.id), eq(schema.decisions.status, "proposed")));
+  const [{ n: members }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.projectMembers).where(eq(schema.projectMembers.projectId, p.id));
+  const sync = await syncHealth(actor, projectId);
+  return {
+    aging,
+    waitingReview,
+    quiet: sync.quiet.slice(0, 5),
+    proposedDecisions: Number(proposed),
+    members: { count: Number(members), myRole: await roleOnProject(db, actor, p.id) },
+    tickets: s.tickets.length,
+  };
 }

@@ -1,6 +1,35 @@
 /** The shapes the web app's API answers with (JSON: every date is an ISO string). Kept by hand and checked by the contract suite. */
 
-export type Role = "owner" | "member";
+export type Role = "owner" | "admin" | "member" | "viewer" | "guest";
+
+/** A workspace the person belongs to. `active` is the one this session is working in. */
+export type WorkspaceChoice = { id: string; name: string; role: Role; active: boolean };
+
+// ───────── who is in a project (ADR-23) ─────────
+
+export type ProjectRole = "admin" | "editor" | "viewer";
+export type ProjectMember = { userId: string; name: string; email: string; role: ProjectRole; workspaceRole: Role; addedAt: string };
+export type ProjectMembers = {
+  project: { id: string; key: string; name: string };
+  /** The caller's own role in the project. */
+  myRole: ProjectRole | null;
+  members: ProjectMember[];
+};
+/** A workspace member who is not in the project yet. */
+export type AddableMember = { userId: string; name: string; email: string; workspaceRole: Role };
+/** One project of the workspace by name (owners and admins): who administers it and whether the caller is in it. */
+export type WorkspaceProject = { id: string; key: string; name: string; admins: string[]; memberCount: number; isMember: boolean };
+export type AuditEvent = {
+  seq: number;
+  actorName: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  projectKey: string | null;
+  before: unknown;
+  after: unknown;
+  createdAt: string;
+};
 
 // ───────── team, members, keys, invites ─────────
 
@@ -13,6 +42,8 @@ export type PendingInvite = {
   email: string;
   role: Role;
   teamName: string | null;
+  /** The projects they join on accepting. */
+  projects: { key: string; name: string; role: ProjectRole }[];
   createdAt: string;
   expiresAt: string;
 };
@@ -49,9 +80,11 @@ export type SetupCommands = {
 export type AgentsPage = { keys: KeyView[]; setup: SetupCommands };
 export type CreatedKey = { key: KeyView; secret: string };
 
-export type CreateInviteInput = { kind: "join_team" | "new_team"; email: string; role?: Role; tags?: string[] | string; team?: string };
+export type CreateInviteInput = { kind: "join_team" | "new_team"; email: string; role?: Role; tags?: string[] | string; team?: string; /** join_team only: the projects the person joins on accepting, by key. The caller must administer each. */ projects?: { project: string; role: ProjectRole }[] };
 export type CreatedInvite = { id: string; email: string; kind: "new_team" | "join_team"; expiresAt: string; link: string };
 export type InvitePeek = { email: string; kind: "new_team" | "join_team"; teamName: string | null };
+/** What an invite sent to a signed-in person's own address would add them to. */
+export type InvitePeekExisting = { email: string; teamName: string; role: Role; projects: { key: string; name: string; role: ProjectRole }[] };
 export type AcceptInviteInput = { token: string; name: string; password: string; confirm: string };
 
 // ───────── instance admin ─────────
@@ -95,6 +128,22 @@ export type DashboardSummary = {
   mapNodes: number;
   staleDocs: number;
   agents: number;
+  /** Different agents that changed something in these projects in the last 7 days. */
+  agentsActive7d: number;
+};
+
+/** The most important things about one project, ranked for a quick look. Only for `?project=KEY`. */
+export type FocusTicket = { ref: string; title: string; column: string; priority: Priority; days: number; byAgent: boolean };
+export type ProjectFocus = {
+  /** In progress the longest, oldest first. */
+  aging: FocusTicket[];
+  /** Waiting for review the longest, oldest first. */
+  waitingReview: FocusTicket[];
+  /** Tickets an agent claimed and went quiet on. */
+  quiet: { ref: string; title: string; projectKey: string; agent: string; lastAt: string }[];
+  proposedDecisions: number;
+  members: { count: number; myRole: string | null };
+  tickets: number;
 };
 
 export type ProjectProgress = {
@@ -162,6 +211,8 @@ export type DashboardWidgets = {
   attention: NeedsAttention;
   recent: ActivityEvent[];
   sync: SyncHealth;
+  /** One project only: ask with `project`. */
+  focus: ProjectFocus;
 };
 
 // ───────── the board and its tickets ─────────

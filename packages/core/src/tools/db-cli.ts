@@ -3,6 +3,7 @@ import path from "node:path";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, type Finding, type Manifest, type Snapshot } from "./db-copy";
 
 /**
+ * pnpm db:migrate --to <PGlite directory | postgres://…>                  (bring a database to this code's migrations; do it to a COPY before exporting)
  * pnpm db:export --from <PGlite directory | postgres://…> --out <folder>
  * pnpm db:import --in <folder> --to <PGlite directory | postgres://…>      (the target is migrated first and must then be empty)
  * pnpm db:verify --in <folder> --to <target>                               (the target against what the export said)
@@ -24,6 +25,7 @@ const need = (name: string) => opt(name) ?? usage(`--${name} is required`);
 function usage(problem?: string): never {
   if (problem) console.error(problem + "\n");
   console.error(`usage:
+  db:migrate --to <PGlite dir | postgres url>      (apply this code's migrations to it; run on a copy of the source before exporting)
   db:export --from <PGlite dir | postgres url> --out <folder> [--in-place]
   db:import --in <folder> --to <PGlite dir | postgres url>
   db:verify --in <folder> --to <target>      or      db:verify --from <source> --to <target>   [--json]`);
@@ -40,6 +42,16 @@ function report(findings: Finding[], json: boolean) {
 }
 
 async function main() {
+  if (command === "migrate") {
+    // The export refuses to cross migrations (an import is checked against the export's), so a source made by older code is
+    // brought up to this code's first. Never point this at the live database: copy it, and migrate the copy.
+    const to = need("to");
+    const conn = await openConn(to, { migrate: true });
+    const [{ n }] = (await conn.query("select count(*)::int as n from drizzle.__drizzle_migrations")) as { n: number }[];
+    await conn.close();
+    log(`${to} is at ${n} migrations (this code's)`);
+    return 0;
+  }
   if (command === "export") {
     const from = need("from");
     const out = need("out");
