@@ -704,6 +704,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/me": "the signed-in person from their session (SessionGuard); nothing taken from the request",
   "GET /api/app/projects": "listProjects(actor) for the signed-in person's team (SessionGuard); a teamId in the query or a header is ignored (tested)",
   "POST /api/app/projects": "svc.createProject(actor): the project is made in the actor's own team; the team is never taken from the request (tested)",
+  "PATCH /api/app/projects/:key": "svc.updateProject(actor): getProject(actor, key, admin), so another workspace's project and one the person is not in are 404, a non-admin member is 403, and agents are refused; only name and description change, never the key (tested in project-access.test.ts)",
   "DELETE /api/app/projects/:key/sessions/:sessionId": "svc.removeSession(actor): the project is resolved through getProject(actor) and the session must belong to it, so another team's is a 404 (tested)",
   "POST /api/app/me/password": "changes the signed-in person's own password, after checking the current one; nothing is taken from the request but the two passwords",
   "GET /api/app/team": "teamOverview(human): the memberships of the person's own team; pending invites only for its owners (tested)",

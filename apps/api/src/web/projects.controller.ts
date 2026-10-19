@@ -1,6 +1,6 @@
-import { Controller, Delete, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { listProjectsWithRole } from "@wheelhouse/core/lib/project-members";
-import { createProject, removeSession } from "@wheelhouse/core/lib/service";
+import { createProject, removeSession, updateProject } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
@@ -24,6 +24,14 @@ export class ProjectsController {
   async create(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
     return { project: view(await createProject(req.human.actor, { name: str(b.name), key: str(b.key) || undefined, description: str(b.description) })) };
+  }
+
+  /** `{ name?, description? }`: project settings. Project admins only (403 otherwise); the key does not change. */
+  @Patch(":key")
+  @UseGuards(SessionGuard)
+  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
+    const b = jsonBody(req);
+    return { project: view(await updateProject(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined })) };
   }
 
   /** Teammates remove an agent session from a project (soft delete: if it reconnects it starts at the top of the queue). */

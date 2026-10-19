@@ -54,7 +54,7 @@ export function Avatar({ name, email, size = 32 }: { name: string; email: string
   );
 }
 
-export function ProfileMenu(props: { name: string; email: string; role: "owner" | "member"; tags: string[]; team: string }) {
+export function ProfileMenu(props: { name: string; email: string; role: "owner" | "admin" | "member" | "viewer" | "guest"; tags: string[]; team: string }) {
   return (
     <Popover.Root>
       <Popover.Trigger

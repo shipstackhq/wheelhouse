@@ -126,6 +126,23 @@ export async function getProject(actor: Actor, ref: string, need: Need = "read",
   return p;
 }
 
+/** Rename a project and/or change its description. Project admins only; the key never changes (tickets are named after it). */
+export async function updateProject(actor: Actor, ref: string, input: { name?: string; description?: string }) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit a project's settings");
+  const db = await getDb();
+  const p = await getProject(actor, ref, "admin", db);
+  const name = input.name === undefined ? p.name : input.name.trim();
+  if (!name) throw new ServiceError("invalid", "Project name is required");
+  const description = input.description === undefined ? p.description : input.description.trim();
+  if (name === p.name && description === p.description) return p;
+  return db.transaction(async (tx) => {
+    const [row] = await tx.update(projects).set({ name, description }).where(eq(projects.id, p.id)).returning();
+    await audit(tx, actor, { action: "project.updated", targetType: "project", targetId: p.id, projectId: p.id, before: { name: p.name }, after: { name } });
+    await emit(tx, actor, p.id, { type: "project.updated", entity: "project", entityId: p.id, summary: `updated the settings of project ${row.name}` });
+    return row;
+  });
+}
+
 /** Delete a project and everything in it (tickets, map, flows, drafts, sessions, activity). Teammates only. */
 export async function deleteProject(actor: Actor, ref: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a project");

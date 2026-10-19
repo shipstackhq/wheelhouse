@@ -164,6 +164,21 @@ describe("writing", () => {
     await assert.rejects(() => pmem.listAddableMembers(bob, p1.key), code("forbidden"));
   });
 
+  test("project settings: only a project admin edits the name and description; the key and other projects are untouched", async () => {
+    const ps = await project(ada, `PS${L}`); // its own project: the others are shared with later tests
+    await addTo(ada, ps.key, bob, "editor");
+    await addTo(ada, ps.key, cy, "viewer");
+    await assert.rejects(() => svc.updateProject(bob, ps.key, { name: "Hijacked" }), code("forbidden")); // an editor
+    await assert.rejects(() => svc.updateProject(cy, ps.key, { name: "Hijacked" }), code("forbidden")); // a viewer
+    await assert.rejects(() => svc.updateProject(eve, ps.key, { name: "Hijacked" }), code("not_found")); // workspace admin, not a member
+    await assert.rejects(() => svc.updateProject(zed, ps.key, { name: "Hijacked" }), code("not_found")); // another workspace
+    await assert.rejects(() => svc.updateProject(keyA, ps.key, { name: "Hijacked" }), code("forbidden")); // an agent key
+    await assert.rejects(() => svc.updateProject(ada, ps.key, { name: "   " }), code("invalid"));
+    const renamed = await svc.updateProject(ada, ps.key, { name: "Renamed", description: "  About it  " });
+    assert.deepEqual([renamed.name, renamed.description, renamed.key], ["Renamed", "About it", ps.key]);
+    assert.equal((await svc.getProject(sam, p2.key)).name, `Project ${p2.key}`); // another project is untouched
+  });
+
   test("workspace viewers and guests cannot start projects; members can, and become the project's admin", async () => {
     await assert.rejects(() => svc.createProject(dee, { name: "No", key: "NOV" }), code("forbidden"));
     await assert.rejects(() => svc.createProject(gus, { name: "No", key: "NOG" }), code("forbidden"));

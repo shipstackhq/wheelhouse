@@ -229,6 +229,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
     projects: {
       list: async () => (await request<{ projects: Project[] }>("GET", "/api/app/projects")).projects,
       create: async (input: CreateProjectInput) => (await request<{ project: Project }>("POST", "/api/app/projects", input)).project,
+      /** Project settings: rename it or change its description (project admins). */
+      update: async (projectKey: string, input: { name?: string; description?: string }) =>
+        (await request<{ project: Project }>("PATCH", `/api/app/projects/${encodeURIComponent(projectKey)}`, input)).project,
       /** The project page in one read: columns, tickets, map nodes, members and the setup checklist. */
       board: (projectKey: string) => request<BoardView>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/board`),
       /** The Bots menu: each agent key with its queue in this project. */
