@@ -6,6 +6,10 @@ import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buck
 import { bus, deferPublish } from "./event-bus";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
+import { ServiceError } from "./service-error";
+import { audit, type Need, roleAllows, roleOnProject, visibleProjectIds, workspaceRoleOf } from "./project-access";
+
+export { ServiceError };
 
 /**
  * The single write path for Wheelhouse. UI server actions, the REST API and the
@@ -14,19 +18,6 @@ import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./do
  */
 
 const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users } = schema;
-
-export class ServiceError extends Error {
-  constructor(
-    public code: "not_found" | "conflict" | "invalid" | "forbidden",
-    message: string,
-    public details?: unknown,
-  ) {
-    super(message);
-  }
-  get status() {
-    return { not_found: 404, conflict: 409, invalid: 400, forbidden: 403 }[this.code];
-  }
-}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
@@ -95,14 +86,21 @@ function diff<T extends Record<string, unknown>>(before: T, patch: Partial<T>) {
 
 // ───────────────────────── projects ─────────────────────────
 
+/** The projects the actor can open: a person's own projects, or every project of the workspace for an agent key (ADR-23). */
 export async function listProjects(actor: Actor) {
   const db = await getDb();
-  return db.select().from(projects).where(eq(projects.teamId, actor.teamId)).orderBy(asc(projects.createdAt));
+  const visible = await visibleProjectIds(db, actor);
+  if (visible && !visible.length) return [];
+  return db
+    .select()
+    .from(projects)
+    .where(and(eq(projects.teamId, actor.teamId), visible ? inArray(projects.id, visible) : undefined))
+    .orderBy(asc(projects.createdAt));
 }
 
-/** Accepts a project uuid or its key (e.g. "WH"). */
-export async function getProject(actor: Actor, ref: string) {
-  const db = await getDb();
+/** Finds a project of the actor's workspace by uuid or key, WITHOUT checking that the actor may open it. Only access code uses this. */
+export async function findWorkspaceProject(actor: Actor, ref: string, q?: Q) {
+  const db = q ?? (await getDb());
   const [p] = await db
     .select()
     .from(projects)
@@ -112,7 +110,19 @@ export async function getProject(actor: Actor, ref: string) {
         isUuid(ref) ? eq(projects.id, ref) : eq(sql`upper(${projects.key})`, ref.toUpperCase()),
       ),
     );
-  if (!p) throw new ServiceError("not_found", `Project ${ref} not found`);
+  return p;
+}
+
+/**
+ * Accepts a project uuid or its key (e.g. "WH"). A project of another workspace and a project the actor is not a member of both
+ * answer not_found, so its existence does not leak; a member whose role is too low for `need` gets forbidden (ADR-23).
+ */
+export async function getProject(actor: Actor, ref: string, need: Need = "read", q?: Q) {
+  const db = q ?? (await getDb());
+  const p = await findWorkspaceProject(actor, ref, db);
+  const role = p ? await roleOnProject(db, actor, p.id) : null;
+  if (!p || !role) throw new ServiceError("not_found", `Project ${ref} not found`);
+  if (!roleAllows(role, need)) throw new ServiceError("forbidden", need === "admin" ? "Only a project admin can do that" : "Your role on this project is read only");
   return p;
 }
 
@@ -120,7 +130,7 @@ export async function getProject(actor: Actor, ref: string) {
 export async function deleteProject(actor: Actor, ref: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a project");
   const db = await getDb();
-  const p = await getProject(actor, ref);
+  const p = await getProject(actor, ref, "admin");
   await db.transaction(async (tx) => {
     // events has no foreign key to projects, so clear it explicitly; everything else cascades.
     await tx.delete(events).where(eq(events.projectId, p.id));
@@ -133,6 +143,11 @@ export async function createProject(actor: Actor, input: { name: string; key?: s
   const db = await getDb();
   const name = input.name.trim();
   if (!name) throw new ServiceError("invalid", "Project name is required");
+  // Workspace Viewers and Guests cannot start projects (ADR-23); agent keys keep creating them as before.
+  if (actor.kind === "human") {
+    const ws = await workspaceRoleOf(db, actor.teamId, actor.id);
+    if (ws !== "owner" && ws !== "admin" && ws !== "member") throw new ServiceError("forbidden", "Your workspace role cannot create projects");
+  }
   const key = (input.key || name.replace(/[^a-zA-Z]/g, "").slice(0, 3) || "PRJ").toUpperCase().slice(0, 6);
   const existing = await db
     .select({ id: projects.id })
@@ -146,6 +161,11 @@ export async function createProject(actor: Actor, input: { name: string; key?: s
       .values({ teamId: actor.teamId, name, key, description: input.description ?? "" })
       .returning();
     await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ projectId: p.id, name: c.name, role: c.role, position: i + 1 })));
+    // The creator becomes the project's first admin: without a row here nobody could open the project they just made.
+    if (actor.kind === "human") {
+      await tx.insert(schema.projectMembers).values({ projectId: p.id, userId: actor.id, teamId: actor.teamId, role: "admin", addedBy: actor.id });
+      await audit(tx, actor, { action: "project.created", targetType: "project", targetId: p.id, projectId: p.id, after: { key: p.key, creatorRole: "admin" } });
+    }
     await emit(tx, actor, p.id, { type: "project.created", entity: "project", entityId: p.id, summary: `created project ${p.name}` });
     return p;
   });
@@ -241,8 +261,8 @@ async function resolveColumn(q: Q, projectId: string, ref: string) {
   return c;
 }
 
-/** Accepts a ticket uuid or a ref like "WH-12". */
-export async function resolveTicket(actor: Actor, ref: string, q?: Q) {
+/** Accepts a ticket uuid or a ref like "WH-12". A ticket of a project the actor cannot open is not_found; `need` says what the caller will do with it. */
+export async function resolveTicket(actor: Actor, ref: string, q?: Q, need: Need = "read") {
   const db = q ?? (await getDb());
   let row: { t: typeof tickets.$inferSelect; p: typeof projects.$inferSelect } | undefined;
   if (isUuid(ref)) {
@@ -262,7 +282,9 @@ export async function resolveTicket(actor: Actor, ref: string, q?: Q) {
         and(eq(projects.teamId, actor.teamId), eq(projects.key, m[1].toUpperCase()), eq(tickets.number, Number(m[2]))),
       );
   }
-  if (!row) throw new ServiceError("not_found", `Ticket ${ref} not found`);
+  const role = row ? await roleOnProject(db, actor, row.p.id) : null;
+  if (!row || !role) throw new ServiceError("not_found", `Ticket ${ref} not found`);
+  if (!roleAllows(role, need)) throw new ServiceError("forbidden", "Your role on this project is read only");
   return { ticket: row.t, project: row.p, ref: `${row.p.key}-${row.t.number}` };
 }
 
@@ -314,7 +336,7 @@ export type TicketInput = {
 
 export async function createTicket(actor: Actor, projectRef: string, input: TicketInput & { title: string; column?: string }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
     await assertAssignee(tx, project.teamId, input.assigneeId);
@@ -366,7 +388,7 @@ export async function updateTicket(actor: Actor, ref: string, patch: TicketInput
 async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const resolved = await resolveTicket(actor, ref, tx);
+    const resolved = await resolveTicket(actor, ref, tx, "edit");
     const { project, ref: r } = resolved;
     const ticket = await lockRow(tx, tickets, resolved.ticket);
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
@@ -402,7 +424,7 @@ export async function moveTicket(actor: Actor, ref: string, column: string, inde
 async function moveTicketTx(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const resolved = await resolveTicket(actor, ref, tx);
+    const resolved = await resolveTicket(actor, ref, tx, "edit");
     const { project, ref: r } = resolved;
     const ticket = await lockRow(tx, tickets, resolved.ticket);
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
@@ -432,7 +454,7 @@ async function moveTicketTx(actor: Actor, ref: string, column: string, index?: n
 export async function deleteTicket(actor: Actor, ref: string) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx);
+    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
     await tx.delete(tickets).where(eq(tickets.id, ticket.id));
     await emit(tx, actor, project.id, {
       type: "ticket.deleted",
@@ -450,7 +472,7 @@ export async function claimTicket(actor: Actor, ref: string) {
   if (actor.kind !== "agent") throw new ServiceError("forbidden", "Only agents claim tickets");
   const db = await getDb();
   const t = await db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx);
+    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
     if (!ticket.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the team`);
     if (ticket.claimedByKeyId && ticket.claimedByKeyId !== actor.id)
       throw new ServiceError("conflict", `${r} is already claimed by another agent`);
@@ -478,7 +500,7 @@ export async function addComment(actor: Actor, ref: string, body: string) {
   if (!body?.trim()) throw new ServiceError("invalid", "Comment body is required");
   const db = await getDb();
   const { c, ticket } = await db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx);
+    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
     const [c] = await tx
       .insert(comments)
       .values({ ticketId: ticket.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() })
@@ -641,7 +663,7 @@ function checkKind(layer: Layer, kind: string) {
 /** Create or update a map node. Agents use names, the UI uses ids. */
 export async function upsertNode(actor: Actor, projectRef: string, input: NodeInput) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
 
   // An agent describing code its own session hasn't landed yet: store a draft
   // instead of rewriting the shared map (published when the code lands).
@@ -866,7 +888,7 @@ function cleanColumn(c: schema.Column): schema.Column {
  */
 export async function syncReferences(actor: Actor, projectRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const tables = await db.select().from(nodes).where(and(eq(nodes.projectId, project.id), eq(nodes.layer, "data")));
   const byName = new Map(tables.map((t) => [t.name.toLowerCase(), t]));
   const current = (await db.select().from(edges).where(and(eq(edges.projectId, project.id), eq(edges.kind, "references")))).filter(
@@ -980,7 +1002,7 @@ export async function saveLayout(
   opts?: { placed?: boolean },
 ) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const placed = opts?.placed ?? true;
   await db.transaction(async (tx) => {
     for (const p of positions) {
@@ -994,7 +1016,7 @@ export async function saveLayout(
 
 export async function deleteNode(actor: Actor, projectRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   return db.transaction(async (tx) => {
     const n = await resolveNode(tx, project.id, ref);
     // Remove the subtree (children reference parent_id without an FK).
@@ -1030,7 +1052,7 @@ export async function upsertEdge(
   input: { from: string; to: string; label?: string; kind?: (typeof schema.EDGE_KINDS)[number] },
 ) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const kind = input.kind ?? "depends";
   return db.transaction(async (tx) => {
     const from = await resolveNode(tx, project.id, input.from);
@@ -1072,7 +1094,7 @@ export async function upsertEdge(
 
 export async function deleteEdge(actor: Actor, projectRef: string, edgeId: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   return db.transaction(async (tx) => {
     const [e] = await tx.delete(edges).where(and(eq(edges.id, edgeId), eq(edges.projectId, project.id))).returning();
     if (!e) return { ok: true };
@@ -1092,7 +1114,7 @@ export async function deleteEdge(actor: Actor, projectRef: string, edgeId: strin
 /** Remove a link by endpoints (agent-friendly). */
 export async function unlinkNodes(actor: Actor, projectRef: string, input: { from: string; to: string; kind?: (typeof schema.EDGE_KINDS)[number] }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const from = await resolveNode(db, project.id, input.from);
   const to = await resolveNode(db, project.id, input.to);
   const found = await db
@@ -1106,7 +1128,7 @@ export async function unlinkNodes(actor: Actor, projectRef: string, input: { fro
 export async function linkTicketNode(actor: Actor, ticketRef: string, nodeRef: string, unlink = false) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, project, ref } = await resolveTicket(actor, ticketRef, tx);
+    const { ticket, project, ref } = await resolveTicket(actor, ticketRef, tx, "edit");
     const n = await resolveNode(tx, project.id, nodeRef);
     if (unlink) {
       await tx.delete(ticketNodes).where(and(eq(ticketNodes.ticketId, ticket.id), eq(ticketNodes.nodeId, n.id)));
@@ -1138,7 +1160,7 @@ export type FlowInput = {
 /** Create or replace a flow (matched by id, else by name). Steps are replaced wholesale. */
 export async function upsertFlow(actor: Actor, projectRef: string, input: FlowInput) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   if (!input.name?.trim()) throw new ServiceError("invalid", "Flow name is required");
   return db.transaction(async (tx) => {
     const steps: schema.FlowStep[] | undefined = input.steps
@@ -1189,7 +1211,7 @@ export async function upsertFlow(actor: Actor, projectRef: string, input: FlowIn
 
 export async function deleteFlow(actor: Actor, projectRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const [f] = await db
     .select()
     .from(flows)
@@ -1253,7 +1275,7 @@ async function resolveRepository(q: Q, projectId: string, ref: string) {
 export async function createRepository(actor: Actor, projectRef: string, input: RepositoryInput) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can add repositories");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   if (!input.displayName?.trim()) throw new ServiceError("invalid", "displayName is required");
   if (!input.role?.trim()) throw new ServiceError("invalid", "role is required");
   const slug = input.slug?.trim() ? slugify(input.slug) : slugify(input.displayName);
@@ -1283,7 +1305,7 @@ export async function createRepository(actor: Actor, projectRef: string, input: 
 export async function updateRepository(actor: Actor, projectRef: string, ref: string, patch: Partial<RepositoryInput>) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit repositories");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const existing = await resolveRepository(db, project.id, ref);
   const set: Partial<typeof repositories.$inferInsert> = { updatedAt: new Date() };
   if (patch.displayName !== undefined) set.displayName = patch.displayName.trim();
@@ -1304,7 +1326,7 @@ export async function updateRepository(actor: Actor, projectRef: string, ref: st
 export async function retireRepository(actor: Actor, projectRef: string, ref: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can retire repositories");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const existing = await resolveRepository(db, project.id, ref);
   const [r] = await db.update(repositories).set({ lifecycle: "retired", updatedAt: new Date() }).where(eq(repositories.id, existing.id)).returning();
   await emit(db, actor, project.id, { type: "repository.retired", entity: "project", entityId: r.id, summary: `retired repository "${r.displayName}"` });
@@ -1399,7 +1421,7 @@ export async function reportChanges(
   input: { files: string[]; sha?: string; summary?: string; repository?: string },
 ) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const files = [...new Set(input.files.map(normPath).filter(Boolean))];
   if (!files.length) throw new ServiceError("invalid", "files is empty");
   // Which repo these files belong to, for repo-qualified anchor matching ("backend:src/**").
@@ -1527,7 +1549,7 @@ export async function listDecisions(actor: Actor, projectRef: string) {
 /** Create (no number) or update (number) an ADR. */
 export async function upsertDecision(actor: Actor, projectRef: string, input: DecisionInput) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   return db.transaction(async (tx) => {
     const nodeIds = input.nodes ? await Promise.all(input.nodes.map(async (r) => (await resolveNode(tx, project.id, r)).id)) : undefined;
     if (input.number !== undefined) {
@@ -1601,7 +1623,7 @@ export async function listTerms(actor: Actor, projectRef: string) {
 
 export async function upsertTerm(actor: Actor, projectRef: string, input: { term: string; definition: string; node?: string | null }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const term = input.term?.trim();
   if (!term || !input.definition?.trim()) throw new ServiceError("invalid", "term and definition are required");
   return db.transaction(async (tx) => {
@@ -1631,7 +1653,7 @@ export async function upsertTerm(actor: Actor, projectRef: string, input: { term
 
 export async function deleteTerm(actor: Actor, projectRef: string, term: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const [t] = await db
     .select()
     .from(terms)
@@ -2279,7 +2301,7 @@ export async function getDoc(actor: Actor, projectRef: string, ref: string) {
 
 export async function createDoc(actor: Actor, projectRef: string, input: DocInput & { title: string }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   await assertDocsWritable(actor, db);
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   // WH-65: explicit body always wins; the template is only a convenience default for a blank doc.
@@ -2362,7 +2384,7 @@ export function cleanDocLabels(labels: string[]): string[] {
 
 export async function updateDoc(actor: Actor, projectRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   await assertDocsWritable(actor, db);
   if (patch.body !== undefined) {
     const bodyBytes = Buffer.byteLength(patch.body, "utf8");
@@ -2431,7 +2453,7 @@ export async function markDocFresh(actor: Actor, projectRef: string, ref: string
 /** Move a doc to a new parent and/or position among its siblings. */
 export async function moveDoc(actor: Actor, projectRef: string, ref: string, opts: { parent?: string | null; index?: number }, expectedVersion?: number) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   await assertDocsWritable(actor, db);
   return db.transaction(async (tx) => {
     const d = await lockRow(tx, docs, await resolveDoc(tx, project.id, ref));
@@ -2482,7 +2504,7 @@ export async function moveDoc(actor: Actor, projectRef: string, ref: string, opt
 /** Soft delete: sets deletedAt (kept 30 days for recovery/purge); history lives in `events`. */
 export async function deleteDoc(actor: Actor, projectRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   await assertDocsWritable(actor, db);
   return db.transaction(async (tx) => {
     const d = await resolveDoc(tx, project.id, ref);
@@ -2507,7 +2529,7 @@ export async function deleteDoc(actor: Actor, projectRef: string, ref: string) {
 
 export async function linkDocNode(actor: Actor, projectRef: string, docRef: string, nodeRef: string, unlink = false) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   await assertDocsWritable(actor, db);
   const d = await resolveDoc(db, project.id, docRef);
   const n = await resolveNode(db, project.id, nodeRef);

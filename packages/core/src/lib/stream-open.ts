@@ -61,12 +61,13 @@ export async function openStream(i: {
   open.set(actor.id, n + 1);
 
   const db = await getDb();
-  const { scope, where } = resolved;
+  const { scope, where, allow, recheck } = resolved;
   const body = eventStream({
-    subscribe: (fn) => bus.subscribe(scope, fn),
+    subscribe: (fn) => bus.subscribe(scope, (e) => (!allow || allow(e)) && fn(e)),
     replay: async (since, limit) =>
       (await db.select().from(schema.events).where(and(where, gt(schema.events.seq, since))).orderBy(asc(schema.events.seq)).limit(limit)).map(toStreamEvent),
     latestSeq: async () => (await db.select({ seq: schema.events.seq }).from(schema.events).where(where).orderBy(desc(schema.events.seq)).limit(1))[0]?.seq ?? 0,
+    recheck,
     since: parseSince(i.lastEventId, i.since),
     signal: i.signal,
     onClose: () => {

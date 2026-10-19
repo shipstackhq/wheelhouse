@@ -1,8 +1,9 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from "./access";
+import { actorForKey, AuthError, sessionForToken, sha256, type Actor } from "./access";
+import { isUuid } from "./project-access";
 
 /**
  * Who is calling, from the raw credentials of a request. Framework-free so the Next app and the API share one
@@ -13,16 +14,47 @@ import { actorForKey, AuthError, sha256, userForSessionToken, type Actor } from 
 export const SESSION_COOKIE = "wh_session";
 export const SESSION_DAYS = 30;
 
-/** MVP: one team per user (the first membership). */
-export async function currentMembership(userId: string) {
+/**
+ * The workspace a person is working in: the one their session chose, else their first. A suspended workspace is never
+ * chosen. Null when they belong to none that is usable.
+ */
+export async function currentMembership(userId: string, activeTeamId?: string | null) {
   const db = await getDb();
-  const [m] = await db
+  const rows = await db
     .select({ membership: schema.memberships, team: schema.teams })
     .from(schema.memberships)
     .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
     .where(eq(schema.memberships.userId, userId))
-    .limit(1);
-  return m ?? null;
+    .orderBy(schema.memberships.createdAt);
+  const usable = rows.filter((r) => !r.team.suspendedAt);
+  return usable.find((r) => r.team.id === activeTeamId) ?? usable[0] ?? null;
+}
+
+/** Every workspace the person can work in, for the switcher; `active` marks the current one. */
+export async function listWorkspaces(userId: string, activeTeamId?: string | null) {
+  const db = await getDb();
+  const cur = await currentMembership(userId, activeTeamId);
+  const rows = await db
+    .select({ team: schema.teams, role: schema.memberships.role })
+    .from(schema.memberships)
+    .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
+    .where(eq(schema.memberships.userId, userId))
+    .orderBy(schema.memberships.createdAt);
+  return rows.filter((r) => !r.team.suspendedAt).map((r) => ({ id: r.team.id, name: r.team.name, role: r.role, active: r.team.id === cur?.team.id }));
+}
+
+/** Point this session at another of the person's workspaces. Refused for one they are not in or that is suspended. */
+export async function switchWorkspace(token: string, userId: string, teamId: string) {
+  if (!isUuid(teamId)) return null;
+  const db = await getDb();
+  const [m] = await db
+    .select({ team: schema.teams })
+    .from(schema.memberships)
+    .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
+    .where(and(eq(schema.memberships.userId, userId), eq(schema.memberships.teamId, teamId)));
+  if (!m || m.team.suspendedAt) return null;
+  await db.update(schema.sessions).set({ activeTeamId: teamId }).where(and(eq(schema.sessions.id, sha256(token)), eq(schema.sessions.userId, userId)));
+  return { id: m.team.id, name: m.team.name };
 }
 
 /**
@@ -31,9 +63,10 @@ export async function currentMembership(userId: string) {
  */
 export async function actorFromCredentials(c: { authorization?: string | null; sessionToken?: string | null; ip: string }): Promise<Actor> {
   if (c.authorization?.startsWith("Bearer ")) return actorForKey(c.authorization.slice(7).trim(), c.ip);
-  const user = c.sessionToken ? await userForSessionToken(c.sessionToken) : null;
-  if (!user) throw new AuthError("Not authenticated");
-  const m = await currentMembership(user.id);
+  const session = c.sessionToken ? await sessionForToken(c.sessionToken) : null;
+  if (!session) throw new AuthError("Not authenticated");
+  const user = session.user;
+  const m = await currentMembership(user.id, session.activeTeamId);
   if (!m) throw new AuthError("No team");
   return { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
 }
@@ -43,9 +76,10 @@ export async function actorFromCredentials(c: { authorization?: string | null; s
  * are only for people (connecting GitHub, the live streams) use this; each host decides what "signed out" looks like.
  */
 export async function humanFromSession(token: string | undefined | null) {
-  const user = token ? await userForSessionToken(token) : null;
-  if (!user) return null;
-  const m = await currentMembership(user.id);
+  const session = token ? await sessionForToken(token) : null;
+  if (!session) return null;
+  const user = session.user;
+  const m = await currentMembership(user.id, session.activeTeamId);
   if (!m) return null;
   const actor: Actor = { kind: "human", id: user.id, name: user.name, teamId: m.team.id };
   return { user, team: m.team, membership: m.membership, actor };

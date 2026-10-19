@@ -17,6 +17,7 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
+import type { WorkspaceRole } from "../db/schema";
 import { AccountError } from "./accounts";
 import { appFailure } from "./api-errors";
 import { hashPassword, humanFromSession, startSession, type Human } from "./auth-core";
@@ -29,7 +30,7 @@ const PW = "correct horse battery";
 let n = 0;
 const email = (p: string) => `${p}-${RUN}-${++n}@example.com`;
 
-async function person(teamId: string, role: "owner" | "member", e = email(role)): Promise<Human> {
+async function person(teamId: string, role: WorkspaceRole, e = email(role)): Promise<Human> {
   const db = await getDb();
   const [u] = await db.insert(schema.users).values({ email: e, name: `${role} ${n}`, passwordHash: await hashPassword(PW) }).returning();
   await db.insert(schema.memberships).values({ userId: u.id, teamId, role });
@@ -114,7 +115,27 @@ describe("changing members", () => {
   });
   test("a bad role is a field error", async () => {
     const e = (await rejects(t.updateMemberAs(A.owner, { userId: A.member.user.id, role: "root", tags: [] }), isService("invalid"), "bad role")) as ServiceError;
-    assert.deepEqual(e.details, { fields: { role: "Choose owner or member" } });
+    assert.deepEqual(e.details, { fields: { role: "Choose a role" } });
+  });
+  test("an admin manages members and invites, but only an owner can make, change or remove an owner", async () => {
+    const adm = await person(A.team.id, "admin");
+    const target = await person(A.team.id, "member");
+    const changed = await t.updateMemberAs(adm, { userId: target.user.id, role: "viewer", tags: [] });
+    assert.equal(changed.role, "viewer");
+    await rejects(t.updateMemberAs(adm, { userId: target.user.id, role: "owner", tags: [] }), isService("forbidden"), "admin makes an owner");
+    await rejects(t.updateMemberAs(adm, { userId: A.owner.user.id, role: "member", tags: [] }), isService("forbidden"), "admin demotes an owner");
+    await rejects(t.removeMemberAs(adm, A.owner.user.id), isService("forbidden"), "admin removes an owner");
+    const inv = await t.createInviteAs(adm, { kind: "join_team", email: email("new"), role: "guest" }, "https://wh.test");
+    assert.equal(inv.kind, "join_team");
+    await rejects(t.createInviteAs(adm, { kind: "join_team", email: email("new"), role: "owner" }, "https://wh.test"), (e) => e instanceof InviteError && e.code === "forbidden", "admin invites an owner");
+    assert.deepEqual(await t.removeMemberAs(adm, target.user.id), { ok: true });
+  });
+  test("a member, viewer or guest cannot manage people", async () => {
+    for (const role of ["member", "viewer", "guest"] as const) {
+      const p = await person(A.team.id, role);
+      await rejects(t.updateMemberAs(p, { userId: A.member.user.id, role: "viewer", tags: [] }), isService("forbidden"), `${role} changes a role`);
+      await rejects(t.createInviteAs(p, { kind: "join_team", email: email("x"), role: "member" }, "https://wh.test"), (e) => e instanceof InviteError && e.code === "forbidden", `${role} invites`);
+    }
   });
   test("an owner removes a member of their own team", async () => {
     const extra = await person(A.team.id, "member");

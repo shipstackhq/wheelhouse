@@ -261,3 +261,49 @@ Creating, editing and retiring repositories is open to any teammate, as it was i
 **Connecting a repository** used to be a form that redirected to `?github=repo_connected`; it is now a fetch, and the page shows "Repository connected." (or the server's reason) on that installation and reads the list again. The words are the same.
 
 **An action item becomes a ticket** through `POST /api/app/projects/:key/tickets` (WH-96), then the page ticks the box with an ordinary `PATCH` of the doc against the version it read. "Create ADR from this doc" is `PUT /api/app/projects/:key/decisions` (WH-97).
+
+## Built by WH-105: who can open a project (ADR-23)
+
+A project is reachable only by its members. Every route below is for a signed-in person; an agent key cannot call them. A project you are not in, and a project of another workspace, are the same plain `404`; a member whose role is too low gets `403`.
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/app/projects` | now only the projects the person is a member of (an agent key still sees its whole workspace) |
+| `POST /api/app/projects` | workspace viewers and guests get `403`; the creator becomes the project's admin |
+| `GET /api/app/projects/:key/members` | `{ project, myRole, members: [{ userId, name, email, role, workspaceRole, addedAt }] }`. Any member |
+| `GET /api/app/projects/:key/members/addable` | `{ people }`: workspace members not yet in the project. Project admins |
+| `POST /api/app/projects/:key/members` | `{ userId, role }` with role `admin`, `editor` or `viewer`; 201. Project admins; the person must be in the workspace; already in is a `409` |
+| `PATCH /api/app/projects/:key/members/:userId` | `{ role }`. Project admins; the last admin cannot be demoted (`409`) |
+| `DELETE /api/app/projects/:key/members/:userId` | remove someone, or leave yourself. The last admin cannot go (`409`) |
+| `POST /api/app/projects/:key/join` | a workspace owner or admin joins as the project's admin. Audited, and shown in the project's own activity |
+| `GET /api/app/access/projects` | every project of the workspace by name with its admins and whether you are in it. Workspace owners and admins |
+| `GET /api/app/access/audit?project=KEY&limit=` | the access audit log, newest first. Workspace owners and admins |
+
+Workspace roles are now `owner`, `admin`, `member`, `viewer` and `guest`. Owners and admins invite, change roles and remove members (`/api/app/team/...`, `/api/app/invites`); only an owner can make, change or remove an owner. Removing a person who is the only admin of a project is a `409` that names the projects. `/api/v1` and `/mcp` are unchanged: an agent key keeps the access it had.
+
+**More from WH-105.**
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/app/projects` | each project now carries `role`, the caller's own role in it |
+| `POST /api/app/invites` | join invites take `projects: [{ project: "KEY", role }]`; the caller must administer each one (`403` otherwise); at most 20. A pending invite lists them under `projects` |
+| `POST /api/app/invites/peek-existing` | signed in: what an invite sent to your own address would add you to. Anyone else's invite, or a bad token, is the usual `400` |
+| `POST /api/app/invites/accept-existing` | signed in: join that workspace with the account you have (you keep your other workspaces); this session then works in it. Already a member is a `409` and the invite stays unused |
+| `GET /api/app/me/workspaces` | `{ workspaces: [{ id, name, role, active }] }`; a suspended workspace is left out |
+| `POST /api/app/me/workspace` | `{ teamId }`: this session works in another of your workspaces. Not yours, suspended or malformed is a `404`. Only this session changes; every cached read in the browser belongs to the old workspace and is dropped |
+
+A person who belongs to several workspaces works in one at a time, chosen per session (`sessions.active_team_id`; null means their first). Addresses do not carry the workspace (`/w/<slug>/...` is not built): two tabs of one session are in the same workspace. A workspace an instance admin suspended is never chosen; someone is locked out only when every workspace of theirs is suspended. Open event streams re-check access every 15 seconds: a project stream ends when its person is removed, and the dashboard stream follows joins and removals.
+
+**Wording.** The product says "workspace" where the code says "team" (tables, ids, URLs such as `/team` and `/api/app/team` are unchanged). Messages shown to people were reworded; messages that are part of the frozen `/api/v1` and `/mcp` contract were not.
+
+## Built by WH-107: a dashboard for each project
+
+`GET /api/app/dashboard/:widget` now takes an optional `?project=KEY`. Without it the widgets read the whole workspace, limited to the projects the person is in (as before). With it they read that one project: the project is resolved through `getProject`, so another workspace's project, one the person is not in, a malformed value or a repeated `project` parameter is a `404`, and the numbers come from a snapshot limited to that project. An empty `?project=` means the workspace.
+
+| Widget | For one project |
+|---|---|
+| `kpis`, `progress`, `throughput`, `activity-split`, `attention`, `recent`, `sync` | the same shapes, for that project only. `kpis` gained `agentsActive7d` (agents that changed something in the project in 7 days) |
+| `agents` | only the agents that do something in that project (pending changes, actions in 7 days or a live session) |
+| `focus` | **project only** (`404` without `?project=`): what has waited longest for review, what has sat longest in progress, agents gone quiet, decisions still proposed, member count and the caller's role. "How long" is time since the ticket last moved into its column |
+
+The page is `/p/:key/overview` ("Overview", first in the project sidebar). It draws the same widget components as the home page, inside a scope that says which project (`lib/dashboard-scope`), so a widget added to `PROJECT_WIDGETS` in `pages/dashboard/registry.tsx` appears on every project's Overview. It stays live through the project's own event stream (opened by the project layout) and a 30 s tick. The home page's project rows link to it.

@@ -307,6 +307,10 @@ describe("Connect GitHub", () => {
     assert.equal(r.status, 200);
     assert.deepEqual([r.json.configured, r.json.isOwner, r.json.missing], [true, true, []]);
     assert.deepEqual(r.json.installations, [{ installationId: gh.installationC, account: "contract-connect", failed: false, repositories: [{ id: gh.connectRepoId, fullName: "ct/connect-app", private: true }] }]);
+    // A plain team member is in no project they did not create (ADR-23): an owner adds them to this one first.
+    const team = await app("GET", "/api/app/team", owner);
+    const memberId = team.json.members.find((m: { email: string }) => m.email === fx.connect.memberEmail).userId;
+    assert.equal((await app("POST", `/api/app/projects/${key}/members`, owner, { body: { userId: memberId, role: "viewer" } })).status, 201);
     const member = await status(await signIn(fx.connect.memberEmail), key);
     assert.deepEqual([member.json.configured, member.json.isOwner, member.json.installations], [true, false, []]);
   });
@@ -337,14 +341,14 @@ describe("Connect GitHub", () => {
     const { owner, key } = await fresh();
     const asMember = await connect(await signIn(fx.connect.memberEmail), key, own);
     assert.equal(asMember.status, 403);
-    assert.match(asMember.json.error.message, /Only team owners/);
+    assert.match(asMember.json.error.message, /Only workspace owners/);
     // Team B's owner, on their own project, using the connect team's installation (or team A's).
     const b = await signIn(fx.b.email);
     const before = (await app("GET", `/api/app/projects/${fx.b.projectKey}/repositories`, b)).json.repositories.length;
     for (const installationId of [gh.installationC, gh.installationA]) {
       const stolen = await connect(b, fx.b.projectKey, { installationId, repoId: gh.connectRepoId });
       assert.equal(stolen.status, 403, installationId);
-      assert.match(stolen.json.error.message, /not connected to your team/);
+      assert.match(stolen.json.error.message, /not connected to your workspace/);
     }
     assert.equal((await connect(owner, key, { installationId: gh.installationC, repoId: "999999" })).status, 404);
     for (const [body, field] of [[{ repoId: "1" }, "installationId"], [{ installationId: "1" }, "repoId"], [{ installationId: 1, repoId: "1" }, "installationId"]] as const) {

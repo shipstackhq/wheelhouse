@@ -6,7 +6,7 @@ import { TeamLiveRefresh } from "../../components/live-refresh";
  * Keep the dashboard fresh: the team's event stream (WH-1) refreshes it the moment anything changes, and every 30s while the tab is
  * visible (and on refocus) as a safety net for anything the stream does not carry.
  */
-export function DashboardRefresh({ intervalMs = 30_000 }: { intervalMs?: number }) {
+export function DashboardRefresh({ intervalMs = 30_000, stream = true }: { intervalMs?: number; /** False inside a project, whose own stream already refreshes everything on screen. */ stream?: boolean }) {
   const { queryClient } = useServices();
   useEffect(() => {
     const tick = () => !document.hidden && void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -17,5 +17,5 @@ export function DashboardRefresh({ intervalMs = 30_000 }: { intervalMs?: number 
       document.removeEventListener("visibilitychange", tick);
     };
   }, [queryClient, intervalMs]);
-  return <TeamLiveRefresh />;
+  return stream ? <TeamLiveRefresh /> : null;
 }

@@ -1,7 +1,9 @@
-import { describe, expect, test } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./sidebar";
+import { NAV_ICONS } from "./icons";
 import { renderIn } from "../test/harness";
 
 const PROJECTS = [
@@ -19,7 +21,7 @@ describe("what the sidebar shows", () => {
   test("a project's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
     renderIn(sidebar(), "/p/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", Members: "/team", "Agents & API keys": "/agents" });
+    expect(links).toMatchObject({ Home: "/", Board: "/p/AA", Activity: "/p/AA/activity", Map: "/p/AA/map", Docs: "/p/AA/docs", Decisions: "/p/AA/decisions", Glossary: "/p/AA/glossary", Repos: "/p/AA/repos", "Project members": "/p/AA/members", Members: "/team", "Agents & API keys": "/agents" });
     expect(screen.getByText("Work")).toBeTruthy();
     expect(screen.getByText("Knowledge")).toBeTruthy();
     expect(screen.getByText("Code")).toBeTruthy();
@@ -42,8 +44,8 @@ describe("what the sidebar shows", () => {
     unmount();
     renderIn(sidebar({ isAdmin: true }), "/");
     expect(screen.getByText("Admin")).toBeTruthy();
-    expect(within(nav()).getByRole("link", { name: "Teams" }).getAttribute("href")).toBe("/admin/teams");
-    expect(within(nav()).getByRole("link", { name: "Invite a new team" }).getAttribute("href")).toBe("/admin/invites");
+    expect(within(nav()).getByRole("link", { name: "Workspaces" }).getAttribute("href")).toBe("/admin/teams");
+    expect(within(nav()).getByRole("link", { name: "Invite a new workspace" }).getAttribute("href")).toBe("/admin/invites");
   });
 });
 
@@ -160,5 +162,140 @@ describe("on a small screen", () => {
     expect(drawer.className).not.toContain("-translate-x-full");
     await user.click(screen.getByRole("button", { name: "Close menu" }));
     expect(drawer.className).toContain("-translate-x-full");
+  });
+});
+
+/** The drawing of an icon, so a test can tell the outline from the solid twin. */
+const pathOf = (Icon: (p: Record<string, unknown>) => React.ReactNode) => /<path[^>]* d="([^"]+)"/.exec(renderToStaticMarkup(<Icon />))![1];
+const iconOf = (link: HTMLElement) => link.querySelector("svg path:last-of-type, svg path")!.getAttribute("d");
+const aside = () => document.getElementById("app-sidebar") as HTMLElement;
+afterEach(() => localStorage.clear());
+
+describe("icons: the place you are on is solid, the others are outline", () => {
+  test("every pair draws differently, so 'solid' is a real difference", () => {
+    for (const [name, pair] of Object.entries(NAV_ICONS)) expect(pathOf(pair.line as never), name).not.toBe(pathOf(pair.fill as never));
+  });
+
+  test("on the Docs page, Docs has the solid icon and every other item the outline one", () => {
+    renderIn(sidebar({ isAdmin: true }), "/p/AA/docs");
+    const expected: Record<string, keyof typeof NAV_ICONS> = {
+      Home: "home", Overview: "overview", Board: "board", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
+      Repos: "repos", "Project members": "projectMembers", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
+    };
+    for (const [label, key] of Object.entries(expected)) {
+      const link = within(nav()).getByRole("link", { name: label });
+      const want = label === "Docs" ? NAV_ICONS[key].fill : NAV_ICONS[key].line;
+      expect(iconOf(link), label).toBe(pathOf(want as never));
+      expect(link.getAttribute("aria-current") === "page", label).toBe(label === "Docs");
+    }
+  });
+
+  test("moving to another page moves the solid icon", () => {
+    const { unmount } = renderIn(sidebar(), "/p/AA");
+    expect(iconOf(within(nav()).getByRole("link", { name: "Board" }))).toBe(pathOf(NAV_ICONS.board.fill as never));
+    expect(iconOf(within(nav()).getByRole("link", { name: "Overview" }))).toBe(pathOf(NAV_ICONS.overview.line as never)); // /overview is its own address
+    unmount();
+    renderIn(sidebar(), "/team");
+    expect(iconOf(within(nav()).getByRole("link", { name: "Members" }))).toBe(pathOf(NAV_ICONS.people.fill as never));
+  });
+});
+
+describe("collapsing to the icon-only rail", () => {
+  test("the toggle collapses and expands, says which, and the labels stay for screen readers", async () => {
+    renderIn(sidebar(), "/p/AA");
+    const user = userEvent.setup();
+    const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(aside().getAttribute("data-collapsed")).toBe("false");
+    expect(aside().className).not.toContain("md:w-14");
+    await user.click(toggle);
+    const expand = screen.getByRole("button", { name: "Expand sidebar" });
+    expect(expand.getAttribute("aria-expanded")).toBe("false");
+    expect(aside().getAttribute("data-collapsed")).toBe("true");
+    expect(aside().className).toContain("md:w-14");
+    // still reachable by name, with the text visible to screen readers only
+    const board = within(nav()).getByRole("link", { name: "Board" });
+    expect(board.querySelector("span")!.className).toContain("md:sr-only");
+    expect(board.getAttribute("href")).toBe("/p/AA");
+    expect(screen.getByText("Analytical Engines").className).toContain("md:hidden");
+    expect(screen.getByText("Work").className).toContain("md:hidden"); // the title makes way for a thin rule
+    await user.click(expand);
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
+    expect(aside().className).not.toContain("md:w-14");
+  });
+
+  test("the choice is remembered: a fresh mount starts as it was left", async () => {
+    const first = renderIn(sidebar(), "/p/AA");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(localStorage.getItem("wh:sidebar-collapsed")).toBe("1");
+    first.unmount();
+    renderIn(sidebar(), "/p/AA");
+    expect(aside().getAttribute("data-collapsed")).toBe("true");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(localStorage.getItem("wh:sidebar-collapsed")).toBe("0");
+  });
+
+  test("blocked storage does not break it: it starts open and still toggles", async () => {
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    try {
+      renderIn(sidebar(), "/p/AA");
+      expect(aside().getAttribute("data-collapsed")).toBe("false");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
+      expect(aside().getAttribute("data-collapsed")).toBe("true");
+    } finally {
+      get.mockRestore();
+      set.mockRestore();
+    }
+  });
+
+  test("a tooltip names each icon when collapsed: shown when the link is focused, as a keyboard user would", async () => {
+    localStorage.setItem("wh:sidebar-collapsed", "1");
+    renderIn(sidebar(), "/p/AA");
+    const docs = within(nav()).getByRole("link", { name: "Docs" });
+    act(() => docs.focus());
+    expect((await screen.findByRole("tooltip")).textContent).toBe("Docs");
+  });
+
+  test("expanded, there are no tooltips and no hidden labels", () => {
+    renderIn(sidebar(), "/p/AA");
+    const board = within(nav()).getByRole("link", { name: "Board" });
+    expect(board.querySelector("span")!.className).not.toContain("md:sr-only");
+  });
+
+  test("the project switcher still works as a rail: it opens, searches and moves to the chosen project", async () => {
+    localStorage.setItem("wh:sidebar-collapsed", "1");
+    const { router } = renderIn(sidebar(), "/p/AA/docs");
+    const user = userEvent.setup();
+    await user.click(within(nav()).getByRole("button", { name: "Project: Alpha" }));
+    await user.type(await screen.findByPlaceholderText("Search projects…"), "gam");
+    await user.click(screen.getByRole("button", { name: /Gamma/ }));
+    expect(router.state.location.pathname).toBe("/p/CC/docs"); // keeps the section
+    expect(within(nav()).getByRole("button", { name: "Project: Gamma" })).toBeTruthy();
+  });
+
+  test("with no project open the collapsed switcher still invites a choice", () => {
+    localStorage.setItem("wh:sidebar-collapsed", "1");
+    renderIn(sidebar(), "/team");
+    expect(within(nav()).getByRole("button", { name: "Select a project" })).toBeTruthy();
+  });
+
+  test("the account menu is told whether the rail is collapsed", async () => {
+    renderIn(sidebar({ profile: (collapsed: boolean) => <div>{collapsed ? "compact profile" : "full profile"}</div> }), "/p/AA");
+    expect(screen.getByText("full profile")).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Collapse sidebar" }));
+    expect(screen.getByText("compact profile")).toBeTruthy();
+  });
+
+  test("the sections, workspace and admin links all keep working when collapsed", () => {
+    localStorage.setItem("wh:sidebar-collapsed", "1");
+    renderIn(sidebar({ isAdmin: true }), "/p/AA");
+    for (const [name, href] of [["Home", "/"], ["Overview", "/p/AA/overview"], ["Map", "/p/AA/map"], ["Members", "/team"], ["Agents & API keys", "/agents"], ["Workspaces", "/admin/teams"], ["Invite a new workspace", "/admin/invites"]]) {
+      expect(within(nav()).getByRole("link", { name }).getAttribute("href")).toBe(href);
+    }
   });
 });

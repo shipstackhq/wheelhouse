@@ -31,6 +31,13 @@ db() { pnpm --silent exec tsx packages/core/src/tools/db-cli.ts "$@"; }
 echo "rehearsal $NAME: source $SOURCE ($(du -sh "$SOURCE" | cut -f1))"
 echo "tool version: $(git rev-parse --short HEAD)$(git diff --quiet && echo '' || echo '+uncommitted')"
 
+step "0. bring a COPY of the source to this code's migrations (the export refuses to cross migrations)"
+if [[ "$SOURCE" != postgres* ]]; then
+  cp -R "$SOURCE" "$W/source-migrated" && SOURCE="$W/source-migrated"
+  db migrate --to "$SOURCE" || { bad "migrate the source copy"; exit 1; }
+fi
+done_step
+
 step "1. export the source (it is copied first, never opened in place)"
 db export --from "$SOURCE" --out "$W/export" || { bad "export"; exit 1; }
 du -sh "$W/export" | sed 's/^/    export size: /'

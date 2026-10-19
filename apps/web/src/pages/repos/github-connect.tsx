@@ -10,11 +10,11 @@ import { useState } from "react";
 
 const MESSAGES: Record<string, string> = {
   not_configured: "GitHub is not set up on this server yet.",
-  owner_only: "Only team owners can connect GitHub.",
+  owner_only: "Only workspace owners can connect GitHub.",
   bad_installation: "GitHub sent back something we could not read. Try again.",
   no_code: "GitHub did not confirm who you are. In the GitHub App's settings, switch on “Request user authorization (OAuth) during installation”, then try again.",
   not_yours: "GitHub says you cannot administer that installation, so it was not connected.",
-  taken: "That GitHub installation is already connected to another team.",
+  taken: "That GitHub installation is already connected to another workspace.",
   failed: "Something went wrong talking to GitHub. Try again in a minute.",
   connect_failed: "That repository could not be connected.",
 };
@@ -86,7 +86,7 @@ export function GithubConnect({ projectKey }: { projectKey: string }) {
       </div>
       {note && <p role="status" className={note.bad ? "text-sm text-danger" : "text-sm text-ok"}>{note.text}</p>}
       {!status.isOwner ? (
-        <p className="text-sm text-muted">A team owner connects GitHub for this project.</p>
+        <p className="text-sm text-muted">A workspace owner connects GitHub for this project.</p>
       ) : (
         <>
           {/* A full page load: this leaves the app for GitHub and comes back to the callback, which redirects here. */}

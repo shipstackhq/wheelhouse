@@ -248,7 +248,7 @@ export async function listDrafts(actor: Actor, projectRef: string) {
 /** Human action: publish or discard a pending draft now. */
 export async function resolveDraft(actor: Actor, projectRef: string, draftId: string, action: "publish" | "discard") {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const [d] = await db
     .select()
     .from(nodeDrafts)
@@ -342,7 +342,7 @@ export async function listDocDrafts(actor: Actor, projectRef: string) {
 /** Human action: publish or discard a pending doc draft now. */
 export async function resolveDocDraft(actor: Actor, projectRef: string, draftId: string, action: "publish" | "discard") {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const [d] = await db
     .select()
     .from(docDrafts)
@@ -385,7 +385,7 @@ export type LandReport = {
  */
 export async function land(actor: Actor, projectRef: string, r: LandReport) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const project = await getProject(actor, projectRef, "edit");
   const { findOrCreateRepository } = await import("./service");
   const repo = await findOrCreateRepository(actor, project.id, r.repository);
   const limit = repo?.pathLimit?.trim().replace(/^\/+/, "").replace(/\/*$/, "/") || null;

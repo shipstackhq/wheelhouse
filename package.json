@@ -12,6 +12,7 @@
     "db:generate": "pnpm --filter @wheelhouse/core db:generate",
     "test:contract": "tsx --conditions=react-server tests/contract/run.ts",
     "typecheck": "tsc --noEmit && pnpm --filter @wheelhouse/core typecheck && pnpm --filter @wheelhouse/api typecheck && pnpm --filter @wheelhouse/api-client typecheck && pnpm --filter @wheelhouse/web typecheck",
+    "db:migrate": "tsx packages/core/src/tools/db-cli.ts migrate",
     "db:export": "tsx packages/core/src/tools/db-cli.ts export",
     "db:import": "tsx packages/core/src/tools/db-cli.ts import",
     "db:verify": "tsx packages/core/src/tools/db-cli.ts verify",

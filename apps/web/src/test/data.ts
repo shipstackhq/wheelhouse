@@ -1,4 +1,5 @@
-import type { Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminTeam, AdminTeamDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, SetupCommands, TeamOverview } from "@wheelhouse/api-client";
+import type {
+  Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminTeam, AdminTeamDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, ProjectMembers, SetupCommands, TeamOverview } from "@wheelhouse/api-client";
 
 /** Believable answers from the page endpoints, for tests to start from and bend. */
 
@@ -38,6 +39,7 @@ export const invite = (over: Partial<PendingInvite> = {}): PendingInvite => ({
   email: "grace@example.test",
   role: "member",
   teamName: null,
+  projects: [],
   createdAt: "2026-10-16T00:00:00.000Z",
   expiresAt: "2026-10-23T00:00:00.000Z",
   ...over,
@@ -85,7 +87,7 @@ export const adminTeamDetail = (over: Partial<AdminTeamDetail> = {}): AdminTeamD
 const days = (n: number) => Array.from({ length: n }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`);
 
 export const widgets = (): DashboardWidgets => ({
-  kpis: { projects: 2, open: 14, inProgress: 3, inReview: 2, completed7d: 5, completedPrev7d: 3, agentShare7d: 0.4, events7d: 20, staleNodes: 1, mapNodes: 12, staleDocs: 2, agents: 2 },
+  kpis: { projects: 2, open: 14, inProgress: 3, inReview: 2, completed7d: 5, completedPrev7d: 3, agentShare7d: 0.4, events7d: 20, staleNodes: 1, mapNodes: 12, staleDocs: 2, agents: 2, agentsActive7d: 1 },
   progress: [
     {
       id: "p1",
@@ -126,6 +128,14 @@ export const widgets = (): DashboardWidgets => ({
     { seq: 2, projectKey: "AA", actorKind: "human", actorName: "Ada Lovelace", summary: "created AA-9", createdAt: new Date().toISOString() },
   ],
   sync: { untracked: [], quiet: [{ ref: "AA-4", title: "Refactor auth", projectKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }], drafts: [] },
+  focus: {
+    aging: [{ ref: "AA-4", title: "Refactor auth", column: "In Progress", priority: "high", days: 9, byAgent: true }],
+    waitingReview: [{ ref: "AA-6", title: "Add rate limiting", column: "Review", priority: "medium", days: 4, byAgent: false }],
+    quiet: [{ ref: "AA-4", title: "Refactor auth", projectKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }],
+    proposedDecisions: 2,
+    members: { count: 3, myRole: "admin" },
+    tickets: 12,
+  },
 });
 
 /** The dashboard's endpoints, all answering from `data`. */
@@ -406,5 +416,17 @@ export const onboardingPage = (key = "AA", over: Partial<OnboardingPage> = {}): 
   project: { key, name: key === "AA" ? "Alpha" : "Beta" },
   hasRepos: false,
   setup: { ...SETUP, projectKey: key, linkRepo: `/wheelhouse:setup ${key}`, buildMap: `/wheelhouse:map-codebase ${key}\n/wheelhouse:map-schema ${key}` },
+  ...over,
+});
+
+/** Who is in project AA: Ada (workspace owner, project admin), Grace (editor) and Alan (workspace member, project viewer). */
+export const projectMembers = (over: Partial<ProjectMembers> = {}): ProjectMembers => ({
+  project: { id: "p1", key: "AA", name: "Analytical Engine" },
+  myRole: "admin",
+  members: [
+    { userId: "u1", name: "Ada Lovelace", email: "ada@example.test", role: "admin", workspaceRole: "owner", addedAt: "2026-10-01T00:00:00.000Z" },
+    { userId: "u2", name: "Grace Hopper", email: "grace@example.test", role: "editor", workspaceRole: "member", addedAt: "2026-10-02T00:00:00.000Z" },
+    { userId: "u3", name: "Alan Turing", email: "alan@example.test", role: "viewer", workspaceRole: "member", addedAt: "2026-10-03T00:00:00.000Z" },
+  ],
   ...over,
 });

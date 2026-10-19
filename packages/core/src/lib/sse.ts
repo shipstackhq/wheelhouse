@@ -4,6 +4,8 @@ import type { StreamEvent } from "./event-bus";
 export const HEARTBEAT_MS = 25_000;
 /** More missed events than this and the browser is told to reload what it shows instead of being sent each one. */
 export const REPLAY_CAP = 200;
+/** How often an open stream asks whether its person may still hear it (removed from a project, say). Short enough that it does not matter. */
+export const RECHECK_MS = 15_000;
 
 const enc = new TextEncoder();
 
@@ -41,6 +43,12 @@ export type StreamDeps = {
   signal: AbortSignal;
   heartbeatMs?: number;
   replayCap?: number;
+  /**
+   * Asked every `recheckMs` while the stream is open: false ends it (the browser reconnects and is judged afresh), true carries on.
+   * An access check at connect time is not enough for a stream that can stay open for hours.
+   */
+  recheck?: () => Promise<boolean>;
+  recheckMs?: number;
   /** Called exactly once when the stream ends for any reason. */
   onClose?: () => void;
 };
@@ -54,6 +62,7 @@ export function eventStream(d: StreamDeps): ReadableStream<Uint8Array> {
   const cap = d.replayCap ?? REPLAY_CAP;
   let unsubscribe: (() => void) | null = null;
   let beat: ReturnType<typeof setInterval> | null = null;
+  let checker: ReturnType<typeof setInterval> | null = null;
   let closed = false;
   let lastSent = d.since ?? -1;
   let controllerRef: ReadableStreamDefaultController<Uint8Array> | null = null;
@@ -63,6 +72,7 @@ export function eventStream(d: StreamDeps): ReadableStream<Uint8Array> {
     closed = true;
     unsubscribe?.();
     if (beat) clearInterval(beat);
+    if (checker) clearInterval(checker);
     d.signal.removeEventListener("abort", shutdown);
     try {
       controllerRef?.close();
@@ -101,6 +111,20 @@ export function eventStream(d: StreamDeps): ReadableStream<Uint8Array> {
       let replaying = true;
       unsubscribe = d.subscribe((e) => (replaying ? held.push(e) : live(e)));
       beat = setInterval(() => send(formatHeartbeat()), heartbeatMs);
+      if (d.recheck) {
+        let checking = false;
+        checker = setInterval(async () => {
+          if (checking || closed) return;
+          checking = true;
+          try {
+            if (!(await d.recheck!())) shutdown();
+          } catch {
+            /* the database hiccuped: keep the stream, the next check will try again */
+          } finally {
+            checking = false;
+          }
+        }, d.recheckMs ?? RECHECK_MS);
+      }
 
       try {
         if (d.since == null) {

@@ -125,7 +125,7 @@ describe("Connect GitHub", () => {
   test("a member is told an owner connects it, and sees no way to", async () => {
     open("/p/AA/repos", (s) => s.on("GET /api/app/projects/AA/repositories/github", githubStatus({ isOwner: false, installations: [] })));
     const c = await githubCard();
-    expect(c.textContent).toContain("A team owner connects GitHub for this project.");
+    expect(c.textContent).toContain("A workspace owner connects GitHub for this project.");
     expect(within(c).queryByRole("link")).toBeNull();
     expect(within(c).queryByRole("button", { name: "Connect" })).toBeNull();
   });
@@ -189,8 +189,8 @@ describe("Connect GitHub", () => {
     ["?github=connected", "GitHub connected. Choose the repositories this project uses.", false],
     ["?github=repo_connected", "Repository connected.", false],
     ["?github_error=not_yours", "GitHub says you cannot administer that installation, so it was not connected.", true],
-    ["?github_error=taken", "That GitHub installation is already connected to another team.", true],
-    ["?github_error=owner_only", "Only team owners can connect GitHub.", true],
+    ["?github_error=taken", "That GitHub installation is already connected to another workspace.", true],
+    ["?github_error=owner_only", "Only workspace owners can connect GitHub.", true],
     ["?github_error=connect_failed&github_msg=acme%2Fweb%20is%20private", "acme/web is private", true],
     ["?github_error=something_new", "Something went wrong talking to GitHub. Try again in a minute.", true],
   ])("coming back from GitHub with %s says %s", async (query, text, bad) => {

@@ -64,9 +64,9 @@ describe("the team page, for an owner", () => {
     await waitFor(() => expect(server.sent("DELETE /api/app/invites/i1")).toHaveLength(1));
   });
 
-  test("a full team says so and the invite form is switched off", async () => {
+  test("a full workspace says so and the invite form is switched off", async () => {
     renderApp("/team", (s) => s.on("GET /api/app/team", team({ seats: { members: 5, pending: 0, used: 5, max: 5, full: true } })));
-    await screen.findByText("Your team is full. Revoke a pending invite or remove a member to free a seat.");
+    await screen.findByText("Your workspace is full. Revoke a pending invite or remove a member to free a seat.");
     expect((screen.getByRole("button", { name: "Create invite link" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByPlaceholderText("Their email") as HTMLInputElement).disabled).toBe(true);
   });
@@ -82,6 +82,29 @@ describe("the team page, for an owner", () => {
     await screen.findByText("Invite created for new@example.test. Send them this link. It is shown only once, works for one person and expires on 2026-10-23:");
     expect(screen.getByText("https://wh.example.test/invite#SECRET")).toBeTruthy();
     expect(server.sent("POST /api/app/invites")[0].body).toEqual({ kind: "join_team", email: "new@example.test", role: "member", tags: "design", team: "" });
+  });
+
+  test("the invite form offers only the projects you administer, and sends the ones ticked with a project role", async () => {
+    const { server } = renderApp("/team", (s) => {
+      s.projects = [
+        { id: "p1", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "admin" },
+        { id: "p2", key: "BB", name: "Beta", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "editor" },
+      ];
+      s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_team", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" });
+    });
+    const user = userEvent.setup();
+    await user.type(await screen.findByPlaceholderText("Their email"), "new@example.test");
+    expect(await screen.findByLabelText(/Alpha/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Beta/)).toBeNull(); // an editor of Beta cannot hand it out
+    await user.click(screen.getByLabelText(/Alpha/));
+    await user.click(screen.getByRole("button", { name: "Create invite link" }));
+    await waitFor(() => expect(server.sent("POST /api/app/invites")).toHaveLength(1));
+    expect((server.sent("POST /api/app/invites")[0].body as { projects: unknown }).projects).toEqual([{ project: "AA", role: "editor" }]);
+  });
+
+  test("a pending invite says which projects it adds the person to", async () => {
+    renderApp("/team", (s) => s.on("GET /api/app/team", team({ pendingInvites: [invite({ projects: [{ key: "AA", name: "Alpha", role: "viewer" }] })] })));
+    expect(await screen.findByText(/joins AA as viewer/)).toBeTruthy();
   });
 
   test("an invite problem (already invited, not allowed) is shown in the server's words", async () => {
@@ -161,5 +184,85 @@ describe("loading and failing", () => {
     await userEvent.setup().click(within(alert).getByRole("button", { name: "Try again" }));
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     expect(server.sent("GET /api/app/team").length).toBeGreaterThan(1);
+  });
+});
+
+describe("the team page and project access (ADR-23)", () => {
+  test("an admin edits members and invites, but cannot touch an owner or hand out the owner role", async () => {
+    renderApp("/team", (s) => s.on("GET /api/app/team", team({ role: "admin" })));
+    await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
+    const ada = await findRow("Ada Lovelace"); // an owner: read only for an admin
+    expect(within(ada).queryByRole("button", { name: "Save" })).toBeNull();
+    expect(within(ada).getByText("owner")).toBeTruthy();
+    const grace = await findRow("Grace Hopper");
+    expect(within(grace).getByRole("button", { name: "Save" })).toBeTruthy();
+    const user = userEvent.setup();
+    await user.click(within(grace).getByRole("combobox"));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(options).toEqual(["admin", "member", "viewer", "guest"]); // no owner
+    await user.keyboard("{Escape}");
+    expect(await screen.findByRole("button", { name: "Create invite link" })).toBeTruthy();
+  });
+
+  test("an owner is offered all five roles", async () => {
+    renderApp("/team");
+    const user = userEvent.setup();
+    await user.click(within(await findRow("Grace Hopper")).getByRole("combobox"));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["owner", "admin", "member", "viewer", "guest"]);
+  });
+
+  test("Save sends the chosen role, whatever it is", async () => {
+    const { server } = renderApp("/team", (s) => s.on("PATCH /api/app/team/members/u2", { member: team().members[1] }));
+    const user = userEvent.setup();
+    await user.click(within(await findRow("Grace Hopper")).getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "viewer" }));
+    await user.click(within(rowOf("Grace Hopper")).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/team/members/u2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/team/members/u2")[0].body).toMatchObject({ role: "viewer" });
+  });
+
+  test("a plain member sees the list read only, with no invite form, project list or access log, and asks for neither", async () => {
+    const { server } = renderApp("/team", (s) => s.on("GET /api/app/team", team({ role: "member", pendingInvites: [] })));
+    await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
+    expect(screen.queryByRole("button", { name: "Create invite link" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Projects" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Access log" })).toBeNull();
+    expect(server.sent("GET /api/app/access/projects")).toHaveLength(0);
+    expect(server.sent("GET /api/app/access/audit")).toHaveLength(0);
+  });
+
+  test("owners see every project by name and admins, and can join one as admin", async () => {
+    const { server } = renderApp("/team", (s) => {
+      s.on("GET /api/app/access/projects", {
+        projects: [
+          { id: "p1", key: "AA", name: "Analytical Engine", admins: ["Ada Lovelace"], memberCount: 3, isMember: true },
+          { id: "p2", key: "BB", name: "Difference Engine", admins: ["Charles Babbage"], memberCount: 1, isMember: false },
+        ],
+      });
+      s.on("POST /api/app/projects/BB/join", { project: { id: "p2", key: "BB", name: "Difference Engine" } });
+    });
+    const projects = (await screen.findByRole("heading", { name: "Projects" })).closest(".card") as HTMLElement;
+    expect(await within(projects).findByText("Difference Engine")).toBeTruthy();
+    expect(within(projects).getByText(/1 member · admin: Charles Babbage/)).toBeTruthy();
+    expect(within(projects).getByText("you are in")).toBeTruthy(); // for the project they are already in
+    expect(within(projects).queryByRole("button", { name: "Join Analytical Engine as admin" })).toBeNull();
+    await userEvent.setup().click(within(projects).getByRole("button", { name: "Join Difference Engine as admin" }));
+    await waitFor(() => expect(server.sent("POST /api/app/projects/BB/join")).toHaveLength(1));
+  });
+
+  test("the access log lists who changed access, newest first", async () => {
+    renderApp("/team", (s) =>
+      s.on("GET /api/app/access/audit", {
+        events: [
+          { seq: 2, actorName: "Ada Lovelace", action: "project.admin_joined", targetType: "user", targetId: "u1", projectKey: "BB", before: null, after: { role: "admin" }, createdAt: "2026-10-18T10:00:00.000Z" },
+          { seq: 1, actorName: "Grace Hopper", action: "project.member_role_changed", targetType: "user", targetId: "u3", projectKey: "AA", before: { role: "viewer" }, after: { role: "editor" }, createdAt: "2026-10-17T10:00:00.000Z" },
+        ],
+      }),
+    );
+    const log = (await screen.findByRole("heading", { name: "Access log" })).closest(".card") as HTMLElement;
+    const items = await within(log).findAllByRole("listitem");
+    expect(items[0].textContent).toContain("Ada Lovelace joined a project as admin");
+    expect(items[0].textContent).toContain("BB");
+    expect(items[1].textContent).toContain("viewer → editor");
   });
 });

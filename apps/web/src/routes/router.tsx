@@ -10,6 +10,8 @@ import { GlossaryPage } from "../pages/glossary";
 import { OnboardingPage } from "../pages/onboarding";
 import { ReposPage } from "../pages/repos";
 import { MapPage } from "../pages/map";
+import { ProjectMembersPage } from "../pages/members";
+import { ProjectOverviewPage } from "../pages/overview";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
 import { InvitePage } from "../pages/invite";
@@ -63,6 +65,7 @@ export function buildRoutes(services: Services): RouteObject[] {
               Component: ProjectLayout,
               children: [
                 { index: true, Component: BoardPage },
+                { path: "overview", Component: ProjectOverviewPage },
                 { path: "activity", Component: ActivityPage },
                 { path: "map", Component: MapPage },
                 { path: "docs", Component: DocsPage },
@@ -70,6 +73,7 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "decisions", Component: DecisionsPage },
                 { path: "glossary", Component: GlossaryPage },
                 { path: "repos", Component: ReposPage },
+                { path: "members", Component: ProjectMembersPage },
                 { path: "onboarding", Component: OnboardingPage },
               ],
             },

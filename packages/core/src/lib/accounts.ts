@@ -43,7 +43,7 @@ export async function signupAllowed() {
 
 /** Create a user and a team they own. Throws AccountError. `ip` only feeds the signup rate limit. */
 export async function signUp(input: { name: string; email: string; password: string; team?: string }, ip: string): Promise<{ userId: string }> {
-  if (!(await signupAllowed())) throw new AccountError("signup_closed", "Signups are closed. Ask a team owner to add you.");
+  if (!(await signupAllowed())) throw new AccountError("signup_closed", "Signups are closed. Ask a workspace owner to add you.");
   const ipHit = rateLimit(`signup:${ip}`, 10, 60 * 60_000);
   if (!ipHit.ok) throw tooMany(ipHit.retryAfter);
   const name = String(input.name ?? "").trim();

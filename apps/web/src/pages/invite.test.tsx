@@ -50,7 +50,7 @@ describe("the invite page", () => {
       signedOut(s);
       s.on("POST /api/app/invites/peek", { invite: { email: "founder@example.test", kind: "new_team", teamName: "Fresh Co" } });
     });
-    await screen.findByText("Create your account and your team, Fresh Co.");
+    await screen.findByText("Create your account and your workspace, Fresh Co.");
   });
 
   test("a bad or used link, and every other bad link, reads the same and points to sign-in", async () => {
@@ -138,5 +138,63 @@ describe("the invite page", () => {
     const { at: path } = renderApp("/invite");
     await screen.findByText("This page needs the full invite link you were sent.");
     expect(path()).toBe("/invite");
+  });
+});
+
+describe("the invite page, for someone who already has an account", () => {
+  const notNew = () => apiError(400, "invalid", "This invite link is invalid or has expired."); // a fresh Response each time: a body can be read once
+  const existing = { invite: { email: "ada@example.test", teamName: "Difference Engines", role: "viewer", projects: [{ key: "DE", name: "Engine", role: "editor" }] } };
+
+  test("signed in as the invited address, they are offered to join and keep their account; joining moves them in and forgets the old workspace", async () => {
+    at(`#${TOKEN}`);
+    const { server, services, router } = renderApp("/invite", (s) => {
+      s.on("POST /api/app/invites/peek", notNew());
+      s.on("POST /api/app/invites/peek-existing", existing);
+      s.on("POST /api/app/invites/accept-existing", { team: { id: "t2", name: "Difference Engines" } });
+    });
+    services.queryClient.setQueryData(["marker"], "from the old workspace");
+    await screen.findByRole("button", { name: "Join Difference Engines" });
+    expect(screen.getByText(/You are signed in as/).textContent).toContain("ada@example.test");
+    expect(screen.getByText(/You are signed in as/).textContent).toContain("Join Difference Engines as viewer, in Engine (editor)?");
+    expect(screen.getByText(/You keep your account and your other workspaces/)).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Join Difference Engines" }));
+    await waitFor(() => expect(server.sent("POST /api/app/invites/accept-existing")).toHaveLength(1));
+    expect(server.sent("POST /api/app/invites/accept-existing")[0].body).toEqual({ token: TOKEN });
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing read in the old workspace lingers
+    expect(server.requests.every((r) => !r.includes(TOKEN))).toBe(true); // still never in a URL
+  });
+
+  test("signed out, a bad link says to sign in with the invited address and open it again", async () => {
+    at(`#${TOKEN}`);
+    renderApp("/invite", (s) => {
+      signedOut(s);
+      s.on("POST /api/app/invites/peek", notNew());
+      s.on("POST /api/app/invites/peek-existing", apiError(401, "unauthorized", "Not authenticated"));
+    });
+    await screen.findByText("This invite link is invalid or has expired.");
+    expect(screen.getByText(/Already have an account on this server\? Sign in with the email this invite was sent to/)).toBeTruthy();
+  });
+
+  test("signed in as someone else, it is just an invalid link (no hint that the address has an account)", async () => {
+    at(`#${TOKEN}`);
+    renderApp("/invite", (s) => {
+      s.on("POST /api/app/invites/peek", notNew());
+      s.on("POST /api/app/invites/peek-existing", apiError(400, "invalid", "This invite link is invalid or has expired."));
+    });
+    await screen.findByText("This invite link is invalid or has expired.");
+    expect(screen.queryByText(/Already have an account/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Join/ })).toBeNull();
+  });
+
+  test("a refusal on joining (already in it) is shown in the server's words", async () => {
+    at(`#${TOKEN}`);
+    renderApp("/invite", (s) => {
+      s.on("POST /api/app/invites/peek", notNew());
+      s.on("POST /api/app/invites/peek-existing", existing);
+      s.on("POST /api/app/invites/accept-existing", apiError(409, "conflict", "You are already in this workspace"));
+    });
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Join Difference Engines" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("You are already in this workspace");
   });
 });

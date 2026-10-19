@@ -1,6 +1,7 @@
 import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import { isInstanceAdmin, maxTeamMembers } from "./auth-policy";
+import type { WorkspaceRole } from "../db/schema";
 
 /**
  * Instance-admin view of the teams on this server, and the switch that cuts a whole team off (WH-52).
@@ -111,7 +112,7 @@ export async function listTeams(admin: Admin, now = new Date()): Promise<TeamSum
 
 export type TeamDetail = TeamSummary & {
   suspendedBy: { name: string; email: string } | null;
-  memberList: { userId: string; name: string; email: string; role: "owner" | "member"; tags: string[]; joinedAt: Date }[];
+  memberList: { userId: string; name: string; email: string; role: WorkspaceRole; tags: string[]; joinedAt: Date }[];
   inviteList: { id: string; kind: "new_team" | "join_team"; email: string; role: string; status: "pending" | "used" | "revoked" | "expired"; expiresAt: Date; createdAt: Date }[];
   keys: { id: string; name: string; prefix: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null }[];
 };
@@ -119,7 +120,7 @@ export type TeamDetail = TeamSummary & {
 export async function getTeamDetail(admin: Admin, teamId: string, now = new Date()): Promise<TeamDetail> {
   requireAdmin(admin);
   const summary = (await listTeams(admin, now)).find((t) => t.id === teamId);
-  if (!summary) throw new AdminError("not_found", "Team not found");
+  if (!summary) throw new AdminError("not_found", "Workspace not found");
   const db = await getDb();
   const [team] = await db.select({ suspendedBy: teams.suspendedBy }).from(teams).where(eq(teams.id, teamId));
   const [by] = team?.suspendedBy
@@ -160,13 +161,13 @@ export async function getTeamDetail(admin: Admin, teamId: string, now = new Date
  */
 export async function suspendTeam(admin: Admin, teamId: string, input: { reason?: string; confirmName: string }, now = new Date()) {
   requireAdmin(admin);
-  if (teamId === admin.teamId) throw new AdminError("conflict", "You cannot suspend your own team");
+  if (teamId === admin.teamId) throw new AdminError("conflict", "You cannot suspend your own workspace");
   const db = await getDb();
   const result = await db.transaction(async (tx) => {
     const [t] = await tx.select().from(teams).where(eq(teams.id, teamId)).for("update");
-    if (!t) throw new AdminError("not_found", "Team not found");
-    if (t.suspendedAt) throw new AdminError("conflict", "That team is already suspended");
-    if (input.confirmName.trim() !== t.name) throw new AdminError("invalid", "Type the team name exactly to confirm");
+    if (!t) throw new AdminError("not_found", "Workspace not found");
+    if (t.suspendedAt) throw new AdminError("conflict", "That workspace is already suspended");
+    if (input.confirmName.trim() !== t.name) throw new AdminError("invalid", "Type the workspace name exactly to confirm");
     await tx
       .update(teams)
       .set({ suspendedAt: now, suspendedBy: admin.userId, suspendedReason: (input.reason ?? "").trim().slice(0, 500) || null })
@@ -187,6 +188,6 @@ export async function restoreTeam(admin: Admin, teamId: string) {
     .set({ suspendedAt: null, suspendedBy: null, suspendedReason: null })
     .where(and(eq(teams.id, teamId), isNotNull(teams.suspendedAt)))
     .returning({ id: teams.id });
-  if (!rows.length) throw new AdminError("conflict", "That team is not suspended");
+  if (!rows.length) throw new AdminError("conflict", "That workspace is not suspended");
   console.info(`[admin] team restored ${teamId} by=${admin.userId}`);
 }

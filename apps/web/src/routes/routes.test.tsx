@@ -14,18 +14,20 @@ const PORTED_PAGES: [path: string, heading: RegExp][] = [
 ];
 /** Project pages ported in WH-97 and WH-98, with something only that page shows. */
 const PROJECT_PAGES: [path: string, find: () => Promise<unknown>][] = [
+  ["/p/AA/overview", () => screen.findByRole("heading", { level: 1, name: "Overview of Alpha" })],
   ["/p/AA/activity", () => screen.findByRole("link", { name: "Everything" })],
   ["/p/AA/map", () => screen.findByRole("tab", { name: /System/ })],
   ["/p/AA/decisions", () => screen.findByRole("heading", { level: 2, name: "Decisions" })],
   ["/p/AA/glossary", () => screen.findByRole("heading", { level: 2, name: "Glossary" })],
   ["/p/AA/docs", () => screen.findByRole("button", { name: "Plan" })],
+  ["/p/AA/members", () => screen.findByRole("heading", { level: 1, name: "Project members" })],
   ["/p/AA/repos", () => screen.findByRole("heading", { level: 2, name: "Repositories" })],
   ["/p/AA/onboarding", () => screen.findByRole("heading", { level: 2, name: "Where does your code live?" })],
 ];
 const ADMIN_PAGES: [path: string, heading: RegExp][] = [
-  ["/admin/teams", /^Teams on this server$/],
+  ["/admin/teams", /^Workspaces on this server$/],
   ["/admin/teams/t2", /^Babbage & Co/],
-  ["/admin/invites", /^Invite a new team$/],
+  ["/admin/invites", /^Invite a new workspace$/],
 ];
 const PUBLIC_PAGES: [path: string, button: RegExp | null, text?: string][] = [
   ["/login", /^Sign in$/],
@@ -81,7 +83,7 @@ describe("signed in: every page is in the shell", () => {
     for (const [path, heading] of ADMIN_PAGES) {
       const { unmount } = renderApp(path, (s) => (s.me = { ...ADA, isInstanceAdmin: true }));
       await screen.findByRole("heading", { level: 1, name: heading });
-      expect(within(screen.getByRole("navigation")).getByRole("link", { name: "Teams" })).toBeTruthy();
+      expect(within(screen.getByRole("navigation")).getByRole("link", { name: "Workspaces" })).toBeTruthy();
       unmount();
     }
   });

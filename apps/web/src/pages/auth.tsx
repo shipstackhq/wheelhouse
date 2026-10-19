@@ -59,7 +59,7 @@ export function AuthForm({ mode, signupOpen = true }: { mode: "login" | "signup"
             <input className="input" id="name" name="name" required autoComplete="name" />
           </div>
           <div>
-            <label className="label" htmlFor="team">Team name</label>
+            <label className="label" htmlFor="team">Workspace name</label>
             <input className="input" id="team" name="team" placeholder="Acme" />
           </div>
         </>

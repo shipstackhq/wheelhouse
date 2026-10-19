@@ -3,12 +3,14 @@ import { getDb, schema } from "../db";
 import { sha256 } from "./access";
 import { AccountError } from "./accounts";
 import { passwordProblem } from "./auth-policy";
-import { hashPassword, randomToken, verifyPassword, type Human } from "./auth-core";
-import { acceptInvite, createInvite, INVITE_INVALID, listInvites, peekInvite, revokeInvite, seatInfo, type Issuer, type PendingInvite } from "./invites";
+import { hashPassword, randomToken, switchWorkspace, verifyPassword, type Human } from "./auth-core";
+import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listInvites, peekInvite, peekInviteAsMember, revokeInvite, seatInfo, type Issuer, type PendingInvite } from "./invites";
 import * as members from "./members";
 import { onboarding } from "./onboarding";
 import { minutes, rateLimit } from "./rate-limit";
-import { ServiceError } from "./service";
+import { canManagePeople, isWorkspaceRole } from "./project-access";
+import { listProjects, ServiceError } from "./service";
+import type { WorkspaceRole } from "../db/schema";
 
 /**
  * What the web app's team, agents and invite pages do, as functions of the signed-in person (WH-95). The API's controllers
@@ -21,8 +23,18 @@ const tooMany = (retryAfter: number) =>
 
 const issuerOf = (h: Human): Issuer => ({ userId: h.user.id, email: h.user.email, teamId: h.team.id, role: h.membership.role });
 
-function requireOwner(h: Human) {
-  if (h.membership.role !== "owner") throw new ServiceError("forbidden", "Only team owners can do that");
+function requireManager(h: Human) {
+  if (!canManagePeople(h.membership.role)) throw new ServiceError("forbidden", "Only workspace owners and admins can do that");
+}
+
+/** `[{ project: "WH", role: "editor" }, ...]` from a request body; anything else is dropped here and judged for real in createInvite. */
+export function parseGrants(v: unknown): { project: string; role: "admin" | "editor" | "viewer" }[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((g) => {
+    const o = g as { project?: unknown; role?: unknown };
+    const role = o?.role === "admin" || o?.role === "editor" || o?.role === "viewer" ? o.role : null;
+    return typeof o?.project === "string" && o.project && role ? [{ project: o.project, role }] : [];
+  });
 }
 
 /** "a, B ,c" or ["a", "B"] to ["a", "b", "c"]: lower case, trimmed, empties dropped. */
@@ -33,7 +45,7 @@ export function parseTags(v: unknown): string[] {
 
 // ───────── the team page ─────────
 
-export type TeamMember = { userId: string; name: string; email: string; role: "owner" | "member"; tags: string[] };
+export type TeamMember = { userId: string; name: string; email: string; role: WorkspaceRole; tags: string[] };
 
 /** The team page: its members, the seats, and (for owners) the invites still waiting. */
 export async function teamOverview(h: Human) {
@@ -44,8 +56,7 @@ export async function teamOverview(h: Human) {
     .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
     .where(eq(schema.memberships.teamId, h.team.id))
     .orderBy(schema.memberships.createdAt);
-  const isOwner = h.membership.role === "owner";
-  const pendingInvites = isOwner ? (await listInvites(issuerOf(h))).filter((i) => i.kind === "join_team") : [];
+  const pendingInvites = canManagePeople(h.membership.role) ? (await listInvites(issuerOf(h))).filter((i) => i.kind === "join_team") : [];
   return {
     team: { id: h.team.id, name: h.team.name },
     role: h.membership.role,
@@ -55,24 +66,28 @@ export async function teamOverview(h: Human) {
   };
 }
 
-/** Owners change a member's role and tags. The last owner cannot be demoted. */
+/** Owners and admins change a member's role and tags; only an owner can make or unmake an owner. The last owner cannot be demoted. */
 export async function updateMemberAs(h: Human, input: { userId: string; role: unknown; tags: unknown }): Promise<TeamMember> {
-  requireOwner(h);
-  const role = input.role === "owner" ? "owner" : input.role === "member" ? "member" : null;
-  if (!role) throw new ServiceError("invalid", "Role must be owner or member", { fields: { role: "Choose owner or member" } });
+  requireManager(h);
+  const role = isWorkspaceRole(input.role) ? input.role : null;
+  if (!role) throw new ServiceError("invalid", "Choose a role: owner, admin, member, viewer or guest", { fields: { role: "Choose a role" } });
+  const current = (await teamOverview(h)).members.find((m) => m.userId === input.userId)?.role;
+  if (h.membership.role !== "owner" && (role === "owner" || current === "owner")) throw new ServiceError("forbidden", "Only an owner can make or change an owner");
   const tags = parseTags(input.tags).slice(0, 20);
   const changed = await members.updateMember(h.team.id, h.user.id, { userId: input.userId, role, tags });
   if (!changed) {
     const existing = (await teamOverview(h)).members.some((m) => m.userId === input.userId);
     if (!existing) throw new ServiceError("not_found", "Member not found");
-    throw new ServiceError("conflict", "A team needs at least one owner");
+    throw new ServiceError("conflict", "A workspace needs at least one owner");
   }
   return (await teamOverview(h)).members.find((m) => m.userId === input.userId)!;
 }
 
-/** Owners remove a member. Nobody removes themselves here. */
+/** Owners and admins remove a member (an admin cannot remove an owner). Nobody removes themselves here. */
 export async function removeMemberAs(h: Human, userId: string) {
-  requireOwner(h);
+  requireManager(h);
+  const target = (await teamOverview(h)).members.find((m) => m.userId === userId);
+  if (target?.role === "owner" && h.membership.role !== "owner") throw new ServiceError("forbidden", "Only an owner can remove an owner");
   if (userId === h.user.id) throw new ServiceError("invalid", "You cannot remove yourself");
   if (!(await members.removeMember(h.team.id, h.user.id, userId))) throw new ServiceError("not_found", "Member not found");
   return { ok: true as const };
@@ -113,8 +128,7 @@ export async function listKeys(h: Human): Promise<KeyView[]> {
 
 /** The Agents page: the keys and the commands to paste. With one project its real key goes in the commands, with several a KEY placeholder. */
 export async function agentsPage(h: Human, origin: string) {
-  const db = await getDb();
-  const teamProjects = await db.select({ key: schema.projects.key }).from(schema.projects).where(eq(schema.projects.teamId, h.team.id));
+  const teamProjects = (await listProjects(h.actor)).map((p) => ({ key: p.key }));
   return { keys: await listKeys(h), setup: onboarding({ origin, projectKey: teamProjects.length === 1 ? teamProjects[0].key : null }) };
 }
 
@@ -164,7 +178,7 @@ export async function pendingInvites(h: Human, kind: "join_team" | "new_team"): 
  */
 export async function createInviteAs(
   h: Human,
-  input: { kind: unknown; email: string; role?: unknown; tags?: unknown; team?: string },
+  input: { kind: unknown; email: string; role?: unknown; tags?: unknown; team?: string; projects?: unknown },
   origin: string,
 ) {
   const hit = rateLimit(`invite-create:${h.user.id}`, 20, 60 * 60_000);
@@ -173,9 +187,10 @@ export async function createInviteAs(
   const inv = await createInvite(issuerOf(h), {
     kind,
     email: String(input.email ?? ""),
-    role: input.role === "owner" ? "owner" : "member",
+    role: isWorkspaceRole(input.role) ? input.role : "member",
     tags: parseTags(input.tags),
     teamName: String(input.team ?? ""),
+    projects: parseGrants(input.projects),
   });
   return { id: inv.id, email: inv.email, kind: inv.kind, expiresAt: inv.expiresAt, link: `${origin.replace(/\/+$/, "")}/invite#${inv.token}` };
 }
@@ -200,4 +215,25 @@ export async function acceptInviteAs(input: { token: string; name: string; passw
   if (!hit.ok) throw tooMany(hit.retryAfter);
   if (input.password !== input.confirm) throw new ServiceError("invalid", "The two passwords do not match", { fields: { confirm: "The two passwords do not match" } });
   return acceptInvite({ token: String(input.token ?? ""), name: input.name, password: input.password });
+}
+
+/**
+ * What a signed-in person is invited to when the invite was sent to their own address and they already have an account.
+ * The same answer for every bad link (and for someone else's invite); 30 tries per 15 minutes per person.
+ */
+export async function peekInviteAsMemberAs(h: Human, token: string) {
+  const hit = rateLimit(`invite-user:${h.user.id}`, 30, 15 * 60_000);
+  if (!hit.ok) throw tooMany(hit.retryAfter);
+  const invite = await peekInviteAsMember(h.user, String(token ?? ""));
+  if (!invite) throw new ServiceError("invalid", INVITE_INVALID);
+  return invite;
+}
+
+/** An existing account joins another workspace through an invite sent to its own address, then this session moves into it. */
+export async function acceptInviteAsMemberAs(h: Human, token: string, sessionToken: string) {
+  const hit = rateLimit(`invite-user:${h.user.id}`, 30, 15 * 60_000);
+  if (!hit.ok) throw tooMany(hit.retryAfter);
+  const { teamId } = await acceptInviteAsMember(h.user, String(token ?? ""));
+  const team = await switchWorkspace(sessionToken, h.user.id, teamId);
+  return { team: team ?? { id: teamId, name: "" } };
 }

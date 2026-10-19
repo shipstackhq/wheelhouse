@@ -70,6 +70,28 @@ describe("wire format", () => {
   });
 });
 
+describe("re-checking access while open", () => {
+  test("a stream whose check says no is closed (and its slot freed), without waiting for the browser to leave", async () => {
+    let allowed = true;
+    const h = harness({ recheck: async () => allowed, recheckMs: 15 });
+    const out = collect(h.stream);
+    await wait(40);
+    assert.equal(out.isDone(), false); // still allowed: still open
+    allowed = false;
+    await wait(60);
+    assert.equal(out.isDone(), true);
+    assert.equal(h.closed(), 1);
+  });
+
+  test("a check that throws (a database hiccup) does not end the stream", async () => {
+    const h = harness({ recheck: async () => { throw new Error("db down"); }, recheckMs: 10 });
+    const out = collect(h.stream);
+    await wait(60);
+    assert.equal(out.isDone(), false);
+    await out.cancel();
+  });
+});
+
 describe("the stream", () => {
   test("a first connection says where the log is, then forwards live changes", async () => {
     const h = harness({ latest: 100 });

@@ -16,6 +16,7 @@ import { SubmitButton } from "../../components/submit-button";
 import { Tip } from "../../components/tip";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
+import { useDashboardProject } from "../../lib/dashboard-scope";
 import { useWidget } from "../../lib/queries";
 import { AgentIcon, ArrowRightIcon, TrendUpIcon, WarningIcon } from "../../components/icons";
 
@@ -39,12 +40,13 @@ function Failed({ title, query }: { title: string; query: UseQueryResult }) {
 
 export function KpiRow() {
   const q = useWidget("kpis");
+  const project = useDashboardProject();
   if (q.isPending) return <WidgetSkeleton title="Key numbers" height={72} />;
   if (q.isError) return <Failed title="Key numbers" query={q} />;
   const s = q.data;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
-      <StatTile label="Open tickets" value={s.open} hint={`across ${s.projects} project${s.projects === 1 ? "" : "s"}`} />
+      <StatTile label="Open tickets" value={s.open} hint={project ? "in this project" : `across ${s.projects} project${s.projects === 1 ? "" : "s"}`} />
       <StatTile label="In progress" value={s.inProgress} hint={`${s.inReview} waiting for review`} />
       <StatTile
         label="Completed, last 7 days"
@@ -56,15 +58,20 @@ export function KpiRow() {
         value={s.agentShare7d === null ? "—" : `${Math.round(s.agentShare7d * 100)}%`}
         hint={`${s.events7d} changes in 7 days`}
       />
-      <StatTile label="Stale map nodes" value={s.staleNodes} hint={`of ${s.mapNodes} described`} />
-      <StatTile label="Stale docs" value={s.staleDocs} hint="possibly out of date" href="/" />
-      <StatTile label="Agents connected" value={s.agents} hint="active API keys" href="/agents" />
+      <StatTile label="Stale map nodes" value={s.staleNodes} hint={`of ${s.mapNodes} described`} href={project ? `/p/${project}/map` : undefined} />
+      <StatTile label="Stale docs" value={s.staleDocs} hint="possibly out of date" href={project ? `/p/${project}/docs` : "/"} />
+      {project ? (
+        <StatTile label="Agents active" value={s.agentsActive7d} hint="changed something in 7 days" />
+      ) : (
+        <StatTile label="Agents connected" value={s.agents} hint="active API keys" href="/agents" />
+      )}
     </div>
   );
 }
 
 export function ProjectProgress() {
   const q = useWidget("progress");
+  const project = useDashboardProject();
   if (q.isPending) return <WidgetSkeleton title="Project progress" height={220} />;
   if (q.isError) return <Failed title="Project progress" query={q} />;
   const ps = q.data;
@@ -73,7 +80,7 @@ export function ProjectProgress() {
     <Widget title="Project progress" subtitle="Tickets per column; done = the last column" action={names.length ? <StageLegend names={names} /> : undefined}>
       {ps.length === 0 ? (
         <Empty>
-          No projects yet. <Link className="text-accent" to="/projects/new">Create one</Link>.
+          You are not in any project yet. <Link className="text-accent" to="/projects/new">Create one</Link>, or ask a project admin to add you.
         </Empty>
       ) : (
         <List inset="card" density="roomy">
@@ -84,6 +91,11 @@ export function ProjectProgress() {
                   <span className="chip bg-accent/15 font-mono text-accent">{p.key}</span>
                   <span className="font-medium">{p.name}</span>
                 </Link>
+                {!project && (
+                  <Link to={`/p/${p.key}/overview`} className="text-xs text-muted hover:text-accent" aria-label={`Overview of ${p.name}`}>
+                    Overview <ArrowRightIcon />
+                  </Link>
+                )}
                 <span className="text-sm">
                   <b>{Math.round(p.pct * 100)}%</b> <span className="text-muted">done · {p.done}/{p.total}</span>
                 </span>
@@ -406,6 +418,63 @@ export function SyncHealth() {
           />
         </div>
       )}
+    </Widget>
+  );
+}
+
+/** Days as words: "today", "1 day", "9 days". */
+const ago = (days: number) => (days === 0 ? "today" : days === 1 ? "1 day" : `${days} days`);
+
+/**
+ * What matters most in this project, in the order to look at it: work that has sat longest in progress, what has waited longest
+ * for review, agents that went quiet, decisions still only proposed. Only on a project's Overview.
+ */
+export function ProjectFocus() {
+  const q = useWidget("focus");
+  const project = useDashboardProject();
+  if (q.isPending) return <WidgetSkeleton title="Focus" height={180} />;
+  if (q.isError) return <Failed title="Focus" query={q} />;
+  const f = q.data;
+  const stuck = f.aging.length + f.waitingReview.length + f.quiet.length;
+  const row = (t: { ref: string; title: string }, right: string, agent = false) => (
+    <li key={t.ref}>
+      <Link to={`/p/${project}?t=${t.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
+        <span className="shrink-0 font-mono text-xs text-muted">{t.ref}</span>
+        <span className="truncate">{t.title}</span>
+        {agent && <span className="shrink-0 text-xs text-agent" title="Agent work"><AgentIcon /></span>}
+        <span className="ml-auto shrink-0 text-xs text-muted">{right}</span>
+      </Link>
+    </li>
+  );
+  return (
+    <Widget title="Focus" subtitle="What to look at first in this project">
+      {f.tickets === 0 ? (
+        <Empty>
+          No tickets yet. <Link className="text-accent" to={`/p/${project}`}>Add the first one on the board</Link>, and what needs attention will appear here.
+        </Empty>
+      ) : stuck === 0 ? (
+        <Empty>Nothing is stuck: no work waiting on review, nothing in progress for long, no agent gone quiet.</Empty>
+      ) : (
+        <div className="space-y-4">
+          <AttentionSection title="Waiting longest for review" count={f.waitingReview.length}>
+            {f.waitingReview.map((t) => row(t, ago(t.days), t.byAgent))}
+          </AttentionSection>
+          <AttentionSection title="In progress the longest" count={f.aging.length}>
+            {f.aging.map((t) => row(t, ago(t.days), t.byAgent))}
+          </AttentionSection>
+          <AttentionSection title="Agents gone quiet" count={f.quiet.length}>
+            {f.quiet.map((t) => row(t, `${t.agent}, ${timeAgo(t.lastAt)}`, true))}
+          </AttentionSection>
+        </div>
+      )}
+      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-xs text-muted">
+        <Link to={`/p/${project}/decisions`} className="hover:text-accent">
+          {f.proposedDecisions} decision{f.proposedDecisions === 1 ? "" : "s"} still proposed
+        </Link>
+        <Link to={`/p/${project}/members`} className="hover:text-accent">
+          {f.members.count} member{f.members.count === 1 ? "" : "s"}{f.members.myRole ? ` · you are ${f.members.myRole}` : ""}
+        </Link>
+      </div>
     </Widget>
   );
 }

@@ -16,6 +16,17 @@ import {
 import { COLUMN_ROLES } from "../lib/column-roles";
 import { sql } from "drizzle-orm";
 
+/**
+ * Workspace roles (ADR-23). A role decides what a person may do around projects (create them, manage people, pay); it never
+ * opens a project by itself: that takes a row in `project_members`. The table is still called `teams` (renamed in a later step).
+ */
+export const WORKSPACE_ROLES = ["owner", "admin", "member", "viewer", "guest"] as const;
+export type WorkspaceRole = (typeof WORKSPACE_ROLES)[number];
+
+/** What a person can do inside one project. */
+export const PROJECT_ROLES = ["admin", "editor", "viewer"] as const;
+export type ProjectRole = (typeof PROJECT_ROLES)[number];
+
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -31,6 +42,8 @@ export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(), // sha256 of the cookie token
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  // The workspace this session is working in, for a person who belongs to several (ADR-23). Null: their first one.
+  activeTeamId: uuid("active_team_id").references(() => teams.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 });
 
@@ -50,11 +63,53 @@ export const memberships = pgTable(
   {
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["owner", "member"] }).notNull().default("member"),
+    role: text("role", { enum: WORKSPACE_ROLES }).notNull().default("member"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.teamId] })],
+);
+
+/**
+ * Who can open a project (ADR-23). A project is visible only to the people in this table; there is no open/private flag and
+ * no other way in. Only people are listed: agent keys still work across their whole workspace until scoped keys arrive.
+ * `team_id` repeats the project's workspace so every row can be checked against it without a join.
+ */
+export const projectMembers = pgTable(
+  "project_members",
+  {
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    role: text("role", { enum: PROJECT_ROLES }).notNull().default("editor"),
+    addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] }), index("project_members_user_idx").on(t.userId, t.teamId)],
+);
+
+/**
+ * Append-only record of who changed access: members added, removed or re-roled, projects joined by an administrator. Separate
+ * from `events`, which is the product activity feed that agent cursors read; never updated or deleted. `project_id` is null
+ * for workspace-level actions and has no foreign key, so a deleted project keeps its history.
+ */
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    seq: bigserial("seq", { mode: "number" }).primaryKey(),
+    teamId: uuid("team_id").notNull(),
+    projectId: uuid("project_id"),
+    actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
+    actorId: uuid("actor_id"),
+    actorName: text("actor_name").notNull(),
+    action: text("action").notNull(), // e.g. project.member_added, project.admin_joined, workspace.role_changed
+    targetType: text("target_type").notNull(), // user | project | membership
+    targetId: text("target_id"),
+    before: jsonb("before").$type<Record<string, unknown> | null>(),
+    after: jsonb("after").$type<Record<string, unknown> | null>(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("audit_events_team_seq_idx").on(t.teamId, t.seq)],
 );
 
 // Invite-only signup (WH-49). Only the SHA-256 of the token is stored; the plain token is shown once.
@@ -67,8 +122,10 @@ export const invites = pgTable(
     email: text("email").notNull(), // lower-cased; the account is created with exactly this address
     teamId: uuid("team_id").references(() => teams.id, { onDelete: "cascade" }), // join_team only
     teamName: text("team_name"), // new_team only (optional)
-    role: text("role", { enum: ["owner", "member"] }).notNull().default("member"),
+    role: text("role", { enum: WORKSPACE_ROLES }).notNull().default("member"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    // join_team only: the projects the person is put into when they accept, each with a project role (ADR-23).
+    projects: jsonb("projects").$type<{ projectId: string; role: ProjectRole }[]>().notNull().default([]),
     tokenHash: text("token_hash").notNull().unique(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),

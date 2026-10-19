@@ -69,7 +69,7 @@ describe("signUp", () => {
     const e = await refusal(signUp({ name: "Cy", email: fresh().email, password: PASSWORD }, fresh().ip));
     assert.equal(e.code, "signup_closed");
     assert.equal(e.status, 403);
-    assert.equal(e.message, "Signups are closed. Ask a team owner to add you.");
+    assert.equal(e.message, "Signups are closed. Ask a workspace owner to add you.");
   });
 
   test("says what is wrong, with the same messages as before, and which field", async () => {

@@ -1,27 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
-import { Logo } from "./logo";
+import { Logo, WheelIcon } from "./logo";
 import { NavLink } from "./nav-link";
-import { CloseIcon, MenuIcon } from "./icons";
+import { CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, FolderIcon, MenuIcon, NAV_ICONS, type IconPair } from "./icons";
+import { Tip } from "./tip";
 
 type ProjectItem = { key: string; name: string };
 
-const SECTIONS = [
-  { group: "Work", items: [{ path: "", label: "Board" }, { path: "/activity", label: "Activity" }] },
+const SECTIONS: { group: string; items: { path: string; label: string; icon: IconPair }[] }[] = [
+  {
+    group: "Work",
+    items: [
+      { path: "/overview", label: "Overview", icon: NAV_ICONS.overview },
+      { path: "", label: "Board", icon: NAV_ICONS.board },
+      { path: "/activity", label: "Activity", icon: NAV_ICONS.activity },
+    ],
+  },
   {
     group: "Knowledge",
     items: [
-      { path: "/map", label: "Map" },
-      { path: "/docs", label: "Docs" },
-      { path: "/decisions", label: "Decisions" },
-      { path: "/glossary", label: "Glossary" },
+      { path: "/map", label: "Map", icon: NAV_ICONS.map },
+      { path: "/docs", label: "Docs", icon: NAV_ICONS.docs },
+      { path: "/decisions", label: "Decisions", icon: NAV_ICONS.decisions },
+      { path: "/glossary", label: "Glossary", icon: NAV_ICONS.glossary },
     ],
   },
-  { group: "Code", items: [{ path: "/repos", label: "Repos" }] },
+  { group: "Code", items: [{ path: "/repos", label: "Repos", icon: NAV_ICONS.repos }] },
+  { group: "Access", items: [{ path: "/members", label: "Project members", icon: NAV_ICONS.projectMembers }] },
 ];
 
 const RECENT_KEY = "wh:recent-projects";
+const COLLAPSED_KEY = "wh:sidebar-collapsed";
+
+/** Whether the person last left the sidebar as the icon-only rail. Storage can be blocked or empty: then it is open. */
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 const LAST_COOKIE = "wh_last_project";
 
 /** The project last viewed, from the cookie this sidebar writes (the Next app read the same cookie on the server). */
@@ -61,7 +80,8 @@ export function Sidebar({
   isAdmin: boolean;
   /** The project to open from the logo; read from the cookie when not given. */
   lastProject?: string | null;
-  profile: React.ReactNode;
+  /** The account menu; a function gets whether the sidebar is the icon-only rail, so it can draw itself compact. */
+  profile: React.ReactNode | ((collapsed: boolean) => React.ReactNode);
 }) {
   const { pathname: path } = useLocation();
   const navigate = useNavigate();
@@ -69,6 +89,16 @@ export function Sidebar({
   const currentKey = match ? decodeURIComponent(match[1]) : null;
   const current = projects.find((p) => p.key === currentKey) ?? null;
   const [open, setOpen] = useState(false); // mobile drawer
+  const [collapsed, setCollapsed] = useState(readCollapsed); // the icon-only rail, tablet and up
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
+      } catch {
+        /* the choice just is not remembered */
+      }
+      return !c;
+    });
   const [switcher, setSwitcher] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -139,35 +169,67 @@ export function Sidebar({
       </button>
       {open && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setOpen(false)} />}
       <aside
+        id="app-sidebar"
+        data-collapsed={collapsed ? "true" : "false"}
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-56 shrink-0 flex-col border-r border-line bg-panel transition-transform md:static md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-56 shrink-0 flex-col border-r border-line bg-panel transition-transform md:static md:translate-x-0 md:transition-[width]",
+          collapsed && "md:w-14",
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex items-center justify-between px-4 py-4">
-          <Link to={home}>
-            <Logo className="text-sm" compact />
+        <div className={clsx("flex items-center justify-between px-4 py-4", collapsed && "md:flex-col md:gap-3 md:px-0")}>
+          <Link to={home} aria-label="Wheelhouse" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
+            <Logo className={clsx("text-sm", collapsed && "md:hidden")} compact />
+            {collapsed && <WheelIcon size={26} className="hidden md:block" />}
           </Link>
           <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="text-muted md:hidden">
             <CloseIcon className="text-lg" />
           </button>
-        </div>
-        <div className="px-4 pb-2 text-xs text-muted">{teamName}</div>
-        <nav className="flex-1 overflow-y-auto px-2 text-sm">
-          <NavLink href="/">Home</NavLink>
-          <div className="relative mt-3">
+          <Tip content={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right" align="center">
             <button
               type="button"
-              onClick={() => setSwitcher(true)}
-              className="flex w-full items-center justify-between gap-2 rounded-md border border-line px-2 py-1.5 text-left hover:bg-panel-2"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!collapsed}
+              aria-controls="app-sidebar"
+              className="hidden rounded-md p-1 text-lg text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 md:inline-flex"
             >
-              <span className="min-w-0 truncate">{current ? current.name : "Select a project"}</span>
-              <kbd className="font-mono text-[11px] text-muted">⌘K</kbd>
+              {collapsed ? <ExpandSidebarIcon /> : <CollapseSidebarIcon />}
             </button>
+          </Tip>
+        </div>
+        <div className={clsx("px-4 pb-2 text-xs text-muted", collapsed && "md:hidden")}>{teamName}</div>
+        <nav className="flex-1 overflow-y-auto px-2 text-sm">
+          <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
+          <div className="relative mt-3">
+            {(() => {
+              const trigger = (
+                <button
+                  type="button"
+                  onClick={() => setSwitcher(true)}
+                  aria-label={collapsed ? (current ? `Project: ${current.name}` : "Select a project") : undefined}
+                  className={clsx(
+                    "flex w-full items-center justify-between gap-2 rounded-md border border-line px-2 py-1.5 text-left outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50",
+                    collapsed && "md:justify-center md:px-0 md:py-2",
+                  )}
+                >
+                  {collapsed && <FolderIcon className="hidden shrink-0 text-xl md:block" />}
+                  <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{current ? current.name : "Select a project"}</span>
+                  <kbd className={clsx("font-mono text-[11px] text-muted", collapsed && "md:hidden")}>⌘K</kbd>
+                </button>
+              );
+              return collapsed ? (
+                <Tip content={current ? `${current.name} (⌘K)` : "Select a project (⌘K)"} side="right" align="center">
+                  {trigger}
+                </Tip>
+              ) : (
+                trigger
+              );
+            })()}
             {switcher && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSwitcher(false)} />
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-line bg-panel p-1 shadow-lg">
+                <div className={clsx("absolute left-0 right-0 top-full z-50 mt-1 rounded-md border border-line bg-panel p-1 shadow-lg", collapsed && "md:fixed md:left-16 md:right-auto md:top-24 md:mt-0 md:w-72")}>
                   <input
                     ref={inputRef}
                     value={query}
@@ -216,28 +278,37 @@ export function Sidebar({
           </div>
           {current &&
             SECTIONS.map((g) => (
-              <div key={g.group}>
-                <div className="label mt-4 px-2 normal-case tracking-normal">{g.group}</div>
+              <Group key={g.group} title={g.group} collapsed={collapsed} gap="mt-4">
                 {g.items.map((i) => (
-                  <NavLink key={i.path} href={`/p/${current.key}${i.path}`} prefix={i.path !== ""}>
+                  <NavLink key={i.path} href={`/p/${current.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
                     {i.label}
                   </NavLink>
                 ))}
-              </div>
+              </Group>
             ))}
-          <div className="label mt-5 px-2 normal-case tracking-normal">Team</div>
-          <NavLink href="/team">Members</NavLink>
-          <NavLink href="/agents">Agents &amp; API keys</NavLink>
+          <Group title="Workspace" collapsed={collapsed} gap="mt-5">
+            <NavLink href="/team" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
+            <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
+          </Group>
           {isAdmin && (
-            <>
-              <div className="label mt-5 px-2 normal-case tracking-normal">Admin</div>
-              <NavLink href="/admin/teams">Teams</NavLink>
-              <NavLink href="/admin/invites">Invite a new team</NavLink>
-            </>
+            <Group title="Admin" collapsed={collapsed} gap="mt-5">
+              <NavLink href="/admin/teams" icon={NAV_ICONS.workspaces} collapsed={collapsed}>Workspaces</NavLink>
+              <NavLink href="/admin/invites" icon={NAV_ICONS.inviteWorkspace} collapsed={collapsed}>Invite a new workspace</NavLink>
+            </Group>
           )}
         </nav>
-        <div className="border-t border-line p-2">{profile}</div>
+        <div className="border-t border-line p-2">{typeof profile === "function" ? profile(collapsed) : profile}</div>
       </aside>
     </>
+  );
+}
+
+/** A titled group of links. As the rail the title goes (it would not fit) and a thin rule separates the groups instead. */
+function Group({ title, collapsed, gap, children }: { title: string; collapsed: boolean; gap: string; children: React.ReactNode }) {
+  return (
+    <div className={clsx(collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
+      <div className={clsx("label px-2 normal-case tracking-normal", gap, collapsed && "md:hidden")}>{title}</div>
+      <div className="space-y-0.5">{children}</div>
+    </div>
   );
 }

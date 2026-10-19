@@ -1,12 +1,17 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import type { InvitePeek } from "@wheelhouse/api-client";
+import { ApiError, type InvitePeek, type InvitePeekExisting } from "@wheelhouse/api-client";
 import { SubmitButton } from "../components/submit-button";
 import { failure, field, type FormState } from "../lib/form-state";
 import { useServices } from "../lib/services";
 import { errorText } from "../components/query-state";
 
-type Phase = { name: "loading" } | { name: "missing" } | { name: "bad"; message: string } | { name: "ready"; invite: InvitePeek };
+type Phase =
+  | { name: "loading" }
+  | { name: "missing" }
+  | { name: "bad"; message: string; signedOut?: boolean }
+  | { name: "ready"; invite: InvitePeek }
+  | { name: "existing"; invite: InvitePeekExisting };
 
 /**
  * The token lives in the URL fragment, which browsers never send to a server. We read it here, take it out of
@@ -40,7 +45,15 @@ export function InvitePage() {
     api.invites
       .peek(t)
       .then((invite) => setPhase({ name: "ready", invite }))
-      .catch((e) => setPhase({ name: "bad", message: e instanceof Error && "status" in e ? errorText(e) : "Something went wrong. Try the link again." }));
+      .catch(async (e) => {
+        const message = e instanceof Error && "status" in e ? errorText(e) : "Something went wrong. Try the link again.";
+        // Not an invite for a new account. If someone with an account is signed in and it is addressed to them, they can join with it.
+        try {
+          setPhase({ name: "existing", invite: await api.invites.peekExisting(t) });
+        } catch (e2) {
+          setPhase({ name: "bad", message, signedOut: e2 instanceof ApiError && e2.status === 401 });
+        }
+      });
   }, [api]);
 
   if (phase.name === "loading") return <p className="text-center text-sm text-muted">Checking your invite…</p>;
@@ -56,9 +69,12 @@ export function InvitePage() {
       <div className="space-y-3 text-center text-sm">
         <p>{phase.message}</p>
         <p className="text-muted">Ask the person who invited you for a new link.</p>
+        {phase.signedOut && <p className="text-muted">Already have an account on this server? Sign in with the email this invite was sent to, then open the link again.</p>}
         <Link className="text-accent" to="/login">Go to sign in</Link>
       </div>
     );
+
+  if (phase.name === "existing") return <JoinExisting invite={phase.invite} token={token} />;
 
   const { invite } = phase;
   return (
@@ -66,8 +82,8 @@ export function InvitePage() {
       <input type="hidden" name="token" value={token} />
       <p className="text-sm text-muted">
         {invite.kind === "new_team"
-          ? `Create your account and your team${invite.teamName ? `, ${invite.teamName}` : ""}.`
-          : `Create your account to join ${invite.teamName ?? "the team"}.`}
+          ? `Create your account and your workspace${invite.teamName ? `, ${invite.teamName}` : ""}.`
+          : `Create your account to join ${invite.teamName ?? "the workspace"}.`}
       </p>
       <div>
         <label className="label" htmlFor="email">Email</label>
@@ -87,6 +103,34 @@ export function InvitePage() {
       </div>
       {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
       <SubmitButton className="btn btn-primary w-full justify-center">Create account</SubmitButton>
+    </form>
+  );
+}
+
+/** A signed-in person is invited to another workspace with the account they already have. */
+function JoinExisting({ invite, token }: { invite: InvitePeekExisting; token: string }) {
+  const { api, queryClient } = useServices();
+  const navigate = useNavigate();
+  const [state, action] = useActionState<FormState, FormData>(async () => {
+    try {
+      await api.invites.acceptExisting(token);
+      // Everything read so far belongs to the workspace they were in: drop it all, and the person's own record too (the team changed).
+      queryClient.clear();
+      await navigate("/", { replace: true });
+      return undefined;
+    } catch (e) {
+      return failure(e);
+    }
+  }, undefined);
+  return (
+    <form action={action} className="space-y-4">
+      <p className="text-sm">
+        You are signed in as <span className="font-medium">{invite.email}</span>. Join <span className="font-medium">{invite.teamName}</span> as {invite.role}
+        {invite.projects.length > 0 && <>, in {invite.projects.map((p) => `${p.name} (${p.role})`).join(", ")}</>}?
+      </p>
+      <p className="text-sm text-muted">You keep your account and your other workspaces; you can switch between them from the account menu.</p>
+      {state?.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
+      <SubmitButton className="btn btn-primary w-full justify-center">Join {invite.teamName}</SubmitButton>
     </form>
   );
 }

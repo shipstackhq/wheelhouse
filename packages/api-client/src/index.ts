@@ -16,6 +16,13 @@
 
 import type {
   ActivityEvent2,
+  AddableMember,
+  InvitePeekExisting,
+  WorkspaceChoice,
+  AuditEvent,
+  ProjectMembers,
+  ProjectRole,
+  WorkspaceProject,
   AskAnswer,
   Decision,
   DecisionInput,
@@ -73,7 +80,7 @@ export type Me = {
   csrfToken: string;
 };
 
-export type Project = { id: string; key: string; name: string; description: string; createdAt: string };
+export type Project = { id: string; key: string; name: string; description: string; createdAt: string; /** The caller's own role in it. */ role?: ProjectRole };
 export type CreateProjectInput = { name: string; key?: string; description?: string };
 
 export type LoginInput = { email: string; password: string };
@@ -202,6 +209,23 @@ export function createApiClient(options: ApiClientOptions = {}) {
       },
     },
 
+    /** The person's workspaces, and moving this session to another. After a switch every cached read belongs to the old one. */
+    workspaces: {
+      list: async () => (await request<{ workspaces: WorkspaceChoice[] }>("GET", "/api/app/me/workspaces")).workspaces,
+      switchTo: async (teamId: string) => (await request<{ team: { id: string; name: string } }>("POST", "/api/app/me/workspace", { teamId })).team,
+    },
+
+    /** Workspace-level views of access (owners and admins). */
+    access: {
+      projects: async () => (await request<{ projects: WorkspaceProject[] }>("GET", "/api/app/access/projects")).projects,
+      audit: async (opts: { project?: string; limit?: number } = {}) => {
+        const q = new URLSearchParams();
+        if (opts.project) q.set("project", opts.project);
+        if (opts.limit) q.set("limit", String(opts.limit));
+        return (await request<{ events: AuditEvent[] }>("GET", `/api/app/access/audit${q.size ? `?${q}` : ""}`)).events;
+      },
+    },
+
     projects: {
       list: async () => (await request<{ projects: Project[] }>("GET", "/api/app/projects")).projects,
       create: async (input: CreateProjectInput) => (await request<{ project: Project }>("POST", "/api/app/projects", input)).project,
@@ -209,6 +233,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
       board: (projectKey: string) => request<BoardView>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/board`),
       /** The Bots menu: each agent key with its queue in this project. */
       queue: async (projectKey: string) => (await request<{ bots: Bot[] }>("GET", `/api/app/projects/${encodeURIComponent(projectKey)}/queue`)).bots,
+      /** Who is in the project, and the caller's own role in it. */
+      members: (projectKey: string) => request<ProjectMembers>("GET", `${project(projectKey)}/members`),
+      /** Workspace members who could still be added (project admins). */
+      addableMembers: async (projectKey: string) => (await request<{ people: AddableMember[] }>("GET", `${project(projectKey)}/members/addable`)).people,
+      addMember: (projectKey: string, input: { userId: string; role: ProjectRole }) => request<{ member: { userId: string; role: ProjectRole } }>("POST", `${project(projectKey)}/members`, input),
+      setMemberRole: (projectKey: string, userId: string, role: ProjectRole) =>
+        request<{ member: { userId: string; role: ProjectRole } }>("PATCH", `${project(projectKey)}/members/${encodeURIComponent(userId)}`, { role }),
+      /** Remove someone from the project, or leave it yourself. */
+      removeMember: (projectKey: string, userId: string) => request<{ ok: true }>("DELETE", `${project(projectKey)}/members/${encodeURIComponent(userId)}`),
+      /** A workspace owner or admin joins the project as its admin (audited). */
+      join: (projectKey: string) => request<{ project: { id: string; key: string; name: string } }>("POST", `${project(projectKey)}/join`, {}),
       /** Teammates remove an agent session from a project. */
       removeSession: (projectKey: string, sessionId: string) =>
         request<{ ok: true }>("DELETE", `/api/app/projects/${encodeURIComponent(projectKey)}/sessions/${encodeURIComponent(sessionId)}`),
@@ -333,6 +368,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
       revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/invites/${encodeURIComponent(id)}`),
       /** For the invite page, before anyone is signed in. */
       peek: async (token: string) => (await request<{ invite: InvitePeek }>("POST", "/api/app/invites/peek", { token })).invite,
+      /** For a signed-in person with an account: what an invite sent to their own address adds them to. */
+      peekExisting: async (token: string) => (await request<{ invite: InvitePeekExisting }>("POST", "/api/app/invites/peek-existing", { token })).invite,
+      /** For a signed-in person with an account: join that workspace; this session then works in it. */
+      acceptExisting: async (token: string) => (await request<{ team: { id: string; name: string } }>("POST", "/api/app/invites/accept-existing", { token })).team,
       /** Creates the account and signs the new person in. */
       accept: async (input: AcceptInviteInput) => adopt(await request<Me>("POST", "/api/app/invites/accept", input)),
     },
@@ -347,7 +386,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     dashboard: {
       /** One widget's data. */
-      widget: <W extends keyof DashboardWidgets>(widget: W) => request<DashboardWidgets[W]>("GET", `/api/app/dashboard/${widget}`),
+      widget: <W extends keyof DashboardWidgets>(widget: W, project?: string) =>
+        request<DashboardWidgets[W]>("GET", `/api/app/dashboard/${widget}${project ? `?project=${encodeURIComponent(project)}` : ""}`),
     },
   };
 }

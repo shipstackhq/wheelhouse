@@ -150,6 +150,7 @@ describe("service layer: CRUD, locking, tree, limits", () => {
   test("a project at the 500-doc cap refuses further creates", async () => {
     const db = await getDb();
     const [capProject] = await db.insert(schema.projects).values({ teamId: human.teamId, key: "CAP", name: "Cap project" }).returning();
+    await db.insert(schema.projectMembers).values({ projectId: capProject.id, userId: human.id, teamId: human.teamId, role: "editor" }); // a project is reachable only by its members
     // Insert 500 docs directly (fast path) rather than through the service, to keep the test quick.
     const rows = Array.from({ length: 500 }, (_, i) => ({
       projectId: capProject.id,

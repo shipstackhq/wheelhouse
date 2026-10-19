@@ -17,7 +17,7 @@ describe("admin: teams", () => {
         ],
       });
     });
-    await screen.findByRole("heading", { level: 1, name: "Teams on this server" });
+    await screen.findByRole("heading", { level: 1, name: "Workspaces on this server" });
     const mine = (await screen.findByText("(yours)")).closest("a") as HTMLElement;
     expect(mine.getAttribute("href")).toBe("/admin/teams/t1");
     expect(within(mine).getByText("ada@example.test")).toBeTruthy();
@@ -46,8 +46,8 @@ describe("admin: one team", () => {
     expect(screen.getByText("new@example.test")).toBeTruthy();
     expect(screen.getByText("pending")).toBeTruthy();
     expect(screen.getByText("wh_zzzzzzz…")).toBeTruthy();
-    expect(screen.getByText("Tickets, comments and the map of this team are not shown here.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "All teams" }).getAttribute("href")).toBe("/admin/teams");
+    expect(screen.getByText("Tickets, comments and the map of this workspace are not shown here.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "All workspaces" }).getAttribute("href")).toBe("/admin/teams");
   });
 
   test("suspending needs the team's exact name; on success it says how many sign-ins ended and reads the team again", async () => {
@@ -55,24 +55,24 @@ describe("admin: one team", () => {
     const user = userEvent.setup();
     await user.type(await screen.findByPlaceholderText(/^Type "Babbage & Co" to confirm$/), "Babbage & Co");
     await user.type(screen.getByPlaceholderText("Reason (only you can see it)"), "abuse");
-    await user.click(screen.getByRole("button", { name: "Suspend team" }));
+    await user.click(screen.getByRole("button", { name: "Suspend workspace" }));
     await screen.findByText("Suspended Babbage & Co. 2 sign-ins ended.");
     expect(server.sent("POST /api/app/admin/teams/t2/suspend")[0].body).toEqual({ confirm: "Babbage & Co", reason: "abuse" });
     await waitFor(() => expect(server.sent("GET /api/app/admin/teams/t2").length).toBeGreaterThan(1));
   });
 
   test("a wrong confirmation is shown in the server's words", async () => {
-    open(adminTeamDetail(), (s) => s.on("POST /api/app/admin/teams/t2/suspend", apiError(400, "invalid", "Type the team name exactly to confirm")));
+    open(adminTeamDetail(), (s) => s.on("POST /api/app/admin/teams/t2/suspend", apiError(400, "invalid", "Type the workspace name exactly to confirm")));
     const user = userEvent.setup();
     await user.type(await screen.findByPlaceholderText(/^Type "Babbage/), "babbage");
-    await user.click(screen.getByRole("button", { name: "Suspend team" }));
-    expect((await screen.findByText("Type the team name exactly to confirm")).textContent).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Suspend workspace" }));
+    expect((await screen.findByText("Type the workspace name exactly to confirm")).textContent).toBeTruthy();
   });
 
   test("your own team cannot be suspended, so there is no form", async () => {
     open(adminTeamDetail({ isYours: true }));
-    await screen.findByText("This is your own team, so it cannot be suspended.");
-    expect(screen.queryByRole("button", { name: "Suspend team" })).toBeNull();
+    await screen.findByText("This is your own workspace, so it cannot be suspended.");
+    expect(screen.queryByRole("button", { name: "Suspend workspace" })).toBeNull();
   });
 
   test("a suspended team shows when, by whom and why, and can be restored", async () => {
@@ -82,8 +82,8 @@ describe("admin: one team", () => {
     );
     await screen.findByText(/Suspended 2026-10-10 by ada@example.test/);
     expect(screen.getByText("Reason: abuse")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Suspend team" })).toBeNull();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Restore team" }));
+    expect(screen.queryByRole("button", { name: "Suspend workspace" })).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Restore workspace" }));
     await waitFor(() => expect(server.sent("POST /api/app/admin/teams/t2/restore")).toHaveLength(1));
   });
 
@@ -103,12 +103,12 @@ describe("admin: invite a new team", () => {
       s.on("GET /api/app/invites", ({ url }) => ({ invites: url.includes("new_team") ? [invite({ id: "n1", kind: "new_team", email: "founder@example.test", teamName: "Fresh Co" })] : [] }));
       s.on("POST /api/app/invites", { id: "n2", email: "x@example.test", kind: "new_team", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#NEW" });
     });
-    await screen.findByRole("heading", { level: 1, name: "Invite a new team" });
-    expect(await screen.findByText(/new team: Fresh Co · expires 2026-10-23/)).toBeTruthy();
+    await screen.findByRole("heading", { level: 1, name: "Invite a new workspace" });
+    expect(await screen.findByText(/new workspace: Fresh Co · expires 2026-10-23/)).toBeTruthy();
     expect(server.sent("GET /api/app/invites")[0].url).toBe("/api/app/invites?kind=new_team");
     const user = userEvent.setup();
     await user.type(screen.getByPlaceholderText("Their email"), "x@example.test");
-    await user.type(screen.getByPlaceholderText("Team name (optional)"), "X Inc");
+    await user.type(screen.getByPlaceholderText("Workspace name (optional)"), "X Inc");
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
     await screen.findByText("https://wh.example.test/invite#NEW");
     expect(server.sent("POST /api/app/invites")[0].body).toEqual({ kind: "new_team", email: "x@example.test", role: "member", tags: "", team: "X Inc" });

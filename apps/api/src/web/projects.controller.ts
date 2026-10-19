@@ -1,10 +1,11 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
-import { createProject, listProjects, removeSession } from "@wheelhouse/core/lib/service";
+import { listProjectsWithRole } from "@wheelhouse/core/lib/project-members";
+import { createProject, removeSession } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt });
+const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date; role?: string }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt, ...(p.role ? { role: p.role } : {}) });
 
 @Controller("api/app/projects")
 @AppEndpoints()
@@ -13,7 +14,7 @@ export class ProjectsController {
   @Get()
   @UseGuards(SessionGuard)
   async list(@Req() req: SessionRequest) {
-    return { projects: (await listProjects(req.human.actor)).map(view) };
+    return { projects: (await listProjectsWithRole(req.human.actor)).map(view) };
   }
 
   /** `{ name, key?, description? }`. The key defaults from the name. 201 with the project; a taken key is a 409. */

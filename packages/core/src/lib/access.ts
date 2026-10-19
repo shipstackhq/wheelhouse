@@ -16,6 +16,11 @@ export type Actor = {
   id: string; // user id or api key id
   name: string;
   teamId: string;
+  /**
+   * Set only by Wheelhouse itself for work it does on a workspace's behalf, such as handling a GitHub webhook. A system actor is
+   * not a person and not a project member: like an agent key it reaches every project of its own workspace and nothing outside it.
+   */
+  system?: true;
   /** Agents only: the client session making the call (Claude Code session_id), when the call names one. */
   sessionId?: string;
 };
@@ -25,34 +30,40 @@ export type Actor = {
  */
 export const TEAM_SUSPENDED_MESSAGE = "This team has been suspended. Contact the administrator.";
 
-/** Whether the user belongs to a team an instance admin has suspended (WH-52). */
+/**
+ * Whether every team the user belongs to is suspended by an instance admin (WH-52). Someone in several workspaces is only locked
+ * out when all of them are; one suspended workspace is simply not offered to them.
+ */
 export async function userTeamSuspended(userId: string) {
   const db = await getDb();
-  const [row] = await db
+  const rows = await db
     .select({ at: schema.teams.suspendedAt })
     .from(schema.memberships)
     .innerJoin(schema.teams, eq(schema.teams.id, schema.memberships.teamId))
-    .where(eq(schema.memberships.userId, userId))
-    .limit(1);
-  return !!row?.at;
+    .where(eq(schema.memberships.userId, userId));
+  return rows.length > 0 && rows.every((r) => !!r.at);
 }
 
 /**
- * The signed-in user behind a session cookie value, or null. A member of a suspended team counts as signed
- * out even if a session row still exists, so every page, action and API call refuses them from this one place.
+ * The signed-in user behind a session cookie value, with the workspace the session is working in (or null for "their first"),
+ * or null when signed out. A person whose every team is suspended counts as signed out even if a session row still exists, so
+ * every page, action and API call refuses them from this one place.
  */
-export async function userForSessionToken(token: string, now = new Date()) {
+export async function sessionForToken(token: string, now = new Date()) {
   const db = await getDb();
   const [row] = await db
-    .select({ user: schema.users })
+    .select({ user: schema.users, activeTeamId: schema.sessions.activeTeamId })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
     .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, now)));
   if (!row) return null;
   if (await userTeamSuspended(row.user.id)) return null;
-  return row.user;
+  return row;
 }
 
+export async function userForSessionToken(token: string, now = new Date()) {
+  return (await sessionForToken(token, now))?.user ?? null;
+}
 
 export class AuthError extends Error {
   status = 401;

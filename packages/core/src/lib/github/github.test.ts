@@ -109,17 +109,17 @@ const prPayload = (team: Team, action: string, over: Record<string, unknown> = {
 
 describe("connecting", () => {
   test("only an owner can register an installation or connect a repository", async () => {
-    await assert.rejects(registerInstallation(A.member, { installationId: "5555", accountLogin: "x", accountType: "User" }), /Only team owners/);
-    await assert.rejects(connectGithubRepository(A.member, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /Only team owners/);
+    await assert.rejects(registerInstallation(A.member, { installationId: "5555", accountLogin: "x", accountType: "User" }), /Only workspace owners/);
+    await assert.rejects(connectGithubRepository(A.member, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /Only workspace owners/);
   });
 
   test("an installation belongs to one team: another team cannot register it", async () => {
-    await assert.rejects(registerInstallation(B.owner, { installationId: A.installation, accountLogin: "acme", accountType: "Organization" }), /already connected to another team/);
+    await assert.rejects(registerInstallation(B.owner, { installationId: A.installation, accountLogin: "acme", accountType: "Organization" }), /already connected to another workspace/);
     assert.equal((await listInstallations(B.owner)).some((i) => i.installationId === A.installation), false);
   });
 
   test("a team cannot connect a repository through an installation that is not its own", async () => {
-    await assert.rejects(connectGithubRepository(B.owner, "BB", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /not connected to your team/);
+    await assert.rejects(connectGithubRepository(B.owner, "BB", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /not connected to your workspace/);
   });
 
   test("a repository GitHub does not list for the installation cannot be connected, and the name and branch come from GitHub", async () => {
