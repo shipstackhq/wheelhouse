@@ -293,6 +293,25 @@ describe("editing", () => {
     expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
   });
 
+  test("WH-104: a doc opened by its uuid address, as the real data has it (untitled slug, no text, no labels), opens in the editor under its own title", async () => {
+    const id = "6d9e6f95-3187-433d-9935-e936100655c6";
+    const real = doc({ id, slug: "untitled-doc", title: "Project Documentation", body: "", version: 2, labels: [] });
+    open(`${HOME}/${id}`, (s) => serve(s, [real]));
+    expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Project Documentation");
+    expect(screen.getByText(/untitled-doc · v2/)).toBeTruthy();
+  });
+
+  test("WH-104: when the server fails to return the doc, the page says so instead of staying blank", async () => {
+    open(DOC, (s) => {
+      s.on(`GET ${url("docs")}`, docsIndex());
+      s.on(`GET ${url("docs/d-plan")}`, apiError(500, "internal", "Something went wrong on our side"));
+    });
+    expect(await screen.findByText("Loading…")).toBeTruthy(); // a server error is retried a couple of times first
+    expect(await screen.findByText("Could not load this doc.", {}, { timeout: 8000 })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
   test("someone else saved first: the banner says the doc moved on, and the save is refused with the server's words, nothing overwritten", async () => {
     let served = doc();
     const conflict = apiError(409, "conflict", 'Doc "Plan" was changed (version 2, you had 1). Re-read and retry.', { current: doc({ version: 2, body: "Theirs" }) });
