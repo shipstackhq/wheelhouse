@@ -60,7 +60,7 @@ The MCP server ships prompts that appear as slash commands in Claude Code:
 
 ## Deploy
 
-Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Postgres you already have. Pushes to `main` build and deploy it automatically. See [docs/deploy.md](docs/deploy.md) for the one-time server setup, the GitHub secrets, rollback and backups.
+Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Postgres you already have. Nothing deploys automatically yet: work lands on `staging` and is promoted to `production` ([docs/branches.md](docs/branches.md)). See [docs/deploy.md](docs/deploy.md) for the one-time server setup, the GitHub secrets, rollback and backups.
 
 `DATABASE_URL` is required in production; the embedded PGlite database is for local development only.
 

@@ -1,18 +1,22 @@
 name: Deploy
 
-# Runs after CI passes on main. Builds the image once, pushes it to GHCR tagged with the commit SHA,
+# NOT AUTOMATIC YET. Nothing is deployed from this repository today: the automatic trigger (after CI passes on `production`)
+# is switched off below until the first real deploy is agreed, so this workflow runs only when started by hand. See docs/branches.md.
+#
+# When it runs, it builds the image once, pushes it to GHCR tagged with the commit SHA,
 # then deploys that exact tag to the VPS over SSH, through a locked-down key that can only run the server's
 # deploy wrapper (which runs deploy/deploy.sh: dump, swap, health gate, rollback).
 # Manual run with `sha` redeploys an already-published image (use it to roll back).
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  # To switch automatic deploys on, uncomment this block (it deploys what passed CI on `production`, never `staging`):
+  # workflow_run:
+  #   workflows: [CI]
+  #   types: [completed]
+  #   branches: [production]
   workflow_dispatch:
     inputs:
       sha:
-        description: "Commit SHA of an already-published image to deploy (leave empty to build and deploy main)"
+        description: "Commit SHA of an already-published image to deploy (leave empty to build and deploy the head of `production`; run it from the `production` branch)"
         required: false
       dry_run:
         description: "Dry run: build the image (not pushed) and check the deploy configuration, without logging in to the registry or touching the server"
@@ -34,7 +38,8 @@ env:
 jobs:
   publish:
     name: Build and push image
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha == '' || github.event.workflow_run.conclusion == 'success' }}
+    # Building from a branch other than production is refused: only `production` is ever deployed.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha == '' && github.ref == 'refs/heads/production' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

@@ -22,7 +22,7 @@ browser / Claude Code ──https──▶ host Caddy ──▶ 127.0.0.1:3000  
                                             existing Postgres container (database "wheelhouse")
 ```
 
-Updates are automatic: a push to `main` runs CI, then `deploy.yml` builds the image, tags it with the commit
+**Nothing deploys automatically yet** (branches are described in `docs/branches.md`). `deploy.yml` runs only when started by hand, from the `production` branch; its automatic trigger (after CI passes on `production`) is commented out until the first real deploy is agreed. When it runs, it builds the image, tags it with the commit
 SHA and pushes it to GHCR. It then SSHes to the server with a key that can run **one thing only**: a root-owned
 wrapper (`/usr/local/sbin/deploy-wheelhouse`). The workflow sends the SHA, the GitHub user and the job's token to
 the wrapper on stdin; the wrapper logs in to GHCR, runs `deploy.sh` in the app directory and logs out. The script
@@ -161,7 +161,7 @@ There is no path variable: the wrapper decides where the app lives.
 
 ## First deploy
 
-Push to `main` (or run **Deploy** manually). Then open `APP_URL` and **create the first account straight
+Run **Deploy** manually from the `production` branch. Then open `APP_URL` and **create the first account straight
 away**: with `ALLOW_SIGNUP=false` only the very first signup is accepted, and after that owners add members
 under *Team*. Do this before sharing the URL.
 

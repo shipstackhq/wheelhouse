@@ -52,7 +52,7 @@ pnpm map:after-migration --db <target>                                          
   notes and one flow that said "server action" are corrected; ADR-16 is recorded as implemented and the packaging sentence in the API's ADR is settled; two new ADRs record why one process serves both apps and why versioned edits lock the row; two glossary terms are added.
   It never overwrites a sentence someone has since edited by hand (it reports it), and a second run changes nothing. It does not need a git repository.
 
-When the new layout reaches `main` and lands (the plugin's hooks on a merge, or the webhook), the first landing records the baselines the re-described nodes do not have yet, and flags only files that really changed since a node was described.
+When the new layout reaches the branch Wheelhouse tracks (`docs/branches.md`) and lands (the plugin's hooks on a merge, or the webhook), the first landing records the baselines the re-described nodes do not have yet, and flags only files that really changed since a node was described.
 
 Both are rehearsed on every run of the rehearsal script below. They are applied on the **cutover day to the imported copy, not to the running control plane**: until the cutover the live map must keep describing `main`, which is still the Next app, and a
 landing only counts on `main`. The map events they create (about 35 for the real data) will appear in each agent's queue as changes by the owner, which is right: agents should hear that the architecture description changed.

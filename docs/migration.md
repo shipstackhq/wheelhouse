@@ -24,7 +24,7 @@ PGLITE_DIR=<a COPY of a data directory> pnpm exec next dev -p 3456
 ```
 
   PGlite allows one process per data directory: never point the old app at a directory another process is using, and use a copy, not the live one. The old app takes a database made by the new one only if the schema is the same (`docs/cutover.md`, "Rollback").
-- Nothing in `main` imports it. It is not a workspace package, it is not built, and it is not tested in CI.
+- Nothing on `staging` or `production` imports it. It is not a workspace package, it is not built, and it is not tested in CI.
 - **Rollback window:** the old container image and the data copies taken at cutover are kept until the date the owner records on WH-87. After that date they can be removed; the archive tag stays.
 
 ## What the migration left behind
