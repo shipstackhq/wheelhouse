@@ -4,12 +4,11 @@ import clsx from "clsx";
 import { useNavigate } from "react-router";
 import { useServices } from "../lib/services";
 import { ChevronDownIcon } from "./icons";
-import { Tip } from "./tip";
 
 /**
- * The workspace at the top of the sidebar: its name, and a menu of the person's workspaces. Choosing another moves this session
- * there and drops everything read from the old one (every team, project and key is the other workspace's). With a single workspace
- * the menu just names it. `collapsed` is the icon-only rail, where an initial stands in for the name.
+ * The workspace, as a round icon with its initial and a down arrow, at the top of the sidebar. It opens a menu of the person's
+ * workspaces; choosing another moves this session there and drops everything read from the old one (every team, project and key
+ * is the other workspace's). With a single workspace the menu just names it. `collapsed` is the icon-only rail.
  */
 export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; collapsed?: boolean }) {
   const { api, queryClient } = useServices();
@@ -25,30 +24,21 @@ export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; c
     queryClient.clear();
     navigate("/", { replace: true });
   };
-  const trigger = (
-    <Popover.Trigger
-      aria-label={collapsed ? `Workspace: ${name}` : "Workspace menu"}
-      className={clsx(
-        "flex w-full items-center gap-2 rounded-md border border-line px-2 py-1.5 text-left outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2",
-        collapsed && "md:justify-center md:px-0 md:py-2",
-      )}
-    >
-      <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded bg-accent/15 text-[11px] font-semibold uppercase text-accent">
-        {name.trim().charAt(0) || "W"}
-      </span>
-      <span className={clsx("min-w-0 flex-1 truncate font-medium", collapsed && "md:hidden")}>{name}</span>
-      <ChevronDownIcon className={clsx("shrink-0 text-muted", collapsed && "md:hidden")} />
-    </Popover.Trigger>
-  );
   return (
     <Popover.Root>
-      {collapsed ? (
-        <Tip content={name} side="right" align="center">
-          {trigger}
-        </Tip>
-      ) : (
-        trigger
-      )}
+      <Popover.Trigger
+        aria-label={`Workspace menu: ${name}`}
+        title={name}
+        className={clsx(
+          "group flex shrink-0 items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1.5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2 data-[state=open]:text-fg",
+          collapsed && "md:pr-1",
+        )}
+      >
+        <span aria-hidden className="grid size-7 place-items-center rounded-full bg-accent/15 text-xs font-semibold uppercase text-accent">
+          {name.trim().charAt(0) || "W"}
+        </span>
+        <ChevronDownIcon aria-hidden className="text-base transition-transform group-data-[state=open]:rotate-180" />
+      </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content side={collapsed ? "right" : "bottom"} align="start" sideOffset={6} collisionPadding={8} className="z-50 w-60 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl">
           <div role="group" aria-label="Workspaces">

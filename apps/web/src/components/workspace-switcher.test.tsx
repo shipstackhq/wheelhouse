@@ -19,9 +19,11 @@ const two = () => {
 describe("the workspace switcher", () => {
   test("shows the workspace's name and initial; with one workspace the menu just names it, as the current one", async () => {
     renderIn(<WorkspaceSwitcher name="Analytical Engines" />);
-    const button = screen.getByRole("button", { name: "Workspace menu" });
-    expect(button.textContent).toContain("Analytical Engines");
-    expect(button.textContent).toContain("A");
+    const button = screen.getByRole("button", { name: /^Workspace menu/ });
+    expect(button.getAttribute("aria-label")).toBe("Workspace menu: Analytical Engines");
+    expect(button.getAttribute("title")).toBe("Analytical Engines");
+    expect(button.textContent).toBe("A"); // a round icon with the initial; the name is in the menu and the tooltip
+    expect(button.querySelector("svg")).toBeTruthy(); // the down arrow that says it is a menu
     await userEvent.setup().click(button);
     const group = await screen.findByRole("group", { name: "Workspaces" });
     const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
@@ -33,7 +35,7 @@ describe("the workspace switcher", () => {
     const { server, services, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", two());
     services.queryClient.setQueryData(["marker"], "from the old workspace");
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Workspace menu" }));
+    await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
     const group = await screen.findByRole("group", { name: "Workspaces" });
     await within(group).findByRole("button", { name: /Difference Engines/ });
     const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
@@ -47,10 +49,9 @@ describe("the workspace switcher", () => {
     expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing from the old workspace lingers
   });
 
-  test("as the rail it shows only the initial, named for screen readers", () => {
+  test("as the rail it is the same round icon, named for screen readers", () => {
     renderIn(<WorkspaceSwitcher name="Analytical Engines" collapsed />);
-    const button = screen.getByRole("button", { name: "Workspace: Analytical Engines" });
-    expect(button.textContent).toContain("A");
-    expect(screen.getByText("Analytical Engines").className).toContain("md:hidden");
+    const button = screen.getByRole("button", { name: "Workspace menu: Analytical Engines" });
+    expect(button.textContent).toBe("A");
   });
 });

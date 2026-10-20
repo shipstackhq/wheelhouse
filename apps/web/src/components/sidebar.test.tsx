@@ -31,7 +31,7 @@ describe("what the sidebar shows", () => {
     expect(order.indexOf("Initiatives")).toBeLessThan(order.indexOf("Projects"));
     expect(order.indexOf("Projects")).toBeLessThan(order.findIndex((t) => t.startsWith("Alpha")));
     expect(order.findIndex((t) => t.startsWith("Gamma"))).toBeLessThan(order.indexOf("Members"));
-    expect(screen.getByRole("button", { name: "Workspace menu" }).textContent).toContain("Analytical Engines");
+    expect(screen.getByRole("button", { name: /^Workspace menu/ }).getAttribute("title")).toBe("Analytical Engines");
   });
 
   test("an account with no team says so, and the create link is there", () => {
@@ -46,7 +46,7 @@ describe("what the sidebar shows", () => {
     expect(links).toMatchObject({ Home: "/", Board: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", Repos: "/t/AA/repos", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
     expect(within(nav()).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true);
     expect(within(nav()).getByRole("link", { name: "Board" }).classList.contains("bg-panel-2")).toBe(false);
-    expect(screen.getByRole("button", { name: "Workspace menu" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Workspace menu/ })).toBeTruthy();
     expect(screen.getByText("the profile")).toBeTruthy();
   });
 
@@ -174,19 +174,7 @@ describe("remembering the last team", () => {
     renderIn(sidebar(), "/t/BB/docs");
     expect(document.cookie).toContain("wh_last_team=BB");
   });
-
-  test("the logo goes to the last team, or home if it is unknown", () => {
-    document.cookie = "wh_last_team=CC; path=/";
-    const { unmount } = renderIn(sidebar(), "/workspace");
-    expect(logo().getAttribute("href")).toBe("/t/CC");
-    unmount();
-    document.cookie = "wh_last_team=GONE; path=/";
-    renderIn(sidebar(), "/workspace");
-    expect(logo().getAttribute("href")).toBe("/");
-  });
 });
-
-const logo = () => screen.getAllByRole("link").find((a) => a.textContent?.includes("Wheelhouse"))!;
 
 describe("on a small screen", () => {
   test("the menu is a drawer that opens and closes", async () => {
@@ -254,7 +242,6 @@ describe("collapsing to the icon-only rail", () => {
     const board = within(nav()).getByRole("link", { name: "Board" });
     expect(board.querySelector("span")!.className).toContain("md:sr-only");
     expect(board.getAttribute("href")).toBe("/t/AA");
-    expect(screen.getByText("Analytical Engines").className).toContain("md:hidden");
     expect(screen.getByText("Workspace").closest("button")!.className).toContain("md:hidden"); // the title makes way for a thin rule
     await user.click(expand);
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();

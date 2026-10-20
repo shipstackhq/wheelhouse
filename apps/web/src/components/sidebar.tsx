@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
-import { Logo, WheelIcon } from "./logo";
 import { NavLink } from "./nav-link";
 import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
 import { Tip } from "./tip";
@@ -51,17 +50,6 @@ function readCollapsed(): boolean {
 }
 const LAST_COOKIE = "wh_last_team";
 
-/** The team last viewed, from the cookie this sidebar writes (the Next app read the same cookie on the server). */
-export function readLastTeam(): string | null {
-  const m = document.cookie.match(new RegExp(`(?:^|; )${LAST_COOKIE}=([^;]*)`));
-  if (!m) return null;
-  try {
-    return decodeURIComponent(m[1]);
-  } catch {
-    return null;
-  }
-}
-
 function readRecent(): string[] {
   try {
     return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
@@ -80,14 +68,11 @@ export function Sidebar({
   teams,
   workspaceName,
   isAdmin,
-  lastTeam,
   profile,
 }: {
   teams: TeamItem[];
   workspaceName: string;
   isAdmin: boolean;
-  /** The team to open from the logo; read from the cookie when not given. */
-  lastTeam?: string | null;
   /** The account menu; a function gets whether the sidebar is the icon-only rail, so it can draw itself compact. */
   profile: React.ReactNode | ((collapsed: boolean) => React.ReactNode);
 }) {
@@ -162,9 +147,6 @@ export function Sidebar({
     navigate(`/t/${p.key}${known ? section : ""}`);
   }
 
-  const last = lastTeam === undefined ? readLastTeam() : lastTeam; // re-read on each render: viewing a team writes the cookie
-  const home = last && teams.some((p) => p.key === last) ? `/t/${last}` : "/";
-
   return (
     <>
       <button
@@ -185,11 +167,8 @@ export function Sidebar({
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className={clsx("flex items-center justify-between px-4 py-4", collapsed && "md:flex-col md:gap-3 md:px-0")}>
-          <Link to={home} aria-label="Wheelhouse" className="rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
-            <Logo className={clsx("text-sm", collapsed && "md:hidden")} compact />
-            {collapsed && <WheelIcon size={26} className="hidden md:block" />}
-          </Link>
+        <div className={clsx("flex items-center justify-between px-3 py-3", collapsed && "md:flex-col md:gap-3 md:px-0")}>
+          <WorkspaceSwitcher name={workspaceName} collapsed={collapsed} />
           <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="text-muted md:hidden">
             <CloseIcon className="text-lg" />
           </button>
@@ -205,9 +184,6 @@ export function Sidebar({
               {collapsed ? <ExpandSidebarIcon /> : <CollapseSidebarIcon />}
             </button>
           </Tip>
-        </div>
-        <div className="px-2 pb-2">
-          <WorkspaceSwitcher name={workspaceName} collapsed={collapsed} />
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
