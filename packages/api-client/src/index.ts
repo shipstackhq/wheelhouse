@@ -91,7 +91,7 @@ export type Me = {
   csrfToken: string;
 };
 
-export type Team = { id: string; key: string; name: string; description: string; createdAt: string; /** The caller's own role in it. */ role?: TeamRole };
+export type Team = { id: string; key: string; name: string; description: string; createdAt: string; /** `ri:<name>` (a Remix icon, drawn in `iconColor`) or one emoji; null for the default. */ icon: string | null; iconColor: string | null; /** The caller's own role in it. */ role?: TeamRole };
 export type CreateTeamInput = { name: string; key?: string; description?: string };
 
 export type LoginInput = { email: string; password: string };
@@ -242,8 +242,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Keep the teams in this order (keys, first to last) for this person; `list` then returns them so. */
       reorder: (keys: string[]) => request<{ ok: true; placed: number }>("PUT", "/api/app/teams/order", { keys }),
       create: async (input: CreateTeamInput) => (await request<{ team: Team }>("POST", "/api/app/teams", input)).team,
-      /** Team settings: rename it or change its description (team admins). */
-      update: async (teamKey: string, input: { name?: string; description?: string }) =>
+      /** Team settings: rename it, change its description, icon or icon colour (team admins). `null` clears an icon. */
+      update: async (teamKey: string, input: { name?: string; description?: string; icon?: string | null; iconColor?: string | null }) =>
         (await request<{ team: Team }>("PATCH", `/api/app/teams/${encodeURIComponent(teamKey)}`, input)).team,
       /** The team page in one read: columns, tickets, map nodes, members and the setup checklist. */
       board: (teamKey: string) => request<BoardView>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/board`),

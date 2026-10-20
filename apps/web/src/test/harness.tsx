@@ -15,7 +15,7 @@ export const ADA: Me = {
   csrfToken: "csrf-ada",
 };
 
-export const team = (key: string, name = `${key} team`): Team => ({ id: `id-${key}`, key, name, description: "", createdAt: "2026-10-16T00:00:00.000Z" });
+export const team = (key: string, name = `${key} team`): Team => ({ id: `id-${key}`, key, name, description: "", createdAt: "2026-10-16T00:00:00.000Z", icon: null, iconColor: null });
 export const TEAMS = [team("AA", "Alpha"), team("BB", "Beta")];
 
 const json = (status: number, body: unknown, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });

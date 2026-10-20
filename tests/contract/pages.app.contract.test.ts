@@ -520,7 +520,7 @@ describe("POST /api/app/teams", () => {
     const p = await signUp();
     const r = await app("POST", "/api/app/teams", p.sess, { body: { name: "Rocket Launcher", description: "Agents read this." } });
     assert.equal(r.status, 201);
-    assert.deepEqual(Object.keys(r.json.team).sort(), ["createdAt", "description", "id", "key", "name"]);
+    assert.deepEqual(Object.keys(r.json.team).sort(), ["createdAt", "description", "icon", "iconColor", "id", "key", "name"]);
     assert.equal(r.json.team.name, "Rocket Launcher");
     assert.equal(r.json.team.key, "ROC");
     assert.equal(r.json.team.description, "Agents read this.");

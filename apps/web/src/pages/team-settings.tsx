@@ -1,6 +1,7 @@
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useParams } from "react-router";
 import { Loaded } from "../components/query-state";
+import { TeamIconPicker } from "../components/team-icon-picker";
 import { SubmitButton } from "../components/submit-button";
 import { failure, field, type FormState } from "../lib/form-state";
 import { useTeamMembers } from "../lib/queries";
@@ -24,7 +25,7 @@ export function TeamSettingsPage() {
   );
 }
 
-function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { name: string; description: string }; myRole: string | null }) {
+function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { name: string; description: string; icon: string | null; iconColor: string | null }; myRole: string | null }) {
   return (
     <div className="h-full overflow-y-auto bg-bg">
       <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
@@ -36,9 +37,33 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
           {/* Keyed on what is saved, so the form starts again from the new values after a save. */}
           <SettingsForm key={`${team.name}\n${team.description}`} teamKey={key} name={team.name} description={team.description} canEdit={myRole === "admin"} />
         </div>
+        <div className="card mt-6 p-5">
+          <h2 className="mb-1 font-medium">Icon</h2>
+          <p className="mb-4 text-sm text-muted">Shown beside the team in the sidebar. Pick an icon and a colour, or an emoji.</p>
+          <IconSection key={`${team.icon}\n${team.iconColor}`} teamKey={key} icon={team.icon} iconColor={team.iconColor} canEdit={myRole === "admin"} />
+        </div>
       </div>
     </div>
   );
+}
+
+function IconSection(props: { teamKey: string; icon: string | null; iconColor: string | null; canEdit: boolean }) {
+  const { api, queryClient } = useServices();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const save = async (icon: string | null, iconColor: string | null) => {
+    setPending(true);
+    setError(null);
+    try {
+      await api.teams.update(props.teamKey, { icon, iconColor });
+      await refreshAll(queryClient); // the sidebar shows it at once
+    } catch (e) {
+      setError(failure(e)?.error ?? "Could not save the icon");
+    } finally {
+      setPending(false);
+    }
+  };
+  return <TeamIconPicker teamKey={props.teamKey} icon={props.icon} iconColor={props.iconColor} canEdit={props.canEdit} pending={pending} error={error} onSave={save} />;
 }
 
 function SettingsForm(props: { teamKey: string; name: string; description: string; canEdit: boolean }) {

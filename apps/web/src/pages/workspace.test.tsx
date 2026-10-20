@@ -87,8 +87,8 @@ describe("the workspace page, for an owner", () => {
   test("the invite form offers only the teams you administer, and sends the ones ticked with a team role", async () => {
     const { server } = renderApp("/workspace", (s) => {
       s.teams = [
-        { id: "p1", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "admin" },
-        { id: "p2", key: "BB", name: "Beta", description: "", createdAt: "2026-10-01T00:00:00.000Z", role: "editor" },
+        { id: "p1", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-01T00:00:00.000Z", icon: null, iconColor: null, role: "admin" },
+        { id: "p2", key: "BB", name: "Beta", description: "", createdAt: "2026-10-01T00:00:00.000Z", icon: null, iconColor: null, role: "editor" },
       ];
       s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_workspace", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" });
     });

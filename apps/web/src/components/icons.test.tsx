@@ -38,7 +38,8 @@ describe("one icon set", () => {
 
   test("no screen draws a glyph or an emoji as an icon: they come from icons.tsx", () => {
     const glyph = /[✕✎⚠☑❝📖▾▸◇✓⋯⚙📄📁☰⤢○✨🎫💬🎉🗺▶▲▼⇆✦🤖]/u;
-    const offenders = files.filter((f) => glyph.test(readFileSync(f, "utf8")));
+    // The team icon picker offers emoji as something a person chooses (data), not as the app's own icons.
+    const offenders = files.filter((f) => !f.endsWith("team-icon-picker.tsx") && glyph.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
   });
 

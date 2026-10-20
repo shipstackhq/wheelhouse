@@ -6,6 +6,7 @@ import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buck
 import { bus, deferPublish } from "./event-bus";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
+import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
 import { ServiceError } from "./service-error";
 import { cleanLabels, labelsOf, setDecisionNodes, setTicketLabels, withCycle, withLabels, withNodeIds } from "./links";
 import { audit, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
@@ -128,17 +129,20 @@ export async function requireTeam(actor: Actor, ref: string, need: Need = "read"
 }
 
 /** Rename a team and/or change its description. Team admins only; the key never changes (tickets are named after it). */
-export async function updateTeam(actor: Actor, ref: string, input: { name?: string; description?: string }) {
+export async function updateTeam(actor: Actor, ref: string, input: { name?: string; description?: string; icon?: unknown; iconColor?: unknown }) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit a team's settings");
   const db = await getDb();
   const p = await requireTeam(actor, ref, "admin", db);
   const name = input.name === undefined ? p.name : input.name.trim();
   if (!name) throw new ServiceError("invalid", "Team name is required");
   const description = input.description === undefined ? p.description : input.description.trim();
-  if (name === p.name && description === p.description) return p;
+  const icon = parseTeamIcon(input.icon);
+  const iconColor = parseTeamIconColor(input.iconColor);
+  const next = { name, description, icon: icon === undefined ? p.icon : icon, iconColor: iconColor === undefined ? p.iconColor : iconColor };
+  if (next.name === p.name && next.description === p.description && next.icon === p.icon && next.iconColor === p.iconColor) return p;
   return db.transaction(async (tx) => {
-    const [row] = await tx.update(teams).set({ name, description }).where(eq(teams.id, p.id)).returning();
-    await audit(tx, actor, { action: "team.updated", targetType: "team", targetId: p.id, teamId: p.id, before: { name: p.name }, after: { name } });
+    const [row] = await tx.update(teams).set(next).where(eq(teams.id, p.id)).returning();
+    await audit(tx, actor, { action: "team.updated", targetType: "team", targetId: p.id, teamId: p.id, before: { name: p.name, icon: p.icon, iconColor: p.iconColor }, after: { name, icon: next.icon, iconColor: next.iconColor } });
     await emit(tx, actor, p.id, { type: "team.updated", entity: "team", entityId: p.id, summary: `updated the settings of team ${row.name}` });
     return row;
   });

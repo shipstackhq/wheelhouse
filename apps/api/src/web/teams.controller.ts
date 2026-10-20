@@ -5,7 +5,7 @@ import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date; role?: string }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt, ...(p.role ? { role: p.role } : {}) });
+const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date; icon?: string | null; iconColor?: string | null; role?: string }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt, icon: p.icon ?? null, iconColor: p.iconColor ?? null, ...(p.role ? { role: p.role } : {}) });
 
 @Controller("api/app/teams")
 @AppEndpoints()
@@ -33,12 +33,12 @@ export class TeamsController {
     return { team: view(await createTeam(req.human.actor, { name: str(b.name), key: str(b.key) || undefined, description: str(b.description) })) };
   }
 
-  /** `{ name?, description? }`: team settings. Team admins only (403 otherwise); the key does not change. */
+  /** `{ name?, description?, icon?, iconColor? }`: team settings. `icon` is `ri:<name>` or one emoji, `null` clears it. Team admins only (403 otherwise); the key does not change. */
   @Patch(":key")
   @UseGuards(SessionGuard)
   async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
     const b = jsonBody(req);
-    return { team: view(await updateTeam(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined })) };
+    return { team: view(await updateTeam(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined, icon: b.icon, iconColor: b.iconColor })) };
   }
 
   /** Teammates remove an agent session from a team (soft delete: if it reconnects it starts at the top of the queue). */

@@ -197,6 +197,13 @@
       "when": 1792525388748,
       "tag": "0027_team_order",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792526433535,
+      "tag": "0028_team_icon",
+      "breakpoints": true
     }
   ]
 }

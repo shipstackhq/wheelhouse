@@ -21,6 +21,7 @@ import {
   pgView,
 } from "drizzle-orm/pg-core";
 import { COLUMN_ROLES } from "../lib/column-roles";
+import { TEAM_ICON_COLORS } from "../lib/team-icon";
 import { sql } from "drizzle-orm";
 
 /**
@@ -246,6 +247,9 @@ export const teams = table("teams", {
   key: text("key").notNull(), // short prefix like "WH" for ticket refs
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
+  // The team's icon in the sidebar: `ri:<name>` (a Remix icon, in `icon_color`) or one emoji; null is the default glyph.
+  icon: text("icon"),
+  iconColor: text("icon_color", { enum: TEAM_ICON_COLORS }),
   ticketCounter: integer("ticket_counter").notNull().default(0),
   createdAt: createdAt(),
 }, (t) => [

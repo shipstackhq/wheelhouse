@@ -687,8 +687,8 @@ function toLegacyWire(value: unknown): unknown {
     // Cycles (WH-117) and projects (WH-118) are not part of the old shape either: a ticket's cycle, project and milestone never reach /api/v1 or the MCP.
     return Object.fromEntries(
       Object.entries(value)
-        // A ticket's project and milestone (WH-118) are new, and `projectId` would collide with what a team's id is called here.
-        .filter(([k]) => !(dropWorkspace && k === "workspaceId") && k !== "cycleId" && k !== "cycle" && k !== "projectId" && k !== "milestoneId")
+        // A ticket's project and milestone (WH-118) and a team's icon are new, and `projectId` would collide with what a team's id is called here.
+        .filter(([k]) => !(dropWorkspace && k === "workspaceId") && k !== "cycleId" && k !== "cycle" && k !== "projectId" && k !== "milestoneId" && k !== "icon" && k !== "iconColor")
         .map(([k, v]) => [legacyKey(k), legacyWord(k, toLegacyWire(v))]),
     );
   }

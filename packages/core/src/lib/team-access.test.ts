@@ -294,6 +294,25 @@ describe("the order a person keeps their teams in", () => {
   });
 });
 
+describe("a team's icon", () => {
+  test("a team admin sets an icon and colour, or an emoji, or clears it; anything else is refused, and so is a non-admin", async () => {
+    const t = await team(ada, `IC${L}`);
+    await addTo(ada, t.key, bob, "editor");
+    const set = await svc.updateTeam(ada, t.key, { icon: "ri:rocket-2", iconColor: "violet" });
+    assert.deepEqual([set.icon, set.iconColor], ["ri:rocket-2", "violet"]);
+    assert.equal((await svc.updateTeam(ada, t.key, { name: "Renamed" })).icon, "ri:rocket-2", "left out means unchanged");
+    const emoji = await svc.updateTeam(ada, t.key, { icon: "🚀" });
+    assert.equal(emoji.icon, "🚀");
+    assert.equal((await svc.updateTeam(ada, t.key, { icon: "👨‍👩‍👧‍👦" })).icon, "👨‍👩‍👧‍👦", "one emoji built from several is still one");
+    for (const bad of ["ri:nonsense", "ab", "🚀🚀", "http://x", 5]) await assert.rejects(() => svc.updateTeam(ada, t.key, { icon: bad }), code("invalid"), String(bad));
+    await assert.rejects(() => svc.updateTeam(ada, t.key, { iconColor: "pink" }), code("invalid"));
+    const cleared = await svc.updateTeam(ada, t.key, { icon: null, iconColor: null });
+    assert.deepEqual([cleared.icon, cleared.iconColor], [null, null]);
+    await assert.rejects(() => svc.updateTeam(bob, t.key, { icon: "ri:star" }), code("forbidden"));
+    assert.equal((await pmem.listTeamsWithRole(ada)).find((x) => x.key === t.key)!.icon, null, "the list carries it too");
+  });
+});
+
 describe("who is in a team", () => {
   test("members are listed to any member; adding needs a workspace member; duplicates and strangers are refused", async () => {
     const seen = await pmem.listTeamMembers(cy, p1.key);

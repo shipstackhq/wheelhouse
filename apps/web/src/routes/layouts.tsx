@@ -91,7 +91,7 @@ export function AppLayout() {
     <div className="flex h-dvh">
       <NavigationProgress />
       <Sidebar
-        teams={teams.map((p) => ({ key: p.key, name: p.name }))}
+        teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
         workspaceName={me.workspace.name}
         isAdmin={me.isInstanceAdmin}
         profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} compact={collapsed} />}

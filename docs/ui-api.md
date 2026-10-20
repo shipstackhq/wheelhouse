@@ -399,3 +399,7 @@ Design for routing work by team (the dispatcher itself is WH-32): [agent-keys-an
 ## Team order (WH-120 follow-up)
 
 `PUT /api/app/teams/order` with `{ keys }` remembers the order this person keeps their teams in (first to last), on their own `team_members` rows (`position`, migration 0027), so it follows them across devices and changes nothing for anyone else. Keys that are not teams they can open are ignored (`placed` says how many were). `GET /api/app/teams` then returns their teams in that order: the ones they placed first, then any they have not, oldest first. Agent keys have no order. The sidebar drags a team by its row (and moves it with Alt+Up and Alt+Down).
+
+## Team icons
+
+A team has an `icon` and an `iconColor` (migration 0028), both null by default. `icon` is `ri:<name>` (one of the Remix icons in `TEAM_ICON_NAMES`, drawn solid in `iconColor`) or a single emoji (drawn by the system's emoji font). `PATCH /api/app/teams/:key` takes them with the name and description (team admins; `null` clears; a bad value is a `400` naming the field), `GET /api/app/teams` and the team answers carry them. With none, the sidebar draws the default glyph in a colour taken from the team's key. `/api/v1` and the MCP never show them. They are set on the team's settings page.
