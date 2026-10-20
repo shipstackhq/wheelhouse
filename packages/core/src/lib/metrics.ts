@@ -33,7 +33,7 @@ export function setRequestMemo(m: Memo) {
   memo = m;
   memoised = null;
 }
-/** `viewer` is the person's user id, or "*" for an agent key or the system, who see the whole workspace (ADR-23). */
+/** `viewer` is the person's user id. "*" (the whole workspace) is only for callers that are not people; only people reach the dashboard, and agent keys and system actors never get here. */
 const snapshot = (actor: Actor, teamId?: string) => (memoised ??= memo(loadSnapshot))(actor.workspaceId, actor.kind === "human" && !actor.system ? actor.id : "*", teamId ?? "*");
 
 /**

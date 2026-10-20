@@ -20,7 +20,7 @@ export const CYCLE_MAX_MS = 14 * DAY;
 const NIL_UUID = "00000000-0000-0000-0000-000000000000";
 
 /** Cycles that roll over, and the first one the sweep creates, are Wheelhouse's own doing, like the claim sweep's. */
-const systemActor = (workspaceId: string): Actor => ({ kind: "human", id: NIL_UUID, name: "Wheelhouse", workspaceId, system: true });
+const systemActor = (workspaceId: string, teamId: string): Actor => ({ kind: "human", id: NIL_UUID, name: "Wheelhouse", workspaceId, system: true, teamId });
 
 export const stateOf = (c: Pick<CycleRow, "startsAt" | "endsAt">, now: Date): CycleState =>
   c.endsAt.getTime() <= now.getTime() ? "past" : c.startsAt.getTime() <= now.getTime() ? "current" : "upcoming";
@@ -143,11 +143,11 @@ export async function rolloverCycles(teamId: string, now = new Date()): Promise<
           const startsAt = new Date(c.endsAt.getTime() + skip * len);
           const [{ max }] = await tx.select({ max: sql<number>`coalesce(max(${cycles.number}), 0)::int` }).from(cycles).where(eq(cycles.teamId, teamId));
           [next] = await tx.insert(cycles).values({ teamId, workspaceId: c.workspaceId, number: Number(max) + 1, startsAt, endsAt: new Date(startsAt.getTime() + len) }).returning();
-          await emit(tx, systemActor(c.workspaceId), teamId, { type: "cycle.created", entity: "cycle", entityId: next.id, summary: `started ${cycleLabel(next)} after ${cycleLabel(c)} ended`, data: { number: next.number, after: c.number } });
+          await emit(tx, systemActor(c.workspaceId, teamId), teamId, { type: "cycle.created", entity: "cycle", entityId: next.id, summary: `started ${cycleLabel(next)} after ${cycleLabel(c)} ended`, data: { number: next.number, after: c.number } });
         }
         await tx.update(tickets).set({ cycleId: next.id, version: sql`${tickets.version} + 1`, updatedAt: now }).where(inArray(tickets.id, unfinished.map((t) => t.id)));
         const [team] = await tx.select({ key: teams.key }).from(teams).where(eq(teams.id, teamId));
-        await emit(tx, systemActor(c.workspaceId), teamId, {
+        await emit(tx, systemActor(c.workspaceId, teamId), teamId, {
           type: "cycle.rolled_over",
           entity: "cycle",
           entityId: c.id,

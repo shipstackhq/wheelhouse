@@ -20,8 +20,9 @@ import type { Actor } from "./access";
 import { acceptInvite, createInvite, listInvites, type Issuer } from "./invites";
 import { removeMember, updateMember } from "./members";
 import * as metrics from "./metrics";
-import { effectiveRole, roleAllows } from "./team-access";
+import { effectiveRole, roleAllows, roleOnTeam, visibleTeamIds } from "./team-access";
 import * as pmem from "./team-members";
+import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { teamScope, workspaceScope } from "./stream-scope";
 
@@ -84,6 +85,7 @@ before(async () => {
   await addTo(ada, p1.key, gus, "viewer");
   p2 = await team(sam, `PB${L}`);
   q1 = await team(zed, `QA${L}`);
+  await scopeKeyToAllTeams(await getDb(), keyA.id, A.id); // as migration 0026 did for every key that existed: both teams of A, nothing of B
   await svc.createTicket(ada, p1.key, { title: "secret of P1" });
   await svc.createTicket(sam, p2.key, { title: "secret of P2" });
   await svc.createTicket(zed, q1.key, { title: "secret of workspace B" });
@@ -125,7 +127,7 @@ describe("reading", () => {
     await assert.rejects(() => svc.getTicket(zed, `${p1.key}-1`), code("not_found"));
   });
 
-  test("lists show only your own teams: a workspace admin in none sees none; an agent key sees its whole workspace", async () => {
+  test("lists show only your own teams: a workspace admin in none sees none; an agent key sees the teams it is scoped to", async () => {
     assert.deepEqual((await svc.listTeams(ada)).map((p) => p.key), [p1.key]);
     assert.deepEqual((await svc.listTeams(sam)).map((p) => p.key), [p2.key]);
     assert.deepEqual(await svc.listTeams(eve), []);
@@ -189,19 +191,85 @@ describe("writing", () => {
 });
 
 describe("agents and the system", () => {
-  test("an agent key still reaches every team of its own workspace and nothing of another", async () => {
+  test("an agent key reaches the teams it is scoped to and nothing of another workspace", async () => {
     assert.ok((await svc.getBoard(keyA, p1.key)).team);
     assert.ok((await svc.getBoard(keyA, p2.key)).team);
     await assert.rejects(() => svc.requireTeam(keyA, q1.key), code("not_found"));
     await svc.createTicket(keyA, p2.key, { title: "from a key" });
   });
 
-  test("a system actor reaches its workspace's teams but is never mistaken for a member", async () => {
-    const sys: Actor = { kind: "human", id: "00000000-0000-4000-8000-000000000001", name: "GitHub", workspaceId: ada.workspaceId, system: true };
+  test("a system actor reaches only the one team it is for, and is never mistaken for a member", async () => {
+    const sys: Actor = { kind: "human", id: "00000000-0000-4000-8000-000000000001", name: "GitHub", workspaceId: ada.workspaceId, system: true, teamId: p2.id };
     assert.ok((await svc.requireTeam(sys, p2.key)).id);
-    await assert.rejects(() => svc.requireTeam(sys, q1.key), code("not_found"));
+    await assert.rejects(() => svc.requireTeam(sys, p1.key), code("not_found"), "another team of its own workspace");
+    await assert.rejects(() => svc.requireTeam(sys, q1.key), code("not_found"), "a team of another workspace");
+    await assert.rejects(() => svc.requireTeam({ ...sys, teamId: undefined }, p2.key), code("not_found"), "no team, no access");
     const notSystem: Actor = { ...sys, system: undefined };
     await assert.rejects(() => svc.requireTeam(notSystem, p2.key), code("not_found"));
+    assert.deepEqual((await svc.listTeams(sys)).map((t) => t.key), [p2.key]);
+  });
+});
+
+describe("a key scoped to teams (WH-120)", () => {
+  const db = () => getDb();
+  const giveKey = async (k: Actor, ...teams: { id: string }[]) => {
+    for (const t of teams) await (await db()).insert(schema.apiKeyTeams).values({ apiKeyId: k.id, teamId: t.id, workspaceId: k.workspaceId });
+  };
+
+  test("a key reaches only its teams: the others answer not_found, in the same words as a team that does not exist", async () => {
+    const k = await agentKey(ada.workspaceId);
+    await giveKey(k, p1);
+    assert.deepEqual((await svc.listTeams(k)).map((t) => t.key), [p1.key]);
+    assert.ok((await svc.getBoard(k, p1.key)).team);
+    await assert.rejects(() => svc.getBoard(k, p2.key), code("not_found"));
+    await assert.rejects(() => svc.getTicket(k, `${p2.key}-1`), code("not_found"));
+    await assert.rejects(() => svc.createTicket(k, p2.key, { title: "planted" }), code("not_found"));
+    const other = await svc.requireTeam(k, p2.key).catch((e) => e.message);
+    const none = await svc.requireTeam(k, "ZZZZ").catch((e) => e.message);
+    assert.equal(other.replace(p2.key, "X"), none.replace("ZZZZ", "X"));
+    assert.ok((await svc.createTicket(k, p1.key, { title: "allowed" })).ref);
+    assert.equal(await roleOnTeam(await db(), k, p1.id), "editor", "an editor on its teams, never an admin");
+    await assert.rejects(() => svc.updateTeam(k, p1.key, { name: "x" }), code("forbidden"));
+  });
+
+  test("a key with no team reaches nothing", async () => {
+    const k = await agentKey(ada.workspaceId);
+    assert.deepEqual(await svc.listTeams(k), []);
+    await assert.rejects(() => svc.requireTeam(k, p1.key), code("not_found"));
+    assert.deepEqual(await visibleTeamIds(await db(), k), []);
+    assert.equal((await workspaceScope()(k)).allow?.({ workspaceId: k.workspaceId, teamId: p1.id, type: "x" }), false);
+  });
+
+  test("taking a team away from a key, or deleting the team, closes it at once", async () => {
+    const k = await agentKey(ada.workspaceId);
+    const mine = await team(ada, `SC${L}`);
+    await giveKey(k, mine);
+    assert.ok((await svc.requireTeam(k, mine.key)).id);
+    await (await db()).delete(schema.apiKeyTeams).where(eq(schema.apiKeyTeams.apiKeyId, k.id));
+    await assert.rejects(() => svc.requireTeam(k, mine.key), code("not_found"));
+    await giveKey(k, mine);
+    await svc.deleteTeam(ada, mine.key);
+    assert.equal((await (await db()).select().from(schema.apiKeyTeams).where(eq(schema.apiKeyTeams.apiKeyId, k.id))).length, 0, "the row went with the team");
+  });
+
+  test("a key that creates a team can open it; one scoped elsewhere still cannot open the rest", async () => {
+    const k = await agentKey(ada.workspaceId);
+    await giveKey(k, p1);
+    const made = await svc.createTeam(k, { name: "Agent made", key: `AG${L}` });
+    assert.deepEqual((await svc.listTeams(k)).map((t) => t.key).sort(), [p1.key, made.key].sort());
+    await assert.rejects(() => svc.requireTeam(k, p2.key), code("not_found"));
+  });
+
+  test("the database refuses a key scoped to a team of another workspace", async () => {
+    const k = await agentKey(ada.workspaceId);
+    await assert.rejects(
+      (await db()).insert(schema.apiKeyTeams).values({ apiKeyId: k.id, teamId: q1.id, workspaceId: ada.workspaceId }),
+      (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503",
+    );
+    await assert.rejects(
+      (await db()).insert(schema.apiKeyTeams).values({ apiKeyId: k.id, teamId: q1.id, workspaceId: zed.workspaceId }),
+      (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503",
+    );
   });
 });
 
@@ -345,7 +413,8 @@ describe("live streams", () => {
     assert.equal(adaScope.allow?.(ev(p2.id)), false);
     assert.equal(samScope.allow?.(ev(p2.id)), true);
     assert.equal(samScope.allow?.(ev(p1.id)), false);
-    assert.equal(keyScope.allow, undefined); // a whole-workspace scope: no filter
+    assert.equal(keyScope.allow?.(ev(p1.id)), true); // keyA is scoped to both teams of A
+    assert.equal(keyScope.allow?.(ev(q1.id)), false);
     const nobody = await workspaceScope()(await person(ada.workspaceId, "member", "nobody"));
     assert.equal(nobody.allow?.(ev(p1.id)), false);
   });

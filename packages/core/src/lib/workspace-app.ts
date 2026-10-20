@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import { sha256 } from "./access";
 import { AccountError } from "./accounts";
@@ -8,8 +8,8 @@ import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listI
 import * as members from "./members";
 import { onboarding } from "./onboarding";
 import { minutes, rateLimit } from "./rate-limit";
-import { canManagePeople, isWorkspaceRole } from "./team-access";
-import { listTeams, ServiceError } from "./service";
+import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "./team-access";
+import { listTeams, requireTeam, ServiceError, type Q } from "./service";
 import type { WorkspaceRole } from "../db/schema";
 
 /**
@@ -107,9 +107,9 @@ export async function changePasswordAs(h: Human, input: { current: string; next:
 
 // ───────── agents and API keys ─────────
 
-export type KeyView = { id: string; name: string; prefix: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null; canWriteDocs: boolean };
+export type KeyView = { id: string; name: string; prefix: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null; canWriteDocs: boolean; teams: { key: string; name: string }[] };
 
-const keyView = (k: typeof schema.apiKeys.$inferSelect): KeyView => ({
+const keyView = (k: typeof schema.apiKeys.$inferSelect, teams: KeyView["teams"] = []): KeyView => ({
   id: k.id,
   name: k.name,
   prefix: k.prefix,
@@ -117,13 +117,41 @@ const keyView = (k: typeof schema.apiKeys.$inferSelect): KeyView => ({
   lastUsedAt: k.lastUsedAt,
   revokedAt: k.revokedAt,
   canWriteDocs: k.capabilities.includes("docs:write"),
+  teams,
 });
+
+/** The teams of each key, by key id. The Agents page shows all of them: a workspace member sees which teams an agent reaches, not what is in them. */
+async function teamsOfKeys(q: Q, keyIds: string[]): Promise<Map<string, KeyView["teams"]>> {
+  const out = new Map<string, KeyView["teams"]>(keyIds.map((id) => [id, []]));
+  if (!keyIds.length) return out;
+  const rows = await q
+    .select({ keyId: schema.apiKeyTeams.apiKeyId, key: schema.teams.key, name: schema.teams.name })
+    .from(schema.apiKeyTeams)
+    .innerJoin(schema.teams, eq(schema.teams.id, schema.apiKeyTeams.teamId))
+    .where(inArray(schema.apiKeyTeams.apiKeyId, keyIds))
+    .orderBy(asc(schema.teams.key));
+  for (const r of rows) out.get(r.keyId)!.push({ key: r.key, name: r.name });
+  return out;
+}
+
+/** Resolve team keys the person may give an agent: teams they can edit (nobody is pulled in), each named once. */
+async function scopeTeams(h: Human, keys: unknown): Promise<{ id: string; key: string }[]> {
+  if (!Array.isArray(keys) || keys.some((k) => typeof k !== "string")) throw new ServiceError("invalid", "teams must be a list of team keys", { fields: { teams: "a list of team keys" } });
+  if (!keys.length) throw new ServiceError("invalid", "Choose at least one team: a key with no team reaches nothing", { fields: { teams: "Choose at least one team" } });
+  const out: { id: string; key: string }[] = [];
+  for (const k of keys as string[]) {
+    const t = await requireTeam(h.actor, k, "edit");
+    if (!out.some((x) => x.id === t.id)) out.push({ id: t.id, key: t.key });
+  }
+  return out;
+}
 
 /** The workspace's keys, newest first. Never the key itself: only its prefix is stored in the clear. */
 export async function listKeys(h: Human): Promise<KeyView[]> {
   const db = await getDb();
   const rows = await db.select().from(schema.apiKeys).where(eq(schema.apiKeys.workspaceId, h.workspace.id)).orderBy(desc(schema.apiKeys.createdAt));
-  return rows.map(keyView);
+  const teams = await teamsOfKeys(db, rows.map((r) => r.id));
+  return rows.map((r) => keyView(r, teams.get(r.id)));
 }
 
 /** The Agents page: the keys and the commands to paste. With one team its real key goes in the commands, with several a KEY placeholder. */
@@ -132,18 +160,54 @@ export async function agentsPage(h: Human, origin: string) {
   return { keys: await listKeys(h), setup: onboarding({ origin, teamKey: workspaceTeams.length === 1 ? workspaceTeams[0].key : null }) };
 }
 
-/** Create a key. The secret is returned here and nowhere else; only its hash is stored. 10 an hour per person. */
-export async function createKeyAs(h: Human, name: string) {
+/**
+ * Create a key. The secret is returned here and nowhere else; only its hash is stored. 10 an hour per person. `teams` are the keys
+ * of the teams it can open (WH-120): teams the person edits, at least one; left out, every team they edit.
+ */
+export async function createKeyAs(h: Human, name: string, teamKeys?: unknown) {
   const hit = rateLimit(`create-key:${h.user.id}`, 10, 60 * 60_000);
   if (!hit.ok) throw tooMany(hit.retryAfter);
   const label = name.trim().slice(0, 100) || "Claude agent";
   const secret = `wh_${randomToken(24)}`;
   const db = await getDb();
-  const [row] = await db
-    .insert(schema.apiKeys)
-    .values({ workspaceId: h.workspace.id, name: label, prefix: secret.slice(0, 10), keyHash: sha256(secret), createdBy: h.user.id })
-    .returning();
-  return { key: keyView(row), secret };
+  const scope = teamKeys === undefined ? await editableTeams(h) : await scopeTeams(h, teamKeys);
+  const row = await db.transaction(async (tx) => {
+    const [k] = await tx
+      .insert(schema.apiKeys)
+      .values({ workspaceId: h.workspace.id, name: label, prefix: secret.slice(0, 10), keyHash: sha256(secret), createdBy: h.user.id })
+      .returning();
+    if (scope.length) await tx.insert(schema.apiKeyTeams).values(scope.map((t) => ({ apiKeyId: k.id, teamId: t.id, workspaceId: h.workspace.id })));
+    return k;
+  });
+  return { key: keyView(row, (await teamsOfKeys(db, [row.id])).get(row.id)), secret };
+}
+
+async function editableTeams(h: Human): Promise<{ id: string; key: string }[]> {
+  const db = await getDb();
+  const roles = await teamRoleMap(db, h.actor);
+  const mine = [...roles].filter(([, role]) => roleAllows(role, "edit")).map(([id]) => id);
+  return mine.length ? db.select({ id: schema.teams.id, key: schema.teams.key }).from(schema.teams).where(inArray(schema.teams.id, mine)) : [];
+}
+
+/** Change the teams a key can open. Any team the person edits can be added; one they are not on cannot be taken away by them either, it stays as it is. */
+export async function setKeyTeamsAs(h: Human, id: string, teamKeys: unknown): Promise<KeyView> {
+  const db = await getDb();
+  const [key] = await db.select().from(schema.apiKeys).where(and(eq(schema.apiKeys.id, id), eq(schema.apiKeys.workspaceId, h.workspace.id)));
+  if (!key) throw new ServiceError("not_found", "API key not found");
+  const want = await scopeTeams(h, teamKeys);
+  await db.transaction(async (tx) => {
+    // Teams the person cannot edit stay in the key's scope whatever the list says: they are not theirs to give or take.
+    const roles = await teamRoleMap(tx, h.actor);
+    const mine = new Set([...roles].filter(([, role]) => roleAllows(role, "edit")).map(([tid]) => tid));
+    const have = (await tx.select({ id: schema.apiKeyTeams.teamId }).from(schema.apiKeyTeams).where(eq(schema.apiKeyTeams.apiKeyId, id))).map((r) => r.id);
+    const keep = have.filter((t) => !mine.has(t));
+    const final = [...new Set([...keep, ...want.map((t) => t.id)])];
+    const drop = have.filter((t) => !final.includes(t));
+    if (drop.length) await tx.delete(schema.apiKeyTeams).where(and(eq(schema.apiKeyTeams.apiKeyId, id), inArray(schema.apiKeyTeams.teamId, drop)));
+    const add = final.filter((t) => !have.includes(t));
+    if (add.length) await tx.insert(schema.apiKeyTeams).values(add.map((t) => ({ apiKeyId: id, teamId: t, workspaceId: h.workspace.id })));
+  });
+  return keyView(key, (await teamsOfKeys(db, [id])).get(id));
 }
 
 export async function revokeKeyAs(h: Human, id: string) {
@@ -162,7 +226,7 @@ export async function setKeyDocsWriteAs(h: Human, id: string, canWrite: boolean)
     .set({ capabilities: next })
     .where(and(eq(schema.apiKeys.id, id), eq(schema.apiKeys.workspaceId, h.workspace.id)))
     .returning();
-  return keyView(row);
+  return keyView(row, (await teamsOfKeys(db, [id])).get(id));
 }
 
 // ───────── invites ─────────

@@ -107,7 +107,7 @@ Scale: a table is read into memory at once, which is fine for Wheelhouse (about 
    that the data says (not a replay from zero); a pull_request webhook, signed with the real webhook secret, for the repository that is really connected,
    naming an open ticket, is handled and matched to its project; the same process serves the React app;
 6. the **whole contract suite** (326 + 6) against the app on the imported copy (its fixtures are added to the copy);
-7. (in the script after step 4) **4b**: the database suites (queue, invites, admin, isolation, version lock, db-copy, workspace scope, constraints, join tables, cycles, projects, initiatives) against the Postgres 18 that holds the imported data, as CI runs them;
+7. (in the script after step 4) **4b**: the database suites (queue, invites, admin, isolation, version lock, db-copy, workspace scope, constraints, join tables, cycles, projects, initiatives, team access and scoped keys) against the Postgres 18 that holds the imported data, as CI runs them;
 8. the **image** builds, starts against a fresh Postgres, serves the React app at `/t/…`, answers 401 on the web API signed out and has applied every migration (skip with `REHEARSAL_SKIP_IMAGE=1`).
 
 `REHEARSAL_BASE=<git ref>` is the code the map was last anchored to (default: where the branch left `staging`), used by the re-anchoring in step 5; `REHEARSAL_RESOLVE=0` makes dangling references fail the rehearsal instead of being resolved.

@@ -49,10 +49,58 @@ describe("the Agents page", () => {
     await user.click(screen.getByRole("button", { name: "Create key" }));
     await screen.findByText('Key "CI bot" created. Copy it now — it won\'t be shown again.');
     expect(screen.getByText(SECRET)).toBeTruthy();
-    expect(server.sent("POST /api/app/keys")[0].body).toEqual({ name: "CI bot" });
+    expect(server.sent("POST /api/app/keys")[0].body).toEqual({ name: "CI bot", teams: ["AA", "BB"] }); // every team they edit starts ticked
     expect(server.sent("POST /api/app/keys")[0].headers["x-csrf-token"]).toBe("csrf-ada");
     await screen.findByText("CI bot");
     expect(screen.getAllByText(SECRET)).toHaveLength(1); // the list shows the prefix, not the key
+  });
+
+  test("a key is made for the teams ticked, and with none ticked nothing is sent", async () => {
+    const { server } = renderApp("/agents", (s) => {
+      s.on("GET /api/app/agents", agentsPage([key()]));
+      s.on("POST /api/app/keys", Response.json({ key: key({ id: "k9", name: "CI bot" }), secret: SECRET }, { status: 201 }));
+    });
+    const user = userEvent.setup();
+    await user.type(await screen.findByLabelText("Key name"), "CI bot");
+    const teams = screen.getByRole("group", { name: "Teams this agent can open" });
+    await user.click(within(teams).getByLabelText("Beta"));
+    await user.click(screen.getByRole("button", { name: "Create key" }));
+    await waitFor(() => expect(server.sent("POST /api/app/keys")).toHaveLength(1));
+    expect(server.sent("POST /api/app/keys")[0].body).toEqual({ name: "CI bot", teams: ["AA"] });
+    await user.click(within(teams).getByLabelText("Alpha"));
+    await user.click(screen.getByRole("button", { name: "Create key" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/at least one team/);
+    expect(server.sent("POST /api/app/keys")).toHaveLength(1);
+  });
+
+  test("each key shows the teams it can open; one with none says it reaches nothing", async () => {
+    renderApp("/agents", (s) =>
+      s.on("GET /api/app/agents", agentsPage([key({ id: "k1", name: "Wide", teams: [{ key: "AA", name: "Alpha" }, { key: "BB", name: "Beta" }] }), key({ id: "k2", name: "Orphan", teams: [] })])),
+    );
+    const wide = (await screen.findByText("Wide")).closest("li") as HTMLElement;
+    expect(within(wide).getByText("AA")).toBeTruthy();
+    expect(within(wide).getByText("BB")).toBeTruthy();
+    const orphan = screen.getByText("Orphan").closest("li") as HTMLElement;
+    expect(within(orphan).getByText(/reaches nothing/)).toBeTruthy();
+  });
+
+  test("changing a key's teams starts from its own, saves the list, and an empty list cannot be saved", async () => {
+    const { server } = renderApp("/agents", (s) => {
+      s.on("GET /api/app/agents", agentsPage([key({ id: "k1", name: "Narrow", teams: [{ key: "AA", name: "Alpha" }] })]));
+      s.on("PATCH /api/app/keys/k1", { key: key({ id: "k1", teams: [{ key: "AA", name: "Alpha" }, { key: "BB", name: "Beta" }] }) });
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Change the teams of Narrow" }));
+    const group = screen.getByRole("group", { name: "Teams of Narrow" });
+    expect((within(group).getByLabelText("Alpha") as HTMLInputElement).checked).toBe(true);
+    expect((within(group).getByLabelText("Beta") as HTMLInputElement).checked).toBe(false);
+    await user.click(within(group).getByLabelText("Alpha"));
+    expect((within(group).getByRole("button", { name: "Save teams" }) as HTMLButtonElement).disabled).toBe(true);
+    await user.click(within(group).getByLabelText("Alpha"));
+    await user.click(within(group).getByLabelText("Beta"));
+    await user.click(within(group).getByRole("button", { name: "Save teams" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/keys/k1")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/keys/k1")[0].body).toEqual({ teams: ["AA", "BB"] });
   });
 
   test("a key the server refuses (too many) is explained, with no secret shown", async () => {

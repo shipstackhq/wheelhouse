@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@wheelhouse/core/db";
+import { scopeKeyToAllTeams } from "@wheelhouse/core/lib/key-scope";
 import * as svc from "@wheelhouse/core/lib/service";
 import type { Actor } from "@wheelhouse/core/lib/access";
 import { hashPassword } from "@wheelhouse/core/lib/auth-core";
@@ -55,7 +56,8 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
   const member = await mkUser("member", "member");
   const key = async (name: string, revoked = false) => {
     const k = token("wh_");
-    await db.insert(schema.apiKeys).values({ workspaceId: t.id, name, prefix: k.slice(0, 10), keyHash: sha256(k), createdBy: owner.id, revokedAt: revoked ? new Date() : null });
+    const [row] = await db.insert(schema.apiKeys).values({ workspaceId: t.id, name, prefix: k.slice(0, 10), keyHash: sha256(k), createdBy: owner.id, revokedAt: revoked ? new Date() : null }).returning({ id: schema.apiKeys.id });
+    await scopeKeyToAllTeams(db, row.id, t.id); // the team exists by now; a key reaches only the teams it is scoped to (WH-120)
     return k;
   };
   const actor: Actor = { kind: "human", id: owner.id, name: owner.name, workspaceId: t.id };

@@ -109,7 +109,7 @@ export const memberships = table(
 
 /**
  * Who can open a team (ADR-23). A team is visible only to the people in this table; there is no open/private flag and
- * no other way in. Only people are listed: agent keys still work across their whole workspace until scoped keys arrive.
+ * no other way in. Only people are listed: an agent key reaches the teams in `api_key_teams` (WH-120).
  * `workspace_id` repeats the team's workspace so every row can be checked against it without a join.
  */
 export const teamMembers = table(
@@ -213,7 +213,26 @@ export const apiKeys = table("api_keys", {
   // explicitly marked "docs:write" by a teammate before upsert_doc/delete_doc will work for it.
   capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
   createdAt: createdAt(),
-});
+}, (t) => [unique("api_keys_id_workspace_id_unique").on(t.id, t.workspaceId)]);
+
+/**
+ * The teams an agent key can open (WH-120). A key reaches a team only through a row here, as an editor; a key with no rows reaches
+ * nothing. Both ends are in the key's own workspace (composite keys), and deleting the key or the team deletes the row.
+ */
+export const apiKeyTeams = table(
+  "api_key_teams",
+  {
+    apiKeyId: uuid("api_key_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.apiKeyId, t.teamId] }),
+    teamScope("api_key_teams", t),
+    foreignKey({ name: "api_key_teams_key_fk", columns: [t.apiKeyId, t.workspaceId], foreignColumns: [apiKeys.id, apiKeys.workspaceId] }).onDelete("cascade"),
+    index("api_key_teams_team_idx").on(t.teamId),
+  ],
+);
 
 /** Capability flags a key can be granted. Currently just docs write access (WH-51). */
 export const KEY_CAPABILITIES = ["docs:write"] as const;

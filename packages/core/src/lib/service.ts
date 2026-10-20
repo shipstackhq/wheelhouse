@@ -87,7 +87,7 @@ function diff<T extends Record<string, unknown>>(before: T, patch: Partial<T>) {
 
 // ───────────────────────── teams ─────────────────────────
 
-/** The teams the actor can open: a person's own teams, or every team of the workspace for an agent key (ADR-23). */
+/** The teams the actor can open: a person's own teams, or the teams an agent key is scoped to (ADR-23, WH-120). */
 export async function listTeams(actor: Actor) {
   const db = await getDb();
   const visible = await visibleTeamIds(db, actor);
@@ -166,7 +166,7 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
   const db = await getDb();
   const name = input.name.trim();
   if (!name) throw new ServiceError("invalid", "Team name is required");
-  // Workspace Viewers and Guests cannot start teams (ADR-23); agent keys keep creating them as before.
+  // Workspace Viewers and Guests cannot start teams (ADR-23); agent keys can still create them.
   if (actor.kind === "human") {
     const ws = await workspaceRoleOf(db, actor.workspaceId, actor.id);
     if (ws !== "owner" && ws !== "admin" && ws !== "member") throw new ServiceError("forbidden", "Your workspace role cannot create teams");
@@ -188,6 +188,9 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
     if (actor.kind === "human") {
       await tx.insert(schema.teamMembers).values({ teamId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
       await audit(tx, actor, { action: "team.created", targetType: "team", targetId: p.id, teamId: p.id, after: { key: p.key, creatorRole: "admin" } });
+    } else if (!actor.system) {
+      // A key that makes a team is scoped to it, or it could not open what it just made (WH-120).
+      await tx.insert(schema.apiKeyTeams).values({ apiKeyId: actor.id, teamId: p.id, workspaceId: p.workspaceId });
     }
     await emit(tx, actor, p.id, { type: "team.created", entity: "team", entityId: p.id, summary: `created team ${p.name}` });
     return p;
@@ -2149,7 +2152,8 @@ export async function checklistForTeam(actor: Actor, teamRef: string): Promise<C
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.apiKeys)
-        .where(and(eq(schema.apiKeys.workspaceId, team.workspaceId), isNull(schema.apiKeys.revokedAt))),
+        .innerJoin(schema.apiKeyTeams, eq(schema.apiKeyTeams.apiKeyId, schema.apiKeys.id))
+        .where(and(eq(schema.apiKeyTeams.teamId, team.id), isNull(schema.apiKeys.revokedAt))),
       db.select({ count: sql<number>`count(*)::int` }).from(nodes).where(eq(nodes.teamId, team.id)),
       db.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.workspaceId, team.workspaceId)),
       db

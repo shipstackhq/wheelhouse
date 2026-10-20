@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
+import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { runTool } from "./tools";
 import { agentQueues } from "./metrics";
@@ -44,6 +45,7 @@ before(async () => {
   otherKey = await mkKey("ci");
   human = { kind: "human", id: user.id, name: "Tess", workspaceId: workspace.id };
   await svc.createTeam(human, { name: "Queue test", key: "QQ" });
+  for (const k of [key, otherKey]) await scopeKeyToAllTeams(db, k.id, workspace.id);
   ticketRef = (await svc.createTicket(human, "QQ", { title: "Shared ticket" })).ref;
 });
 

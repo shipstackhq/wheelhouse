@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
+import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { summary } from "./metrics";
 import { briefing } from "./briefing";
@@ -37,6 +38,7 @@ before(async () => {
   human = { kind: "human", id: user.id, name: "Rae", workspaceId: workspace.id };
   agent = { kind: "agent", id: k.id, name: "worker", workspaceId: workspace.id };
   teamId = (await svc.createTeam(human, { name: "Roles", key: "RR" })).id;
+  await scopeKeyToAllTeams(db, agent.id, workspace.id);
 });
 
 describe("column roles", () => {

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "@wheelhouse/core/db/schema";
 
 const EMAIL = process.env.SEED_EMAIL ?? "demo@wheelhouse.local";
@@ -59,6 +59,8 @@ async function main() {
     keyHash: crypto.createHash("sha256").update(key).digest("hex"),
     createdBy: user.id,
   });
+  // A key reaches only the teams it is scoped to (WH-120): the demo key gets every team the workspace has now.
+  await db.execute(sql`insert into api_key_teams (api_key_id, team_id, workspace_id) select k.id, t.id, t.workspace_id from api_keys k join teams t on t.workspace_id = k.workspace_id where k.key_hash = ${crypto.createHash("sha256").update(key).digest("hex")} on conflict do nothing`);
   console.log(JSON.stringify({ email: EMAIL, password: PASSWORD, apiKey: key }, null, 2));
   await close();
 }

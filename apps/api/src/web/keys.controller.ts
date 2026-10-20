@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { markAllSeen } from "@wheelhouse/core/lib/service";
-import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs } from "@wheelhouse/core/lib/workspace-app";
+import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs, setKeyTeamsAs } from "@wheelhouse/core/lib/workspace-app";
 import { ServiceError } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
@@ -26,11 +26,12 @@ export class KeysController {
     return { ok: true };
   }
 
-  /** Create a key. The secret is in this response and nowhere else, ever. */
+  /** `{ name, teams? }`: create a key. `teams` are the keys of the teams it can open (teams you edit; default all of them). The secret is in this response and nowhere else, ever. */
   @Post("keys")
   @HttpCode(201)
   create(@Req() req: SessionRequest & RawTextRequest) {
-    return createKeyAs(req.human, str(jsonBody(req).name));
+    const b = jsonBody(req);
+    return createKeyAs(req.human, str(b.name), b.teams);
   }
 
   @Delete("keys/:id")
@@ -39,11 +40,15 @@ export class KeysController {
     return revokeKeyAs(req.human, id);
   }
 
-  /** `{ docsWrite: boolean }`: let this key create, edit and delete docs (off by default). */
+  /** `{ docsWrite?: boolean, teams?: string[] }`: let this key edit docs (off by default), and/or set the teams it can open. */
   @Patch("keys/:id")
   async patch(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
     const b = jsonBody(req);
-    if (typeof b.docsWrite !== "boolean") throw new ServiceError("invalid", "docsWrite must be true or false", { fields: { docsWrite: "true or false" } });
-    return { key: await setKeyDocsWriteAs(req.human, id, b.docsWrite) };
+    if (b.docsWrite === undefined && b.teams === undefined) throw new ServiceError("invalid", "Send docsWrite or teams", { fields: { docsWrite: "true or false" } });
+    if (b.docsWrite !== undefined && typeof b.docsWrite !== "boolean") throw new ServiceError("invalid", "docsWrite must be true or false", { fields: { docsWrite: "true or false" } });
+    let key;
+    if (b.docsWrite !== undefined) key = await setKeyDocsWriteAs(req.human, id, b.docsWrite as boolean);
+    if (b.teams !== undefined) key = await setKeyTeamsAs(req.human, id, b.teams);
+    return { key };
   }
 }

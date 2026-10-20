@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { bus, type StreamEvent } from "./event-bus";
+import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { runTool } from "./tools";
 import { teamScope, workspaceScope } from "./stream-scope";
@@ -37,6 +38,7 @@ before(async () => {
   agent = { kind: "agent", id: k.id, name: "laptop", workspaceId: workspace.id };
   human = { kind: "human", id: user.id, name: "Lia", workspaceId: workspace.id };
   teamId = (await svc.createTeam(human, { name: "Live test", key: "LV" })).id;
+  await scopeKeyToAllTeams(db, agent.id, workspace.id);
 });
 
 /** Everything the bus carries for the team while `fn` runs. */

@@ -101,7 +101,7 @@ the reason.
 | `changePassword` | `POST /api/app/me/password` | WH-95 | needs the current password |
 | `createApiKey` | `POST /api/app/keys` | WH-95 | the secret is returned once, in this response only |
 | `revokeApiKey` | `DELETE /api/app/keys/:id` | WH-95 |  |
-| `setKeyDocsWriteAction` | `PATCH /api/app/keys/:id` | WH-95 | `{ docsWrite: boolean }` |
+| `setKeyDocsWriteAction` | `PATCH /api/app/keys/:id` | WH-95 | `{ docsWrite?: boolean, teams?: string[] }` (teams: WH-120) |
 | `createTeamAction` | `POST /api/app/teams` | WH-95 | extends the GET already built; 201 |
 | `createConceptFromDescriptionAction` | `POST /api/app/teams/:key/onboarding/concept` | WH-98 | onboarding wizard |
 | `latestSeq` | none | unneeded | only fed the polling refresh; replaced by the SSE stream (WH-94) |
@@ -155,7 +155,7 @@ ticket. Anything not marked public needs a session.
 | Endpoint | What it is |
 |---|---|
 | `GET /api/app/workspace` | the workspace page: members with roles and tags, seats, and (owners only) the pending join invites |
-| `GET /api/app/agents` | the Agents page: the workspace's keys (name, prefix, last used, `canWriteDocs`; never a key value) and the printed setup commands |
+| `GET /api/app/agents` | the Agents page: the workspace's keys (name, prefix, last used, `canWriteDocs`, `teams`; never a key value) and the printed setup commands |
 | `GET /api/app/invites?kind=join_workspace\|new_workspace` | pending invites. `new_workspace` is for instance admins; anyone else gets a 404 |
 | `GET /api/app/admin/workspaces`, `GET /api/app/admin/workspaces/:id` | instance admins only; anyone else gets a 404. Names, emails and counts, never what a workspace wrote |
 | `GET /api/app/dashboard/:widget` | one dashboard widget's data: `kpis`, `progress`, `throughput`, `activity-split`, `agents`, `attention`, `recent`, `sync`. An unknown widget is a 404 |
@@ -268,7 +268,7 @@ A team is reachable only by its members. Every route below is for a signed-in pe
 
 | Endpoint | Notes |
 |---|---|
-| `GET /api/app/teams` | now only the teams the person is a member of (an agent key still sees its whole workspace) |
+| `GET /api/app/teams` | now only the teams the person is a member of (an agent key sees the teams it is scoped to, WH-120) |
 | `POST /api/app/teams` | workspace viewers and guests get `403`; the creator becomes the team's admin |
 | `GET /api/app/teams/:key/members` | `{ team, myRole, members: [{ userId, name, email, role, workspaceRole, addedAt }] }`. Any member |
 | `GET /api/app/teams/:key/members/addable` | `{ people }`: workspace members not yet in the team. Team admins |
@@ -380,3 +380,18 @@ are on are listed, and the rest are only **counted and totalled** (`hidden`), ne
 initiatives stop counting. **Health** is the project rule from the initiative's target date (only an `active` initiative has one; a value set by hand wins). **Events:** every change is appended to `workspace_events` (entity `initiative`:
 `initiative.created`, `.updated`, `.deleted`, `.project_linked`, `.project_unlinked`); the table is append-only (a trigger refuses any update or delete, except the cascade of deleting the whole workspace). Initiatives do not appear in a team's
 `events`, `/api/v1` or the MCP. Not OKRs, and no metric correlation (ADR-10).
+
+## Built by WH-120: agent keys scoped to teams
+
+An agent key reaches only the teams it is scoped to (`api_key_teams`), as an editor and never an admin; a team it is not scoped to answers `not_found`, in the same words as a team that does not exist, over `/api/v1`, the MCP and
+the web API alike. A key with no team reaches nothing. Scope is read on every call, so a change takes effect on the key's next request. Streams are for people and stay closed to keys (`403`). The GitHub webhook acts as a system actor
+for the one team that owns the repository, and the cycle sweep for the one team whose cycle ended; neither reaches any other team. The change queue, sessions and cursors stay per team, so `/api/v1` and the MCP keep their shapes.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/app/keys` | `{ name, teams? }`; 201 `{ key, secret }`. `teams` are keys of teams **you edit**, at least one (`400` naming `teams` otherwise; a team you cannot see or edit is a `404`). Left out, the key gets every team you edit |
+| `PATCH /api/app/keys/:id` | `{ docsWrite?, teams? }`: `teams` replaces the key's teams. Teams of the key that you cannot edit stay as they are (they are not yours to give or take); `{ key }` comes back with its `teams` |
+| `GET /api/app/agents` | each key now carries `teams: [{ key, name }]` |
+
+A key that creates a team (`create_project`) is scoped to it, or it could not open what it made. Migration 0026 gave every existing key every team of its workspace, so nobody lost access; an owner narrows them afterwards.
+Design for routing work by team (the dispatcher itself is WH-32): [agent-keys-and-routing.md](agent-keys-and-routing.md).

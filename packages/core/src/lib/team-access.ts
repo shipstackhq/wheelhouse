@@ -10,8 +10,8 @@ import { ServiceError } from "./service-error";
  * opens one by itself, not even an owner's. This file holds the rule and the audit trail; `requireTeam` and `resolveTicket` in
  * service.ts apply it, which is what puts every read and write path behind it.
  *
- * Agent keys and system actors (a GitHub webhook) are not people and have no row here. Until keys are scoped to teams (a later step of the same design) a key
- * keeps the access it has always had: every team in its own workspace, and nothing outside it.
+ * Agent keys and system actors (a GitHub webhook) are not people and have no row here. A key reaches the teams it is scoped to in `api_key_teams`
+ * (as an editor, never an admin) and a system actor the one team it was made for; any other team answers exactly as it does for a stranger (WH-120).
  */
 
 export type Need = "read" | "edit" | "admin";
@@ -30,9 +30,28 @@ export function effectiveRole(teamRole: TeamRole | null, workspaceRole: Workspac
   return workspaceRole === "viewer" ? "viewer" : teamRole;
 }
 
+/** The teams a key or system actor is scoped to: the key's rows in `api_key_teams`, or the one team of a system actor. */
+async function scopedTeamIds(q: Q, actor: Actor): Promise<string[]> {
+  if (actor.system) return actor.teamId ? [actor.teamId] : [];
+  const { apiKeyTeams } = schema;
+  const rows = await q
+    .select({ id: apiKeyTeams.teamId })
+    .from(apiKeyTeams)
+    .where(and(eq(apiKeyTeams.apiKeyId, actor.id), eq(apiKeyTeams.workspaceId, actor.workspaceId)));
+  return rows.map((r) => r.id);
+}
+
 /** The actor's role on one team, or null when they cannot open it. The membership join also drops anyone removed from the workspace. */
 export async function roleOnTeam(q: Q, actor: Actor, teamId: string): Promise<TeamRole | null> {
-  if (actor.kind === "agent" || actor.system) return "editor";
+  if (actor.kind === "agent" || actor.system) {
+    if (actor.system) return actor.teamId === teamId ? "editor" : null;
+    const { apiKeyTeams } = schema;
+    const [row] = await q
+      .select({ id: apiKeyTeams.teamId })
+      .from(apiKeyTeams)
+      .where(and(eq(apiKeyTeams.apiKeyId, actor.id), eq(apiKeyTeams.teamId, teamId), eq(apiKeyTeams.workspaceId, actor.workspaceId)));
+    return row ? "editor" : null;
+  }
   const { teamMembers: pm, memberships } = schema;
   const [row] = await q
     .select({ role: pm.role, workspaceRole: memberships.role })
@@ -42,9 +61,9 @@ export async function roleOnTeam(q: Q, actor: Actor, teamId: string): Promise<Te
   return row ? effectiveRole(row.role, row.workspaceRole) : null;
 }
 
-/** Ids of the workspace's teams the actor can open, or null for "all of them" (agent keys). Used by every cross-team query. */
-export async function visibleTeamIds(q: Q, actor: Actor): Promise<string[] | null> {
-  if (actor.kind === "agent" || actor.system) return null;
+/** Ids of the workspace's teams the actor can open. Used by every cross-team query. */
+export async function visibleTeamIds(q: Q, actor: Actor): Promise<string[]> {
+  if (actor.kind === "agent" || actor.system) return scopedTeamIds(q, actor);
   const { teamMembers: pm, memberships } = schema;
   const rows = await q
     .select({ id: pm.teamId, workspaceRole: memberships.role })
@@ -54,9 +73,9 @@ export async function visibleTeamIds(q: Q, actor: Actor): Promise<string[] | nul
   return rows.map((r) => r.id);
 }
 
-/** The actor's role in each of their teams, by team id (null for an agent key or system actor, who are editors everywhere). */
-export async function teamRoleMap(q: Q, actor: Actor): Promise<Map<string, TeamRole> | null> {
-  if (actor.kind === "agent" || actor.system) return null;
+/** The actor's role in each team they can open, by team id (editor in each team of a key or system actor). */
+export async function teamRoleMap(q: Q, actor: Actor): Promise<Map<string, TeamRole>> {
+  if (actor.kind === "agent" || actor.system) return new Map((await scopedTeamIds(q, actor)).map((id) => [id, "editor" as const]));
   const { teamMembers: pm, memberships } = schema;
   const rows = await q
     .select({ id: pm.teamId, role: pm.role, workspaceRole: memberships.role })

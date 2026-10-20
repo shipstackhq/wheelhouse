@@ -19,11 +19,12 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@wheelhouse/core/db";
 import type { Actor } from "@wheelhouse/core/lib/access";
 import { actorForKey, sha256, userForSessionToken } from "@wheelhouse/core/lib/access";
 import * as svc from "@wheelhouse/core/lib/service";
+import { scopeKeyToAllTeams } from "@wheelhouse/core/lib/key-scope";
 import * as cycles from "@wheelhouse/core/lib/cycles";
 import * as projects from "@wheelhouse/core/lib/projects";
 import * as initiatives from "@wheelhouse/core/lib/initiatives";
@@ -87,6 +88,7 @@ async function seedSide(label: "A" | "B") {
   await svc.createTeam(human, { name: `${tag} shared-key team`, key: "SH" });
   const t = await svc.createTicket(human, teamKey, { title: `${tag} ticket`, body: `${tag} body`, priority: "high" });
   await svc.createTicket(human, "SH", { title: `${tag} shared ticket` });
+  await scopeKeyToAllTeams(db, k.id, workspace.id);
   await svc.addComment(human, t.ref, `${tag} comment`);
   return { workspaceId: workspace.id, owner: human, ownerEmail, ownerId: owner.id, agent, keyId: k.id, key, teamKey, teamId: team.id, ticketRef: t.ref, ticketId: t.id, tag };
 }
@@ -165,6 +167,7 @@ before(async () => {
     .insert(schema.apiKeys)
     .values({ workspaceId: a.workspaceId, name: "A-SECRET spare key", prefix: "wh_spare", keyHash: sha256(`spare-${RUN}`), createdBy: a.ownerId })
     .returning();
+  await scopeKeyToAllTeams(db, spare.id, a.workspaceId);
   await svc.createTicket(a.agent, a.teamKey, { title: "A-SECRET agent ticket" }); // an event written by A's agent
   A = {
     ...a,
@@ -295,6 +298,78 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
 
   test("a tool added without an isolation case fails here", () => {
     assert.deepEqual(Object.keys(attacks).sort(), Object.keys(tools).sort());
+  });
+});
+
+describe("a key scoped to one team of a workspace (WH-120)", () => {
+  let narrow: Actor; // A's key, scoped to A's team SH only
+  let sh: { id: string };
+  before(async () => {
+    const db = await getDb();
+    const key = `wh_${crypto.randomBytes(18).toString("base64url")}`;
+    const [k] = await db.insert(schema.apiKeys).values({ workspaceId: A.workspaceId, name: "A narrow key", prefix: key.slice(0, 10), keyHash: sha256(key), createdBy: A.ownerId }).returning();
+    [sh] = await db.select({ id: schema.teams.id }).from(schema.teams).where(and(eq(schema.teams.workspaceId, A.workspaceId), eq(schema.teams.key, "SH")));
+    await db.insert(schema.apiKeyTeams).values({ apiKeyId: k.id, teamId: sh.id, workspaceId: A.workspaceId });
+    narrow = { kind: "agent", id: k.id, name: "A narrow key", workspaceId: A.workspaceId };
+  });
+
+  test("every tool, called with the identifiers of A's other team: refused, nothing read, nothing changed", async () => {
+    const before = await fingerprint(A);
+    const skip = new Set<string>(["list_projects", "create_project"]); // legitimate for any key; checked below
+    for (const name of Object.keys(tools) as ToolName[]) {
+      if (skip.has(name)) continue;
+      for (const args of attacks[name]()) {
+        const label = `${name}(${JSON.stringify(args).slice(0, 80)}) as a key scoped to SH`;
+        let error: unknown;
+        let result: unknown;
+        try {
+          result = await runTool(narrow, name, args);
+        } catch (e) {
+          error = e;
+        }
+        if (error) {
+          assert.ok(error instanceof svc.ServiceError, `${label}: expected a clean refusal, got ${error}`);
+          assert.ok(["not_found", "forbidden", "invalid", "conflict"].includes(error.code), `${label}: ${error.code}`);
+          assert.ok(!isZodMessage(error.message), `${label}: refused only because the arguments were malformed: ${error.message}`);
+        } else {
+          assert.ok(name === "list_doc_templates", `${label}: succeeded against a team the key is not scoped to: ${JSON.stringify(result).slice(0, 120)}`);
+        }
+      }
+    }
+    assert.equal(await fingerprint(A), before, "team AA's data is exactly as it was");
+  });
+
+  test("it lists only its own team, and reads and writes there", async () => {
+    const listed = (await runTool(narrow, "list_projects", {})) as { key: string }[];
+    assert.deepEqual(listed.map((p) => p.key), ["SH"]);
+    assert.ok(!JSON.stringify(listed).includes(A.teamId));
+    assert.equal(((await runTool(narrow, "get_ticket", { ticket: "SH-1" })) as { ticket: { title: string } }).ticket.title, "A-SECRET shared ticket");
+    await runTool(narrow, "comment", { ticket: "SH-1", body: "from the narrow key" });
+    await assert.rejects(runTool(narrow, "comment", { ticket: A.ticketRef, body: "no" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+  });
+
+  test("a key with no team and a key scoped to AA each reach only what they are given", async () => {
+    const db = await getDb();
+    const mk = async (name: string, teams: string[]): Promise<Actor> => {
+      const key = `wh_${crypto.randomBytes(18).toString("base64url")}`;
+      const [k] = await db.insert(schema.apiKeys).values({ workspaceId: A.workspaceId, name, prefix: key.slice(0, 10), keyHash: sha256(key), createdBy: A.ownerId }).returning();
+      for (const t of teams) await db.insert(schema.apiKeyTeams).values({ apiKeyId: k.id, teamId: t, workspaceId: A.workspaceId });
+      return { kind: "agent", id: k.id, name, workspaceId: A.workspaceId };
+    };
+    const none = await mk("A none key", []);
+    const aa = await mk("A AA key", [A.teamId]);
+    assert.deepEqual(await runTool(none, "list_projects", {}), []);
+    await assert.rejects(runTool(none, "get_ticket", { ticket: A.ticketRef }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    assert.equal(((await runTool(aa, "get_ticket", { ticket: A.ticketRef })) as { ticket: { title: string } }).ticket.title, "A-SECRET ticket");
+    await assert.rejects(runTool(aa, "get_ticket", { ticket: "SH-1" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+  });
+
+  test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
+    const { githubActor } = await import("@wheelhouse/core/lib/github/service");
+    const gh = githubActor(A.workspaceId, A.teamId);
+    assert.ok((await svc.requireTeam(gh, A.teamKey)).id);
+    await assert.rejects(svc.requireTeam(gh, "SH"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(svc.requireTeam(githubActor(B.workspaceId, B.teamId), A.teamKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
   });
 });
 
@@ -652,7 +727,7 @@ describe("projects stay inside their workspace, and show other teams only as tot
 
   test("two workspaces, two teams in one of them: the member of one team sees the other only as totals, and never in the other workspace", async () => {
     // A's workspace gets a second team and a member of only it; the project spans both teams.
-    const a2 = await svc.createTeam(A.owner, { name: "A-SECOND team", key: `Z${RUN.slice(0, 3).replace(/[0-9]/g, "q").toUpperCase()}` });
+    const a2 = await svc.createTeam(A.owner, { name: "A-SECOND team", key: `Z${RUN.slice(0, 3).replace(/[0-9a]/g, "q").toUpperCase()}` });
     const db = await getDb();
     const [u] = await db.insert(schema.users).values({ email: `a2-${RUN}@example.com`, name: "second-team member", passwordHash: "x" }).returning();
     await db.insert(schema.memberships).values({ userId: u.id, workspaceId: A.workspaceId, role: "member" });

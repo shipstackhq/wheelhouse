@@ -16,6 +16,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { sha256 } from "./access";
+import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { runTool } from "./tools";
 import * as sync from "./sync";
@@ -46,6 +47,7 @@ before(async () => {
 
   const team = await svc.createTeam(human, { name: "Docs team", key: "DP" });
   teamKey = team.key;
+  for (const a of [readOnlyAgent, writerAgent]) await scopeKeyToAllTeams(db, a.id, workspace.id);
 });
 
 describe("service layer: CRUD, locking, tree, limits", () => {

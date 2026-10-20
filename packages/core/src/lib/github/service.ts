@@ -11,7 +11,8 @@ const { githubDeliveries, githubInstallations, memberships, teams, pullRequests,
 
 /** Writes made because of something GitHub reported are attributed to this actor, like the claim sweep's "Wheelhouse". */
 export const GITHUB_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
-export const githubActor = (workspaceId: string): Actor => ({ kind: "human", id: GITHUB_ACTOR_ID, name: "GitHub", workspaceId, system: true });
+/** It reaches only the team that owns the repository the delivery is about (WH-120). */
+export const githubActor = (workspaceId: string, teamId: string): Actor => ({ kind: "human", id: GITHUB_ACTOR_ID, name: "GitHub", workspaceId, system: true, teamId });
 
 /** Land at most this many files per call, like the baseline does. */
 const LAND_CHUNK = 2000;
@@ -166,7 +167,7 @@ async function onPush(payload: Delivery["payload"], installationId: string | nul
 
   const db = await getDb();
   for (const t of targets) {
-    const actor = githubActor(t.team.workspaceId);
+    const actor = githubActor(t.team.workspaceId, t.team.id);
     for (let i = 0; i < files.length || i === 0; i += LAND_CHUNK) {
       const chunk = Object.fromEntries(files.slice(i, i + LAND_CHUNK).map((f) => [f.path, f.hash]));
       if (!Object.keys(chunk).length) break;
@@ -231,7 +232,7 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
     if (linked.length) await db.insert(pullRequestTickets).values(linked.map((x) => ({ pullRequestId: row.id, ticketId: x.id }))).onConflictDoNothing();
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
 
-    const actor = githubActor(t.team.workspaceId);
+    const actor = githubActor(t.team.workspaceId, t.team.id);
     const boardColumns = await db.select({ id: columns.id, name: columns.name, role: columns.role }).from(columns).where(eq(columns.teamId, t.team.id)).orderBy(columns.position);
     for (const tk of linked) {
       if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
@@ -289,7 +290,7 @@ async function onCheckRun(payload: Delivery["payload"], installationId: string |
       touched++;
       if (next !== pr.ciState && (next === "failure" || next === "success")) {
         const links = await db.select({ ticketId: pullRequestTickets.ticketId }).from(pullRequestTickets).where(eq(pullRequestTickets.pullRequestId, pr.id));
-        const actor = githubActor(t.team.workspaceId);
+        const actor = githubActor(t.team.workspaceId, t.team.id);
         for (const l of links) {
           const [tk] = await db.select().from(tickets).where(eq(tickets.id, l.ticketId));
           if (!tk) continue;

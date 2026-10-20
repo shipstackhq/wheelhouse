@@ -414,8 +414,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
     },
 
     keys: {
-      /** The secret is in this response only. */
-      create: (name: string) => request<CreatedKey>("POST", "/api/app/keys", { name }),
+      /** The secret is in this response only. `teams` are the keys of the teams it can open (teams you edit, at least one); left out, all of them. */
+      create: (name: string, teams?: string[]) => request<CreatedKey>("POST", "/api/app/keys", teams ? { name, teams } : { name }),
+      /** Set the teams the key can open; takes effect on its next call. */
+      setTeams: async (id: string, teams: string[]) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { teams })).key,
       revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/keys/${encodeURIComponent(id)}`),
       setDocsWrite: async (id: string, docsWrite: boolean) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { docsWrite })).key,
     },
