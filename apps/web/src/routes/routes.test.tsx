@@ -38,7 +38,7 @@ const PUBLIC_PAGES: [path: string, button: RegExp | null, text?: string][] = [
 const ALL_APP_PATHS = [...PORTED_PAGES.map(([p]) => p), ...TEAM_PAGES.map(([p]) => p)];
 
 const inShell = () => {
-  const sidebar = screen.getByRole("navigation");
+  const sidebar = screen.getByRole("navigation", { name: "Main" });
   expect(within(sidebar).getByRole("link", { name: "Home" })).toBeTruthy();
   expect(within(sidebar).getByRole("button", { name: /Alpha|Select a team/ })).toBeTruthy(); // the switcher
   expect(within(sidebar).getByRole("link", { name: "Members" })).toBeTruthy();
@@ -65,8 +65,10 @@ describe("signed in: every page is in the shell", () => {
   test("a team page has the team's header and its sections in the sidebar", async () => {
     renderApp("/t/BB/docs");
     await screen.findByRole("button", { name: "Plan" });
-    expect(screen.getByRole("heading", { level: 1, name: "Beta" })).toBeTruthy(); // the header names the team, without its key
-    const sidebar = screen.getByRole("navigation");
+    const trail = within(screen.getByRole("navigation", { name: "Breadcrumb" })); // the header says where you are, naming the team without its key
+    expect(trail.getByRole("link", { name: "Beta" }).getAttribute("href")).toBe("/t/BB");
+    expect(trail.getByText("Docs").getAttribute("aria-current")).toBe("page");
+    const sidebar = screen.getByRole("navigation", { name: "Main" });
     for (const name of ["Board", "Activity", "Map", "Docs", "Decisions", "Glossary", "Repos"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
     expect(within(sidebar).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true); // the current section is marked
   });
@@ -84,7 +86,7 @@ describe("signed in: every page is in the shell", () => {
     for (const [path, heading] of ADMIN_PAGES) {
       const { unmount } = renderApp(path, (s) => (s.me = { ...ADA, isInstanceAdmin: true }));
       await screen.findByRole("heading", { level: 1, name: heading });
-      expect(within(screen.getByRole("navigation")).getByRole("link", { name: "Workspaces" })).toBeTruthy();
+      expect(within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name: "Workspaces" })).toBeTruthy();
       unmount();
     }
   });
@@ -92,7 +94,7 @@ describe("signed in: every page is in the shell", () => {
   test("an address that is not a page is not found, still inside the shell", async () => {
     renderApp("/nonsense/here");
     await screen.findByTestId("not-found");
-    expect(screen.getByRole("navigation")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeTruthy();
   });
 
   test("a team that is not this workspace's is not found", async () => {

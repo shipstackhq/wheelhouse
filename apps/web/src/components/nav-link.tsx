@@ -19,12 +19,12 @@ export function NavLink({ href, prefix, icon, collapsed = false, children }: { h
       to={href}
       aria-current={active ? "page" : undefined}
       className={clsx(
-        "flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
-        collapsed && "md:justify-center md:px-0 md:py-2",
+        "flex items-center gap-2.5 rounded-md px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+        collapsed && "md:justify-center md:px-0 md:py-1.5",
         active ? "bg-panel-2 text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
       )}
     >
-      {Icon && <Icon className={clsx("shrink-0 text-lg", collapsed && "md:text-xl", active && "text-accent")} />}
+      {Icon && <Icon className={clsx("shrink-0 text-base", collapsed && "md:text-lg", active && "text-accent")} />}
       <span className={clsx("min-w-0 flex-1 truncate", collapsed && "md:sr-only")}>{children}</span>
       <LinkPending pending={pending} className={collapsed ? "h-3 w-3 md:hidden" : undefined} />
     </Link>

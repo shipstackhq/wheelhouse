@@ -87,7 +87,7 @@ describe("a team's Overview", () => {
   test("the sidebar leads with Overview, and the page offers the board", async () => {
     renderApp("/t/AA/overview");
     await screen.findByRole("heading", { level: 1, name: "Overview of Alpha" });
-    const nav = screen.getByRole("navigation");
+    const nav = screen.getByRole("navigation", { name: "Main" });
     expect(within(nav).getByRole("link", { name: "Overview" }).getAttribute("href")).toBe("/t/AA/overview");
     expect(screen.getByRole("link", { name: "Open the board" }).getAttribute("href")).toBe("/t/AA");
   });

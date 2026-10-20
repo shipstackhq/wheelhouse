@@ -15,7 +15,7 @@ const open = async (path = "/t/AA") => {
 describe("the board", () => {
   test("shows the team's five columns with their cards, counts and the team header", async () => {
     await open();
-    expect(screen.getByRole("heading", { level: 1, name: "Alpha" })).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText("Alpha")).toBeTruthy(); // the header names the team
     for (const [name, count] of [["Backlog", 1], ["Todo", 2], ["In Progress", 0], ["Review", 0], ["Done", 1]] as const) {
       const col = column(name);
       expect(within(col).getAllByText(String(count)).length).toBeGreaterThan(0);

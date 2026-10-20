@@ -78,6 +78,6 @@ describe("the Bots menu in the team header", () => {
 
     const failing = renderApp("/t/BB", (s) => s.on("GET /api/app/teams/BB/queue", apiError(500, "internal", "Internal error")));
     expect(failing).toBeTruthy();
-    await waitFor(() => expect(screen.getAllByRole("heading", { level: 1, name: "Beta" }).length).toBeGreaterThan(0), { timeout: 8000 });
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "Board" }).length).toBeGreaterThan(0), { timeout: 8000 });
   }, 20_000);
 });

@@ -2,10 +2,8 @@ import { useEffect } from "react";
 import { Navigate, Outlet, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
-import { SearchIcon } from "../components/icons";
-import { NotificationsMenu } from "../components/notifications-menu";
 import { ProfileMenu } from "../components/profile-menu";
-import { TeamQueueMenu } from "../components/team-queue-menu";
+import { AppHeader } from "../components/app-header";
 import { PwaRegister } from "../components/pwa";
 import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
@@ -80,7 +78,7 @@ export function InviteLayout() {
   );
 }
 
-/** The signed-in app: the sidebar around whichever page the address calls for. */
+/** The signed-in app: the sidebar, the header with its breadcrumbs, and whichever page the address calls for. */
 export function AppLayout() {
   const me = useMe().data;
   const teams = useTeams().data;
@@ -96,41 +94,23 @@ export function AppLayout() {
         isAdmin={me.isInstanceAdmin}
         profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} compact={collapsed} />}
       />
-      <main className="min-w-0 flex-1 overflow-hidden pt-10 md:pt-0">
-        <Outlet />
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} />
+        <main className="min-h-0 flex-1 overflow-hidden">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
 
-/** One team: its header, live updates for it, and its page. A team that is not this workspace's is simply not found. */
+/** One team: live updates for it, and its page. A team that is not this workspace's is simply not found. */
 export function TeamLayout() {
   const { key = "" } = useParams();
   const team = useTeams().data?.find((p) => p.key === key);
   if (!team) return <NotFound />;
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate font-semibold">{team.name}</h1>
-          </div>
-        </div>
-        {/* Dummy for now: the one search across tickets, docs and notes (WH-66) is not wired up yet. */}
-        <div className="relative mx-auto hidden w-full max-w-md sm:block">
-          <input
-            type="search"
-            className="input !rounded-full !border-line !bg-panel-2 !py-1.5 !pl-9 text-sm focus:!border-accent"
-            placeholder="Search docs, tickets, notes"
-            aria-label="Search docs, tickets, notes"
-          />
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted" />
-        </div>
-        <div className="ml-auto flex items-center gap-2 sm:ml-0">
-          <NotificationsMenu />
-          <TeamQueueMenu teamKey={team.key} />
-        </div>
-      </header>
       <TeamLiveRefresh teamKey={team.key} />
       <div className="min-h-0 flex-1">
         <Outlet />

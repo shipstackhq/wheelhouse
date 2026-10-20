@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { Logo, WheelIcon } from "./logo";
 import { NavLink } from "./nav-link";
-import { CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, FolderIcon, MenuIcon, NAV_ICONS, type IconPair } from "./icons";
+import { ChevronDownIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, FolderIcon, MenuIcon, NAV_ICONS, type IconPair } from "./icons";
 import { Tip } from "./tip";
 
 type TeamItem = { key: string; name: string };
@@ -206,7 +206,7 @@ export function Sidebar({
           </Tip>
         </div>
         <div className={clsx("px-4 pb-2 text-xs text-muted", collapsed && "md:hidden")}>{workspaceName}</div>
-        <nav className="flex-1 overflow-y-auto px-2 text-sm">
+        <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
           <div className="relative mt-3">
             {(() => {
@@ -312,12 +312,53 @@ export function Sidebar({
   );
 }
 
-/** A titled group of links. As the rail the title goes (it would not fit) and a thin rule separates the groups instead. */
+const GROUPS_KEY = "wh:sidebar-closed-groups";
+
+function readClosedGroups(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A titled group of links that folds away from its title (the choice is remembered). The title row is the same size as a link row.
+ * As the rail the title goes (it would not fit), the links always show, and a thin rule separates the groups instead.
+ */
 function Group({ title, collapsed, gap, children }: { title: string; collapsed: boolean; gap: string; children: React.ReactNode }) {
+  const [closed, setClosed] = useState(() => readClosedGroups().includes(title));
+  const toggle = () =>
+    setClosed((c) => {
+      try {
+        const rest = readClosedGroups().filter((g) => g !== title);
+        localStorage.setItem(GROUPS_KEY, JSON.stringify(c ? rest : [...rest, title]));
+      } catch {
+        /* the choice just is not remembered */
+      }
+      return !c;
+    });
+  const id = `group-${title.toLowerCase()}`;
   return (
     <div className={clsx(collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
-      <div className={clsx("label px-2 normal-case tracking-normal", gap, collapsed && "md:hidden")}>{title}</div>
-      <div className="space-y-0.5">{children}</div>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!closed}
+        aria-controls={id}
+        className={clsx(
+          "flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50",
+          gap,
+          collapsed && "md:hidden",
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        <ChevronDownIcon className={clsx("shrink-0 text-base transition-transform", closed && "-rotate-90")} />
+      </button>
+      <div id={id} className={clsx("mt-0.5 space-y-0.5", closed && "hidden", closed && collapsed && "md:block")}>
+        {children}
+      </div>
     </div>
   );
 }

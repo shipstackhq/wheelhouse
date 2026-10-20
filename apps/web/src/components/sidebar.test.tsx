@@ -49,6 +49,24 @@ describe("what the sidebar shows", () => {
   });
 });
 
+describe("folding a section", () => {
+  test("a section's title folds and unfolds its links, and the choice is remembered", async () => {
+    const user = userEvent.setup();
+    const first = renderIn(sidebar(), "/t/AA");
+    const title = screen.getByRole("button", { name: "Knowledge" });
+    expect(title.getAttribute("aria-expanded")).toBe("true");
+    await user.click(title);
+    expect(title.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById("group-knowledge")!.className).toContain("hidden");
+    expect(document.getElementById("group-work")!.className).not.toContain("hidden");
+    first.unmount();
+    renderIn(sidebar(), "/t/AA");
+    expect(screen.getByRole("button", { name: "Knowledge" }).getAttribute("aria-expanded")).toBe("false");
+    await user.click(screen.getByRole("button", { name: "Knowledge" }));
+    expect(document.getElementById("group-knowledge")!.className).not.toContain("hidden");
+  });
+});
+
 describe("the team switcher", () => {
   test("opens from the button and with Cmd+K or Ctrl+K, and closes with Escape", async () => {
     const user = userEvent.setup();
@@ -218,7 +236,7 @@ describe("collapsing to the icon-only rail", () => {
     expect(board.querySelector("span")!.className).toContain("md:sr-only");
     expect(board.getAttribute("href")).toBe("/t/AA");
     expect(screen.getByText("Analytical Engines").className).toContain("md:hidden");
-    expect(screen.getByText("Work").className).toContain("md:hidden"); // the title makes way for a thin rule
+    expect(screen.getByText("Work").closest("button")!.className).toContain("md:hidden"); // the title makes way for a thin rule
     await user.click(expand);
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
     expect(aside().className).not.toContain("md:w-14");

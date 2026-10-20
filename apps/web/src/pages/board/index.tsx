@@ -23,6 +23,7 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
   const [selected, setSelected] = useState<string[]>([]);
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <h1 className="sr-only">{board.team.name}</h1> {/* the header's breadcrumbs name the team, but are not a heading */}
       <div className="shrink-0 px-4 pt-3">
         <BoardFilterBar labels={labels} selected={selected} onChange={setSelected} />
       </div>
