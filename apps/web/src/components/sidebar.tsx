@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { NavLink } from "./nav-link";
-import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
+import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, NAV_ICONS, SearchIcon, TeamGlyphIcon, type IconPair } from "./icons";
 import { Tip } from "./tip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -36,6 +37,9 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
     ],
   },
 ];
+
+/** A team's sections fade in and out, quickly. `MotionConfig reducedMotion="user"` (in the app root) turns it off for people who ask the OS for less motion. */
+const fade = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.12, ease: "easeOut" } }, exit: { opacity: 0, transition: { duration: 0.08, ease: "easeIn" } } } as const;
 
 const RECENT_KEY = "wh:recent-teams";
 const COLLAPSED_KEY = "wh:sidebar-collapsed";
@@ -92,6 +96,12 @@ export function Sidebar({
       }
       return !c;
     });
+  const [openTeams, setOpenTeams] = useState<string[]>(() => (currentKey ? [currentKey] : []));
+  const toggleTeam = (key: string) => setOpenTeams((o) => (o.includes(key) ? o.filter((k) => k !== key) : [...o, key]));
+  // Going to a team (from a link, the search, the address bar) opens it; opening or closing one by hand never navigates.
+  useEffect(() => {
+    if (currentKey) setOpenTeams((o) => (o.includes(currentKey) ? o : [...o, currentKey]));
+  }, [currentKey]);
   const [switcher, setSwitcher] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -244,12 +254,14 @@ export function Sidebar({
                     placeholder="Search teams…"
                     className="mb-1 w-full rounded bg-panel-2 px-2 py-1 text-sm outline-none"
                   />
-                  <div className="max-h-64 overflow-y-auto">
+                  <div role="listbox" aria-label="Teams" className="max-h-64 overflow-y-auto">
                     {!query && recent.length > 0 && <div className="px-2 py-1 text-[11px] text-muted">Recent</div>}
                     {results.map((p, i) => (
                       <button
                         key={p.key}
                         type="button"
+                        role="option"
+                        aria-selected={i === cursor}
                         onMouseEnter={() => setCursor(i)}
                         onClick={() => go(p)}
                         className={clsx("flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left", i === cursor && "bg-panel-2")}
@@ -274,22 +286,27 @@ export function Sidebar({
           <div className="mt-1 space-y-0.5">
             {teams.length === 0 && <p className={clsx("px-2 py-1.5 text-xs text-muted", collapsed && "md:hidden")}>No teams yet. Teams you are a member of appear here.</p>}
             {teams.map((t) => {
-              const active = t.key === current?.key;
+              const here = t.key === current?.key;
+              const isOpen = openTeams.includes(t.key);
               const row = (
-                <Link
-                  to={`/t/${t.key}`}
-                  aria-current={active ? "true" : undefined}
+                <button
+                  type="button"
+                  onClick={() => toggleTeam(t.key)}
+                  aria-expanded={isOpen}
+                  aria-controls={`team-${t.key}`}
                   aria-label={collapsed ? t.name : undefined}
                   className={clsx(
-                    "flex items-center gap-2 rounded-md px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
                     collapsed && "md:justify-center md:px-0 md:py-2",
-                    active ? "font-medium text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
+                    here ? "font-medium text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
                   )}
                 >
-                  <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-muted transition-transform", active && "rotate-90", collapsed && "md:hidden")} />
+                  {/* A placeholder for the team's own icon, which a team will be able to choose later. */}
+                  <TeamGlyphIcon aria-hidden className={clsx("shrink-0 text-lg", here ? "text-accent" : "text-muted", collapsed && "md:text-xl")} />
                   <span className={clsx("min-w-0 flex-1 truncate", collapsed && "md:hidden")}>{t.name}</span>
-                  <span className={clsx("font-mono text-[11px] text-muted", collapsed ? "hidden md:inline md:text-xs md:text-fg" : "")}>{t.key}</span>
-                </Link>
+                  <span className={clsx("font-mono text-[11px] text-muted", collapsed && "md:hidden")}>{t.key}</span>
+                  <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-muted transition-transform duration-150", isOpen && "rotate-90", collapsed && "md:hidden")} />
+                </button>
               );
               return (
                 <div key={t.key}>
@@ -300,19 +317,28 @@ export function Sidebar({
                   ) : (
                     row
                   )}
-                  {active && (
-                    <div className={clsx("ml-3 mt-0.5 space-y-2 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}>
-                      {SECTIONS.map((g) => (
-                        <div key={g.group} className={clsx("space-y-0.5", collapsed && "md:border-t md:border-line md:pt-1")}>
-                          {g.items.map((i) => (
-                            <NavLink key={i.path} href={`/t/${t.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
-                              {i.label}
-                            </NavLink>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        key="sections"
+                        id={`team-${t.key}`}
+                        {...fade}
+                        className={clsx("ml-3 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}
+                      >
+                        <div className="mt-0.5 space-y-2">
+                          {SECTIONS.map((g) => (
+                            <div key={g.group} className={clsx("space-y-0.5", collapsed && "md:border-t md:border-line md:pt-1")}>
+                              {g.items.map((i) => (
+                                <NavLink key={i.path} href={`/t/${t.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
+                                  {i.label}
+                                </NavLink>
+                              ))}
+                            </div>
                           ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               );
             })}

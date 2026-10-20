@@ -41,7 +41,7 @@ const inShell = () => {
   const sidebar = screen.getByRole("navigation", { name: "Main" });
   expect(within(sidebar).getByRole("link", { name: "Home" })).toBeTruthy();
   expect(within(sidebar).getByRole("button", { name: "Search teams (⌘K)" })).toBeTruthy(); // the team search
-  expect(within(sidebar).getByRole("link", { name: /^Alpha/ })).toBeTruthy(); // the teams list
+  expect(within(sidebar).getByRole("button", { name: /^Alpha/ })).toBeTruthy(); // the teams list
   expect(screen.getByRole("button", { name: /^Workspace menu/ })).toBeTruthy(); // the workspace switcher
   expect(within(sidebar).getByRole("link", { name: "Members" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Account menu" })).toBeTruthy();

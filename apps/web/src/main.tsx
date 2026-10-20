@@ -1,4 +1,5 @@
 import { StrictMode } from "react";
+import { MotionConfig } from "motion/react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
@@ -17,8 +18,10 @@ router = createBrowserRouter(buildRoutes(services));
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ServicesProvider services={services}>
-      <RouterProvider router={router} />
-    </ServicesProvider>
+    <MotionConfig reducedMotion="user">
+      <ServicesProvider services={services}>
+        <RouterProvider router={router} />
+      </ServicesProvider>
+    </MotionConfig>
   </StrictMode>,
 );

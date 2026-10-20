@@ -1,7 +1,11 @@
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { MotionGlobalConfig } from "motion/react";
 
 afterEach(() => cleanup());
+
+// Animations finish at once in tests, so what a click opens or closes is there (or gone) when the next line looks.
+MotionGlobalConfig.skipAnimations = true;
 
 // jsdom does not have these; the real browsers do.
 if (!window.matchMedia) {
