@@ -169,6 +169,13 @@
       "when": 1792459007299,
       "tag": "0023_cycles",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792467216358,
+      "tag": "0024_projects",
+      "breakpoints": true
     }
   ]
 }

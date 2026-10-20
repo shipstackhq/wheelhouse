@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog } from "radix-ui";
 import ReactMarkdown from "react-markdown";
-import type { CycleOption } from "@wheelhouse/api-client";
+import type { CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
 import remarkGfm from "remark-gfm";
 import { AutoGrowTextarea } from "../../components/auto-grow-textarea";
 import { DescriptionEditor } from "../../components/description-editor";
@@ -35,6 +35,8 @@ export function TicketDialog(props: {
   members: Member[];
   /** The team's cycles, for the Cycle field. */
   cycles?: CycleOption[];
+  /** The projects the team takes part in, with their milestones, for the Project and Milestone fields. */
+  projects?: TeamProjectOption[];
   /** Position among the tickets of the same column, as the board shows them. */
   nav: Neighbours;
   onNavigate: (ref: string) => void;
@@ -42,6 +44,7 @@ export function TicketDialog(props: {
 }) {
   const { ticketRef, columns, nodes, members, nav, onNavigate, onClose } = props;
   const cycles = props.cycles ?? [];
+  const projects = props.projects ?? [];
   const { api, queryClient } = useServices();
   const query = useQuery(ticketQuery(api, ticketRef));
   const data = query.data ?? null;
@@ -342,6 +345,24 @@ export function TicketDialog(props: {
                           ...cycles.filter((c) => c.state !== "past" || c.number === t.cycle).map((c) => ({ value: String(c.number), label: cycleTitle(c) })),
                         ]}
                         onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { cycle: v ? Number(v) : null, version: t.version }))}
+                      />
+                    </Field>
+                  )}
+                  {(projects.length > 0 || t.projectId != null) && (
+                    <Field label="Project">
+                      <Select
+                        value={t.projectId ?? ""}
+                        options={[{ value: "", label: "No project" }, ...projects.map((x) => ({ value: x.id, label: x.name }))]}
+                        onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { projectId: v || null, version: t.version }))}
+                      />
+                    </Field>
+                  )}
+                  {t.projectId != null && (projects.find((x) => x.id === t.projectId)?.milestones.length ?? 0) > 0 && (
+                    <Field label="Milestone">
+                      <Select
+                        value={t.milestoneId ?? ""}
+                        options={[{ value: "", label: "No milestone" }, ...(projects.find((x) => x.id === t.projectId)?.milestones ?? []).map((m) => ({ value: m.id, label: m.name }))]}
+                        onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { milestoneId: v || null, version: t.version }))}
                       />
                     </Field>
                   )}

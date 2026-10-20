@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb, schema } from "../db";
 import type { Actor } from "../lib/access";
 import * as svc from "../lib/service";
+import { createMilestone, createProject } from "../lib/projects";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";
 
 const require = createRequire(import.meta.url);
@@ -48,6 +49,10 @@ before(async () => {
   await svc.upsertDecision(actor, "MV", { title: "Use it", context: TRICKY });
   await svc.upsertTerm(actor, "MV", { term: "Thing", definition: "a thing" });
   await svc.upsertFlow(actor, "MV", { name: "Go", steps: [{ node: a.id, title: "start" }] });
+  // A project with its milestone and a ticket in it: projects and project_teams point at each other (the lead team), so the order of the load matters.
+  const prj = await createProject(actor, { name: TRICKY, leadTeam: "MV", status: "active", targetDate: "2026-12-31" });
+  const ms = (await createMilestone(actor, prj.id, { name: "First" })).milestones[0];
+  await svc.updateTicket(actor, t.id, { projectId: prj.id, milestoneId: ms.id });
   const [key] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
   const [team] = await db.select().from(schema.teams);
   await db.insert(schema.agentCursors).values({ apiKeyId: key.id, teamId: team.id, workspaceId: workspace.id, lastSeq: 3 });
@@ -143,10 +148,10 @@ describe("export and import between PGlite directories", () => {
     await assert.rejects(exportData(src.query, exportDir, "again"), /already holds an export/);
   });
 
-  test("tables come parents-first, and the app's own 36 tables are all there", async () => {
+  test("tables come parents-first, and the app's own 40 tables are all there", async () => {
     const src = await track(openConn(copyDirToTemp(source)));
     const order = await tablesInOrder(src.query);
-    assert.equal(order.length, 36);
+    assert.equal(order.length, 40);
     const at = (n: string) => order.findIndex((t) => t.name === n);
     for (const t of order) for (const p of t.parents) assert.ok(at(p) < at(t.name), `${p} before ${t.name}`);
   });
@@ -201,7 +206,7 @@ describe("the command line", () => {
     const out = path.join(work, "cli-export");
     const e = cli("export", "--from", source, "--out", out);
     assert.equal(e.status, 0, e.stderr + e.stdout);
-    assert.match(e.stdout, /exported 36 tables/);
+    assert.match(e.stdout, /exported 40 tables/);
     const after = fs.readdirSync(source, { recursive: true }).map(String).sort().map((f) => `${f}:${fs.statSync(path.join(source, f)).mtimeMs}`);
     assert.deepEqual(after, before, "the source was only copied, never opened");
     const target = path.join(work, "cli-target");

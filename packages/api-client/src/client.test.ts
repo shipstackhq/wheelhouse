@@ -330,6 +330,21 @@ describe("the docs, repositories and onboarding endpoints (WH-98)", () => {
     assert.deepEqual([e.isConflict, e.current], [true, { id: "d1", version: 3 }]);
   });
 
+  test("projects: reads unwrap; changes go to the project's id, its teams and its milestones", async () => {
+    const s = script([{ json: { projects: [{ id: "p1" }] } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).projects.list(), [{ id: "p1" }]);
+    assert.deepEqual(await sent((a) => a.projects.get("p1"), { json: { project: { id: "p1" } } }), { method: "GET", url: "/api/app/projects/p1", body: undefined });
+    assert.deepEqual(await sent((a) => a.projects.create({ name: "Launch", leadTeam: "WH", teams: ["AT"] }), { json: { project: {} } }), { method: "POST", url: "/api/app/projects", body: { name: "Launch", leadTeam: "WH", teams: ["AT"] } });
+    assert.deepEqual(await sent((a) => a.projects.update("p1", { healthOverride: null, version: 2 }), { json: { project: {} } }), { method: "PATCH", url: "/api/app/projects/p1", body: { healthOverride: null, version: 2 } });
+    assert.deepEqual(await sent((a) => a.projects.delete("p1"), { json: { ok: true, released: 0 } }), { method: "DELETE", url: "/api/app/projects/p1", body: undefined });
+    assert.deepEqual(await sent((a) => a.projects.addTeam("p1", "AT"), { json: { project: {} } }), { method: "POST", url: "/api/app/projects/p1/teams", body: { team: "AT" } });
+    assert.deepEqual(await sent((a) => a.projects.removeTeam("p1", "AT"), { json: { ok: true } }), { method: "DELETE", url: "/api/app/projects/p1/teams/AT", body: undefined });
+    assert.deepEqual(await sent((a) => a.projects.removeTeam("p1", "AT", { releaseTickets: true }), { json: { ok: true } }), { method: "DELETE", url: "/api/app/projects/p1/teams/AT?releaseTickets=1", body: undefined });
+    assert.deepEqual(await sent((a) => a.projects.addMilestone("p1", { name: "Beta" }), { json: { project: {} } }), { method: "POST", url: "/api/app/projects/p1/milestones", body: { name: "Beta" } });
+    assert.deepEqual(await sent((a) => a.projects.updateMilestone("p1", "m1", { index: 0 }), { json: { project: {} } }), { method: "PATCH", url: "/api/app/projects/p1/milestones/m1", body: { index: 0 } });
+    assert.deepEqual(await sent((a) => a.projects.deleteMilestone("p1", "m1"), { json: { project: {} } }), { method: "DELETE", url: "/api/app/projects/p1/milestones/m1", body: undefined });
+  });
+
   test("cycles: list and get unwrap; create, update and delete go to the team's cycles by number", async () => {
     const s = script([{ json: { current: null, upcoming: [], past: [] } }]);
     assert.deepEqual(await createApiClient({ fetch: s.f }).cycles.list("WH"), { current: null, upcoming: [], past: [] });

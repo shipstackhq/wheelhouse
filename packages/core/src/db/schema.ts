@@ -17,6 +17,8 @@ import {
   type AnyPgColumn,
   type PgColumn,
   check,
+  date,
+  pgView,
 } from "drizzle-orm/pg-core";
 import { COLUMN_ROLES } from "../lib/column-roles";
 import { sql } from "drizzle-orm";
@@ -265,6 +267,11 @@ export const tickets = table(
     // The cycle the ticket is in, of its own team: the foreign key `(cycle_id, team_id)` to cycles is `ON DELETE SET NULL (cycle_id)`
     // (migration 0023; drizzle cannot express the column list), so deleting a cycle takes its tickets out without touching team_id.
     cycleId: uuid("cycle_id"),
+    // The project (a deliverable that can span teams) and its milestone. Keys in migration 0024, written there because drizzle
+    // cannot say SET NULL on named columns: `(project_id, team_id)` to project_teams, so only a team that takes part may put a
+    // ticket in the project (removing the team takes both columns out), and `(milestone_id, project_id)` to its milestones.
+    projectId: uuid("project_id"),
+    milestoneId: uuid("milestone_id"),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     position: doublePrecision("position").notNull(),
@@ -279,6 +286,9 @@ export const tickets = table(
     unique("tickets_id_team_unique").on(t.id, t.teamId),
     index("tickets_team_idx").on(t.teamId),
     index("tickets_cycle_idx").on(t.cycleId),
+    index("tickets_project_idx").on(t.projectId),
+    index("tickets_milestone_idx").on(t.milestoneId),
+    check("tickets_milestone_needs_project_check", sql`"milestone_id" is null or "project_id" is not null`),
     uniqueIndex("tickets_team_number_idx").on(t.teamId, t.number),
   ],
 );
@@ -311,6 +321,88 @@ export const cycles = table(
     check("cycles_window_check", sql`"ends_at" > "starts_at"`),
   ],
 );
+
+export const PROJECT_STATUSES = ["planned", "active", "paused", "completed", "canceled"] as const;
+export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+export const PROJECT_HEALTH = ["on_track", "at_risk", "off_track"] as const;
+export type ProjectHealth = (typeof PROJECT_HEALTH)[number];
+
+/**
+ * A project (WH-118): an outcome that ends and can span teams, with a lead, dates, milestones and a health that is worked out from
+ * its tickets and dates unless someone sets it. It belongs to the workspace; the teams that take part are in `project_teams`, and
+ * its lead team is one of them: the key `(lead_team_id, id)` into project_teams is deferrable (migration 0024), so a project and its
+ * first team are made in one transaction. Deleting is soft (`deleted_at`).
+ */
+export const projects = table(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    // A member of the workspace; leaving the workspace clears it (the key is in migration 0024: SET NULL on one column).
+    leadUserId: uuid("lead_user_id"),
+    leadTeamId: uuid("lead_team_id").notNull(),
+    status: text("status", { enum: PROJECT_STATUSES }).notNull().default("planned"),
+    startDate: date("start_date", { mode: "string" }),
+    targetDate: date("target_date", { mode: "string" }),
+    healthOverride: text("health_override", { enum: PROJECT_HEALTH }),
+    version: integer("version").notNull().default(1),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("projects_id_workspace_id_unique").on(t.id, t.workspaceId),
+    index("projects_workspace_idx").on(t.workspaceId, t.status),
+    check("projects_dates_check", sql`"start_date" is null or "target_date" is null or "target_date" >= "start_date"`),
+  ],
+);
+
+/** The teams that take part in a project. A ticket can be in the project only through its own team's row here. */
+export const projectTeams = table(
+  "project_teams",
+  {
+    projectId: uuid("project_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.teamId] }),
+    teamScope("project_teams", t),
+    foreignKey({ name: "project_teams_project_fk", columns: [t.projectId, t.workspaceId], foreignColumns: [projects.id, projects.workspaceId] }).onDelete("cascade"),
+    index("project_teams_team_idx").on(t.teamId),
+  ],
+);
+
+/** Ordered stages of a project, each with an optional target date. A ticket may be in one. */
+export const projectMilestones = table(
+  "project_milestones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    targetDate: date("target_date", { mode: "string" }),
+    position: doublePrecision("position").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("project_milestones_id_project_unique").on(t.id, t.projectId),
+    foreignKey({ name: "project_milestones_project_fk", columns: [t.projectId, t.workspaceId], foreignColumns: [projects.id, projects.workspaceId] }).onDelete("cascade"),
+    index("project_milestones_project_idx").on(t.projectId, t.position),
+  ],
+);
+
+/**
+ * Who can see which project: a person who is on a team that takes part, and is not a guest of the workspace (WH-118, plan section 5).
+ * The service lists projects through this; opening one also needs the caller's team role. Created in migration 0024.
+ */
+export const projectVisibility = pgView("project_visibility", {
+  userId: uuid("user_id").notNull(),
+  projectId: uuid("project_id").notNull(),
+}).existing();
 
 export const comments = table("comments", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -544,7 +636,7 @@ export const events = table(
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
     type: text("type").notNull(), // e.g. ticket.created, ticket.moved, comment.created
-    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc", "cycle"] }).notNull(),
+    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc", "cycle", "project"] }).notNull(),
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
@@ -557,6 +649,31 @@ export const events = table(
 );
 
 // Per-agent read pointer into `events` (the AI queue).
+export const WORKSPACE_EVENT_ENTITIES = ["project", "initiative"] as const;
+
+/**
+ * The append-only change log of what belongs to the workspace and not to one team: projects and, with WH-119, initiatives. Same
+ * shape as `events` without a team. A change that matters to a team (a ticket joins a project, a milestone moves) is also written to
+ * that team's `events`, which is what the team's agents read. Never updated or deleted.
+ */
+export const workspaceEvents = table(
+  "workspace_events",
+  {
+    seq: bigserial("seq", { mode: "number" }).primaryKey(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
+    actorId: uuid("actor_id"),
+    actorName: text("actor_name").notNull(),
+    type: text("type").notNull(), // e.g. project.created, project.team_added, project.milestone_changed
+    entity: text("entity", { enum: WORKSPACE_EVENT_ENTITIES }).notNull(),
+    entityId: uuid("entity_id").notNull(),
+    summary: text("summary").notNull(),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index("workspace_events_workspace_seq_idx").on(t.workspaceId, t.seq)],
+);
+
 export const agentCursors = table(
   "agent_cursors",
   {

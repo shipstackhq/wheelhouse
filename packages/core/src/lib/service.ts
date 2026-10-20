@@ -18,7 +18,7 @@ export { ServiceError };
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { teams, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users } = schema;
+const { teams, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users, projects } = schema;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
@@ -150,6 +150,11 @@ export async function deleteTeam(actor: Actor, ref: string) {
   const db = await getDb();
   const p = await requireTeam(actor, ref, "admin");
   await db.transaction(async (tx) => {
+    // A team that leads a live project cannot go until someone else leads it; a deleted project it led goes for good with it.
+    const led = await tx.select({ id: projects.id, name: projects.name, deletedAt: projects.deletedAt }).from(projects).where(eq(projects.leadTeamId, p.id));
+    const live = led.filter((x) => !x.deletedAt);
+    if (live.length) throw new ServiceError("conflict", `${p.name} leads ${live.map((x) => `"${x.name}"`).join(", ")}. Make another team the lead of ${live.length === 1 ? "that project" : "those projects"} first.`);
+    if (led.length) await tx.delete(projects).where(inArray(projects.id, led.map((x) => x.id)));
     // events has no foreign key to teams, so clear it explicitly; everything else cascades.
     await tx.delete(events).where(eq(events.teamId, p.id));
     await tx.delete(teams).where(eq(teams.id, p.id));
@@ -358,7 +363,23 @@ export type TicketInput = {
   labels?: string[];
   /** The number of one of the ticket's own team's cycles that has not ended; null takes it out of its cycle. */
   cycle?: number | null;
+  /**
+   * The id of a project the ticket's team takes part in; null takes the ticket out of its project (and its milestone). Named
+   * `projectId`, not `project`: the tools pass their own `project` argument (the team) through this same object.
+   */
+  projectId?: string | null;
+  /** The id of a milestone of the ticket's project; null clears it. Changing the project clears it unless a new one is named. */
+  milestoneId?: string | null;
 };
+
+/** The ticket joined or left a project: said to the ticket's team, whose agents read that log. */
+async function emitProjectMove(tx: Tx, actor: Actor, teamId: string, ref: string, from: string | null, to: string | null) {
+  if (from === to) return;
+  const ids = [from, to].filter((x): x is string => !!x);
+  const names = new Map((await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, ids))).map((p) => [p.id, p.name]));
+  if (from) await emit(tx, actor, teamId, { type: "project.ticket_left", entity: "project", entityId: from, summary: `${ref} left project "${names.get(from) ?? ""}"`, data: { ref, project: names.get(from) ?? null } });
+  if (to) await emit(tx, actor, teamId, { type: "project.ticket_joined", entity: "project", entityId: to, summary: `${ref} joined project "${names.get(to) ?? ""}"`, data: { ref, project: names.get(to) ?? null } });
+}
 
 export async function createTicket(actor: Actor, teamRef: string, input: TicketInput & { title: string; column?: string }) {
   const db = await getDb();
@@ -367,6 +388,10 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
   return db.transaction(async (tx) => {
     await assertAssignee(tx, team.id, input.assigneeId);
     const cycle = input.cycle == null ? null : await (await import("./cycles")).cycleForTicket(tx, team.id, input.cycle);
+    const inProject =
+      input.projectId === undefined && input.milestoneId === undefined
+        ? { projectId: null, milestoneId: null }
+        : await (await import("./projects")).resolveTicketProject(tx, team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
     const col = await resolveColumn(tx, team.id, input.column ?? DEFAULT_COLUMNS[0]);
     const [{ ticketCounter }] = await tx
       .update(teams)
@@ -386,6 +411,8 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
         priority: input.priority ?? "medium",
         assigneeId: input.assigneeId ?? null,
         cycleId: cycle?.id ?? null,
+        projectId: inProject.projectId,
+        milestoneId: inProject.milestoneId,
         agentClaimable: input.agentClaimable ?? actor.kind === "agent",
         position,
         createdByKind: actor.kind,
@@ -394,6 +421,7 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
       .returning();
     await setTicketLabels(tx, team, t.id, input.labels ?? []);
     const ref = `${team.key}-${t.number}`;
+    await emitProjectMove(tx, actor, team.id, ref, null, t.projectId);
     await emit(tx, actor, team.id, {
       type: "ticket.created",
       entity: "ticket",
@@ -437,17 +465,23 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
       else clean.labels = want;
     }
     await assertAssignee(tx, team.id, clean.assigneeId);
-    const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
+    const { projectId: wantProject, milestoneId: wantMilestone, ...cleanRest } = clean;
+    const projectChoice =
+      wantProject === undefined && wantMilestone === undefined
+        ? undefined
+        : await (await import("./projects")).resolveTicketProject(tx, team, { projectId: ticket.projectId, milestoneId: ticket.milestoneId }, { project: wantProject, milestone: wantMilestone });
+    const changes = diff(ticket as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}) } as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...ticket, ref: r };
-    const { labels: newLabels, cycle: newCycle, ...columnsPatch } = clean;
+    const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
     const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await (await import("./cycles")).cycleForTicket(tx, team.id, newCycle)).id };
     const [row] = await tx
       .update(tickets)
-      .set({ ...columnsPatch, ...cycleChange, version: ticket.version + 1, updatedAt: new Date() })
+      .set({ ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
     if (newLabels) await setTicketLabels(tx, team, row.id, newLabels);
     const t = { ...row, labels: newLabels ?? ticket.labels, cycle: newCycle === undefined ? ticket.cycle : newCycle };
+    await emitProjectMove(tx, actor, team.id, r, ticket.projectId, row.projectId);
     await emit(tx, actor, team.id, {
       type: "ticket.updated",
       entity: "ticket",

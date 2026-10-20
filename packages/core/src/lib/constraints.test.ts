@@ -121,7 +121,7 @@ describe("a value outside its enum is refused", () => {
     ["edges.kind", () => db.execute(sql`update edges set kind = 'likes'`)],
     ["decisions.status", () => db.execute(sql`insert into decisions (team_id, workspace_id, number, title, status, author_kind, author_name) values (${a1.id}, ${wsA}, 9999, 't', 'maybe', 'human', 'x')`)],
     ["events.actor_kind", () => db.execute(sql`update events set actor_kind = 'robot'`)],
-    ["events.entity", () => db.execute(sql`update events set entity = 'project'`)],
+    ["events.entity", () => db.execute(sql`update events set entity = 'workspace'`)],
     ["repositories.provider", () => db.execute(sql`insert into repositories (team_id, workspace_id, display_name, role, slug, provider) values (${a1.id}, ${wsA}, 'r', 'x', 'bad-provider', 'gitlab')`)],
     ["repositories.lifecycle", () => db.execute(sql`insert into repositories (team_id, workspace_id, display_name, role, slug, lifecycle) values (${a1.id}, ${wsA}, 'r', 'x', 'bad-life', 'zombie')`)],
     ["invites.kind", () => db.execute(sql`insert into invites (kind, email, token_hash, expires_at) values ('join_team', 'x@example.com', ${`t-${RUN}`}, now())`)],
@@ -165,7 +165,7 @@ describe("the TypeScript enums and the CHECK constraints agree", () => {
       from pg_constraint c where c.contype = 'c' and c.connamespace = 'public'::regnamespace and c.conname like '%\\_check'`);
     const list = (Array.isArray(res) ? res : (res as unknown as { rows: unknown[] }).rows) as { conname: string; def: string }[];
     // CHECKs that are about a rule, not about an enum, are named here.
-    const notEnums = new Set(["cycles_window_check"]);
+    const notEnums = new Set(["cycles_window_check", "projects_dates_check", "tickets_milestone_needs_project_check"]);
     const inDb = new Map(list.filter((r) => !notEnums.has(r.conname)).map((r) => [r.conname, valuesIn(r.def)]));
     const expected = enumColumns();
     assert.ok(expected.length >= 30, `found only ${expected.length} enum columns`);

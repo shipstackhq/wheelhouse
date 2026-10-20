@@ -93,9 +93,14 @@ export async function openConn(target: string, o: { migrate?: boolean; create?: 
 export type TableInfo = { name: string; parents: string[] };
 
 /** The application's tables (every table of the public schema) with the tables each one points at, parents before children. */
+/**
+ * The tables, parents first. A foreign key that is DEFERRABLE does not count: it is checked when the transaction commits, and an
+ * import is one transaction, so two tables that point at each other through one (projects and project_teams: a project's lead team
+ * must be one of its teams) can be loaded in either order.
+ */
 export async function tablesInOrder(q: Q): Promise<TableInfo[]> {
   const names = (await q(`select c.relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by c.relname`)).map((r) => String(r.name));
-  const fks = await q(`select conrelid::regclass::text as child, confrelid::regclass::text as parent from pg_constraint where contype = 'f' and connamespace = 'public'::regnamespace`);
+  const fks = await q(`select conrelid::regclass::text as child, confrelid::regclass::text as parent from pg_constraint where contype = 'f' and not condeferrable and connamespace = 'public'::regnamespace`);
   const parents = new Map<string, Set<string>>(names.map((n) => [n, new Set()]));
   for (const f of fks) {
     const child = String(f.child).replaceAll('"', "");

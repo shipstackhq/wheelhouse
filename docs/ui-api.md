@@ -184,7 +184,7 @@ The board and the ticket dialog. Everything needs a session. A ticket is address
 | `PATCH /api/app/tickets/:ref` | see "The version check" below |
 | `POST /api/app/tickets/:ref/move` | `{ column, index?, version? }`: the column by id, name or role; `index` is the place in the column (the end when absent) |
 
-A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
+A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
 
 **Claiming.** Only agents claim a ticket (over MCP or `/api/v1`). A person decides whether agents may pick a ticket up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
 
@@ -330,3 +330,32 @@ ended is closed to new tickets, and the database refuses a cycle of another team
 moved, so a second read, or two at once, changes nothing. With no next cycle, one of the same length is made, starting where the last ended and moved on by whole lengths if the team was away, so it holds today.
 It happens on reads of the cycles and the board, as the claim sweep does, as "Wheelhouse", and is announced as `cycle.rolled_over` (and `cycle.created`). Cycle changes are events (`cycle.created`, `cycle.updated`,
 `cycle.deleted`, `cycle.rolled_over`, entity `cycle`), so agents hear them in their queue. `/api/v1` and the MCP tools never show a ticket's cycle.
+
+## Built by WH-118: projects (deliverables that span teams)
+
+A project is an outcome that ends (a launch, a migration). It belongs to the workspace, not to a team, and the teams that take part are
+its `project_teams`. Everything needs a session. **A project is seen through a team of yours that takes part, and never by a guest**: a project you cannot see,
+one that is deleted and one of another workspace are all a `404`, and the list leaves them out. Of the teams you are not on you see **how many and the totals of their tickets**, never a
+name, a key or a title.
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/app/projects` | `{ projects }`: each `{ id, name, description, status, health, startDate, targetDate, leadUser, leadTeam, total, done, teamCount, version, canEdit, updatedAt }`, active first. `total` and `done` count every team's tickets; `leadTeam` is named only to people on it |
+| `POST /api/app/projects` | `{ name, leadTeam, description?, status?, startDate?, targetDate?, leadUser?, healthOverride?, teams? }`; 201 `{ project }`. `leadTeam` and each of `teams` are keys of teams you can edit. Dates are `YYYY-MM-DD`; a bad value is a `400` naming the field |
+| `GET /api/app/projects/:id` | `{ project }` with `milestones` (`id, name, description, targetDate, position, total, done`), `teams` (only yours: `key, name, role, lead, total, done, tickets`), `others` (`{ count, total, done }` for the teams you are not on), `addableTeams`, `canEdit`, `canAdmin` |
+| `PATCH /api/app/projects/:id` | any of the create fields; `healthOverride: null` clears the health set by hand; `version` makes a stale edit a `409`. Needs the project lead or an editor of the lead team; changing `leadUser` or `leadTeam` needs the lead or an admin of the lead team. The lead team must be one that takes part |
+| `DELETE /api/app/projects/:id` | `{ ok, released }`: a soft delete, the tickets stay on their boards in no project. The lead or an admin of the lead team |
+| `POST /api/app/projects/:id/teams` | `{ team }`: bring in a team you can edit; `409` if it already takes part |
+| `DELETE /api/app/projects/:id/teams/:key` | take a team out (a project editor, or an admin of that team). `409` if it has tickets in the project, unless `?releaseTickets=1`; never the lead team |
+| `POST /api/app/projects/:id/milestones` | `{ name, description?, targetDate? }`; 201 `{ project }` |
+| `PATCH /api/app/projects/:id/milestones/:milestoneId` | any of `name`, `description`, `targetDate`, and `index` to move it |
+| `DELETE /api/app/projects/:id/milestones/:milestoneId` | `{ project }`; its tickets stay in the project, in no milestone |
+
+A ticket joins with `projectId` and `milestoneId` on `POST .../tickets` or `PATCH /api/app/tickets/:ref` (`null` leaves). The ticket's team must take part in the project (`400`, and the database refuses
+anything else), the milestone must be that project's, changing the project drops the milestone unless a new one is named, and a milestone needs a project. The board answer carries
+`projects` (the ones this team takes part in, each with its milestones) for the card chip and the ticket's fields.
+
+**Health** is worked out for an `active` project and set by hand when someone says so (`health: { derived, override, value }`). Past the target date with work open is off track; otherwise the share of time gone is
+compared with the share of tickets done (a gap over a quarter is at risk, over a half is off track); a project with no dates and no tickets has none. **Events:** workspace-level changes go to `workspace_events`; what matters to a
+team (a project made or deleted, its status or date changed, a team joining or leaving, a milestone changing, a ticket joining or leaving) is also in that team's `events` (`project.*`, entity `project`), so its agents hear it.
+`/api/v1` and the MCP never show a ticket's project or milestone, and their `project` is still the team.

@@ -684,10 +684,11 @@ function toLegacyWire(value: unknown): unknown {
     // A row of a team-scoped table now also carries its workspace (WH-113), which the old shape never showed. Events always
     // carried both ids, so they keep them.
     const dropWorkspace = "workspaceId" in value && "teamId" in value && !("entity" in value);
-    // Cycles (WH-117) are not part of the old shape either: a ticket's cycle never reaches /api/v1 or the MCP.
+    // Cycles (WH-117) and projects (WH-118) are not part of the old shape either: a ticket's cycle, project and milestone never reach /api/v1 or the MCP.
     return Object.fromEntries(
       Object.entries(value)
-        .filter(([k]) => !(dropWorkspace && k === "workspaceId") && k !== "cycleId" && k !== "cycle")
+        // A ticket's project and milestone (WH-118) are new, and `projectId` would collide with what a team's id is called here.
+        .filter(([k]) => !(dropWorkspace && k === "workspaceId") && k !== "cycleId" && k !== "cycle" && k !== "projectId" && k !== "milestoneId")
         .map(([k, v]) => [legacyKey(k), legacyWord(k, toLegacyWire(v))]),
     );
   }

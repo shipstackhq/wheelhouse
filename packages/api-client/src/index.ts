@@ -59,9 +59,13 @@ import type {
   DashboardWidgets,
   InvitePeek,
   KeyView,
+  MilestoneInput,
   MoveTicket,
   NewTicket,
   PendingInvite,
+  ProjectDetail,
+  ProjectInput,
+  ProjectSummary,
   Role,
   WorkspaceMember,
   WorkspaceOverview,
@@ -317,6 +321,27 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<{ ok: true }>("PUT", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
       unlinkNode: (teamKey: string, ref: string, nodeId: string) =>
         request<{ ok: true }>("DELETE", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
+    },
+
+    projects: {
+      /** The projects the person can see (through a team of theirs that takes part), active first. */
+      list: async () => (await request<{ projects: ProjectSummary[] }>("GET", "/api/app/projects")).projects,
+      /** One project: milestones, the viewer's own teams with their tickets, the other teams as totals. */
+      get: async (id: string) => (await request<{ project: ProjectDetail }>("GET", `/api/app/projects/${encodeURIComponent(id)}`)).project,
+      create: async (input: ProjectInput & { name: string; leadTeam: string }) => (await request<{ project: ProjectDetail }>("POST", "/api/app/projects", input)).project,
+      /** With `version`, a project changed since rejects with a 409. */
+      update: async (id: string, patch: ProjectInput) => (await request<{ project: ProjectDetail }>("PATCH", `/api/app/projects/${encodeURIComponent(id)}`, patch)).project,
+      /** Its tickets stay on their boards, in no project. */
+      delete: (id: string) => request<{ ok: true; released: number }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}`),
+      addTeam: async (id: string, teamKey: string) => (await request<{ project: ProjectDetail }>("POST", `/api/app/projects/${encodeURIComponent(id)}/teams`, { team: teamKey })).project,
+      /** A team with tickets in the project is refused (409) unless `releaseTickets`; the lead team cannot go. */
+      removeTeam: (id: string, teamKey: string, o: { releaseTickets?: boolean } = {}) =>
+        request<{ ok: true; released: number }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}/teams/${encodeURIComponent(teamKey)}${o.releaseTickets ? "?releaseTickets=1" : ""}`),
+      addMilestone: async (id: string, input: MilestoneInput & { name: string }) => (await request<{ project: ProjectDetail }>("POST", `/api/app/projects/${encodeURIComponent(id)}/milestones`, input)).project,
+      updateMilestone: async (id: string, milestoneId: string, patch: MilestoneInput) =>
+        (await request<{ project: ProjectDetail }>("PATCH", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, patch)).project,
+      deleteMilestone: async (id: string, milestoneId: string) =>
+        (await request<{ project: ProjectDetail }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`)).project,
     },
 
     cycles: {

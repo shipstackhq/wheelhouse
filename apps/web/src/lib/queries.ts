@@ -52,6 +52,12 @@ export const cycleQuery = (api: ApiClient, teamKey: string, number: number) => (
 export const useCycles = (teamKey: string) => useQuery(cyclesQuery(useServices().api, teamKey));
 export const useCycle = (teamKey: string, number: number) => useQuery(cycleQuery(useServices().api, teamKey, number));
 
+/** Projects (WH-118): the list the person can see, and one project with its milestones and teams. */
+export const projectsQuery = (api: ApiClient) => ({ queryKey: ["projects"] as const, queryFn: () => api.projects.list() });
+export const projectQuery = (api: ApiClient, id: string) => ({ queryKey: ["project", id] as const, queryFn: () => api.projects.get(id) });
+export const useProjects = () => useQuery(projectsQuery(useServices().api));
+export const useProject = (id: string) => useQuery(projectQuery(useServices().api, id));
+
 /** Who is in a team, the people who could still be added, and the workspace-level views of access (ADR-23). */
 export const teamMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey] as const, queryFn: () => api.teams.members(teamKey) });
 export const addableMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey, "addable"] as const, queryFn: () => api.teams.addableMembers(teamKey) });

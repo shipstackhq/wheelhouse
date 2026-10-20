@@ -25,6 +25,7 @@ import type { Actor } from "@wheelhouse/core/lib/access";
 import { actorForKey, sha256, userForSessionToken } from "@wheelhouse/core/lib/access";
 import * as svc from "@wheelhouse/core/lib/service";
 import * as cycles from "@wheelhouse/core/lib/cycles";
+import * as projects from "@wheelhouse/core/lib/projects";
 import * as members from "@wheelhouse/core/lib/members";
 import { runTool, tools } from "@wheelhouse/core/lib/tools";
 import { askMap } from "@wheelhouse/core/lib/ask";
@@ -603,6 +604,71 @@ describe("cycles stay inside their workspace and team (WH-117)", () => {
   });
 });
 
+describe("projects stay inside their workspace, and show other teams only as totals (WH-118)", () => {
+  const refused = (e: unknown) => (e as { cause?: { code?: string }; code?: string }).cause?.code === "23503" || (e as { code?: string }).code === "23503";
+  const notFound = (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found";
+  let aProject: Awaited<ReturnType<typeof projects.createProject>>;
+
+  test("workspace B cannot list, open, change, delete, add to or take from A's project, and A's project is not changed", async () => {
+    aProject = await projects.createProject(A.owner, { name: "A-SECRET project", description: "A-SECRET description", leadTeam: A.teamId });
+    await svc.createTicket(A.owner, A.teamKey, { title: "A-SECRET in the project", projectId: aProject.id });
+    const before = await fingerprint(A);
+    assert.ok(!(await projects.listProjects(B.owner)).some((p) => p.id === aProject.id));
+    assert.ok(!JSON.stringify(await projects.listProjects(B.owner)).includes("A-SECRET"));
+    await assert.rejects(projects.getProject(B.owner, aProject.id), notFound);
+    await assert.rejects(projects.updateProject(B.owner, aProject.id, { name: "defaced" }), notFound);
+    await assert.rejects(projects.deleteProject(B.owner, aProject.id), notFound);
+    await assert.rejects(projects.addProjectTeam(B.owner, aProject.id, B.teamKey), notFound);
+    await assert.rejects(projects.removeProjectTeam(B.owner, aProject.id, A.teamKey), notFound);
+    await assert.rejects(projects.createMilestone(B.owner, aProject.id, { name: "planted" }), notFound);
+    assert.equal((await projects.getProject(A.owner, aProject.id)).name, "A-SECRET project");
+    assert.equal(await fingerprint(A), before);
+  });
+
+  test("B cannot lead a project with A's team, or bring it in, and a project made by B has only B's teams", async () => {
+    await assert.rejects(projects.createProject(B.owner, { name: "steal", leadTeam: A.teamId }), notFound);
+    const bProject = await projects.createProject(B.owner, { name: "B's own", leadTeam: B.teamKey });
+    await assert.rejects(projects.addProjectTeam(B.owner, bProject.id, A.teamId), notFound);
+    assert.deepEqual((await projects.getProject(B.owner, bProject.id)).teams.map((t) => t.key), [B.teamKey]);
+    assert.deepEqual((await projects.listProjects(B.owner)).map((p) => p.name), ["B's own"]);
+  });
+
+  test("a ticket of B cannot be put in A's project, through the service or around it", async () => {
+    const db = await getDb();
+    const bTicket = await svc.createTicket(B.owner, B.teamKey, { title: "B wants A's project" });
+    await assert.rejects(svc.updateTicket(B.owner, bTicket.ref, { projectId: aProject.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not exist/.test(e.message));
+    await assert.rejects(db.update(schema.tickets).set({ projectId: aProject.id }).where(eq(schema.tickets.id, bTicket.id)), refused);
+    await assert.rejects(svc.updateTicket(B.owner, A.ticketRef, { projectId: aProject.id }), notFound);
+    assert.equal((await svc.getTicket(B.owner, bTicket.ref)).ticket.projectId, null);
+  });
+
+  test("project rows cannot be made to name the other workspace", async () => {
+    const db = await getDb();
+    await assert.rejects(db.insert(schema.projectTeams).values({ projectId: aProject.id, teamId: B.teamId, workspaceId: A.workspaceId }), refused);
+    await assert.rejects(db.insert(schema.projectTeams).values({ projectId: aProject.id, teamId: B.teamId, workspaceId: B.workspaceId }), refused);
+    await assert.rejects(db.insert(schema.projectMilestones).values({ projectId: aProject.id, workspaceId: B.workspaceId, name: "x", position: 1 }), refused);
+  });
+
+  test("two workspaces, two teams in one of them: the member of one team sees the other only as totals, and never in the other workspace", async () => {
+    // A's workspace gets a second team and a member of only it; the project spans both teams.
+    const a2 = await svc.createTeam(A.owner, { name: "A-SECOND team", key: `Z${RUN.slice(0, 3).replace(/[0-9]/g, "q").toUpperCase()}` });
+    const db = await getDb();
+    const [u] = await db.insert(schema.users).values({ email: `a2-${RUN}@example.com`, name: "second-team member", passwordHash: "x" }).returning();
+    await db.insert(schema.memberships).values({ userId: u.id, workspaceId: A.workspaceId, role: "member" });
+    const { addTeamMember } = await import("@wheelhouse/core/lib/team-members");
+    await addTeamMember(A.owner, a2.key, { userId: u.id, role: "editor" });
+    await projects.addProjectTeam(A.owner, aProject.id, a2.key);
+    await svc.createTicket(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, column: "Done" });
+    const second: Actor = { kind: "human", id: u.id, name: u.name, workspaceId: A.workspaceId };
+    const seen = await projects.getProject(second, aProject.id);
+    assert.deepEqual(seen.teams.map((t) => t.key), [a2.key]);
+    assert.deepEqual(seen.others, { count: 1, total: 1, done: 0 }, "the other team has one open ticket");
+    const text = JSON.stringify(seen);
+    assert.ok(!text.includes("A-SECRET in the project") && !text.includes(A.teamKey), "no title and no key of the team they are not on");
+    assert.ok(!(await projects.listProjects(B.owner)).some((p) => p.id === aProject.id), "and B still sees none of it");
+  });
+});
+
 describe("the database refuses a row that points across workspaces (WH-113)", () => {
   // Even code that skips the service layer cannot put workspace B's row on workspace A's team, or the reverse.
   const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
@@ -649,6 +715,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "packages/core/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
   "packages/core/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and a ticket joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
+  "packages/core/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; ticket detail is read only for the viewer's own teams and every other team is counted, never named; a ticket reaches a project only through its own team's project_teams row, which the database enforces (tested)",
   "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs, nodes and repositories inside it (tested)",
   "packages/core/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one team by key and the owner of that team's own workspace, and everything it changes goes through the service layer as that owner, so it can only reach that workspace's map (tested on a throwaway database)",
   "packages/core/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
@@ -769,6 +836,16 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/teams/:key/cycles/:number": "getCycle(actor, key, number): requireTeam(actor, key); the number is resolved inside that team, so another team's or workspace's cycle is a 404 (tested)",
   "PATCH /api/app/teams/:key/cycles/:number": "updateCycle(actor, key, number): requireTeam(actor, key, edit), the cycle resolved inside that team (tested)",
   "DELETE /api/app/teams/:key/cycles/:number": "deleteCycle(actor, key, number): requireTeam(actor, key, edit), the cycle resolved inside that team (tested)",
+  "GET /api/app/projects": "listProjects(actor): through project_visibility (people on a team that takes part, never a guest) in the caller's workspace (tested)",
+  "POST /api/app/projects": "createProject(actor): the lead team and each extra team through requireTeam(actor, key, edit), so only teams the person edits take part; made in the caller's own workspace (tested)",
+  "GET /api/app/projects/:id": "getProject(actor, id): openProject needs the person on a team that takes part; ticket detail only for their own teams, the others as totals (tested)",
+  "PATCH /api/app/projects/:id": "updateProject(actor, id): openProject(edit), or admin to change the lead; the row is locked and checked against its version (tested)",
+  "DELETE /api/app/projects/:id": "deleteProject(actor, id): openProject(admin); soft delete, its tickets released (tested)",
+  "POST /api/app/projects/:id/teams": "addProjectTeam(actor, id): openProject(edit) and requireTeam(actor, team, edit): nobody is pulled in (tested)",
+  "DELETE /api/app/projects/:id/teams/:key": "removeProjectTeam(actor, id, key): the project's editors or an admin of that team; never the lead team; tickets are released only on request (tested)",
+  "POST /api/app/projects/:id/milestones": "createMilestone(actor, id): openProject(edit) (tested)",
+  "PATCH /api/app/projects/:id/milestones/:milestoneId": "updateMilestone(actor, id, mid): openProject(edit); the milestone is looked up inside that project only (tested)",
+  "DELETE /api/app/projects/:id/milestones/:milestoneId": "deleteMilestone(actor, id, mid): openProject(edit); looked up inside that project only (tested)",
   "GET /api/app/teams/:key/repositories": "svc.listRepositories(actor): rows are selected by the team found through requireTeam(actor); the answer is a view without installation ids (tested)",
   "POST /api/app/teams/:key/repositories": "svc.createRepository(actor): the team through requireTeam(actor); humans only (tested)",
   "GET /api/app/teams/:key/repositories/github": "githubStatus(human): installations are listed by the person's workspace id, and only for owners; repositories GitHub lists are asked per installation (tested against a fake GitHub)",

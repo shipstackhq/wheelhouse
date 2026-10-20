@@ -145,7 +145,7 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 
 // ───────── the board ─────────
 
-import type { BoardTicket, BoardView, Bot, CycleDetail, CycleSummary, TicketDetail } from "@wheelhouse/api-client";
+import type { BoardTicket, BoardView, Bot, CycleDetail, CycleSummary, ProjectDetail, ProjectSummary, TicketDetail } from "@wheelhouse/api-client";
 
 export const COLUMNS = [
   { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
@@ -171,6 +171,8 @@ export const ticket = (over: Partial<BoardTicket> = {}): BoardTicket => {
     claimedByKeyId: null,
     labels: [],
     cycle: null,
+    projectId: null,
+    milestoneId: null,
     position: n * 1000,
     version: 1,
     createdByKind: "human",
@@ -200,6 +202,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
     { id: "u2", name: "Grace Hopper" },
   ],
   cycles: [],
+  projects: [],
   checklist: {
     items: [
       { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/t/${key}/repos` },
@@ -452,3 +455,34 @@ export const cycleSummary = (over: Partial<CycleSummary> = {}): CycleSummary => 
 });
 
 export const cycleDetail = (over: Partial<CycleDetail> = {}): CycleDetail => ({ ...cycleSummary(), tickets: [], landed: [], ...over });
+
+// ───────── projects ─────────
+
+export const projectSummary = (over: Partial<ProjectSummary> = {}): ProjectSummary => ({
+  id: "p1",
+  name: "Launch SSO",
+  description: "",
+  status: "active",
+  health: { derived: "on_track", override: null, value: "on_track" },
+  startDate: "2026-11-01",
+  targetDate: "2026-12-15",
+  leadUser: { id: "u1", name: "Ada Lovelace" },
+  leadTeam: { key: "AA", name: "Alpha" },
+  total: 0,
+  done: 0,
+  teamCount: 1,
+  version: 1,
+  canEdit: true,
+  updatedAt: "2026-10-20T00:00:00.000Z",
+  ...over,
+});
+
+export const projectDetail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
+  ...projectSummary(),
+  canAdmin: true,
+  milestones: [],
+  teams: [{ key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, tickets: [] }],
+  others: { count: 0, total: 0, done: 0 },
+  addableTeams: [],
+  ...over,
+});

@@ -4,6 +4,7 @@ import type { Actor } from "./access";
 import * as svc from "./service";
 import { withCycle, withLabels } from "./links";
 import { cycleOptions, type CycleOption } from "./cycles";
+import { projectsOfTeam, type TeamProjectOption } from "./projects";
 import { ServiceError } from "./service";
 import type { ChecklistState } from "./setup-checklist";
 
@@ -27,6 +28,9 @@ export type TicketView = {
   labels: string[];
   /** The number of the cycle it is in, or null. */
   cycle: number | null;
+  /** The project (a deliverable that can span teams) and the milestone it is in; the board's `projects` names them. */
+  projectId: string | null;
+  milestoneId: string | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -49,6 +53,8 @@ export const ticketView = (t: TicketRow): TicketView => ({
   claimedByKeyId: t.claimedByKeyId,
   labels: t.labels,
   cycle: t.cycle,
+  projectId: t.projectId,
+  milestoneId: t.milestoneId,
   position: t.position,
   version: t.version,
   createdByKind: t.createdByKind,
@@ -68,6 +74,8 @@ export type BoardView = {
   members: { id: string; name: string }[];
   /** The team's cycles, newest first: a ticket's chip names one, the board filters by one. */
   cycles: CycleOption[];
+  /** The projects this team takes part in, with their milestones: for the card chip and the ticket's Project field. */
+  projects: TeamProjectOption[];
   checklist: ChecklistState;
 };
 
@@ -87,6 +95,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
       .where(eq(schema.teamMembers.teamId, board.team.id)),
   ]);
   const cycles = await cycleOptions(db, board.team.id);
+  const teamProjects = await projectsOfTeam(db, board.team.id);
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
     columns: board.columns.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
@@ -94,6 +103,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
     nodes,
     members,
     cycles,
+    projects: teamProjects,
     checklist,
   };
 }
@@ -164,6 +174,12 @@ export function ticketInput(b: Record<string, unknown>, o: { create: boolean }):
   if (b.labels !== undefined) {
     if (!Array.isArray(b.labels) || b.labels.some((l) => typeof l !== "string")) bad("labels", "labels must be a list of text");
     out.labels = b.labels as string[];
+  }
+  for (const f of ["projectId", "milestoneId"] as const) {
+    if (b[f] !== undefined) {
+      if (b[f] !== null && typeof b[f] !== "string") bad(f, `${f} must be an id, or null for none`);
+      out[f] = (b[f] as string | null) || null;
+    }
   }
   if (b.cycle !== undefined) {
     if (b.cycle !== null && (typeof b.cycle !== "number" || !Number.isSafeInteger(b.cycle))) bad("cycle", "cycle must be a cycle number, or null for none");

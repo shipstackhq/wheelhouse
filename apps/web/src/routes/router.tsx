@@ -9,6 +9,7 @@ import { DocsPage } from "../pages/docs";
 import { GlossaryPage } from "../pages/glossary";
 import { OnboardingPage } from "../pages/onboarding";
 import { CyclePage, CyclesPage } from "../pages/cycles";
+import { ProjectPage, ProjectsPage } from "../pages/projects";
 import { ReposPage } from "../pages/repos";
 import { MapPage } from "../pages/map";
 import { TeamMembersPage } from "../pages/members";
@@ -52,6 +53,8 @@ export function buildRoutes(services: Services): RouteObject[] {
           children: [
             { index: true, Component: Dashboard },
             { path: "teams/new", Component: NewTeamPage },
+            { path: "projects", Component: ProjectsPage },
+            { path: "projects/:id", Component: ProjectPage },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
             {

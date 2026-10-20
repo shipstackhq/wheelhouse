@@ -74,7 +74,7 @@ describe("GET /api/app/teams/:key/board", () => {
   test("the team, its five columns with their roles, tickets, map nodes, members and the checklist", async () => {
     const t = await workspace();
     const b = await board(t.s);
-    assert.deepEqual(Object.keys(b).sort(), ["checklist", "columns", "cycles", "members", "nodes", "team", "tickets"]);
+    assert.deepEqual(Object.keys(b).sort(), ["checklist", "columns", "cycles", "members", "nodes", "projects", "team", "tickets"]);
     assert.deepEqual(Object.keys(b.team).sort(), ["description", "id", "key", "name"]);
     assert.deepEqual(b.columns.map((c: { name: string; role: string }) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
     assert.deepEqual(b.tickets, []);
@@ -91,7 +91,7 @@ describe("GET /api/app/teams/:key/board", () => {
     await app("PUT", `/api/app/tickets/${tk.ref}/nodes/${node.id}`, t.s);
     await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "hello" } });
     const b = await board(t.s);
-    assert.deepEqual(Object.keys(b.tickets[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "columnId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "nodeIds", "number", "position", "priority", "ref", "title", "updatedAt", "version"]);
+    assert.deepEqual(Object.keys(b.tickets[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "columnId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "milestoneId", "nodeIds", "number", "position", "priority", "projectId", "ref", "title", "updatedAt", "version"]);
     assert.equal(b.tickets[0].ref, "RKT-1");
     assert.deepEqual(b.tickets[0].nodeIds, [node.id]);
     assert.equal(b.tickets[0].commentCount, 1);

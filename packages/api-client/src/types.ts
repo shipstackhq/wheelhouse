@@ -233,6 +233,9 @@ export type TicketView = {
   labels: string[];
   /** The number of the cycle it is in, or null. */
   cycle: number | null;
+  /** The project and milestone it is in (ids; the board's `projects` names them). */
+  projectId: string | null;
+  milestoneId: string | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -273,6 +276,63 @@ export type CycleDetail = CycleSummary & {
 /** No dates: from now for two weeks. A cycle lasts one to fourteen days and does not overlap another of the team. */
 export type CycleInput = { name?: string; goal?: string; startsAt?: string; endsAt?: string };
 
+// ───────── projects ─────────
+
+export type ProjectStatus = "planned" | "active" | "paused" | "completed" | "canceled";
+export type ProjectHealthValue = "on_track" | "at_risk" | "off_track";
+/** What the tickets and dates say (`derived`, only for an active project), what someone set (`override`), and the one to show. */
+export type ProjectHealth = { derived: ProjectHealthValue | null; override: ProjectHealthValue | null; value: ProjectHealthValue | null };
+
+export type ProjectSummary = {
+  id: string;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  health: ProjectHealth;
+  startDate: string | null;
+  targetDate: string | null;
+  leadUser: { id: string; name: string } | null;
+  /** Named only to people on the lead team. */
+  leadTeam: { key: string; name: string } | null;
+  /** Every ticket in the project, across all its teams, and how many are done. */
+  total: number;
+  done: number;
+  teamCount: number;
+  version: number;
+  canEdit: boolean;
+  updatedAt: string;
+};
+export type ProjectMilestone = { id: string; name: string; description: string; targetDate: string | null; position: number; total: number; done: number };
+export type ProjectTicket = { ref: string; title: string; priority: Priority; column: string; done: boolean; milestoneId: string | null };
+export type ProjectTeam = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; tickets: ProjectTicket[] };
+export type ProjectDetail = ProjectSummary & {
+  canAdmin: boolean;
+  milestones: ProjectMilestone[];
+  /** The teams of the project the viewer is on, with their tickets. */
+  teams: ProjectTeam[];
+  /** The teams they are not on: how many and the totals of their tickets, never a name or a title. */
+  others: { count: number; total: number; done: number };
+  /** Teams the viewer could bring in (they edit them) and that do not take part yet. */
+  addableTeams: { key: string; name: string }[];
+};
+export type ProjectInput = {
+  name?: string;
+  description?: string;
+  status?: ProjectStatus;
+  startDate?: string | null;
+  targetDate?: string | null;
+  leadUser?: string | null;
+  leadTeam?: string;
+  /** `null` clears a health that was set by hand. */
+  healthOverride?: ProjectHealthValue | null;
+  /** When creating: the keys of the other teams taking part. */
+  teams?: string[];
+  /** The version last read, so an edit made since is refused. */
+  version?: number;
+};
+export type MilestoneInput = { name?: string; description?: string; targetDate?: string | null; index?: number };
+export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
+
 export type BoardColumn = { id: string; name: string; role: string | null; position: number };
 export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
 export type BoardMember = { id: string; name: string };
@@ -285,6 +345,8 @@ export type BoardView = {
   members: BoardMember[];
   /** The team's cycles, newest first: a card's chip names one, the filter lists them. */
   cycles: CycleOption[];
+  /** The projects this team takes part in, with their milestones: for the card chip and the ticket's Project field. */
+  projects: TeamProjectOption[];
   checklist: ChecklistState;
 };
 
@@ -321,6 +383,10 @@ export type TicketPatch = {
   labels?: string[];
   /** A cycle number of this team that has not ended; null takes the ticket out of its cycle. */
   cycle?: number | null;
+  /** A project this team takes part in; null takes the ticket out of it (and its milestone). */
+  projectId?: string | null;
+  /** A milestone of the ticket's project; null clears it. */
+  milestoneId?: string | null;
   version?: number;
 };
 export type NewTicket = Omit<TicketPatch, "version"> & { title: string; column?: string };

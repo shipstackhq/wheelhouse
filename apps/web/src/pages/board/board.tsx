@@ -17,7 +17,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import type { CycleOption } from "@wheelhouse/api-client";
+import type { CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { useServices } from "../../lib/services";
 import { neighbours, parseTicketParam } from "../../lib/ticket-nav";
@@ -25,7 +25,7 @@ import { dragOver, drop, findCol, group, type Items } from "./board-state";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Ticket } from "./shared";
 import { TicketDialog } from "./ticket-dialog";
-import { AgentIcon, CloseIcon, CommentIcon, CyclesIcon, NodeIcon } from "../../components/icons";
+import { AgentIcon, CloseIcon, CommentIcon, CyclesIcon, NodeIcon, ProjectsIcon } from "../../components/icons";
 import { cycleTitle } from "../cycles/cycle-bits";
 
 /**
@@ -34,10 +34,12 @@ import { cycleTitle } from "../cycles/cycle-bits";
  * real positions, when a drop has been saved.
  */
 const NO_CYCLES: CycleOption[] = [];
+const NO_PROJECTS: TeamProjectOption[] = [];
 
-export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[]; cycles?: CycleOption[] }) {
+export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[]; cycles?: CycleOption[]; projects?: TeamProjectOption[] }) {
   const { teamKey, columns, nodes, members } = props;
   const cycles = props.cycles ?? NO_CYCLES;
+  const projects = props.projects ?? NO_PROJECTS;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
   const [items, setItems] = useState<Items>(() => group(columns, props.tickets));
@@ -179,6 +181,7 @@ export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[
                 members={members}
                 labels={labels}
                 cycles={cycles}
+                projects={projects}
                 nodes={nodes}
                 onOpen={openTicket}
                 selected={openRef}
@@ -187,7 +190,7 @@ export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[
               />
             ))}
           </div>
-          <DragOverlay>{active ? <Card t={active} nodes={nodes} cycles={cycles} overlay /> : null}</DragOverlay>
+          <DragOverlay>{active ? <Card t={active} nodes={nodes} cycles={cycles} projects={projects} overlay /> : null}</DragOverlay>
         </DndContext>
       </div>
       {openRef && (
@@ -199,6 +202,7 @@ export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[
           nodes={nodes}
           members={members}
           cycles={cycles}
+          projects={projects}
           nav={nav}
           onNavigate={openTicket}
           onClose={() => openTicket(null)}
@@ -216,6 +220,7 @@ function Column(props: {
   members: Member[];
   labels: string[];
   cycles: CycleOption[];
+  projects: TeamProjectOption[];
   nodes: NodeLite[];
   selected: string | null;
   teamKey: string;
@@ -273,7 +278,7 @@ function Column(props: {
       <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tickets.map((t) => (
-            <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} selected={props.selected === t.ref} onOpen={props.onOpen} />
+            <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} projects={props.projects} selected={props.selected === t.ref} onOpen={props.onOpen} />
           ))}
         </SortableContext>
         {adding ? (
@@ -314,7 +319,7 @@ function Column(props: {
   );
 }
 
-function SortableCard({ t, nodes, cycles, selected, onOpen }: { t: Ticket; nodes: NodeLite[]; cycles: CycleOption[]; selected: boolean; onOpen: (ref: string) => void }) {
+function SortableCard({ t, nodes, cycles, projects, selected, onOpen }: { t: Ticket; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; selected: boolean; onOpen: (ref: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
     <div
@@ -326,13 +331,14 @@ function SortableCard({ t, nodes, cycles, selected, onOpen }: { t: Ticket; nodes
       className={clsx(isDragging && "opacity-30")}
       data-ticket={t.ref}
     >
-      <Card t={t} nodes={nodes} cycles={cycles} selected={selected} />
+      <Card t={t} nodes={nodes} cycles={cycles} projects={projects} selected={selected} />
     </div>
   );
 }
 
-function Card({ t, nodes, cycles, selected, overlay }: { t: Ticket; nodes: NodeLite[]; cycles: CycleOption[]; selected?: boolean; overlay?: boolean }) {
+function Card({ t, nodes, cycles, projects, selected, overlay }: { t: Ticket; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; selected?: boolean; overlay?: boolean }) {
   const linked = t.nodeIds.map((id) => nodes.find((n) => n.id === id)).filter(Boolean) as NodeLite[];
+  const project = t.projectId ? projects.find((x) => x.id === t.projectId) : undefined;
   const cycle = t.cycle == null ? null : (cycles.find((c) => c.number === t.cycle) ?? { number: t.cycle, name: "", startsAt: "", endsAt: "", state: "current" as const });
   return (
     <div
@@ -350,8 +356,13 @@ function Card({ t, nodes, cycles, selected, overlay }: { t: Ticket; nodes: NodeL
         </div>
       </div>
       <div className="mt-1 leading-snug">{t.title}</div>
-      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle) && (
+      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle || project) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
+          {project && (
+            <span className="chip max-w-[10rem] bg-accent/10 text-accent/90" title={`Project: ${project.name}`} data-project-chip>
+              <ProjectsIcon /> <span className="truncate">{project.name}</span>
+            </span>
+          )}
           {cycle && (
             <span className="chip bg-ok/10 text-ok" title={cycleTitle(cycle)} data-cycle-chip>
               <CyclesIcon /> {cycle.number}
