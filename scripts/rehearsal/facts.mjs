@@ -17,9 +17,14 @@ try {
   const hash = crypto.createHash("sha256").update(String(Object.values(creds)[0])).digest("hex");
   const [row] = await c.query("select id, prefix from api_keys where key_hash = $1", [hash]).then((r) => r.rows);
   if (row) {
-    const perTeam = await q(`select p.key as team, coalesce(a.last_seq, 0)::int as cursor,
-      (select count(*)::int from events e where e.team_id = p.id and e.seq > coalesce(a.last_seq, 0) and not (e.actor_kind = 'agent' and e.actor_id = '${row.id}')) as waiting
-      from teams p left join agent_cursors a on a.team_id = p.id and a.api_key_id = '${row.id}' order by p.key`);
+    // Where the queue says this key stands in each team: its cursor row, or (a team it has never read) the newest event of that team
+    // up to the moment the key was created, which is the rule the server uses for a key without a cursor.
+    const perTeam = await q(`select p.key as team,
+      coalesce(a.last_seq, (select coalesce(max(e.seq), 0) from events e where e.team_id = p.id and e.created_at <= k.created_at), 0)::int as cursor,
+      (a.last_seq is not null) as has_cursor,
+      (select count(*)::int from events e where e.team_id = p.id and e.seq > coalesce(a.last_seq, (select coalesce(max(e2.seq), 0) from events e2 where e2.team_id = p.id and e2.created_at <= k.created_at), 0) and not (e.actor_kind = 'agent' and e.actor_id = k.id)) as waiting
+      from teams p cross join (select id, created_at from api_keys where id = '${row.id}') k
+      left join agent_cursors a on a.team_id = p.id and a.api_key_id = k.id order by p.key`);
     mine = { prefix: row.prefix, teams: perTeam };
   }
 } catch {}

@@ -77,6 +77,12 @@ export function planAnchor(anchor: string, tree: Tree, rules: Rules): AnchorPlan
     const matchedOld = tree.oldFiles.filter((f) => anchorScore(base, f) > 0);
     if (matchedOld.length && matchedOld.every((f) => newSet.has(f))) return { anchor, action: "keep", to: [anchor], note: "everything it matched is where it was" };
     if (!matchedOld.length && matchesAny(base, tree.newFiles)) return { anchor, action: "keep", to: [anchor], note: "matches files in the new tree" };
+    // Files inside it were renamed or removed, but none left it and it still holds files: it describes the same place. (The
+    // baseline of the files that were renamed follows them separately.)
+    const leftIt = matchedOld.some((f) => tree.renames.has(f) && anchorScore(base, tree.renames.get(f)!) === 0);
+    if (matchedOld.length && !leftIt && matchesAny(base, tree.newFiles)) {
+      return { anchor, action: "keep", to: [anchor], note: "the directory is where it was; some files inside it were renamed or removed" };
+    }
     // Moved as a directory: the files that git calls renames all went from the same prefix to the same new prefix.
     const moves = matchedOld.filter((f) => tree.renames.has(f)).map((f) => [f, tree.renames.get(f)!] as const);
     const from = literalPrefix(base);

@@ -104,6 +104,18 @@ describe("one anchor", () => {
     assert.deepEqual(plan("drizzle/**").to, ["packages/core/drizzle/**"]);
     assert.equal(plan("src/db/**").note, "the directory was renamed");
   });
+  test("a directory that stayed where it is is kept even when files inside it were renamed or removed; one that lost files to somewhere else is not", () => {
+    const t: Tree = {
+      oldFiles: ["apps/api/src/a.ts", "apps/api/src/web/team.controller.ts", "apps/api/src/web/gone.ts", "src/x/one.ts", "src/x/two.ts"],
+      newFiles: ["apps/api/src/a.ts", "apps/api/src/web/workspace.controller.ts", "src/y/one.ts", "src/x/two.ts"],
+      renames: new Map([["apps/api/src/web/team.controller.ts", "apps/api/src/web/workspace.controller.ts"], ["src/x/one.ts", "src/y/one.ts"]]),
+    };
+    const p = planAnchor("apps/api/**", t, rules);
+    assert.equal(p.action, "keep");
+    assert.match(p.note, /some files inside it were renamed or removed/);
+    assert.equal(planAnchor("apps/api/src/web/**", t, rules).action, "keep");
+    assert.equal(planAnchor("src/x/**", t, rules).action, "unmapped", "one of its files went to src/y: nobody guesses");
+  });
   test("a #symbol suffix and a repo qualifier survive the rewrite", () => {
     assert.deepEqual(plan("src/db/schema.ts#docs").to, ["packages/core/src/db/schema.ts#docs"]);
     assert.deepEqual(plan("wheelhouse:src/lib/a.ts").to, ["wheelhouse:packages/core/src/lib-a.ts"]);
