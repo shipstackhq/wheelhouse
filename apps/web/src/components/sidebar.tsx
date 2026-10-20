@@ -440,7 +440,7 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
     </div>
   );
   return (
-      <Reorder.Item as="div" value={t.key} dragListener={false} dragControls={controls} onDragEnd={onDragEnd} whileDrag={{ zIndex: 20 }} transition={reorderSpring} dragTransition={{ bounceStiffness: 900, bounceDamping: 50 }} className="relative">
+      <Reorder.Item as="div" value={t.key} layout="position" dragListener={false} dragControls={controls} onDragEnd={onDragEnd} whileDrag={{ zIndex: 20 }} transition={reorderSpring} dragTransition={{ bounceStiffness: 900, bounceDamping: 50 }} className="relative">
       {collapsed ? (
         <Tip content={t.name} side="right" align="center">
           {row}
