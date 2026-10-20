@@ -94,9 +94,9 @@ describe("the workspace page, for an owner", () => {
     });
     const user = userEvent.setup();
     await user.type(await screen.findByPlaceholderText("Their email"), "new@example.test");
-    expect(await screen.findByLabelText("Alpha")).toBeTruthy();
-    expect(screen.queryByLabelText(/Beta/)).toBeNull(); // an editor of Beta cannot hand it out
-    await user.click(screen.getByLabelText("Alpha"));
+    expect(await screen.findByRole("checkbox", { name: /Alpha/ })).toBeTruthy();
+    expect(screen.queryByRole("checkbox", { name: /Beta/ })).toBeNull(); // an editor of Beta cannot hand it out
+    await user.click(screen.getByRole("checkbox", { name: /Alpha/ }));
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
     await waitFor(() => expect(server.sent("POST /api/app/invites")).toHaveLength(1));
     expect((server.sent("POST /api/app/invites")[0].body as { teams: unknown }).teams).toEqual([{ team: "AA", role: "editor" }]);
