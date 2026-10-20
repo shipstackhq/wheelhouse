@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { columnField, intField, issueInput } from "./board-app";
+import { statusField, intField, issueInput } from "./board-app";
 import { ServiceError } from "./service";
 
 /** Reading a request body for the board and issue endpoints: nothing wrong-typed gets past here to the database. */
@@ -56,7 +56,7 @@ describe("issueInput", () => {
   });
 });
 
-describe("intField and columnField", () => {
+describe("intField and statusField", () => {
   test("a whole number, or absent", () => {
     assert.equal(intField({ n: 3 }, "n"), 3);
     assert.equal(intField({ n: 0 }, "n"), 0);
@@ -66,10 +66,10 @@ describe("intField and columnField", () => {
     for (const n of ["3", 1.5, NaN, Infinity, 2 ** 60, true, []]) assert.deepEqual(fieldsOf(() => intField({ n }, "n")), ["n"], String(n));
   });
 
-  test("a column is text, and required where it must be", () => {
-    assert.equal(columnField({ column: "Done" }, true), "Done");
-    assert.equal(columnField({}, false), undefined);
-    assert.deepEqual(fieldsOf(() => columnField({}, true)), ["column"]);
-    for (const column of [3, "", "  ", {}, []]) assert.deepEqual(fieldsOf(() => columnField({ column }, true)), ["column"], JSON.stringify(column));
+  test("a status is text, and required where it must be", () => {
+    assert.equal(statusField({ status: "Done" }, true), "Done");
+    assert.equal(statusField({}, false), undefined);
+    assert.deepEqual(fieldsOf(() => statusField({}, true)), ["status"]);
+    for (const status of [3, "", "  ", {}, []]) assert.deepEqual(fieldsOf(() => statusField({ status }, true)), ["status"], JSON.stringify(status));
   });
 });

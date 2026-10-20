@@ -19,7 +19,7 @@ import { compare, copyDirToTemp, exportData, importData, integrity, openConn, sn
 
 const require = createRequire(import.meta.url);
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "wh-dbcopy-"));
-const BIG = "9007199254740993"; // 2^53 + 1: a JavaScript number cannot hold it, a bigint column can
+const BIG = "9007199254740993"; // 2^53 + 1: a JavaScript number cannot hold it, a bigint status can
 const TRICKY = "emoji 🧭, quote \" backslash \\ newline\nand a tab\t, nul-free unicode ñ 漢字, <script>";
 let source = ""; // the PGlite directory with the seeded data
 let exportDir = "";

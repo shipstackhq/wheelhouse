@@ -7,7 +7,7 @@ import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./a
 import { decideMove, ciState, type CheckState } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";
 
-const { githubDeliveries, githubInstallations, memberships, teams, pullRequests, pullRequestIssues, repositories, issues, columns, events } = schema;
+const { githubDeliveries, githubInstallations, memberships, teams, pullRequests, pullRequestIssues, repositories, issues, statuses, events } = schema;
 
 /** Writes made because of something GitHub reported are attributed to this actor, like the claim sweep's "Wheelhouse". */
 export const GITHUB_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -183,11 +183,11 @@ async function issuesByRefs(teamId: string, teamKey: string, refs: { key: string
   if (!wanted.length) return [];
   const db = await getDb();
   const rows = await db
-    .select({ t: issues, column: columns.name })
+    .select({ t: issues, status: statuses.name })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(and(eq(issues.teamId, teamId), inArray(issues.number, wanted.map((w) => w.number))));
-  return rows.map((r) => ({ ...r.t, column: r.column, ref: `${teamKey}-${r.t.number}` }));
+  return rows.map((r) => ({ ...r.t, status: r.status, ref: `${teamKey}-${r.t.number}` }));
 }
 
 async function onPullRequest(payload: Delivery["payload"], installationId: string | null): Promise<Outcome> {
@@ -233,7 +233,7 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
 
     const actor = githubActor(t.team.workspaceId, t.team.id);
-    const boardColumns = await db.select({ id: columns.id, name: columns.name, role: columns.role }).from(columns).where(eq(columns.teamId, t.team.id)).orderBy(columns.position);
+    const boardStatuses = await db.select({ id: statuses.id, name: statuses.name, role: statuses.role }).from(statuses).where(eq(statuses.teamId, t.team.id)).orderBy(statuses.position);
     for (const tk of linked) {
       if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
         await emit(db, actor, t.team.id, {
@@ -250,14 +250,14 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
         .where(and(eq(events.entityId, tk.id), eq(events.type, "issue.moved")))
         .orderBy(desc(events.seq))
         .limit(1);
-      const current = boardColumns.find((c) => c.id === tk.columnId);
+      const current = boardStatuses.find((c) => c.id === tk.statusId);
       if (!current) continue;
       const decision = decideMove({
         action,
         merged,
         draft: !!pr.draft,
-        column: current,
-        columns: boardColumns,
+        status: current,
+        statuses: boardStatuses,
         lastMove: last && last.actorId !== GITHUB_ACTOR_ID ? { at: last.at, by: last.by } : null,
         now: new Date(),
       });

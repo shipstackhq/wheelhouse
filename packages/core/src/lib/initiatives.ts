@@ -15,7 +15,7 @@ import { isUuid, workspaceRoleOf } from "./team-access";
  * name and no issue. No initiative page ever lists an issue.
  */
 
-const { initiatives, initiativeProjects, projects, issues, columns, users, memberships } = schema;
+const { initiatives, initiativeProjects, projects, issues, statuses, users, memberships } = schema;
 export type InitiativeRow = typeof initiatives.$inferSelect;
 const MAX_DEPTH = schema.INITIATIVE_MAX_DEPTH;
 
@@ -112,9 +112,9 @@ async function projectProgress(q: Q, projectIds: string[]): Promise<Map<string, 
   const out = new Map<string, ProgressCounts>(projectIds.map((id) => [id, { total: 0, done: 0 }]));
   if (!projectIds.length) return out;
   const rows = await q
-    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(inArray(issues.projectId, projectIds))
     .groupBy(issues.projectId);
   for (const r of rows) out.set(r.projectId!, { total: Number(r.total), done: Number(r.done) });

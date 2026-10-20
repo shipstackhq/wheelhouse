@@ -1,4 +1,4 @@
-import { columnForRole, DEFAULT_COLUMN_DEFS, roleFromText } from "./column-roles";
+import { statusForRole, DEFAULT_STATUS_DEFS, roleFromText } from "./status-roles";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "../db";
 import type { Actor } from "./access";
@@ -19,12 +19,12 @@ export { ServiceError };
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { teams, columns, issues, comments, nodes, edges, issueNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users, projects } = schema;
+const { teams, statuses, issues, comments, nodes, edges, issueNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users, projects } = schema;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
 
-export const DEFAULT_COLUMNS = DEFAULT_COLUMN_DEFS.map((c) => c.name);
+export const DEFAULT_STATUSES = DEFAULT_STATUS_DEFS.map((c) => c.name);
 
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 export type Q = DB | Tx;
@@ -187,7 +187,7 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
       .insert(teams)
       .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "" })
       .returning();
-    await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, position: i + 1 })));
+    await tx.insert(statuses).values(DEFAULT_STATUS_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, position: i + 1 })));
     // The creator becomes the team's first admin: without a row here nobody could open the team they just made.
     if (actor.kind === "human") {
       await tx.insert(schema.teamMembers).values({ teamId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
@@ -250,7 +250,7 @@ export async function getBoard(actor: Actor, teamRef: string) {
   const team = await requireTeam(actor, teamRef);
   await expireStaleClaims(team.id);
   await (await import("./cycles")).rolloverCycles(team.id);
-  const cols = await db.select().from(columns).where(eq(columns.teamId, team.id)).orderBy(asc(columns.position));
+  const cols = await db.select().from(statuses).where(eq(statuses.teamId, team.id)).orderBy(asc(statuses.position));
   const ts = await db.select().from(issues).where(eq(issues.teamId, team.id)).orderBy(asc(issues.position));
   const ids = ts.map((t) => t.id);
   const links = ids.length ? await db.select().from(issueNodes).where(inArray(issueNodes.issueId, ids)) : [];
@@ -272,7 +272,7 @@ export async function getBoard(actor: Actor, teamRef: string) {
     nodeIds: links.filter((l) => l.issueId === t.id).map((l) => l.nodeId),
     commentCount: countMap.get(t.id) ?? 0,
   }));
-  return { team, columns: cols, issues: withLinks };
+  return { team, statuses: cols, issues: withLinks };
 }
 
 /** An assignee must be a member of the issue's team: a user from another workspace, a workspace member who is not on the team, or a made-up id is refused. */
@@ -287,12 +287,12 @@ async function assertAssignee(q: Q, teamId: string, userId: string | null | unde
   if (!m) throw new ServiceError("invalid", "Assignee must be a member of this team");
 }
 
-async function resolveColumn(q: Q, teamId: string, ref: string) {
-  const cols = await q.select().from(columns).where(eq(columns.teamId, teamId)).orderBy(asc(columns.position));
-  // An id or an exact name wins; otherwise a role ("review") finds the column with that role even if it was renamed.
+async function resolveStatus(q: Q, teamId: string, ref: string) {
+  const cols = await q.select().from(statuses).where(eq(statuses.teamId, teamId)).orderBy(asc(statuses.position));
+  // An id or an exact name wins; otherwise a role ("review") finds the status with that role even if it was renamed.
   const role = roleFromText(ref);
-  const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase()) ?? (role ? columnForRole(cols, role) : undefined);
-  if (!c) throw new ServiceError("invalid", `Unknown column "${ref}". Valid: ${cols.map((c) => c.name).join(", ")}`);
+  const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase()) ?? (role ? statusForRole(cols, role) : undefined);
+  if (!c) throw new ServiceError("invalid", `Unknown status "${ref}". Valid: ${cols.map((c) => c.name).join(", ")}`);
   return c;
 }
 
@@ -326,7 +326,7 @@ export async function resolveIssue(actor: Actor, ref: string, q?: Q, need: Need 
 export async function getIssue(actor: Actor, ref: string) {
   const db = await getDb();
   const { issue, team, ref: r } = await resolveIssue(actor, ref);
-  const [col] = await db.select().from(columns).where(eq(columns.id, issue.columnId));
+  const [col] = await db.select().from(statuses).where(eq(statuses.id, issue.statusId));
   const cs = await db.select().from(comments).where(eq(comments.issueId, issue.id)).orderBy(asc(comments.createdAt));
   const linked = await db
     .select({ id: nodes.id, name: nodes.name, kind: nodes.kind, parentId: nodes.parentId })
@@ -343,14 +343,14 @@ export async function getIssue(actor: Actor, ref: string) {
   const { pullRequestsForIssue } = await import("./github/service");
   const pullRequests = await pullRequestsForIssue(issue.id);
   const [withLabel] = await withCycle(db, await withLabels(db, [issue]));
-  return { issue: { ...withLabel, ref: r, column: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
+  return { issue: { ...withLabel, ref: r, status: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
 }
 
-async function positionAt(q: Q, columnId: string, index: number | undefined, excludeId?: string) {
+async function positionAt(q: Q, statusId: string, index: number | undefined, excludeId?: string) {
   const siblings = await q
     .select({ id: issues.id, position: issues.position })
     .from(issues)
-    .where(and(eq(issues.columnId, columnId), excludeId ? ne(issues.id, excludeId) : undefined))
+    .where(and(eq(issues.statusId, statusId), excludeId ? ne(issues.id, excludeId) : undefined))
     .orderBy(asc(issues.position));
   const i = index === undefined || index < 0 || index > siblings.length ? siblings.length : index;
   const before = siblings[i - 1]?.position;
@@ -388,7 +388,7 @@ async function emitProjectMove(tx: Tx, actor: Actor, teamId: string, ref: string
   if (to) await emit(tx, actor, teamId, { type: "project.issue_joined", entity: "project", entityId: to, summary: `${ref} joined project "${names.get(to) ?? ""}"`, data: { ref, project: names.get(to) ?? null } });
 }
 
-export async function createIssue(actor: Actor, teamRef: string, input: IssueInput & { title: string; column?: string }) {
+export async function createIssue(actor: Actor, teamRef: string, input: IssueInput & { title: string; status?: string }) {
   const db = await getDb();
   const team = await requireTeam(actor, teamRef, "edit");
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
@@ -399,7 +399,7 @@ export async function createIssue(actor: Actor, teamRef: string, input: IssueInp
       input.projectId === undefined && input.milestoneId === undefined
         ? { projectId: null, milestoneId: null }
         : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
-    const col = await resolveColumn(tx, team.id, input.column ?? DEFAULT_COLUMNS[0]);
+    const col = await resolveStatus(tx, team.id, input.status ?? DEFAULT_STATUSES[0]);
     const [{ issueCounter }] = await tx
       .update(teams)
       .set({ issueCounter: sql`${teams.issueCounter} + 1` })
@@ -411,7 +411,7 @@ export async function createIssue(actor: Actor, teamRef: string, input: IssueInp
       .values({
         teamId: team.id,
         workspaceId: team.workspaceId,
-        columnId: col.id,
+        statusId: col.id,
         number: issueCounter,
         title: input.title.trim(),
         body: input.body ?? "",
@@ -434,10 +434,10 @@ export async function createIssue(actor: Actor, teamRef: string, input: IssueInp
       entity: "issue",
       entityId: t.id,
       summary: `created ${ref} "${t.title}" in ${col.name}`,
-      data: { ref, column: col.name, title: t.title },
+      data: { ref, status: col.name, title: t.title },
     });
     const [withLabel] = await withCycle(tx, await withLabels(tx, [t]));
-    return { ...withLabel, ref, column: col.name };
+    return { ...withLabel, ref, status: col.name };
   });
 }
 
@@ -500,11 +500,11 @@ async function updateIssueTx(actor: Actor, ref: string, patch: IssueInput, expec
   });
 }
 
-export async function moveIssue(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
-  return bindSession(actor, await moveIssueTx(actor, ref, column, index, expectedVersion));
+export async function moveIssue(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
+  return bindSession(actor, await moveIssueTx(actor, ref, status, index, expectedVersion));
 }
 
-async function moveIssueTx(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
+async function moveIssueTx(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
     const resolved = await resolveIssue(actor, ref, tx, "edit");
@@ -514,12 +514,12 @@ async function moveIssueTx(actor: Actor, ref: string, column: string, index?: nu
     if (expectedVersion !== undefined && expectedVersion !== issue.version) {
       throw new ServiceError("conflict", `${r} was changed since you read it`, { current: issue });
     }
-    const to = await resolveColumn(tx, team.id, column);
-    const [from] = await tx.select().from(columns).where(eq(columns.id, issue.columnId));
+    const to = await resolveStatus(tx, team.id, status);
+    const [from] = await tx.select().from(statuses).where(eq(statuses.id, issue.statusId));
     const position = await positionAt(tx, to.id, index, issue.id);
     const [moved] = await tx
       .update(issues)
-      .set({ columnId: to.id, position, version: issue.version + 1, updatedAt: new Date() })
+      .set({ statusId: to.id, position, version: issue.version + 1, updatedAt: new Date() })
       .where(eq(issues.id, issue.id))
       .returning();
     const t = { ...moved, labels: issue.labels, cycle: issue.cycle };
@@ -532,7 +532,7 @@ async function moveIssueTx(actor: Actor, ref: string, column: string, index?: nu
         data: { ref: r, from: from.name, to: to.name, fromRole: from.role, toRole: to.role },
       });
     }
-    return { ...t, ref: r, column: to.name };
+    return { ...t, ref: r, status: to.name };
   });
 }
 
@@ -624,7 +624,7 @@ export async function getGraph(actor: Actor, teamRef: string) {
   const nodeIds = ns.map((n) => n.id);
   const links = nodeIds.length
     ? await db
-        .select({ nodeId: issueNodes.nodeId, issueId: issues.id, number: issues.number, title: issues.title, columnId: issues.columnId })
+        .select({ nodeId: issueNodes.nodeId, issueId: issues.id, number: issues.number, title: issues.title, statusId: issues.statusId })
         .from(issueNodes)
         .innerJoin(issues, eq(issues.id, issueNodes.issueId))
         .where(inArray(issueNodes.nodeId, nodeIds))

@@ -64,11 +64,11 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
   // Restore each column's filter/sort when the team or its columns change.
   // Keyed on the column ids, not the array: a refresh hands over a new array, and reloading here would give each Column a fresh
   // view object and un-pin issues it just added.
-  const columnIds = columns.map((c) => c.id).join(",");
+  const statusIds = columns.map((c) => c.id).join(",");
   useEffect(() => {
     setViews(Object.fromEntries(columns.map((c) => [c.id, loadView(viewKey(c.id))])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamKey, columnIds]);
+  }, [teamKey, statusIds]);
 
   useEffect(() => {
     if (!notice) return;
@@ -119,15 +119,15 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
       dragging.current = false;
       return;
     }
-    const { columnId, index, crossed } = result.move;
+    const { statusId, index, crossed } = result.move;
     const t = byId.get(String(active.id))!;
-    const target = viewOf(columnId);
+    const target = viewOf(statusId);
     if (crossed && isFiltered(target) && !matches(t, target)) {
-      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === columnId)?.name}, but the column filter hides it.`);
+      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === statusId)?.name}, but the column filter hides it.`);
     }
     void (async () => {
       try {
-        await api.issues.move(t.ref, { column: columnId, index });
+        await api.issues.move(t.ref, { status: statusId, index });
       } catch (err) {
         setError(describeFailure(err));
       } finally {
@@ -253,7 +253,7 @@ function Column(props: {
     if (!keepOpen) setAdding(false);
     void (async () => {
       try {
-        await api.issues.create(props.teamKey, { title: value, column: col.id });
+        await api.issues.create(props.teamKey, { title: value, status: col.id });
         props.onCreated();
       } catch {
         props.onCreated(); // whatever happened, show the board as the server has it

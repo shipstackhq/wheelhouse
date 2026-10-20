@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { appJwt, GithubApi, GithubApiError, isZeroSha } from "./api";
 import { githubConfig, githubMissing, type GithubConfig } from "./config";
-import { roleFromText, type RoleColumn } from "../column-roles";
+import { roleFromText, type RoleStatus } from "../status-roles";
 import { ciState, decideMove, RECENT_MOVE_MS } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";
 import { signBody, verifySignature } from "./signature";
@@ -47,90 +47,90 @@ describe("issue references", () => {
 });
 
 describe("what a pull request does to its issue", () => {
-  // Columns carry a role (WH-86); the rules only ever look at roles. Standard names get their standard roles here.
-  const cols = (...names: string[]): RoleColumn[] => names.map((name) => ({ name, role: roleFromText(name) }));
+  // Statuses carry a role (WH-86); the rules only ever look at roles. Standard names get their standard roles here.
+  const cols = (...names: string[]): RoleStatus[] => names.map((name) => ({ name, role: roleFromText(name) }));
   const board = cols("Backlog", "Todo", "In Progress", "Review", "Done");
   const now = new Date("2026-10-15T12:00:00Z");
-  const base = { merged: false, draft: false, columns: board, now, lastMove: null };
-  const d = (over: Partial<Omit<Parameters<typeof decideMove>[0], "column">> & { action: string; column: string }) => {
-    const columns = over.columns ?? board;
-    return decideMove({ ...base, ...over, columns, column: columns.find((c) => c.name === over.column)! });
+  const base = { merged: false, draft: false, statuses: board, now, lastMove: null };
+  const d = (over: Partial<Omit<Parameters<typeof decideMove>[0], "status">> & { action: string; status: string }) => {
+    const statuses = over.statuses ?? board;
+    return decideMove({ ...base, ...over, statuses, status: statuses.find((c) => c.name === over.status)! });
   };
 
   test("opened moves the issue to Review, from anywhere before it", () => {
-    for (const column of ["Backlog", "Todo", "In Progress"]) assert.equal(d({ action: "opened", column }).move, "Review", column);
-    assert.equal(d({ action: "reopened", column: "In Progress" }).move, "Review");
-    assert.equal(d({ action: "ready_for_review", column: "In Progress" }).move, "Review");
+    for (const status of ["Backlog", "Todo", "In Progress"]) assert.equal(d({ action: "opened", status }).move, "Review", status);
+    assert.equal(d({ action: "reopened", status: "In Progress" }).move, "Review");
+    assert.equal(d({ action: "ready_for_review", status: "In Progress" }).move, "Review");
   });
   test("a draft is left alone until it is ready, and an issue already in Review or Done is not touched", () => {
-    assert.equal(d({ action: "opened", column: "In Progress", draft: true }).move, null);
-    assert.equal(d({ action: "opened", column: "Review" }).move, null);
-    assert.equal(d({ action: "opened", column: "Done" }).move, null);
+    assert.equal(d({ action: "opened", status: "In Progress", draft: true }).move, null);
+    assert.equal(d({ action: "opened", status: "Review" }).move, null);
+    assert.equal(d({ action: "opened", status: "Done" }).move, null);
   });
   test("merged leaves an issue in Review for a person, and only pulls an earlier one forward", () => {
-    assert.equal(d({ action: "closed", merged: true, column: "Review" }).move, null);
-    assert.equal(d({ action: "closed", merged: true, column: "Done" }).move, null);
-    assert.equal(d({ action: "closed", merged: true, column: "In Progress" }).move, "Review");
-    assert.equal(d({ action: "closed", merged: true, column: "Todo" }).move, "Review");
+    assert.equal(d({ action: "closed", merged: true, status: "Review" }).move, null);
+    assert.equal(d({ action: "closed", merged: true, status: "Done" }).move, null);
+    assert.equal(d({ action: "closed", merged: true, status: "In Progress" }).move, "Review");
+    assert.equal(d({ action: "closed", merged: true, status: "Todo" }).move, "Review");
   });
   test("closed without merging goes back to In Progress, but only from Review", () => {
-    assert.equal(d({ action: "closed", column: "Review" }).move, "In Progress");
-    for (const column of ["Backlog", "Todo", "In Progress", "Done"]) assert.equal(d({ action: "closed", column }).move, null, column);
+    assert.equal(d({ action: "closed", status: "Review" }).move, "In Progress");
+    for (const status of ["Backlog", "Todo", "In Progress", "Done"]) assert.equal(d({ action: "closed", status }).move, null, status);
   });
   test("pushes, edits and everything else never move an issue", () => {
-    for (const action of ["synchronize", "edited", "labeled", "assigned", "converted_to_draft"]) assert.equal(d({ action, column: "In Progress" }).move, null, action);
+    for (const action of ["synchronize", "edited", "labeled", "assigned", "converted_to_draft"]) assert.equal(d({ action, status: "In Progress" }).move, null, action);
   });
   test("someone moved it a moment ago: leave it, and say why", () => {
-    const r = d({ action: "opened", column: "In Progress", lastMove: { at: new Date(now.getTime() - 3 * 60_000), by: "Claude Atharva's Macbook Pro" } });
+    const r = d({ action: "opened", status: "In Progress", lastMove: { at: new Date(now.getTime() - 3 * 60_000), by: "Claude Atharva's Macbook Pro" } });
     assert.equal(r.move, null);
     assert.match(r.note!, /Claude Atharva's Macbook Pro moved it 3 minutes ago/);
     assert.match(r.note!, /did not move it/);
   });
   test("an older move does not get in the way, and the window can be changed", () => {
     const old = { at: new Date(now.getTime() - RECENT_MOVE_MS - 1000), by: "Demo" };
-    assert.equal(d({ action: "opened", column: "In Progress", lastMove: old }).move, "Review");
-    assert.equal(d({ action: "opened", column: "In Progress", lastMove: old, recentMs: 60 * 60_000 }).move, null);
+    assert.equal(d({ action: "opened", status: "In Progress", lastMove: old }).move, "Review");
+    assert.equal(d({ action: "opened", status: "In Progress", lastMove: old, recentMs: 60 * 60_000 }).move, null);
   });
-  test("a board without a Review column is left alone instead of guessed at", () => {
-    assert.equal(d({ action: "opened", column: "Todo", columns: cols("Todo", "Doing", "Done") }).move, null);
+  test("a board without a Review status is left alone instead of guessed at", () => {
+    assert.equal(d({ action: "opened", status: "Todo", statuses: cols("Todo", "Doing", "Done") }).move, null);
   });
-  test("columns are found by role, so renaming them changes nothing", () => {
-    const renamed: RoleColumn[] = [
+  test("statuses are found by role, so renaming them changes nothing", () => {
+    const renamed: RoleStatus[] = [
       { name: "Ideas", role: "backlog" },
       { name: "Ready", role: "todo" },
       { name: "Doing", role: "in_progress" },
       { name: "QA", role: "review" },
       { name: "Shipped", role: "done" },
     ];
-    assert.equal(d({ action: "opened", column: "Doing", columns: renamed }).move, "QA");
-    assert.equal(d({ action: "closed", column: "QA", columns: renamed }).move, "Doing");
-    assert.equal(d({ action: "closed", merged: true, column: "Ready", columns: renamed }).move, "QA");
-    assert.equal(d({ action: "closed", merged: true, column: "QA", columns: renamed }).move, null);
-    assert.equal(d({ action: "opened", column: "Shipped", columns: renamed }).move, null);
-    assert.match(d({ action: "opened", column: "Doing", columns: renamed }).note!, /moved to QA: pull request opened/);
+    assert.equal(d({ action: "opened", status: "Doing", statuses: renamed }).move, "QA");
+    assert.equal(d({ action: "closed", status: "QA", statuses: renamed }).move, "Doing");
+    assert.equal(d({ action: "closed", merged: true, status: "Ready", statuses: renamed }).move, "QA");
+    assert.equal(d({ action: "closed", merged: true, status: "QA", statuses: renamed }).move, null);
+    assert.equal(d({ action: "opened", status: "Shipped", statuses: renamed }).move, null);
+    assert.match(d({ action: "opened", status: "Doing", statuses: renamed }).note!, /moved to QA: pull request opened/);
   });
-  test("a column literally named Review but with no role is not treated as the review column", () => {
-    const odd: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: null }, { name: "Done", role: "done" }];
-    assert.equal(d({ action: "opened", column: "Todo", columns: odd }).move, null);
-    assert.equal(d({ action: "closed", column: "Review", columns: odd }).move, null);
+  test("a status literally named Review but with no role is not treated as the review status", () => {
+    const odd: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: null }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", status: "Todo", statuses: odd }).move, null);
+    assert.equal(d({ action: "closed", status: "Review", statuses: odd }).move, null);
   });
-  test("a custom column with no role is outside the workflow: never a target, and an issue in one is left where a person put it", () => {
-    const custom: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
+  test("a custom status with no role is outside the workflow: never a target, and an issue in one is left where a person put it", () => {
+    const custom: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
     for (const action of ["opened", "reopened", "ready_for_review", "closed"]) {
-      assert.equal(d({ action, column: "Blocked", columns: custom }).move, null, action);
-      assert.equal(d({ action, merged: action === "closed", column: "Blocked", columns: custom }).move, null, `${action} merged`);
+      assert.equal(d({ action, status: "Blocked", statuses: custom }).move, null, action);
+      assert.equal(d({ action, merged: action === "closed", status: "Blocked", statuses: custom }).move, null, `${action} merged`);
     }
-    assert.equal(d({ action: "opened", column: "Doing", columns: custom }).move, "Review", "custom columns between the standard ones do not get in the way");
-    assert.equal(d({ action: "closed", column: "Review", columns: custom }).move, "Doing");
+    assert.equal(d({ action: "opened", status: "Doing", statuses: custom }).move, "Review", "custom statuses between the standard ones do not get in the way");
+    assert.equal(d({ action: "closed", status: "Review", statuses: custom }).move, "Doing");
   });
-  test("two columns with the review role: the first in board order is the target", () => {
-    const two: RoleColumn[] = [{ name: "Doing", role: "in_progress" }, { name: "Code review", role: "review" }, { name: "Design review", role: "review" }, { name: "Done", role: "done" }];
-    assert.equal(d({ action: "opened", column: "Doing", columns: two }).move, "Code review");
-    assert.equal(d({ action: "opened", column: "Design review", columns: two }).move, null, "already in a review column");
+  test("two statuses with the review role: the first in board order is the target", () => {
+    const two: RoleStatus[] = [{ name: "Doing", role: "in_progress" }, { name: "Code review", role: "review" }, { name: "Design review", role: "review" }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", status: "Doing", statuses: two }).move, "Code review");
+    assert.equal(d({ action: "opened", status: "Design review", statuses: two }).move, null, "already in a review status");
   });
   test("the note explains a move", () => {
-    assert.match(d({ action: "opened", column: "Todo" }).note!, /moved to Review: pull request opened/);
-    assert.match(d({ action: "closed", column: "Review" }).note!, /moved to In Progress: pull request closed without merging/);
+    assert.match(d({ action: "opened", status: "Todo" }).note!, /moved to Review: pull request opened/);
+    assert.match(d({ action: "closed", status: "Review" }).note!, /moved to In Progress: pull request closed without merging/);
   });
 });
 

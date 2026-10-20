@@ -20,7 +20,7 @@ import {
   date,
   pgView,
 } from "drizzle-orm/pg-core";
-import { COLUMN_ROLES } from "../lib/column-roles";
+import { STATUS_ROLES } from "../lib/status-roles";
 import { TEAM_ICON_COLORS } from "../lib/team-icon";
 import { sql } from "drizzle-orm";
 
@@ -258,18 +258,19 @@ export const teams = table("teams", {
   uniqueIndex("teams_workspace_key_idx").on(t.workspaceId, sql`lower(${t.key})`),
 ]);
 
-export const columns = table("columns", {
+/** A team's statuses (what a board column is): the stages an issue moves through. */
+export const statuses = table("statuses", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull(),
   workspaceId: uuid("workspace_id").notNull(),
   name: text("name").notNull(),
   position: doublePrecision("position").notNull(),
-  // What stage of work this column stands for (WH-86); rules and reports use it, never the name. Null: a custom column.
-  role: text("role", { enum: COLUMN_ROLES }),
+  // What stage of work this status stands for (WH-86); rules and reports use it, never the name. Null: a custom status.
+  role: text("role", { enum: STATUS_ROLES }),
 }, (t) => [
-  teamScope("columns", t),
-  // One column per role per team (ADR-15); custom columns have no role and there can be any number of them.
-  uniqueIndex("columns_team_role_idx").on(t.teamId, t.role).where(sql`role is not null`),
+  teamScope("statuses", t),
+  // One status per role per team (ADR-15); custom statuses have no role and there can be any number of them.
+  uniqueIndex("statuses_team_role_idx").on(t.teamId, t.role).where(sql`role is not null`),
 ]);
 
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
@@ -280,7 +281,7 @@ export const issues = table(
     id: uuid("id").primaryKey().defaultRandom(),
     teamId: uuid("team_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
-    columnId: uuid("column_id").notNull().references(() => columns.id, { onDelete: "cascade" }),
+    statusId: uuid("status_id").notNull().references(() => statuses.id, { onDelete: "cascade" }),
     number: integer("number").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),
@@ -661,7 +662,7 @@ export const events = table(
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
     type: text("type").notNull(), // e.g. issue.created, issue.moved, comment.created
-    entity: text("entity", { enum: ["issue", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc", "cycle", "project"] }).notNull(),
+    entity: text("entity", { enum: ["issue", "comment", "node", "edge", "status", "team", "flow", "decision", "term", "doc", "cycle", "project"] }).notNull(),
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),

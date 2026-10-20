@@ -11,7 +11,7 @@ export type Items = Record<string, Issue[]>;
 export function group(cols: Col[], issues: Issue[]): Items {
   const m: Items = {};
   for (const c of cols) m[c.id] = [];
-  for (const t of [...issues].sort((a, b) => a.position - b.position)) m[t.columnId]?.push(t);
+  for (const t of [...issues].sort((a, b) => a.position - b.position)) m[t.statusId]?.push(t);
   return m;
 }
 
@@ -33,14 +33,14 @@ export function dragOver(prev: Items, activeId: string, overId: string): Items {
   return {
     ...prev,
     [from]: prev[from].filter((t) => t.id !== activeId),
-    [to]: [...prev[to].slice(0, idx), { ...moving, columnId: to }, ...prev[to].slice(idx)],
+    [to]: [...prev[to].slice(0, idx), { ...moving, statusId: to }, ...prev[to].slice(idx)],
   };
 }
 
 export type DropResult = {
   items: Items;
   /** What to tell the server, or null when nothing changed or the drop does not count. */
-  move: { columnId: string; index: number; crossed: boolean } | null;
+  move: { statusId: string; index: number; crossed: boolean } | null;
 };
 
 /**
@@ -61,5 +61,5 @@ export function drop(items: Items, activeId: string, overId: string | null, drag
   }
   const index = list.findIndex((t) => t.id === activeId);
   if (dragFrom === col && oldIdx === index && overIdx < 0) return { items: next, move: null };
-  return { items: next, move: { columnId: col, index, crossed: dragFrom !== col } };
+  return { items: next, move: { statusId: col, index, crossed: dragFrom !== col } };
 }

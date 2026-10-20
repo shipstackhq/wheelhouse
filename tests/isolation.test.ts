@@ -125,7 +125,7 @@ const fingerprint = async (s: { workspaceId: string; teamId: string; keyId: stri
     members: await db.select().from(schema.memberships).where(eq(schema.memberships.workspaceId, s.workspaceId)),
     keys: await db.select().from(schema.apiKeys).where(eq(schema.apiKeys.workspaceId, s.workspaceId)),
     teams: await db.select().from(schema.teams).where(eq(schema.teams.workspaceId, s.workspaceId)),
-    columns: await byTeam(schema.columns as never),
+    columns: await byTeam(schema.statuses as never),
     issues: await byTeam(schema.issues as never),
     comments: tix.length ? await db.select().from(schema.comments).where(inArray(schema.comments.issueId, tix)) : [],
     nodes: await byTeam(schema.nodes as never),
@@ -204,7 +204,7 @@ const attacks = {
   get_issue: () => [{ issue: A.issueRef }, { issue: A.issueId }],
   create_issue: () => [{ project: A.teamKey, title: "B writes into A" }, { project: A.teamId, title: "B writes into A", link_nodes: [A.nodeName] }],
   update_issue: () => [{ issue: A.issueRef, title: "hijacked" }, { issue: A.issueId, body: "hijacked" }],
-  move_issue: () => [{ issue: A.issueRef, column: "Done" }],
+  move_issue: () => [{ issue: A.issueRef, status: "Done" }],
   claim_issue: () => [{ issue: A.issueRef }],
   comment: () => [{ issue: A.issueRef, body: "B comments on A" }],
   get_changes: () => [{ project: A.teamKey }, { project: A.teamId }],
@@ -734,7 +734,7 @@ describe("projects stay inside their workspace, and show other teams only as tot
     const { addTeamMember } = await import("@wheelhouse/core/lib/team-members");
     await addTeamMember(A.owner, a2.key, { userId: u.id, role: "editor" });
     await projects.addProjectTeam(A.owner, aProject.id, a2.key);
-    await svc.createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, column: "Done" });
+    await svc.createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, status: "Done" });
     const second: Actor = { kind: "human", id: u.id, name: u.name, workspaceId: A.workspaceId };
     const seen = await projects.getProject(second, aProject.id);
     assert.deepEqual(seen.teams.map((t) => t.key), [a2.key]);
@@ -783,10 +783,10 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
   // Even code that skips the service layer cannot put workspace B's row on workspace A's team, or the reverse.
   const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
 
-  test("B's workspace id on A's team is refused, for a column, a node and a team member", async () => {
+  test("B's workspace id on A's team is refused, for a status, a node and a team member", async () => {
     const db = await getDb();
     const before = await fingerprint(A);
-    await assert.rejects(db.insert(schema.columns).values({ teamId: A.teamId, workspaceId: B.workspaceId, name: "planted", position: 99 }), refused);
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: A.teamId, workspaceId: B.workspaceId, name: "planted", position: 99 }), refused);
     await assert.rejects(db.insert(schema.nodes).values({ teamId: A.teamId, workspaceId: B.workspaceId, layer: "system", kind: "service", name: "planted" }), refused);
     await assert.rejects(db.insert(schema.teamMembers).values({ teamId: A.teamId, workspaceId: B.workspaceId, userId: B.owner.id, role: "admin" }), refused);
     assert.equal(await fingerprint(A), before);
@@ -909,11 +909,11 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/admin/workspaces/:id/suspend": "instance admins only; needs the workspace's exact name; refuses the admin's own workspace (tested)",
   "POST /api/app/admin/workspaces/:id/restore": "instance admins only (tested)",
   "GET /api/app/teams/:key/board": "boardView(actor): the team is resolved through requireTeam(actor), so another workspace's is a 404; members are this workspace's memberships only (tested)",
-  "POST /api/app/teams/:key/issues": "svc.createIssue(actor): the team through requireTeam(actor) (another workspace's is a 404), the column resolved inside that team, the assignee must be a member of the actor's workspace (tested)",
+  "POST /api/app/teams/:key/issues": "svc.createIssue(actor): the team through requireTeam(actor) (another workspace's is a 404), the status resolved inside that team, the assignee must be a member of the actor's workspace (tested)",
   "GET /api/app/teams/:key/queue": "svc.queueStatus(actor): the team through requireTeam(actor); the keys are this workspace's (tested)",
   "GET /api/app/issues/:ref": "svc.getIssue(actor): resolveIssue joins the team and requires its workspace to be the actor's, so another workspace's issue is a 404 (tested, including two workspaces with the same key)",
   "PATCH /api/app/issues/:ref": "svc.updateIssue(actor): resolveIssue is workspace scoped; a stale version is a 409 that returns the trimmed current issue and changes nothing; the assignee must be on the actor's workspace (tested)",
-  "POST /api/app/issues/:ref/move": "svc.moveIssue(actor): resolveIssue is workspace scoped and the column is resolved inside the issue's own team (tested)",
+  "POST /api/app/issues/:ref/move": "svc.moveIssue(actor): resolveIssue is workspace scoped and the status is resolved inside the issue's own team (tested)",
   "DELETE /api/app/issues/:ref": "svc.deleteIssue(actor): resolveIssue is workspace scoped (tested)",
   "POST /api/app/issues/:ref/comments": "svc.addComment(actor): resolveIssue is workspace scoped (tested)",
   "PUT /api/app/issues/:ref/nodes/:nodeId": "svc.linkIssueNode(actor): the issue is workspace scoped and the node is resolved inside the issue's own team, so another workspace's node is a 404 (tested)",

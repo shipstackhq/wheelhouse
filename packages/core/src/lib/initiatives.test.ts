@@ -75,7 +75,7 @@ before(async () => {
 });
 
 const project = (over: Record<string, unknown> = {}, as: Actor = ada) => pr.createProject(as, { name: `P ${++n}`, leadTeam: ta.key, ...over });
-const issueIn = (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { column?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
+const issueIn = (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { status?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
 const make = (over: Record<string, unknown> = {}, as: Actor = ada) => ini.createInitiative(as, { name: `I ${++n}`, ...over });
 const events = (entityId: string) => db.select().from(schema.workspaceEvents).where(eq(schema.workspaceEvents.entityId, entityId)).orderBy(schema.workspaceEvents.seq);
 
@@ -150,9 +150,9 @@ describe("roll-up", () => {
     const right = await make({ parentId: top.id });
     const shared = await project();
     const only = await project();
-    await issueIn(ta, shared.id, { column: "Done" });
+    await issueIn(ta, shared.id, { status: "Done" });
     await issueIn(ta, shared.id);
-    await issueIn(ta, only.id, { column: "Done" });
+    await issueIn(ta, only.id, { status: "Done" });
     await ini.linkProject(ada, left.id, shared.id);
     await ini.linkProject(ada, right.id, shared.id);
     await ini.linkProject(ada, top.id, shared.id);
@@ -190,7 +190,7 @@ describe("roll-up", () => {
     const top = await make({ status: "active", targetDate: "2026-11-30" });
     const p = await project();
     await issueIn(ta, p.id);
-    await issueIn(ta, p.id, { column: "Done" });
+    await issueIn(ta, p.id, { status: "Done" });
     await ini.linkProject(ada, top.id, p.id);
     const before = await ini.getInitiative(ada, top.id, D("2026-11-10"));
     assert.equal(before.health.derived, "on_track");
@@ -210,7 +210,7 @@ describe("who sees what", () => {
     const top = await make({ status: "active" });
     const secret = await project({ name: "SECRET-PROJECT", leadTeam: tb.key });
     const open = await project({ name: "open-project", leadTeam: ta.key });
-    await issueIn(tb, secret.id, { title: "SECRET-ISSUE", column: "Done" });
+    await issueIn(tb, secret.id, { title: "SECRET-ISSUE", status: "Done" });
     await issueIn(tb, secret.id, { title: "SECRET-ISSUE-2" });
     await issueIn(ta, open.id, { title: "open-issue" });
     await ini.linkProject(ada, top.id, secret.id);

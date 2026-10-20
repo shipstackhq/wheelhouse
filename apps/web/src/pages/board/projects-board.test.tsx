@@ -13,9 +13,9 @@ const withProjects = () =>
   makeBoard("AA", {
     projects: PROJECTS,
     issues: [
-      issue({ number: 1, title: "Write the plan", columnId: "c-backlog" }),
-      issue({ number: 2, title: "Build the board", columnId: "c-todo", projectId: "p1", milestoneId: "m1" }),
-      issue({ number: 3, title: "Fix the crash", columnId: "c-todo", projectId: "p2" }),
+      issue({ number: 1, title: "Write the plan", statusId: "c-backlog" }),
+      issue({ number: 2, title: "Build the board", statusId: "c-todo", projectId: "p1", milestoneId: "m1" }),
+      issue({ number: 3, title: "Fix the crash", statusId: "c-todo", projectId: "p2" }),
     ],
   });
 const open = async (path = "/t/AA", setup: (s: FakeServer) => unknown = () => {}) => {
@@ -101,7 +101,7 @@ describe("the Project and Milestone fields of an issue", () => {
   });
 
   test("a team that takes part in no project, and an issue in none, does not show the field", async () => {
-    renderApp("/t/AA?t=AA-2", (s) => s.on("GET /api/app/issues/AA-2", detail(issue({ number: 2, title: "Build the board", columnId: "c-todo" }))));
+    renderApp("/t/AA?t=AA-2", (s) => s.on("GET /api/app/issues/AA-2", detail(issue({ number: 2, title: "Build the board", statusId: "c-todo" }))));
     const d = await screen.findByRole("dialog");
     await within(d).findByRole("textbox", { name: "Title" });
     expect(within(d).queryByText("Project", { selector: "span.label" })).toBeNull();

@@ -516,7 +516,7 @@ describe("the instance admin's workspaces pages", () => {
 });
 
 describe("POST /api/app/teams", () => {
-  test("creates a team with the five columns, derives a key from the name, and answers 201", async () => {
+  test("creates a team with the five statuses, derives a key from the name, and answers 201", async () => {
     const p = await signUp();
     const r = await app("POST", "/api/app/teams", p.sess, { body: { name: "Rocket Launcher", description: "Agents read this." } });
     assert.equal(r.status, 201);

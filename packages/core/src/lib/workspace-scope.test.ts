@@ -70,11 +70,11 @@ describe("a row names its team's own workspace", () => {
   });
 
   const cases: [string, () => Promise<unknown>][] = [
-    ["columns", async () => (await getDb()).insert(schema.columns).values({ ...wrong(), name: "x", position: 1 })],
+    ["statuses", async () => (await getDb()).insert(schema.statuses).values({ ...wrong(), name: "x", position: 1 })],
     ["issues", async () => {
       const db = await getDb();
-      const [col] = await db.select().from(schema.columns).where(eq(schema.columns.teamId, a1.id));
-      return db.insert(schema.issues).values({ ...wrong(), columnId: col.id, number: 999, title: "x", position: 1, createdByKind: "human" });
+      const [col] = await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a1.id));
+      return db.insert(schema.issues).values({ ...wrong(), statusId: col.id, number: 999, title: "x", position: 1, createdByKind: "human" });
     }],
     ["nodes", async () => (await getDb()).insert(schema.nodes).values({ ...wrong(), layer: "system", kind: "service", name: "x" })],
     ["flows", async () => (await getDb()).insert(schema.flows).values({ ...wrong(), name: "x" })],
@@ -93,14 +93,14 @@ describe("a row names its team's own workspace", () => {
 
   test("a row cannot be moved to another workspace while its team stays", async () => {
     const db = await getDb();
-    await assert.rejects(db.update(schema.columns).set({ workspaceId: wsB.id }).where(eq(schema.columns.teamId, a1.id)), refused("23503"));
+    await assert.rejects(db.update(schema.statuses).set({ workspaceId: wsB.id }).where(eq(schema.statuses.teamId, a1.id)), refused("23503"));
   });
 
   test("deleting a team removes its rows through the same key", async () => {
     const t = await svc.createTeam(ada, { name: "Short lived", key: `${L}S` });
     await svc.deleteTeam(ada, t.key);
     const db = await getDb();
-    assert.equal((await db.select().from(schema.columns).where(eq(schema.columns.teamId, t.id))).length, 0);
+    assert.equal((await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, t.id))).length, 0);
   });
 });
 
@@ -161,7 +161,7 @@ describe("an assignee is a member of the issue's team", () => {
     assert.equal(after.assigneeId, null);
   });
 
-  test("the assignee key is in the database as written (drizzle cannot say SET NULL on one column)", async () => {
+  test("the assignee key is in the database as written (drizzle cannot say SET NULL on one status)", async () => {
     const db = await getDb();
     const r = await db.execute(sql`select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'issues_assignee_member_fk'`);
     const def = String((r as unknown as { rows?: { def: string }[] }).rows?.[0]?.def ?? (r as unknown as { def: string }[])[0]?.def);

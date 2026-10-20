@@ -36,7 +36,7 @@ describe("one workspace cannot reach another's data over HTTP", () => {
     const writes: [string, Record<string, unknown>][] = [
       ["create_issue", { project: fx.a.teamKey, title: "intruder" }],
       ["update_issue", { issue: fx.a.issueRef, title: "hijacked" }],
-      ["move_issue", { issue: fx.a.issueRef, column: "Done" }],
+      ["move_issue", { issue: fx.a.issueRef, status: "Done" }],
       ["comment", { issue: fx.a.issueRef, body: "intruder" }],
       ["claim_issue", { issue: fx.a.issueRef }],
       ["upsert_node", { project: fx.a.teamKey, name: "intruder node" }],
@@ -48,7 +48,7 @@ describe("one workspace cannot reach another's data over HTTP", () => {
     const after = (await v1ok(A, "get_issue", { issue: fx.a.issueRef })).issue;
     assert.equal(after.title, before.title);
     assert.equal(after.version, before.version);
-    assert.equal(after.columnId, before.columnId);
+    assert.equal(after.statusId, before.statusId);
   });
 
   test("a workspace's team list holds only its own teams", async () => {

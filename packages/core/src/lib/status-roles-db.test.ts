@@ -1,5 +1,5 @@
 /**
- * Column roles against a real database (WH-86): a board can rename its columns without breaking the logic that finds
+ * Status roles against a real database (WH-86): a board can rename its statuses without breaking the logic that finds
  * "review" and "done". Runs on an in-memory PGlite (`pnpm test`), or a real Postgres with TEST_DATABASE_URL.
  */
 if (process.env.TEST_DATABASE_URL) {
@@ -25,9 +25,9 @@ let teamId: string;
 
 const rename = async (from: string, to: string) => {
   const db = await getDb();
-  await db.update(schema.columns).set({ name: to }).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, from)));
+  await db.update(schema.statuses).set({ name: to }).where(and(eq(schema.statuses.teamId, teamId), eq(schema.statuses.name, from)));
 };
-const columnOf = async (ref: string) => (await svc.getIssue(human, ref)).issue.column;
+const columnOf = async (ref: string) => (await svc.getIssue(human, ref)).issue.status;
 
 before(async () => {
   const db = await getDb();
@@ -41,27 +41,27 @@ before(async () => {
   await scopeKeyToAllTeams(db, agent.id, workspace.id);
 });
 
-describe("column roles", () => {
-  test("a new team's five columns each have their role", async () => {
-    const { columns } = await svc.getBoard(human, "RR");
-    assert.deepEqual(columns.map((c) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
+describe("status roles", () => {
+  test("a new team's five statuses each have their role", async () => {
+    const { statuses } = await svc.getBoard(human, "RR");
+    assert.deepEqual(statuses.map((c) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
   });
 
-  test("a renamed column is still found by its role, and an exact name still wins", async () => {
+  test("a renamed status is still found by its role, and an exact name still wins", async () => {
     await rename("Review", "QA");
     await rename("Done", "Shipped");
     const t = await svc.createIssue(human, "RR", { title: "Move me" });
-    assert.equal((await svc.moveIssue(human, t.ref, "review")).column, "QA", "role finds the renamed review column");
-    assert.equal((await svc.moveIssue(human, t.ref, "In progress")).column, "In Progress", "case-insensitive name");
-    assert.equal((await svc.moveIssue(human, t.ref, "qa")).column, "QA", "the new name works");
-    assert.equal((await svc.moveIssue(human, t.ref, "done")).column, "Shipped", "role finds the renamed done column");
+    assert.equal((await svc.moveIssue(human, t.ref, "review")).status, "QA", "role finds the renamed review status");
+    assert.equal((await svc.moveIssue(human, t.ref, "In progress")).status, "In Progress", "case-insensitive name");
+    assert.equal((await svc.moveIssue(human, t.ref, "qa")).status, "QA", "the new name works");
+    assert.equal((await svc.moveIssue(human, t.ref, "done")).status, "Shipped", "role finds the renamed done status");
     await assert.rejects(svc.moveIssue(human, t.ref, "nonsense"), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
 
-    // A column that is literally called "review" but has no role beats the role alias on an exact name match.
+    // A status that is literally called "review" but has no role beats the role alias on an exact name match.
     const db = await getDb();
-    await db.insert(schema.columns).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: null });
-    assert.equal((await svc.moveIssue(human, t.ref, "review")).column, "review");
-    await db.delete(schema.columns).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, "review")));
+    await db.insert(schema.statuses).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: null });
+    assert.equal((await svc.moveIssue(human, t.ref, "review")).status, "review");
+    await db.delete(schema.statuses).where(and(eq(schema.statuses.teamId, teamId), eq(schema.statuses.name, "review")));
   });
 
   test("moves record the roles, so history survives a later rename", async () => {
@@ -77,12 +77,12 @@ describe("column roles", () => {
     const t = await svc.createIssue(human, "RR", { title: "Counted" });
     await svc.moveIssue(human, t.ref, "review");
     const mid = await summary(human);
-    assert.equal(mid.inReview, before.inReview + 1, "waiting for review counts the QA column");
+    assert.equal(mid.inReview, before.inReview + 1, "waiting for review counts the QA status");
     await svc.moveIssue(human, t.ref, "done");
     const end = await summary(human);
     assert.equal(end.inReview, before.inReview, "no longer waiting");
-    assert.equal(end.open, before.open, "an issue in the renamed done column is not open");
-    assert.equal(end.completed7d, before.completed7d + 1, "the move into the renamed done column is a completion");
+    assert.equal(end.open, before.open, "an issue in the renamed done status is not open");
+    assert.equal(end.completed7d, before.completed7d + 1, "the move into the renamed done status is a completion");
   });
 
   test("the briefing reports review and in progress by role", async () => {
@@ -92,7 +92,7 @@ describe("column roles", () => {
     assert.match(markdown, /Waiting for review: \d+/);
     const d = await svc.createIssue(human, "RR", { title: "Finished" });
     await svc.moveIssue(human, d.ref, "done");
-    assert.ok(!markdown.includes("Finished"), "an issue in the renamed done column is not listed as open work");
+    assert.ok(!markdown.includes("Finished"), "an issue in the renamed done status is not listed as open work");
     assert.equal(await columnOf(d.ref), "Shipped");
   });
 });

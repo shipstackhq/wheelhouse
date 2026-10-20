@@ -232,10 +232,10 @@ describe("the board endpoints (WH-96)", () => {
 
   test("issues: create, read, edit, move, delete, comment, link and unlink, each at its address with the ref escaped", async () => {
     const t = { issue: { ref: "WH-1" } };
-    assert.deepEqual(await sent((a) => a.issues.create("WH", { title: "x", column: "review" }), { status: 201, json: t }), { method: "POST", url: "/api/app/teams/WH/issues", body: { title: "x", column: "review" } });
+    assert.deepEqual(await sent((a) => a.issues.create("WH", { title: "x", status: "review" }), { status: 201, json: t }), { method: "POST", url: "/api/app/teams/WH/issues", body: { title: "x", status: "review" } });
     assert.deepEqual(await sent((a) => a.issues.get("WH-1"), { json: {} }), { method: "GET", url: "/api/app/issues/WH-1", body: undefined });
     assert.deepEqual(await sent((a) => a.issues.update("WH-1", { title: "y", version: 3 }), { json: t }), { method: "PATCH", url: "/api/app/issues/WH-1", body: { title: "y", version: 3 } });
-    assert.deepEqual(await sent((a) => a.issues.move("WH-1", { column: "Done", index: 0 }), { json: t }), { method: "POST", url: "/api/app/issues/WH-1/move", body: { column: "Done", index: 0 } });
+    assert.deepEqual(await sent((a) => a.issues.move("WH-1", { status: "Done", index: 0 }), { json: t }), { method: "POST", url: "/api/app/issues/WH-1/move", body: { status: "Done", index: 0 } });
     assert.deepEqual(await sent((a) => a.issues.remove("WH-1")), { method: "DELETE", url: "/api/app/issues/WH-1", body: undefined });
     assert.deepEqual(await sent((a) => a.issues.comment("WH-1", "hi"), { status: 201, json: { comment: {} } }), { method: "POST", url: "/api/app/issues/WH-1/comments", body: { body: "hi" } });
     assert.deepEqual(await sent((a) => a.issues.link("WH-1", "n/1")), { method: "PUT", url: "/api/app/issues/WH-1/nodes/n%2F1", body: {} });

@@ -79,7 +79,7 @@ export function TeamProgress() {
   const ps = q.data;
   const names = ps.find((p) => p.stages.length)?.stages.map((s) => s.name) ?? [];
   return (
-    <Widget title="Team progress" subtitle="Issues per column; done = the last column" action={names.length ? <StageLegend names={names} /> : undefined}>
+    <Widget title="Team progress" subtitle="Issues per status; done = the last status" action={names.length ? <StageLegend names={names} /> : undefined}>
       {ps.length === 0 ? (
         <Empty>
           You are not in any team yet. <Link className="text-accent" to="/teams/new">Create one</Link>, or ask a team admin to add you.
@@ -271,7 +271,7 @@ export function NeedsAttention() {
   const a = q.data;
   const items: AttentionItem[] = [
     ...a.review.map((t) => ({ key: `r-${t.ref}`, kind: "review" as const, to: `/t/${t.teamKey}?t=${t.ref}`, ref: t.ref, text: t.title, byAgent: t.byAgent })),
-    ...a.urgent.map((t) => ({ key: `u-${t.ref}`, kind: "urgent" as const, to: `/t/${t.teamKey}?t=${t.ref}`, ref: t.ref, text: t.title, meta: t.column })),
+    ...a.urgent.map((t) => ({ key: `u-${t.ref}`, kind: "urgent" as const, to: `/t/${t.teamKey}?t=${t.ref}`, ref: t.ref, text: t.title, meta: t.status })),
     ...a.stale.map((n) => ({ key: `n-${n.id}`, kind: "stale" as const, to: `/t/${n.teamKey}/map?node=${n.id}`, text: n.name, meta: `${n.teamKey} · ${n.layer}`, title: n.reason ?? undefined })),
     ...a.staleDocs.map((d) => ({ key: `d-${d.id}`, kind: "staleDocs" as const, to: `/t/${d.teamKey}/docs?doc=${d.id}`, text: d.title, meta: d.teamKey, title: d.reason ?? undefined })),
   ];

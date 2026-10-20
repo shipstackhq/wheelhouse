@@ -14,7 +14,7 @@ import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "./team-access"
  * project_teams, a milestone belongs to that project, and the lead team takes part.
  */
 
-const { projects, projectTeams, projectMilestones, projectVisibility, issues, columns, teams, workspaceEvents, memberships, users } = schema;
+const { projects, projectTeams, projectMilestones, projectVisibility, issues, statuses, teams, workspaceEvents, memberships, users } = schema;
 export type ProjectRow = typeof projects.$inferSelect;
 
 const DAY = 86_400_000;
@@ -154,9 +154,9 @@ async function progressOf(q: Q, projectIds: string[]): Promise<Counts> {
   const out: Counts = new Map(projectIds.map((id) => [id, { total: 0, done: 0 }]));
   if (!projectIds.length) return out;
   const rows = await q
-    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(inArray(issues.projectId, projectIds))
     .groupBy(issues.projectId);
   for (const r of rows) out.set(r.projectId!, { total: Number(r.total), done: Number(r.done) });
@@ -216,7 +216,7 @@ export async function listProjects(actor: Actor, now = new Date()): Promise<Proj
 }
 
 export type ProjectMilestoneView = { id: string; name: string; description: string; targetDate: string | null; position: number; total: number; done: number };
-export type ProjectIssueView = { ref: string; title: string; priority: string; column: string; done: boolean; milestoneId: string | null };
+export type ProjectIssueView = { ref: string; title: string; priority: string; status: string; done: boolean; milestoneId: string | null };
 export type ProjectTeamView = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; issues: ProjectIssueView[] };
 export type ProjectDetail = ProjectSummary & {
   canAdmin: boolean;
@@ -234,9 +234,9 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
   const a = await openProject(db, actor, id);
   const [summary] = await summarise(db, actor, [a.project], now);
   const perTeam = await db
-    .select({ teamId: issues.teamId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .select({ teamId: issues.teamId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(eq(issues.projectId, id))
     .groupBy(issues.teamId);
   const counts = new Map(perTeam.map((r) => [r.teamId, { total: Number(r.total), done: Number(r.done) }]));
@@ -245,9 +245,9 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
   const mineIds = mineRows.map((t) => t.id);
   const mineIssues = mineIds.length
     ? await db
-        .select({ teamId: issues.teamId, number: issues.number, title: issues.title, priority: issues.priority, column: columns.name, role: columns.role, milestoneId: issues.milestoneId })
+        .select({ teamId: issues.teamId, number: issues.number, title: issues.title, priority: issues.priority, status: statuses.name, role: statuses.role, milestoneId: issues.milestoneId })
         .from(issues)
-        .innerJoin(columns, eq(columns.id, issues.columnId))
+        .innerJoin(statuses, eq(statuses.id, issues.statusId))
         .where(and(eq(issues.projectId, id), inArray(issues.teamId, mineIds)))
         .orderBy(asc(issues.number))
     : [];
@@ -258,14 +258,14 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
     lead: t.id === a.project.leadTeamId,
     total: counts.get(t.id)?.total ?? 0,
     done: counts.get(t.id)?.done ?? 0,
-    issues: mineIssues.filter((x) => x.teamId === t.id).map((x) => ({ ref: `${t.key}-${x.number}`, title: x.title, priority: x.priority, column: x.column, done: x.role === "done", milestoneId: x.milestoneId })),
+    issues: mineIssues.filter((x) => x.teamId === t.id).map((x) => ({ ref: `${t.key}-${x.number}`, title: x.title, priority: x.priority, status: x.status, done: x.role === "done", milestoneId: x.milestoneId })),
   }));
   const otherIds = a.teamIds.filter((t) => !a.mine.has(t));
   const others = otherIds.reduce((acc, t) => ({ count: acc.count + 1, total: acc.total + (counts.get(t)?.total ?? 0), done: acc.done + (counts.get(t)?.done ?? 0) }), { count: 0, total: 0, done: 0 });
   const msCounts = await db
-    .select({ milestoneId: issues.milestoneId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .select({ milestoneId: issues.milestoneId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(and(eq(issues.projectId, id), sql`${issues.milestoneId} is not null`))
     .groupBy(issues.milestoneId);
   const byMs = new Map(msCounts.map((r) => [r.milestoneId, r]));

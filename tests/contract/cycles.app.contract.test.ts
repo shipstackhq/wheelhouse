@@ -105,7 +105,7 @@ describe("the cycles endpoints", () => {
     await make(t.s, { startsAt: at(-1), endsAt: at(6) });
     const a = await issue(t.s, { title: "Will finish", cycle: 1 });
     await issue(t.s, { title: "Stays open", cycle: 1 });
-    const out = await app("POST", `/api/app/issues/${a.ref}/move`, t.s, { body: { column: "done" } });
+    const out = await app("POST", `/api/app/issues/${a.ref}/move`, t.s, { body: { status: "done" } });
     assert.equal(out.status, 200, out.text);
     const r = await app("GET", "/api/app/teams/CYC/cycles/1", t.s);
     assert.equal(r.status, 200, r.text);
@@ -156,7 +156,7 @@ describe("the cycles endpoints", () => {
     const types = (changes.changes as { type: string; entity: string }[]).map((c) => `${c.type}/${c.entity}`);
     assert.ok(types.includes("cycle.created/cycle"), types.join(", "));
     const board = await v1ok({ key: t.key }, "get_board", { project: "CYC" });
-    const first = board.columns.flatMap((c: { issues: object[] }) => c.issues)[0] as Record<string, unknown>;
+    const first = board.statuses.flatMap((c: { issues: object[] }) => c.issues)[0] as Record<string, unknown>;
     assert.ok(first, "the issue is on the agent's board");
     assert.equal("cycle" in first || "cycleId" in first, false);
     const got = await v1ok({ key: t.key }, "get_issue", { issue: tk.ref });

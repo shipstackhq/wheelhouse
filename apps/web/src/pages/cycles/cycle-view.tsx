@@ -102,7 +102,7 @@ export function CycleView(props: { teamKey: string; cycle: CycleDetail }) {
                     {t.done ? <CheckIcon /> : <span className="inline-block size-2.5 rounded-full border border-muted" />}
                   </span>
                   <span className={clsx("min-w-0 flex-1 truncate", t.done && "text-muted line-through")}>{issueLink(t.ref, t.title)}</span>
-                  <span className="chip bg-panel-2 text-muted">{t.column}</span>
+                  <span className="chip bg-panel-2 text-muted">{t.status}</span>
                 </li>
               ))}
             </ul>

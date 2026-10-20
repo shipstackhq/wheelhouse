@@ -72,7 +72,7 @@ describe("what a scoped key reaches", () => {
   });
 
   test("/api/v1: its team works, any other team of the workspace is a 404 for every kind of call", async () => {
-    assert.equal((await v1ok(asKey(secret), "get_board", { project: t1 })).columns.length, 5);
+    assert.equal((await v1ok(asKey(secret), "get_board", { project: t1 })).statuses.length, 5);
     assert.deepEqual((await v1ok(asKey(secret), "list_projects")).map((p: { key: string }) => p.key), [t1]);
     const refused: [string, Record<string, unknown>][] = [
       ["get_board", { project: t2 }],

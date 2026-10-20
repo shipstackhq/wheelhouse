@@ -98,11 +98,11 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
   const headSha = "b".repeat(40);
 
   test("a pull request naming an issue opens it in Review, links it, and says who did it", async () => {
-    assert.equal((await issue(A, ref)).issue.column, "Backlog");
+    assert.equal((await issue(A, ref)).issue.status, "Backlog");
     const r = await deliver("pull_request", pr({ action: "opened", number: 7, title: `${ref} contract change`, sha: headSha }));
     assert.deepEqual(r.json, { status: "handled", matched: 1 });
     const t = await issue(A, ref);
-    assert.equal(t.issue.column, "Review");
+    assert.equal(t.issue.status, "Review");
     assert.equal(t.pullRequests.length, 1);
     assert.equal(t.pullRequests[0].number, 7);
     assert.equal(t.pullRequests[0].state, "open");
@@ -130,7 +130,7 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
   test("closing without merging sends an issue in Review back to In Progress", async () => {
     await deliver("pull_request", pr({ action: "closed", number: 7, title: `${ref} contract change`, sha: headSha }));
     const t = await issue(A, ref);
-    assert.equal(t.issue.column, "In Progress");
+    assert.equal(t.issue.status, "In Progress");
     assert.equal(t.pullRequests[0].state, "closed");
   });
 
@@ -149,7 +149,7 @@ describe("POST /api/webhooks/github: two workspaces, one repository id", () => {
     const r = await deliver("pull_request", pr({ action: "opened", number: 21, title: `${bRef} sneaking in`, installation: gh.installationA }));
     assert.equal(r.json.matched, 1, "only workspace A's own repository matched");
     const after = await issue(B, bRef);
-    assert.equal(after.issue.column, before.issue.column);
+    assert.equal(after.issue.status, before.issue.status);
     assert.equal(after.pullRequests.length, 0);
     assert.equal(after.issue.version, before.issue.version);
   });
@@ -159,7 +159,7 @@ describe("POST /api/webhooks/github: two workspaces, one repository id", () => {
     const before = await issue(A, aRef);
     await deliver("pull_request", pr({ action: "opened", number: 22, title: `${aRef} sneaking in`, installation: gh.installationB }));
     const after = await issue(A, aRef);
-    assert.equal(after.issue.column, before.issue.column);
+    assert.equal(after.issue.status, before.issue.status);
     assert.equal(after.pullRequests.length, 0);
     assert.equal(after.issue.version, before.issue.version);
   });

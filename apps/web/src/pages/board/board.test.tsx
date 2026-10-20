@@ -91,10 +91,10 @@ describe("adding an issue", () => {
   const withCreate = (s: Parameters<Parameters<typeof renderApp>[1] & object>[0]) => {
     const live = liveBoard(s, "AA", makeBoard("AA"));
     s.on("POST /api/app/teams/AA/issues", ({ body }) => {
-      const b = body as { title: string; column: string };
-      const created = issue({ number: 50, title: b.title, columnId: b.column });
+      const b = body as { title: string; status: string };
+      const created = issue({ number: 50, title: b.title, statusId: b.status });
       live.board = { ...live.board, issues: [...live.board.issues, created] };
-      return Response.json({ issue: { ...created, column: "x" } }, { status: 201 });
+      return Response.json({ issue: { ...created, status: "x" } }, { status: 201 });
     });
     return live;
   };
@@ -107,7 +107,7 @@ describe("adding an issue", () => {
     const box = within(column("Todo")).getByLabelText("New issue in Todo");
     await user.type(box, "A new one{Enter}");
     await waitFor(() => expect(server.sent("POST /api/app/teams/AA/issues")).toHaveLength(1));
-    expect(server.sent("POST /api/app/teams/AA/issues")[0].body).toEqual({ title: "A new one", column: "c-todo" });
+    expect(server.sent("POST /api/app/teams/AA/issues")[0].body).toEqual({ title: "A new one", status: "c-todo" });
     await within(column("Todo")).findByText("A new one");
     expect((within(column("Todo")).getByLabelText("New issue in Todo") as HTMLTextAreaElement).value).toBe("");
     await user.type(within(column("Todo")).getByLabelText("New issue in Todo"), "And another{Enter}");
@@ -217,8 +217,8 @@ describe("live updates", () => {
     live.board = {
       ...live.board,
       issues: [
-        ...live.board.issues.map((t) => (t.ref === "AA-2" ? { ...t, columnId: "c-review", version: 2 } : t)),
-        issue({ number: 60, title: "Added by an agent", columnId: "c-progress", createdByKind: "agent" }),
+        ...live.board.issues.map((t) => (t.ref === "AA-2" ? { ...t, statusId: "c-review", version: 2 } : t)),
+        issue({ number: 60, title: "Added by an agent", statusId: "c-progress", createdByKind: "agent" }),
       ],
     };
     const started = Date.now();

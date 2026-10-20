@@ -318,7 +318,7 @@ export function IssueDialog(props: {
               <aside className="space-y-5 border-t border-line px-4 py-4 sm:px-5 md:min-h-0 md:overflow-y-auto md:border-l md:border-t-0">
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-1">
                   <Field label="Status">
-                    <Select value={t.columnId} options={columns.map((c) => ({ value: c.id, label: c.name }))} onValueChange={(v) => void mutate(() => api.issues.move(t.ref, { column: v }))} />
+                    <Select value={t.statusId} options={columns.map((c) => ({ value: c.id, label: c.name }))} onValueChange={(v) => void mutate(() => api.issues.move(t.ref, { status: v }))} />
                   </Field>
                   <Field label="Priority">
                     <Select

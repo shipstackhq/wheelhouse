@@ -24,8 +24,8 @@ const make = async (s: Sess, body: Record<string, unknown>, key = "RKT") => {
   assert.equal(r.status, 201, r.text);
   return r.json.issue;
 };
-const order = (b: { issues: { columnId: string; position: number; ref: string }[] }, columnId: string) =>
-  b.issues.filter((t) => t.columnId === columnId).sort((x, y) => x.position - y.position).map((t) => t.ref);
+const order = (b: { issues: { statusId: string; position: number; ref: string }[] }, statusId: string) =>
+  b.issues.filter((t) => t.statusId === statusId).sort((x, y) => x.position - y.position).map((t) => t.ref);
 
 describe("every endpoint needs a signed-in person, and refuses a forged request", () => {
   const table: [string, string, unknown?][] = [
@@ -34,7 +34,7 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
     ["GET", "/api/app/teams/RKT/queue"],
     ["GET", "/api/app/issues/RKT-1"],
     ["PATCH", "/api/app/issues/RKT-1", { title: "x" }],
-    ["POST", "/api/app/issues/RKT-1/move", { column: "Done" }],
+    ["POST", "/api/app/issues/RKT-1/move", { status: "Done" }],
     ["DELETE", "/api/app/issues/RKT-1"],
     ["POST", "/api/app/issues/RKT-1/comments", { body: "x" }],
     ["PUT", `/api/app/issues/RKT-1/nodes/${SID}`],
@@ -55,7 +55,7 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
       for (const [method, path, body] of [
         ["POST", "/api/app/teams/RKT/issues", { title: "Forged" }],
         ["PATCH", `/api/app/issues/${tk.ref}`, { title: "Forged" }],
-        ["POST", `/api/app/issues/${tk.ref}/move`, { column: "Done" }],
+        ["POST", `/api/app/issues/${tk.ref}/move`, { status: "Done" }],
         ["POST", `/api/app/issues/${tk.ref}/comments`, { body: "Forged" }],
         ["DELETE", `/api/app/issues/${tk.ref}`, undefined],
       ] as const) {
@@ -71,12 +71,12 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
 });
 
 describe("GET /api/app/teams/:key/board", () => {
-  test("the team, its five columns with their roles, issues, map nodes, members and the checklist", async () => {
+  test("the team, its five statuses with their roles, issues, map nodes, members and the checklist", async () => {
     const t = await workspace();
     const b = await board(t.s);
-    assert.deepEqual(Object.keys(b).sort(), ["checklist", "columns", "cycles", "issues", "members", "nodes", "projects", "team"]);
+    assert.deepEqual(Object.keys(b).sort(), ["checklist", "cycles", "issues", "members", "nodes", "projects", "statuses", "team"]);
     assert.deepEqual(Object.keys(b.team).sort(), ["description", "id", "key", "name"]);
-    assert.deepEqual(b.columns.map((c: { name: string; role: string }) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
+    assert.deepEqual(b.statuses.map((c: { name: string; role: string }) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
     assert.deepEqual(b.issues, []);
     assert.deepEqual(b.nodes, []);
     assert.deepEqual(b.members, [{ id: t.owner.me.user.id, name: "Owner" }]);
@@ -91,7 +91,7 @@ describe("GET /api/app/teams/:key/board", () => {
     await app("PUT", `/api/app/issues/${tk.ref}/nodes/${node.id}`, t.s);
     await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "hello" } });
     const b = await board(t.s);
-    assert.deepEqual(Object.keys(b.issues[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "columnId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "milestoneId", "nodeIds", "number", "position", "priority", "projectId", "ref", "title", "updatedAt", "version"]);
+    assert.deepEqual(Object.keys(b.issues[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "milestoneId", "nodeIds", "number", "position", "priority", "projectId", "ref", "statusId", "title", "updatedAt", "version"]);
     assert.equal(b.issues[0].ref, "RKT-1");
     assert.deepEqual(b.issues[0].nodeIds, [node.id]);
     assert.equal(b.issues[0].commentCount, 1);
@@ -120,7 +120,7 @@ describe("GET /api/app/teams/:key/board", () => {
 });
 
 describe("POST /api/app/teams/:key/issues", () => {
-  test("creates in the first column by default: 201, version 1, a ref from the team", async () => {
+  test("creates in the first status by default: 201, version 1, a ref from the team", async () => {
     const t = await workspace();
     const r = await app("POST", "/api/app/teams/RKT/issues", t.s, { body: { title: "  First one  " } });
     assert.equal(r.status, 201);
@@ -128,7 +128,7 @@ describe("POST /api/app/teams/:key/issues", () => {
     assert.equal(tk.title, "First one");
     assert.equal(tk.ref, "RKT-1");
     assert.equal(tk.version, 1);
-    assert.equal(tk.column, "Backlog");
+    assert.equal(tk.status, "Backlog");
     assert.equal(tk.priority, "medium");
     assert.equal(tk.createdByKind, "human");
     assert.equal(tk.agentClaimable, false, "a person's issue is not agent-claimable until they say so");
@@ -136,13 +136,13 @@ describe("POST /api/app/teams/:key/issues", () => {
     assert.equal((await make(t.s, { title: "Second" })).ref, "RKT-2");
   });
 
-  test("the column can be an id, a name, or a role", async () => {
+  test("the status can be an id, a name, or a role", async () => {
     const t = await workspace();
-    const cols = (await board(t.s)).columns;
-    const byId = await make(t.s, { title: "by id", column: cols[1].id });
-    const byName = await make(t.s, { title: "by name", column: "In Progress" });
-    const byRole = await make(t.s, { title: "by role", column: "review" });
-    assert.deepEqual([byId.column, byName.column, byRole.column], ["Todo", "In Progress", "Review"]);
+    const cols = (await board(t.s)).statuses;
+    const byId = await make(t.s, { title: "by id", status: cols[1].id });
+    const byName = await make(t.s, { title: "by name", status: "In Progress" });
+    const byRole = await make(t.s, { title: "by role", status: "review" });
+    assert.deepEqual([byId.status, byName.status, byRole.status], ["Todo", "In Progress", "Review"]);
   });
 
   test("it takes priority, labels, body, assignee and the AI flag", async () => {
@@ -151,7 +151,7 @@ describe("POST /api/app/teams/:key/issues", () => {
     assert.deepEqual([tk.body, tk.priority, tk.labels, tk.assigneeId, tk.agentClaimable], ["Markdown **body**", "urgent", ["a", "b"], t.owner.me.user.id, true]);
   });
 
-  test("problems name the field: no title, the wrong type, an unknown priority or column", async () => {
+  test("problems name the field: no title, the wrong type, an unknown priority or status", async () => {
     const t = await workspace();
     const cases: [Record<string, unknown>, string][] = [
       [{}, "title"],
@@ -163,7 +163,7 @@ describe("POST /api/app/teams/:key/issues", () => {
       [{ title: "x", labels: ["ok", 3] }, "labels"],
       [{ title: "x", agentClaimable: "yes" }, "agentClaimable"],
       [{ title: "x", assigneeId: 7 }, "assigneeId"],
-      [{ title: "x", column: 7 }, "column"],
+      [{ title: "x", status: 7 }, "status"],
     ];
     for (const [body, field] of cases) {
       const r = await app("POST", "/api/app/teams/RKT/issues", t.s, { body });
@@ -171,9 +171,9 @@ describe("POST /api/app/teams/:key/issues", () => {
       assert.equal(r.json.error.code, "invalid");
       assert.ok(r.json.error.details.fields[field], `${JSON.stringify(body)} names ${field}`);
     }
-    const col = await app("POST", "/api/app/teams/RKT/issues", t.s, { body: { title: "x", column: "Nowhere" } });
+    const col = await app("POST", "/api/app/teams/RKT/issues", t.s, { body: { title: "x", status: "Nowhere" } });
     assert.equal(col.status, 400);
-    assert.match(col.json.error.message, /^Unknown column "Nowhere"\. Valid: Backlog, Todo/);
+    assert.match(col.json.error.message, /^Unknown status "Nowhere"\. Valid: Backlog, Todo/);
     assert.deepEqual((await board(t.s)).issues, [], "nothing was created");
   });
 
@@ -206,7 +206,7 @@ describe("GET /api/app/issues/:ref", () => {
     assert.equal(r.status, 200);
     assert.deepEqual(Object.keys(r.json).sort(), ["comments", "history", "issue", "nodes", "pullRequests", "team"]);
     assert.equal(r.json.issue.ref, "RKT-1");
-    assert.equal(r.json.issue.column, "Backlog");
+    assert.equal(r.json.issue.status, "Backlog");
     assert.deepEqual(r.json.team, { key: "RKT", name: "Rocket" });
     assert.deepEqual(r.json.comments.map((c: { body: string }) => c.body), ["first"]);
     assert.deepEqual(Object.keys(r.json.comments[0]).sort(), ["authorKind", "authorName", "body", "createdAt", "id"]);
@@ -250,7 +250,7 @@ describe("PATCH /api/app/issues/:ref: the version check", () => {
     assert.equal(current.title, "Changed by an agent");
     assert.equal(current.version, 2);
     assert.equal(current.ref, "RKT-1");
-    assert.deepEqual(Object.keys(current).sort(), Object.keys(tk).filter((k) => k !== "column").sort(), "the same trimmed issue every answer uses");
+    assert.deepEqual(Object.keys(current).sort(), Object.keys(tk).filter((k) => k !== "status").sort(), "the same trimmed issue every answer uses");
     assert.ok(!/teamId|createdById/.test(JSON.stringify(stale.json)), "no raw row in an error");
     const after = (await app("GET", `/api/app/issues/${tk.ref}`, t.s)).json.issue;
     assert.deepEqual([after.title, after.body, after.version], ["Changed by an agent", "mine", 2], "the slow edit was not applied");
@@ -300,35 +300,35 @@ describe("PATCH /api/app/issues/:ref: the version check", () => {
 });
 
 describe("POST /api/app/issues/:ref/move", () => {
-  test("by column id, by name and by role; the issue changes column and its version goes up", async () => {
+  test("by status id, by name and by role; the issue changes status and its version goes up", async () => {
     const t = await workspace();
-    const cols = (await board(t.s)).columns;
+    const cols = (await board(t.s)).statuses;
     const tk = await make(t.s, { title: "Mover" });
-    const byId = await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: cols[1].id } });
-    assert.deepEqual([byId.status, byId.json.issue.column, byId.json.issue.columnId, byId.json.issue.version], [200, "Todo", cols[1].id, 2]);
-    assert.equal((await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: "In Progress" } })).json.issue.column, "In Progress");
-    assert.equal((await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: "review" } })).json.issue.column, "Review");
-    assert.equal((await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: "done" } })).json.issue.columnId, cols[4].id);
+    const byId = await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: cols[1].id } });
+    assert.deepEqual([byId.status, byId.json.issue.status, byId.json.issue.statusId, byId.json.issue.version], [200, "Todo", cols[1].id, 2]);
+    assert.equal((await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "In Progress" } })).json.issue.status, "In Progress");
+    assert.equal((await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "review" } })).json.issue.status, "Review");
+    assert.equal((await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "done" } })).json.issue.statusId, cols[4].id);
   });
 
   test("index puts it in a place: first, in the middle, and the end when absent", async () => {
     const t = await workspace();
-    const cols = (await board(t.s)).columns;
-    const [a, b, c] = [await make(t.s, { title: "a", column: "Todo" }), await make(t.s, { title: "b", column: "Todo" }), await make(t.s, { title: "c", column: "Todo" })];
+    const cols = (await board(t.s)).statuses;
+    const [a, b, c] = [await make(t.s, { title: "a", status: "Todo" }), await make(t.s, { title: "b", status: "Todo" }), await make(t.s, { title: "c", status: "Todo" })];
     const d = await make(t.s, { title: "d" });
-    await app("POST", `/api/app/issues/${d.ref}/move`, t.s, { body: { column: "Todo", index: 0 } });
+    await app("POST", `/api/app/issues/${d.ref}/move`, t.s, { body: { status: "Todo", index: 0 } });
     assert.deepEqual(order(await board(t.s), cols[1].id), [d.ref, a.ref, b.ref, c.ref]);
-    await app("POST", `/api/app/issues/${c.ref}/move`, t.s, { body: { column: "Todo", index: 1 } });
+    await app("POST", `/api/app/issues/${c.ref}/move`, t.s, { body: { status: "Todo", index: 1 } });
     assert.deepEqual(order(await board(t.s), cols[1].id), [d.ref, c.ref, a.ref, b.ref]);
-    await app("POST", `/api/app/issues/${d.ref}/move`, t.s, { body: { column: "Todo" } });
+    await app("POST", `/api/app/issues/${d.ref}/move`, t.s, { body: { status: "Todo" } });
     assert.deepEqual(order(await board(t.s), cols[1].id), [c.ref, a.ref, b.ref, d.ref]);
   });
 
-  test("into an empty column", async () => {
+  test("into an empty status", async () => {
     const t = await workspace();
-    const cols = (await board(t.s)).columns;
+    const cols = (await board(t.s)).statuses;
     const tk = await make(t.s, { title: "Lonely" });
-    const r = await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: cols[3].id, index: 0 } });
+    const r = await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: cols[3].id, index: 0 } });
     assert.equal(r.status, 200);
     assert.deepEqual(order(await board(t.s), cols[3].id), [tk.ref]);
     assert.deepEqual(order(await board(t.s), cols[0].id), []);
@@ -338,30 +338,30 @@ describe("POST /api/app/issues/:ref/move", () => {
     const t = await workspace();
     const tk = await make(t.s, { title: "Stale" });
     await app("PATCH", `/api/app/issues/${tk.ref}`, t.s, { body: { priority: "high" } });
-    const r = await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: "Done", version: 1 } });
+    const r = await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "Done", version: 1 } });
     assert.equal(r.status, 409);
     assert.equal(r.json.error.details.current.version, 2);
-    assert.equal((await app("GET", `/api/app/issues/${tk.ref}`, t.s)).json.issue.column, "Backlog");
+    assert.equal((await app("GET", `/api/app/issues/${tk.ref}`, t.s)).json.issue.status, "Backlog");
   });
 
-  test("problems: no column, an unknown one, a column that is not text, an index that is not a whole number", async () => {
+  test("problems: no status, an unknown one, a status that is not text, an index that is not a whole number", async () => {
     const t = await workspace();
     const tk = await make(t.s, { title: "Bad" });
     const go = (body: unknown) => app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body });
-    assert.equal((await go({})).json.error.details.fields.column, "column is required");
-    assert.equal((await go({ column: "Nowhere" })).status, 400);
-    assert.ok((await go({ column: 3 })).json.error.details.fields.column);
-    assert.ok((await go({ column: "Done", index: "0" })).json.error.details.fields.index);
-    assert.ok((await go({ column: "Done", index: 0.5 })).json.error.details.fields.index);
-    assert.equal((await app("GET", `/api/app/issues/${tk.ref}`, t.s)).json.issue.column, "Backlog");
+    assert.equal((await go({})).json.error.details.fields.status, "status is required");
+    assert.equal((await go({ status: "Nowhere" })).status, 400);
+    assert.ok((await go({ status: 3 })).json.error.details.fields.status);
+    assert.ok((await go({ status: "Done", index: "0" })).json.error.details.fields.index);
+    assert.ok((await go({ status: "Done", index: 0.5 })).json.error.details.fields.index);
+    assert.equal((await app("GET", `/api/app/issues/${tk.ref}`, t.s)).json.issue.status, "Backlog");
   });
 
   test("the move is an event agents see, through the same write path (the agents' board shows it)", async () => {
     const t = await workspace();
     const tk = await make(t.s, { title: "Shared" });
-    await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { column: "review" } });
+    await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "review" } });
     const agentsBoard = await v1ok({ key: t.key }, "get_board", { project: "RKT" });
-    const inReview = agentsBoard.columns.find((c: { name: string }) => c.name === "Review");
+    const inReview = agentsBoard.statuses.find((c: { name: string }) => c.name === "Review");
     assert.deepEqual(inReview.issues.map((x: { ref: string }) => x.ref), [tk.ref]);
   });
 });
@@ -436,7 +436,7 @@ describe("another workspace's issues are out of reach", () => {
     const attempts: [string, string, unknown?][] = [
       ["GET", `/api/app/issues/${tk.ref}`],
       ["PATCH", `/api/app/issues/${tk.ref}`, { title: "Hacked", version: 1 }],
-      ["POST", `/api/app/issues/${tk.ref}/move`, { column: "Done" }],
+      ["POST", `/api/app/issues/${tk.ref}/move`, { status: "Done" }],
       ["POST", `/api/app/issues/${tk.ref}/comments`, { body: "hi" }],
       ["PUT", `/api/app/issues/${tk.ref}/nodes/${node.id}`],
       ["DELETE", `/api/app/issues/${tk.ref}/nodes/${node.id}`],
@@ -450,7 +450,7 @@ describe("another workspace's issues are out of reach", () => {
       assert.ok(!r.text.includes("secret plan") && !r.text.includes("Private"), "nothing of the issue in the answer");
     }
     const mine = (await app("GET", `/api/app/issues/${tk.ref}`, a.s)).json;
-    assert.deepEqual([mine.issue.title, mine.issue.body, mine.issue.version, mine.issue.column], ["Private", "secret plan", 1, "Backlog"]);
+    assert.deepEqual([mine.issue.title, mine.issue.body, mine.issue.version, mine.issue.status], ["Private", "secret plan", 1, "Backlog"]);
     assert.deepEqual(mine.comments, []);
   });
 
@@ -497,7 +497,7 @@ describe("a change by an agent reaches an open board within a second", () => {
       assert.equal(stream.status, 200);
       await stream.waitFor((e) => e.event === "ready");
       const started = Date.now();
-      await v1ok({ key: t.key }, "move_issue", { issue: tk.ref, column: "Review" });
+      await v1ok({ key: t.key }, "move_issue", { issue: tk.ref, status: "Review" });
       const change = await stream.waitFor((e) => e.event === "change" && /moved RKT-1/.test(String(e.data?.summary)), 1000);
       assert.ok(Date.now() - started < 1000, "within a second");
       assert.match(String(change.data.summary), /Backlog → Review/);

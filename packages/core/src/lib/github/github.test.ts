@@ -87,16 +87,16 @@ const push = (installation: string, over: Record<string, unknown> = {}) => ({
 });
 const deliver = (event: string, payload: Record<string, unknown>, id = `d-${uniq()}`) => handleDelivery({ event, deliveryId: id, payload }, fakeGithub.api);
 
-/** An issue in `column`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
-async function issueIn(workspace: Workspace, key: string, title: string, column: string) {
+/** An issue in `status`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
+async function issueIn(workspace: Workspace, key: string, title: string, status: string) {
   const t = await svc.createIssue(workspace.owner, key, { title });
-  if (column !== "Backlog") await svc.moveIssue(workspace.owner, t.ref, column);
+  if (status !== "Backlog") await svc.moveIssue(workspace.owner, t.ref, status);
   const db = await getDb();
   await db.update(schema.events).set({ createdAt: new Date(Date.now() - 2 * 3600_000) }).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "issue.moved")));
   return t;
 }
 async function columnOf(workspace: Workspace, ref: string) {
-  return (await svc.getIssue(workspace.owner, ref)).issue.column;
+  return (await svc.getIssue(workspace.owner, ref)).issue.status;
 }
 const prPayload = (workspace: Workspace, action: string, over: Record<string, unknown> = {}, pr: Record<string, unknown> = {}) => ({
   action,

@@ -20,7 +20,7 @@ export type IssueView = {
   number: number;
   title: string;
   body: string;
-  columnId: string;
+  statusId: string;
   priority: (typeof schema.PRIORITIES)[number];
   assigneeId: string | null;
   agentClaimable: boolean;
@@ -46,7 +46,7 @@ export const issueView = (t: IssueRow): IssueView => ({
   number: t.number,
   title: t.title,
   body: t.body,
-  columnId: t.columnId,
+  statusId: t.statusId,
   priority: t.priority,
   assigneeId: t.assigneeId,
   agentClaimable: t.agentClaimable,
@@ -67,7 +67,7 @@ export type BoardIssue = IssueView & { nodeIds: string[]; commentCount: number }
 
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
-  columns: { id: string; name: string; role: string | null; position: number }[];
+  statuses: { id: string; name: string; role: string | null; position: number }[];
   issues: BoardIssue[];
   /** Just enough of the map to show and link nodes. The map itself is another page. */
   nodes: { id: string; name: string; kind: string; parentId: string | null; layer: string }[];
@@ -79,7 +79,7 @@ export type BoardView = {
   checklist: ChecklistState;
 };
 
-/** The team page: its columns, every issue, the map nodes an issue can link to, the team's members (the people an issue can be assigned to) and the setup checklist. */
+/** The team page: its statuses, every issue, the map nodes an issue can link to, the team's members (the people an issue can be assigned to) and the setup checklist. */
 export async function boardView(actor: Actor, teamKey: string): Promise<BoardView> {
   const [board, checklist] = await Promise.all([svc.getBoard(actor, teamKey), svc.checklistForTeam(actor, teamKey)]);
   const db = await getDb();
@@ -98,7 +98,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
   const teamProjects = await projectsOfTeam(db, board.team.id);
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
-    columns: board.columns.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
+    statuses: board.statuses.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
     issues: board.issues.map((t) => ({ ...issueView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
     nodes,
     members,
@@ -109,7 +109,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
 }
 
 export type IssueDetail = {
-  issue: IssueView & { column: string | undefined };
+  issue: IssueView & { status: string | undefined };
   team: { key: string; name: string };
   comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
@@ -121,7 +121,7 @@ export type IssueDetail = {
 export async function issueDetail(actor: Actor, ref: string): Promise<IssueDetail> {
   const d = await svc.getIssue(actor, ref);
   return {
-    issue: { ...issueView(d.issue), column: d.issue.column },
+    issue: { ...issueView(d.issue), status: d.issue.status },
     team: { key: d.team.key, name: d.team.name },
     comments: d.comments.map((c) => ({ id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt })),
     nodes: d.nodes,
@@ -188,11 +188,11 @@ export function issueInput(b: Record<string, unknown>, o: { create: boolean }): 
   return out;
 }
 
-/** The column of a move or a new issue: an id, a name or a role ("review"); the service finds it in this issue's own team. */
-export function columnField(b: Record<string, unknown>, required: boolean): string | undefined {
-  const v = b.column;
-  if (v === undefined || v === null) return required ? bad("column", "column is required") : undefined;
-  if (typeof v !== "string" || !v.trim()) return bad("column", "column must be text");
+/** The status of a move or a new issue: an id, a name or a role ("review"); the service finds it in this issue's own team. */
+export function statusField(b: Record<string, unknown>, required: boolean): string | undefined {
+  const v = b.status;
+  if (v === undefined || v === null) return required ? bad("status", "status is required") : undefined;
+  if (typeof v !== "string" || !v.trim()) return bad("status", "status must be text");
   return v;
 }
 
@@ -216,9 +216,9 @@ async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>):
   }
 }
 
-export async function createIssueAs(actor: Actor, teamKey: string, input: svc.IssueInput & { title: string }, column?: string) {
-  const t = await svc.createIssue(actor, teamKey, { ...input, column });
-  return { ...issueView(t), column: t.column };
+export async function createIssueAs(actor: Actor, teamKey: string, input: svc.IssueInput & { title: string }, status?: string) {
+  const t = await svc.createIssue(actor, teamKey, { ...input, status });
+  return { ...issueView(t), status: t.status };
 }
 
 /** Change fields. With `version`, a change made by anyone since is refused (409) and nothing is overwritten. */
@@ -227,8 +227,8 @@ export async function updateIssueAs(actor: Actor, ref: string, patch: svc.IssueI
   return issueView(t);
 }
 
-/** Move to a column (an id, a name or a role such as "review") at a position (the end when absent). */
-export async function moveIssueAs(actor: Actor, ref: string, column: string, index?: number, version?: number) {
-  const t = await withCurrent(actor, ref, () => svc.moveIssue(actor, ref, column, index, version));
-  return { ...issueView(t), column: t.column };
+/** Move to a status (an id, a name or a role such as "review") at a position (the end when absent). */
+export async function moveIssueAs(actor: Actor, ref: string, status: string, index?: number, version?: number) {
+  const t = await withCurrent(actor, ref, () => svc.moveIssue(actor, ref, status, index, version));
+  return { ...issueView(t), status: t.status };
 }

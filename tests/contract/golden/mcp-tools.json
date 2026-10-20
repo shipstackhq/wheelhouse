@@ -89,8 +89,8 @@
         "body": {
           "type": "string"
         },
-        "column": {
-          "description": "Column name, default Backlog",
+        "status": {
+          "description": "Status name, default Backlog",
           "type": "string"
         },
         "priority": {
@@ -857,11 +857,11 @@
           "type": "string",
           "description": "Issue ref like \"WH-12\" (or id)"
         },
-        "column": {
+        "status": {
           "type": "string"
         },
         "index": {
-          "description": "Position in column, default end",
+          "description": "Position within the status, default end",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -879,7 +879,7 @@
       },
       "required": [
         "issue",
-        "column"
+        "status"
       ],
       "additionalProperties": false
     }

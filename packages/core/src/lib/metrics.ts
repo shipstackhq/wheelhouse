@@ -1,4 +1,4 @@
-import { idsWithRole } from "./column-roles";
+import { idsWithRole } from "./status-roles";
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
@@ -12,7 +12,7 @@ import type { SessionView } from "./session-buckets";
  * Day buckets are UTC calendar days.
  */
 
-const { teams, columns, issues, events, nodes, docs, apiKeys } = schema;
+const { teams, statuses, issues, events, nodes, docs, apiKeys } = schema;
 
 const DAY = 864e5;
 export const dayKey = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
@@ -37,7 +37,7 @@ export function setRequestMemo(m: Memo) {
 const snapshot = (actor: Actor, teamId?: string) => (memoised ??= memo(loadSnapshot))(actor.workspaceId, actor.kind === "human" && !actor.system ? actor.id : "*", teamId ?? "*");
 
 /**
- * Teams, columns, issues, recent events for one workspace, limited to the teams `viewer` can open, and to one team when
+ * Teams, statuses, issues, recent events for one workspace, limited to the teams `viewer` can open, and to one team when
  * `teamId` is given (the caller has already resolved it through requireTeam, so it is one the viewer can open; it is
  * intersected with what they can open anyway, so a stray id yields an empty snapshot rather than someone else's numbers).
  */
@@ -50,9 +50,9 @@ const loadSnapshot = async (workspaceId: string, viewer: string, teamId: string)
     .where(and(eq(teams.workspaceId, workspaceId), visible ? inArray(teams.id, visible) : undefined, teamId === "*" ? undefined : eq(teams.id, teamId)))
     .orderBy(asc(teams.createdAt));
   const pids = ps.map((p) => p.id);
-  if (!pids.length) return { teams: ps, columns: [], issues: [], events: [], nodes: [], docs: [] };
+  if (!pids.length) return { teams: ps, statuses: [], issues: [], events: [], nodes: [], docs: [] };
   const [cs, ts, es, ns, ds] = await Promise.all([
-    db.select().from(columns).where(inArray(columns.teamId, pids)).orderBy(asc(columns.position)),
+    db.select().from(statuses).where(inArray(statuses.teamId, pids)).orderBy(asc(statuses.position)),
     db.select().from(issues).where(inArray(issues.teamId, pids)),
     db
       .select()
@@ -68,22 +68,22 @@ const loadSnapshot = async (workspaceId: string, viewer: string, teamId: string)
       .from(docs)
       .where(and(inArray(docs.teamId, pids), isNull(docs.deletedAt))),
   ]);
-  return { teams: ps, columns: cs, issues: ts, events: es, nodes: ns, docs: ds };
+  return { teams: ps, statuses: cs, issues: ts, events: es, nodes: ns, docs: ds };
 };
 
 type Snap = Awaited<ReturnType<typeof snapshot>>;
 
-/** Columns are found by role (WH-86), so renaming one changes nothing here. */
-function columnRoles(s: Snap) {
-  const byTeam = new Map<string, Snap["columns"]>();
-  for (const c of s.columns) byTeam.set(c.teamId, [...(byTeam.get(c.teamId) ?? []), c]);
-  return { byTeam, doneIds: idsWithRole(s.columns, "done"), inProgress: idsWithRole(s.columns, "in_progress"), review: idsWithRole(s.columns, "review") };
+/** Statuses are found by role (WH-86), so renaming one changes nothing here. */
+function statusRoles(s: Snap) {
+  const byTeam = new Map<string, Snap["statuses"]>();
+  for (const c of s.statuses) byTeam.set(c.teamId, [...(byTeam.get(c.teamId) ?? []), c]);
+  return { byTeam, doneIds: idsWithRole(s.statuses, "done"), inProgress: idsWithRole(s.statuses, "in_progress"), review: idsWithRole(s.statuses, "review") };
 }
 
-/** Moves into a team's done column, from the event log. Older events only recorded the column's name. */
+/** Moves into a team's done status, from the event log. Older events only recorded the status's name. */
 function completions(s: Snap) {
   const doneNames = new Map<string, Set<string>>();
-  for (const c of s.columns) if (c.role === "done") doneNames.set(c.teamId, (doneNames.get(c.teamId) ?? new Set()).add(c.name));
+  for (const c of s.statuses) if (c.role === "done") doneNames.set(c.teamId, (doneNames.get(c.teamId) ?? new Set()).add(c.name));
   return s.events.filter((e) => e.type === "issue.moved" && (e.data?.toRole ? e.data.toRole === "done" : doneNames.get(e.teamId)?.has(String(e.data?.to)) ?? false));
 }
 
@@ -91,8 +91,8 @@ function completions(s: Snap) {
 
 export async function summary(actor: Actor, teamId?: string) {
   const s = await snapshot(actor, teamId);
-  const roles = columnRoles(s);
-  const open = s.issues.filter((t) => !roles.doneIds.has(t.columnId));
+  const roles = statusRoles(s);
+  const open = s.issues.filter((t) => !roles.doneIds.has(t.statusId));
   const now = Date.now();
   const within = (d: Date, from: number, to: number) => {
     const age = now - new Date(d).getTime();
@@ -110,8 +110,8 @@ export async function summary(actor: Actor, teamId?: string) {
   return {
     teams: s.teams.length,
     open: open.length,
-    inProgress: open.filter((t) => roles.inProgress.has(t.columnId)).length,
-    inReview: open.filter((t) => roles.review.has(t.columnId)).length,
+    inProgress: open.filter((t) => roles.inProgress.has(t.statusId)).length,
+    inReview: open.filter((t) => roles.review.has(t.statusId)).length,
     completed7d: thisWeek,
     completedPrev7d: lastWeek,
     agentShare7d: week.length ? agentEvents / week.length : null,
@@ -127,14 +127,14 @@ export async function summary(actor: Actor, teamId?: string) {
 
 export async function teamProgress(actor: Actor, teamId?: string) {
   const s = await snapshot(actor, teamId);
-  const roles = columnRoles(s);
+  const roles = statusRoles(s);
   return s.teams.map((p) => {
     const cols = roles.byTeam.get(p.id) ?? [];
     const ts = s.issues.filter((t) => t.teamId === p.id);
-    const stages = cols.map((c) => ({ id: c.id, name: c.name, count: ts.filter((t) => t.columnId === c.id).length }));
-    const done = ts.filter((t) => roles.doneIds.has(t.columnId)).length;
+    const stages = cols.map((c) => ({ id: c.id, name: c.name, count: ts.filter((t) => t.statusId === c.id).length }));
+    const done = ts.filter((t) => roles.doneIds.has(t.statusId)).length;
     const lastEvent = s.events.find((e) => e.teamId === p.id);
-    const open = ts.filter((t) => !roles.doneIds.has(t.columnId));
+    const open = ts.filter((t) => !roles.doneIds.has(t.statusId));
     return {
       id: p.id,
       key: p.key,
@@ -209,21 +209,21 @@ export async function agentQueues(actor: Actor, teamId?: string) {
 /** Things a human should look at: review queue, urgent work, stale explanations. */
 export async function needsAttention(actor: Actor, teamId?: string) {
   const s = await snapshot(actor, teamId);
-  const roles = columnRoles(s);
+  const roles = statusRoles(s);
   const pkey = new Map(s.teams.map((p) => [p.id, p.key]));
   const doneIds = roles.doneIds;
   const ref = (t: Snap["issues"][number]) => `${pkey.get(t.teamId)}-${t.number}`;
   const byUpdated = (a: { updatedAt: Date }, b: { updatedAt: Date }) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   const review = s.issues
-    .filter((t) => roles.review.has(t.columnId))
+    .filter((t) => roles.review.has(t.statusId))
     .sort(byUpdated)
     .slice(0, 6)
     .map((t) => ({ ref: ref(t), title: t.title, teamKey: pkey.get(t.teamId)!, byAgent: t.createdByKind === "agent" || !!t.claimedByKeyId, updatedAt: t.updatedAt }));
   const urgent = s.issues
-    .filter((t) => !doneIds.has(t.columnId) && t.priority === "urgent")
+    .filter((t) => !doneIds.has(t.statusId) && t.priority === "urgent")
     .sort(byUpdated)
     .slice(0, 6)
-    .map((t) => ({ ref: ref(t), title: t.title, teamKey: pkey.get(t.teamId)!, column: s.columns.find((c) => c.id === t.columnId)?.name ?? "" }));
+    .map((t) => ({ ref: ref(t), title: t.title, teamKey: pkey.get(t.teamId)!, status: s.statuses.find((c) => c.id === t.statusId)?.name ?? "" }));
   const stale = s.nodes
     .filter((n) => n.stale)
     .slice(0, 6)
@@ -253,7 +253,7 @@ export async function syncHealth(actor: Actor, teamId?: string) {
   const pids = s.teams.map((p) => p.id);
   if (!pids.length) return { untracked: [], quiet: [], drafts: [] };
   const pkey = new Map(s.teams.map((p) => [p.id, p.key]));
-  const roles = columnRoles(s);
+  const roles = statusRoles(s);
   const doneIds = roles.doneIds;
 
   const sessions = await db
@@ -269,7 +269,7 @@ export async function syncHealth(actor: Actor, teamId?: string) {
   const keys = await db.select({ id: apiKeys.id, name: apiKeys.name }).from(apiKeys).where(eq(apiKeys.workspaceId, actor.workspaceId));
   const keyName = new Map(keys.map((k) => [k.id, k.name]));
   const quiet = s.issues
-    .filter((t) => t.claimedByKeyId && !doneIds.has(t.columnId))
+    .filter((t) => t.claimedByKeyId && !doneIds.has(t.statusId))
     .map((t) => {
       const last = s.events.find((e) => e.entityId === t.id && e.actorId === t.claimedByKeyId);
       const lastAt = last ? new Date(last.createdAt).getTime() : new Date(t.updatedAt).getTime();
@@ -296,16 +296,16 @@ export async function syncHealth(actor: Actor, teamId?: string) {
 /**
  * The most important things about ONE team, ranked for a quick look: work that has sat longest in progress, what has waited
  * longest for review, agents that claimed an issue and went quiet, decisions still only proposed, and who is in the team.
- * "How long" is time since the issue last moved into its current column (from the event log; an issue that has not moved in the
+ * "How long" is time since the issue last moved into its current status (from the event log; an issue that has not moved in the
  * 28 days the snapshot reads is dated from its last update, which is never later than when it moved).
  */
 export async function teamFocus(actor: Actor, teamId: string) {
   const s = await snapshot(actor, teamId);
   const p = s.teams[0];
   if (!p) return { aging: [], waitingReview: [], quiet: [], proposedDecisions: 0, members: { count: 0, myRole: null as null | string }, issues: 0 };
-  const roles = columnRoles(s);
+  const roles = statusRoles(s);
   const now = Date.now();
-  const colName = new Map(s.columns.map((c) => [c.id, c.name]));
+  const colName = new Map(s.statuses.map((c) => [c.id, c.name]));
   const since = (t: Snap["issues"][number]) => {
     const moved = s.events.find((e) => e.entityId === t.id && e.type === "issue.moved");
     return new Date(moved?.createdAt ?? t.updatedAt).getTime();
@@ -313,14 +313,14 @@ export async function teamFocus(actor: Actor, teamId: string) {
   const row = (t: Snap["issues"][number]) => ({
     ref: `${p.key}-${t.number}`,
     title: t.title,
-    column: colName.get(t.columnId) ?? "",
+    status: colName.get(t.statusId) ?? "",
     priority: t.priority,
     days: Math.max(0, Math.floor((now - since(t)) / DAY)),
     byAgent: !!t.claimedByKeyId,
   });
   const oldestFirst = (a: { days: number }, b: { days: number }) => b.days - a.days;
-  const aging = s.issues.filter((t) => roles.inProgress.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
-  const waitingReview = s.issues.filter((t) => roles.review.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
+  const aging = s.issues.filter((t) => roles.inProgress.has(t.statusId)).map(row).sort(oldestFirst).slice(0, 5);
+  const waitingReview = s.issues.filter((t) => roles.review.has(t.statusId)).map(row).sort(oldestFirst).slice(0, 5);
 
   const db = await getDb();
   const [{ n: proposed }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.decisions).where(and(eq(schema.decisions.teamId, p.id), eq(schema.decisions.status, "proposed")));

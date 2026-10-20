@@ -55,7 +55,7 @@ before(async () => {
   await addTeamMember(ada, a.key, { userId: vic.id, role: "viewer" });
 });
 
-const issue = async (team: { key: string }, title: string, over: Partial<svc.IssueInput> & { column?: string } = {}) => svc.createIssue(ada, team.key, { title: `${title} ${++n}`, ...over });
+const issue = async (team: { key: string }, title: string, over: Partial<svc.IssueInput> & { status?: string } = {}) => svc.createIssue(ada, team.key, { title: `${title} ${++n}`, ...over });
 const cycleRow = async (team: { id: string }, number: number) => (await db.select().from(schema.cycles).where(and(eq(schema.cycles.teamId, team.id), eq(schema.cycles.number, number))))[0];
 const cycleOf = async (ref: string) => (await svc.getIssue(ada, ref)).issue.cycle;
 
@@ -168,16 +168,16 @@ describe("issues in cycles", () => {
 });
 
 describe("rollover", () => {
-  // A fresh team: cycle 1 (Aug 3 to Aug 10) holds two open issues, one in a custom column, and one done; cycle 2 follows.
+  // A fresh team: cycle 1 (Aug 3 to Aug 10) holds two open issues, one in a custom status, and one done; cycle 2 follows.
   const setup = async (key: string, withNext: boolean) => {
     const t = await svc.createTeam(ada, { name: `Roll ${key}`, key });
     const start = at(-1);
     await cy.createCycle(ada, t.key, { startsAt: start, endsAt: new Date(start.getTime() + 7 * DAY) }, start);
     if (withNext) await cy.createCycle(ada, t.key, { startsAt: new Date(start.getTime() + 7 * DAY), endsAt: new Date(start.getTime() + 14 * DAY) }, start);
-    const todo = await svc.createIssue(ada, t.key, { title: "still todo", cycle: 1, column: "Todo" });
-    const doing = await svc.createIssue(ada, t.key, { title: "in progress", cycle: 1, column: "In Progress" });
-    const done = await svc.createIssue(ada, t.key, { title: "finished", cycle: 1, column: "Done" });
-    const outside = await svc.createIssue(ada, t.key, { title: "no cycle", column: "Todo" });
+    const todo = await svc.createIssue(ada, t.key, { title: "still todo", cycle: 1, status: "Todo" });
+    const doing = await svc.createIssue(ada, t.key, { title: "in progress", cycle: 1, status: "In Progress" });
+    const done = await svc.createIssue(ada, t.key, { title: "finished", cycle: 1, status: "Done" });
+    const outside = await svc.createIssue(ada, t.key, { title: "no cycle", status: "Todo" });
     return { t, start, todo, doing, done, outside };
   };
 
@@ -239,7 +239,7 @@ describe("rollover", () => {
     const t = await svc.createTeam(ada, { name: "Quiet", key: `${L}Q` });
     const start = at(-1);
     await cy.createCycle(ada, t.key, { startsAt: start, endsAt: new Date(start.getTime() + 7 * DAY) }, start);
-    await svc.createIssue(ada, t.key, { title: "all done", cycle: 1, column: "Done" });
+    await svc.createIssue(ada, t.key, { title: "all done", cycle: 1, status: "Done" });
     assert.deepEqual(await cy.rolloverCycles(t.id, new Date(start.getTime() + 9 * DAY)), { cycles: 1, moved: 0 });
     assert.equal((await db.select().from(schema.cycles).where(eq(schema.cycles.teamId, t.id))).length, 1, "no cycle is made for nobody");
   });
@@ -312,7 +312,7 @@ describe("the cycle view and what landed", () => {
     assert.deepEqual((await cy.getCycle(ada, t.key, 1, at(-1))).landed, [], "asked at the moment it began, nothing had landed yet");
   });
 
-  test("older events that only named the column still count, and a deleted issue is not listed", async () => {
+  test("older events that only named the status still count, and a deleted issue is not listed", async () => {
     const t = await svc.createTeam(ada, { name: "Old", key: `${L}T` });
     const start = at(-1);
     await cy.createCycle(ada, t.key, { startsAt: start, endsAt: new Date(start.getTime() + 7 * DAY) }, start);

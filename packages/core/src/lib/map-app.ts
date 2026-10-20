@@ -127,7 +127,7 @@ export type GraphView = {
   team: { id: string; key: string; name: string; description: string };
   nodes: NodeView[];
   edges: EdgeView[];
-  issueLinks: { nodeId: string; issueId: string; number: number; title: string; columnId: string; ref: string }[];
+  issueLinks: { nodeId: string; issueId: string; number: number; title: string; statusId: string; ref: string }[];
   flows: FlowView[];
   decisions: DecisionView[];
   terms: TermView[];
@@ -143,7 +143,7 @@ export async function graphView(actor: Actor, teamKey: string): Promise<GraphVie
     team: { id: g.team.id, key: g.team.key, name: g.team.name, description: g.team.description },
     nodes: g.nodes.map(nodeView),
     edges: g.edges.map(edgeView),
-    issueLinks: g.issueLinks.map((l) => ({ nodeId: l.nodeId, issueId: l.issueId, number: l.number, title: l.title, columnId: l.columnId, ref: l.ref })),
+    issueLinks: g.issueLinks.map((l) => ({ nodeId: l.nodeId, issueId: l.issueId, number: l.number, title: l.title, statusId: l.statusId, ref: l.ref })),
     flows: g.flows.map(flowView),
     decisions: g.decisions.map(decisionView),
     terms: g.terms.map(termView),

@@ -18,7 +18,7 @@ export function BoardPage() {
 
 function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>["data"]> }) {
   // A refresh hands over equal data in a new array; the board only re-reads its columns when they really change.
-  const columns = useMemo(() => board.columns.map(({ id, name }) => ({ id, name })), [board.columns]);
+  const columns = useMemo(() => board.statuses.map(({ id, name }) => ({ id, name })), [board.statuses]);
   const labels = useMemo(() => [...new Set(board.issues.flatMap((t) => t.labels))].sort(), [board.issues]);
   const [selected, setSelected] = useState<string[]>([]);
   return (

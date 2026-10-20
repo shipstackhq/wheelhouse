@@ -99,8 +99,8 @@ describe("one project", () => {
         {
           key: "AA", name: "Alpha", role: "admin", lead: true, total: 2, done: 1,
           issues: [
-            { ref: "AA-1", title: "Add the button", priority: "high", column: "Done", done: true, milestoneId: "m1" },
-            { ref: "AA-2", title: "Wire the callback", priority: "medium", column: "Todo", done: false, milestoneId: null },
+            { ref: "AA-1", title: "Add the button", priority: "high", status: "Done", done: true, milestoneId: "m1" },
+            { ref: "AA-2", title: "Wire the callback", priority: "medium", status: "Todo", done: false, milestoneId: null },
           ],
         },
       ],

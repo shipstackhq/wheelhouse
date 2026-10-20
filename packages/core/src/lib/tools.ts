@@ -49,23 +49,23 @@ export const tools = {
   }),
 
   create_project: tool({
-    description: "Create a project with default columns: Backlog, Todo, In Progress, Review, Done.",
+    description: "Create a project with default statuses: Backlog, Todo, In Progress, Review, Done.",
     input: z.object({ name: z.string(), key: z.string().max(6).optional(), description: z.string().optional() }),
     run: (a, i) => svc.createTeam(a, i),
   }),
 
   get_board: tool({
-    description: "Get the kanban board: columns in order, each with its issues (ref, title, priority, labels, version, claimable/claimed, linked graph nodes).",
+    description: "Get the kanban board: statuses in order, each with its issues (ref, title, priority, labels, version, claimable/claimed, linked graph nodes).",
     input: z.object({ project }),
     readOnly: true,
     run: async (a, i) => {
       const b = await svc.getBoard(a, i.project);
       return {
         project: { key: b.team.key, name: b.team.name, description: b.team.description },
-        columns: b.columns.map((c) => ({
+        statuses: b.statuses.map((c) => ({
           name: c.name,
           issues: b.issues
-            .filter((t) => t.columnId === c.id)
+            .filter((t) => t.statusId === c.id)
             .map((t) => ({
               ref: t.ref,
               title: t.title,
@@ -95,13 +95,13 @@ export const tools = {
       project,
       title: z.string(),
       body: z.string().optional(),
-      column: z.string().optional().describe("Column name, default Backlog"),
+      status: z.string().optional().describe("Status name, default Backlog"),
       priority: z.enum(PRIORITIES).optional(),
       labels: z.array(z.string()).optional(),
       link_nodes: z.array(z.string()).optional().describe("Graph node names/ids this issue touches"),
     }),
     run: async (a, i) => {
-      const t = await svc.createIssue(a, i.project, { ...i, column: i.column });
+      const t = await svc.createIssue(a, i.project, { ...i, status: i.status });
       for (const n of i.link_nodes ?? []) await svc.linkIssueNode(a, t.ref, n);
       return t;
     },
@@ -121,14 +121,14 @@ export const tools = {
   }),
 
   move_issue: tool({
-    description: 'Move an issue to a column, by name or by role ("in_progress", "review", "done"; a role finds the column even if it was renamed). Use in_progress when you start and review when done — leave done for humans unless told otherwise.',
+    description: 'Move an issue to a status, by name or by role ("in_progress", "review", "done"; a role finds the status even if it was renamed). Use in_progress when you start and review when done — leave done for humans unless told otherwise.',
     input: z.object({
       issue,
-      column: z.string(),
-      index: z.number().int().optional().describe("Position in column, default end"),
+      status: z.string(),
+      index: z.number().int().optional().describe("Position within the status, default end"),
       expected_version: expectedVersion,
     }),
-    run: (a, i) => svc.moveIssue(a, i.issue, i.column, i.index, i.expected_version),
+    run: (a, i) => svc.moveIssue(a, i.issue, i.status, i.index, i.expected_version),
   }),
 
   claim_issue: tool({

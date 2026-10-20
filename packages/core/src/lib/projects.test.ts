@@ -76,7 +76,7 @@ before(async () => {
 });
 
 const project = (over: Record<string, unknown> = {}, as: Actor = ada) => pr.createProject(as, { name: `P ${++n}`, leadTeam: ta.key, ...over });
-const issueIn = async (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { column?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
+const issueIn = async (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { status?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
 const rawSet = (id: string, set: Partial<typeof schema.issues.$inferInsert>) => db.update(schema.issues).set(set).where(eq(schema.issues.id, id));
 
 describe("making a project", () => {
@@ -186,11 +186,11 @@ describe("who sees a project (plan section 5)", () => {
   before(async () => {
     p1 = await project({ name: "Shared delivery", teams: [tb.key] });
     p2 = await pr.createProject(ada, { name: "Beta only", leadTeam: tb.key });
-    await issueIn(ta, p1.id, { title: "A-SECRET open", column: "Todo" });
-    await issueIn(ta, p1.id, { title: "A-SECRET done", column: "Done" });
-    await issueIn(tb, p1.id, { title: "B-SECRET done", column: "Done" });
-    await issueIn(tb, p1.id, { title: "B-SECRET open one", column: "Todo" });
-    await issueIn(tb, p1.id, { title: "B-SECRET open two", column: "In Progress" });
+    await issueIn(ta, p1.id, { title: "A-SECRET open", status: "Todo" });
+    await issueIn(ta, p1.id, { title: "A-SECRET done", status: "Done" });
+    await issueIn(tb, p1.id, { title: "B-SECRET done", status: "Done" });
+    await issueIn(tb, p1.id, { title: "B-SECRET open one", status: "Todo" });
+    await issueIn(tb, p1.id, { title: "B-SECRET open two", status: "In Progress" });
   });
   const ids = async (who: Actor) => (await pr.listProjects(who)).map((p) => p.id);
 
@@ -290,11 +290,11 @@ describe("health and progress", () => {
 
   test("a project's progress is the issues in it across its teams, and what people set wins over what is derived", async () => {
     const p = await pr.createProject(ada, { name: "Counted", leadTeam: ta.key, teams: [tb.key], status: "active", startDate: "2026-11-01", targetDate: "2026-11-30" });
-    await issueIn(ta, p.id, { column: "Done" });
-    await issueIn(ta, p.id, { column: "Todo" });
-    await issueIn(tb, p.id, { column: "Done" });
-    await issueIn(tb, p.id, { column: "Review" });
-    const outside = await issueIn(tb, null, { column: "Done" });
+    await issueIn(ta, p.id, { status: "Done" });
+    await issueIn(ta, p.id, { status: "Todo" });
+    await issueIn(tb, p.id, { status: "Done" });
+    await issueIn(tb, p.id, { status: "Review" });
+    const outside = await issueIn(tb, null, { status: "Done" });
     void outside;
     const view = (now: Date) => pr.getProject(ada, p.id, now);
     const early = await view(D("2026-11-03"));
@@ -311,10 +311,10 @@ describe("health and progress", () => {
     assert.equal((await view(D("2026-12-02"))).health.derived, null);
   });
 
-  test("a done issue is one in a done column; a custom column counts as open", async () => {
-    const p = await pr.createProject(ada, { name: "Columns", leadTeam: ta.key });
-    await issueIn(ta, p.id, { column: "Review" });
-    await issueIn(ta, p.id, { column: "Done" });
+  test("a done issue is one in a done status; a custom status counts as open", async () => {
+    const p = await pr.createProject(ada, { name: "Statuses", leadTeam: ta.key });
+    await issueIn(ta, p.id, { status: "Review" });
+    await issueIn(ta, p.id, { status: "Done" });
     const v = await pr.getProject(ada, p.id);
     assert.deepEqual([v.total, v.done], [2, 1]);
   });
@@ -390,7 +390,7 @@ describe("milestones and an issue's place in a project", () => {
     assert.deepEqual(v.milestones.map((m) => m.name), ["GA", "Alpha", "Beta"]);
     v = await pr.updateMilestone(ada, p.id, alpha.id, { name: "Alpha 1", targetDate: null });
     assert.deepEqual([v.milestones[1].name, v.milestones[1].targetDate], ["Alpha 1", null]);
-    await issueIn(ta, p.id, { milestoneId: beta.id, column: "Done" });
+    await issueIn(ta, p.id, { milestoneId: beta.id, status: "Done" });
     await issueIn(ta, p.id, { milestoneId: beta.id });
     v = await pr.getProject(ada, p.id);
     assert.deepEqual(v.milestones.map((m) => [m.name, m.total, m.done]), [["GA", 0, 0], ["Alpha 1", 0, 0], ["Beta", 2, 1]]);

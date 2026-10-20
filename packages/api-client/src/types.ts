@@ -133,7 +133,7 @@ export type DashboardSummary = {
 };
 
 /** The most important things about one team, ranked for a quick look. Only for `?team=KEY`. */
-export type FocusIssue = { ref: string; title: string; column: string; priority: Priority; days: number; byAgent: boolean };
+export type FocusIssue = { ref: string; title: string; status: string; priority: Priority; days: number; byAgent: boolean };
 export type TeamFocus = {
   /** In progress the longest, oldest first. */
   aging: FocusIssue[];
@@ -188,7 +188,7 @@ export type AgentQueue = {
 
 export type NeedsAttention = {
   review: { ref: string; title: string; teamKey: string; byAgent: boolean; updatedAt: string }[];
-  urgent: { ref: string; title: string; teamKey: string; column: string }[];
+  urgent: { ref: string; title: string; teamKey: string; status: string }[];
   stale: { id: string; name: string; layer: string; reason: string | null; teamKey: string }[];
   staleDocs: { id: string; slug: string; title: string; reason: string | null; teamKey: string }[];
 };
@@ -225,7 +225,7 @@ export type IssueView = {
   number: number;
   title: string;
   body: string;
-  columnId: string;
+  statusId: string;
   priority: Priority;
   assigneeId: string | null;
   agentClaimable: boolean;
@@ -269,7 +269,7 @@ export type CycleSummary = CycleOption & {
 export type CycleList = { current: CycleSummary | null; upcoming: CycleSummary[]; past: CycleSummary[] };
 export type CycleLanded = { ref: string; title: string; issueId: string; doneAt: string; inCycle: boolean };
 export type CycleDetail = CycleSummary & {
-  issues: { ref: string; title: string; priority: Priority; column: string; done: boolean; assigneeId: string | null }[];
+  issues: { ref: string; title: string; priority: Priority; status: string; done: boolean; assigneeId: string | null }[];
   /** Issues that reached Done while the cycle ran, and which of them are in it. */
   landed: CycleLanded[];
 };
@@ -303,7 +303,7 @@ export type ProjectSummary = {
   updatedAt: string;
 };
 export type ProjectMilestone = { id: string; name: string; description: string; targetDate: string | null; position: number; total: number; done: number };
-export type ProjectIssue = { ref: string; title: string; priority: Priority; column: string; done: boolean; milestoneId: string | null };
+export type ProjectIssue = { ref: string; title: string; priority: Priority; status: string; done: boolean; milestoneId: string | null };
 export type ProjectTeam = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; issues: ProjectIssue[] };
 export type ProjectDetail = ProjectSummary & {
   canAdmin: boolean;
@@ -380,13 +380,13 @@ export type InitiativeInput = {
 };
 export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
 
-export type BoardColumn = { id: string; name: string; role: string | null; position: number };
+export type BoardStatus = { id: string; name: string; role: string | null; position: number };
 export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
 export type BoardMember = { id: string; name: string };
 
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
-  columns: BoardColumn[];
+  statuses: BoardStatus[];
   issues: BoardIssue[];
   nodes: BoardNode[];
   members: BoardMember[];
@@ -412,7 +412,7 @@ export type IssuePullRequest = {
 };
 
 export type IssueDetail = {
-  issue: IssueView & { column: string | undefined };
+  issue: IssueView & { status: string | undefined };
   team: { key: string; name: string };
   comments: IssueComment[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
@@ -436,8 +436,8 @@ export type IssuePatch = {
   milestoneId?: string | null;
   version?: number;
 };
-export type NewIssue = Omit<IssuePatch, "version"> & { title: string; column?: string };
-export type MoveIssue = { column: string; index?: number; version?: number };
+export type NewIssue = Omit<IssuePatch, "version"> & { title: string; status?: string };
+export type MoveIssue = { status: string; index?: number; version?: number };
 
 export type BotSession = SessionView;
 /** An agent key and its queue in one team. */
@@ -519,7 +519,7 @@ export type GraphView = {
   team: { id: string; key: string; name: string; description: string };
   nodes: MapNode[];
   edges: MapEdge[];
-  issueLinks: { nodeId: string; issueId: string; number: number; title: string; columnId: string; ref: string }[];
+  issueLinks: { nodeId: string; issueId: string; number: number; title: string; statusId: string; ref: string }[];
   flows: Flow[];
   decisions: Decision[];
   terms: Term[];

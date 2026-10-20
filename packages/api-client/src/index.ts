@@ -245,7 +245,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Team settings: rename it, change its description, icon or icon colour (team admins). `null` clears an icon. */
       update: async (teamKey: string, input: { name?: string; description?: string; icon?: string | null; iconColor?: string | null }) =>
         (await request<{ team: Team }>("PATCH", `/api/app/teams/${encodeURIComponent(teamKey)}`, input)).team,
-      /** The team page in one read: columns, issues, map nodes, members and the setup checklist. */
+      /** The team page in one read: statuses, issues, map nodes, members and the setup checklist. */
       board: (teamKey: string) => request<BoardView>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/board`),
       /** The Bots menu: each agent key with its queue in this team. */
       queue: async (teamKey: string) => (await request<{ bots: Bot[] }>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/queue`)).bots,
@@ -267,12 +267,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     issues: {
       create: async (teamKey: string, input: NewIssue) =>
-        (await request<{ issue: IssueView & { column: string | undefined } }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/issues`, input)).issue,
+        (await request<{ issue: IssueView & { status: string | undefined } }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/issues`, input)).issue,
       get: (ref: string) => request<IssueDetail>("GET", `/api/app/issues/${encodeURIComponent(ref)}`),
       /** With `version`, a stale edit rejects with an ApiError whose `current` is the issue as it is now. */
       update: async (ref: string, patch: IssuePatch) => (await request<{ issue: IssueView }>("PATCH", `/api/app/issues/${encodeURIComponent(ref)}`, patch)).issue,
       move: async (ref: string, move: MoveIssue) =>
-        (await request<{ issue: IssueView & { column: string | undefined } }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/move`, move)).issue,
+        (await request<{ issue: IssueView & { status: string | undefined } }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/move`, move)).issue,
       remove: (ref: string) => request<{ ok: true }>("DELETE", `/api/app/issues/${encodeURIComponent(ref)}`),
       comment: async (ref: string, body: string) => (await request<{ comment: IssueComment }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/comments`, { body })).comment,
       link: (ref: string, nodeId: string) => request<{ ok: true }>("PUT", `/api/app/issues/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),

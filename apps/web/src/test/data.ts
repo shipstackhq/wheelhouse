@@ -120,7 +120,7 @@ export const widgets = (): DashboardWidgets => ({
   ],
   attention: {
     review: [{ ref: "AA-7", title: "Add the login page", teamKey: "AA", byAgent: true, updatedAt: new Date().toISOString() }],
-    urgent: [{ ref: "AA-9", title: "Fix the crash", teamKey: "AA", column: "In Progress" }],
+    urgent: [{ ref: "AA-9", title: "Fix the crash", teamKey: "AA", status: "In Progress" }],
     stale: [{ id: "n1", name: "Service layer", layer: "system", reason: "src/lib/service.ts changed", teamKey: "AA" }],
     staleDocs: [{ id: "d1", slug: "runbook", title: "Runbook", reason: "code changed", teamKey: "AA" }],
   },
@@ -130,8 +130,8 @@ export const widgets = (): DashboardWidgets => ({
   ],
   sync: { untracked: [], quiet: [{ ref: "AA-4", title: "Refactor auth", teamKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }], drafts: [] },
   focus: {
-    aging: [{ ref: "AA-4", title: "Refactor auth", column: "In Progress", priority: "high", days: 9, byAgent: true }],
-    waitingReview: [{ ref: "AA-6", title: "Add rate limiting", column: "Review", priority: "medium", days: 4, byAgent: false }],
+    aging: [{ ref: "AA-4", title: "Refactor auth", status: "In Progress", priority: "high", days: 9, byAgent: true }],
+    waitingReview: [{ ref: "AA-6", title: "Add rate limiting", status: "Review", priority: "medium", days: 4, byAgent: false }],
     quiet: [{ ref: "AA-4", title: "Refactor auth", teamKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }],
     proposedDecisions: 2,
     members: { count: 3, myRole: "admin" },
@@ -148,7 +148,7 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 
 import type { BoardIssue, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, IssueDetail } from "@wheelhouse/api-client";
 
-export const COLUMNS = [
+export const STATUSES = [
   { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
   { id: "c-todo", name: "Todo", role: "todo", position: 2000 },
   { id: "c-progress", name: "In Progress", role: "in_progress", position: 3000 },
@@ -165,7 +165,7 @@ export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
     number: n,
     title: `Issue ${n}`,
     body: "",
-    columnId: "c-backlog",
+    statusId: "c-backlog",
     priority: "medium",
     assigneeId: null,
     agentClaimable: false,
@@ -187,12 +187,12 @@ export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
 
 export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => ({
   team: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
-  columns: COLUMNS,
+  statuses: STATUSES,
   issues: [
-    issue({ number: 1, title: "Write the plan", columnId: "c-backlog", priority: "high", labels: ["docs"] }),
-    issue({ number: 2, title: "Build the board", columnId: "c-todo", agentClaimable: true }),
-    issue({ number: 3, title: "Fix the crash", columnId: "c-todo", createdByKind: "agent", commentCount: 2 }),
-    issue({ number: 4, title: "Ship it", columnId: "c-done" }),
+    issue({ number: 1, title: "Write the plan", statusId: "c-backlog", priority: "high", labels: ["docs"] }),
+    issue({ number: 2, title: "Build the board", statusId: "c-todo", agentClaimable: true }),
+    issue({ number: 3, title: "Fix the crash", statusId: "c-todo", createdByKind: "agent", commentCount: 2 }),
+    issue({ number: 4, title: "Ship it", statusId: "c-done" }),
   ],
   nodes: [
     { id: "n-api", name: "API", kind: "service", parentId: null, layer: "system" },
@@ -220,7 +220,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
 });
 
 export const detail = (t: BoardIssue, over: Partial<IssueDetail> = {}): IssueDetail => ({
-  issue: { ...t, column: COLUMNS.find((c) => c.id === t.columnId)?.name },
+  issue: { ...t, status: STATUSES.find((c) => c.id === t.statusId)?.name },
   team: { key: "AA", name: "Alpha" },
   comments: [],
   nodes: [],
@@ -320,7 +320,7 @@ export const graph = (key = "AA", over: Partial<GraphView> = {}): GraphView => (
   team: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
   nodes: MAP_NODES,
   edges: MAP_EDGES,
-  issueLinks: [{ nodeId: "s-api", issueId: "t-1", number: 1, title: "Write the plan", columnId: "c-backlog", ref: `${key}-1` }],
+  issueLinks: [{ nodeId: "s-api", issueId: "t-1", number: 1, title: "Write the plan", statusId: "c-backlog", ref: `${key}-1` }],
   flows: MAP_FLOWS,
   decisions: MAP_DECISIONS,
   terms: MAP_TERMS,

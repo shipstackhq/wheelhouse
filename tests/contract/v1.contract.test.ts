@@ -59,7 +59,7 @@ describe("POST /api/v1/:tool: issues", () => {
     const title = unique("v1 flow");
     const made = await v1ok(A, "create_issue", { project: fx.a.teamKey, title, body: "body", priority: "high", labels: ["contract"] });
     assert.match(made.ref, new RegExp(`^${fx.a.teamKey}-\\d+$`));
-    assert.equal(made.column, "Backlog");
+    assert.equal(made.status, "Backlog");
     assert.equal(made.version, 1);
 
     const edited = await v1ok(A, "update_issue", { issue: made.ref, title: `${title} edited`, expected_version: 1 });
@@ -69,17 +69,17 @@ describe("POST /api/v1/:tool: issues", () => {
     assert.equal(stale.json.error.code, "conflict");
     assert.equal(stale.json.error.details.current.title, `${title} edited`, "a conflict carries the current state");
 
-    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, column: "In Progress" })).column, "In Progress");
-    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, column: "review" })).column, "Review", "a role finds the column (ADR-15)");
-    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, column: "done" })).column, "Done");
-    const badColumn = await v1(A, "move_issue", { issue: made.ref, column: "Nowhere" });
+    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, status: "In Progress" })).status, "In Progress");
+    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, status: "review" })).status, "Review", "a role finds the status (ADR-15)");
+    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, status: "done" })).status, "Done");
+    const badColumn = await v1(A, "move_issue", { issue: made.ref, status: "Nowhere" });
     assert.equal(badColumn.status, 400);
-    assert.match(badColumn.json.error.message, /Unknown column/);
+    assert.match(badColumn.json.error.message, /Unknown status/);
 
     const c = await v1ok(A, "comment", { issue: made.ref, body: "hello from the contract suite" });
     assert.equal(c.body, "hello from the contract suite");
     const got = await v1ok(A, "get_issue", { issue: made.ref });
-    assert.equal(got.issue.column, "Done");
+    assert.equal(got.issue.status, "Done");
     assert.equal(got.comments.length, 1);
     assert.ok(got.history.some((e: { type: string }) => e.type === "issue.moved"));
 
@@ -104,10 +104,10 @@ describe("POST /api/v1/:tool: issues", () => {
     expectGolden("v1-shapes", shapes);
   });
 
-  test("a new project's board has the five workflow columns in order", async () => {
+  test("a new project's board has the five workflow statuses in order", async () => {
     const board = await v1ok(A, "get_board", { project: fx.a.teamKey });
     assert.deepEqual(
-      board.columns.map((c: { name: string }) => c.name),
+      board.statuses.map((c: { name: string }) => c.name),
       ["Backlog", "Todo", "In Progress", "Review", "Done"],
     );
   });

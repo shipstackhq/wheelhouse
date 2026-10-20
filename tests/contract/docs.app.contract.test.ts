@@ -73,13 +73,13 @@ describe("docs", () => {
     assert.deepEqual(r.json.members.map((m: { id: string }) => m.id), [t.owner.me.user.id]);
   });
 
-  test("one doc by id or slug, with the map nodes it is linked to and none of the internal columns", async () => {
+  test("one doc by id or slug, with the map nodes it is linked to and none of the internal statuses", async () => {
     const t = await workspace();
     const d = await create(t.s, { title: "Arch", body: "Hello" });
     const r = await app("GET", `/api/app/teams/DOC/docs/${d.id}`, t.s);
     assert.equal(r.status, 200);
     assert.deepEqual([r.json.doc.body, r.json.doc.version, r.json.doc.updatedByKind, r.json.nodes], ["Hello", 1, "human", []]);
-    assert.equal(r.json.doc.describedHashes, undefined, "internal columns are not sent");
+    assert.equal(r.json.doc.describedHashes, undefined, "internal statuses are not sent");
     assert.equal((await app("GET", `/api/app/teams/DOC/docs/${d.slug}`, t.s)).status, 200, "a slug works too");
     assert.equal((await app("GET", "/api/app/teams/DOC/docs/00000000-0000-4000-8000-000000000000", t.s)).status, 404);
   });

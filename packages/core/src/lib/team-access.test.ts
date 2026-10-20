@@ -498,7 +498,7 @@ describe("the per-team dashboard (WH-107)", () => {
     await svc.moveIssue(owner, `${one.key}-${t2.number}`, "in_progress");
     await svc.moveIssue(owner, `${one.key}-${t3.number}`, "review");
     await svc.createIssue(owner, two.key, { title: "urgent elsewhere", priority: "urgent" });
-    // age the moves: the events say when each issue arrived in its column
+    // age the moves: the events say when each issue arrived in its status
     const db = await getDb();
     const moved = await db.select().from(schema.events).where(and(eq(schema.events.teamId, one.id), eq(schema.events.type, "issue.moved")));
     for (const e of moved) {

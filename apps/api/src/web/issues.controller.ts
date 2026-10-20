@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
-import { columnField, intField, moveIssueAs, issueDetail, issueInput, updateIssueAs } from "@wheelhouse/core/lib/board-app";
+import { statusField, intField, moveIssueAs, issueDetail, issueInput, updateIssueAs } from "@wheelhouse/core/lib/board-app";
 import { addComment, deleteIssue, linkIssueNode, ServiceError } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
@@ -23,12 +23,12 @@ export class IssuesController {
     return { issue: await updateIssueAs(req.human.actor, ref, issueInput(b, { create: false }), intField(b, "version")) };
   }
 
-  /** `{ column, index?, version? }`: the column by id, name or role (ADR-15); `index` is the place in it (the end when absent). */
+  /** `{ status, index?, version? }`: the status by id, name or role (ADR-15); `index` is the place in it (the end when absent). */
   @Post(":ref/move")
   @HttpCode(200)
   async move(@Req() req: SessionRequest & RawTextRequest, @Param("ref") ref: string) {
     const b = jsonBody(req);
-    return { issue: await moveIssueAs(req.human.actor, ref, columnField(b, true)!, intField(b, "index"), intField(b, "version")) };
+    return { issue: await moveIssueAs(req.human.actor, ref, statusField(b, true)!, intField(b, "index"), intField(b, "version")) };
   }
 
   @Delete(":ref")

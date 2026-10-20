@@ -16,10 +16,10 @@ const withCycles = () =>
   makeBoard("AA", {
     cycles: CYCLES,
     issues: [
-      issue({ number: 1, title: "Write the plan", columnId: "c-backlog" }),
-      issue({ number: 2, title: "Build the board", columnId: "c-todo", cycle: 2 }),
-      issue({ number: 3, title: "Fix the crash", columnId: "c-todo", cycle: 3 }),
-      issue({ number: 4, title: "Ship it", columnId: "c-done", cycle: 1 }),
+      issue({ number: 1, title: "Write the plan", statusId: "c-backlog" }),
+      issue({ number: 2, title: "Build the board", statusId: "c-todo", cycle: 2 }),
+      issue({ number: 3, title: "Fix the crash", statusId: "c-todo", cycle: 3 }),
+      issue({ number: 4, title: "Ship it", statusId: "c-done", cycle: 1 }),
     ],
   });
 const column = (name: string) => screen.getByText(name, { selector: ".text-sm.font-medium" }).closest("[data-column]") as HTMLElement;
@@ -139,7 +139,7 @@ describe("the Cycle field of an issue", () => {
   });
 
   test("a team with no cycles, and an issue in none, does not show the field", async () => {
-    renderApp("/t/AA?t=AA-2", (s) => s.on("GET /api/app/issues/AA-2", detail(issue({ number: 2, title: "Build the board", columnId: "c-todo" }))));
+    renderApp("/t/AA?t=AA-2", (s) => s.on("GET /api/app/issues/AA-2", detail(issue({ number: 2, title: "Build the board", statusId: "c-todo" }))));
     const d = await screen.findByRole("dialog");
     await within(d).findByRole("textbox", { name: "Title" });
     expect(within(d).queryByText("Cycle", { selector: "span.label" })).toBeNull();

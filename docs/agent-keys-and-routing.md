@@ -21,7 +21,7 @@ worker_teams (worker_id, team_id, workspace_id)  PK (worker_id, team_id)      --
 ```
 
 - A worker authenticates with an agent key. It may belong only to teams that key is scoped to; the dispatcher checks `worker_teams ⊆ api_key_teams` each time it assigns, so narrowing a key takes effect at once without touching the worker.
-- Offering work: for a team T, the candidates are workers with a `worker_teams` row for T whose key is still scoped to T. An issue is "ready" through T's own board (its column roles), never across teams.
+- Offering work: for a team T, the candidates are workers with a `worker_teams` row for T whose key is still scoped to T. An issue is "ready" through T's own board (its status roles), never across teams.
 - Claims stay per issue (`claimed_by_key_id`), so an assignment is the existing `claim_issue` call made through the worker's key, subject to the same scope check.
 - An issue of a project that spans teams is offered by the team that owns the issue, to that team's workers; the project never routes work.
 - Events a worker sees are the team's own `events` (and later a workspace cursor over `workspace_events`, for teams it belongs to only).

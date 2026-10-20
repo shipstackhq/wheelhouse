@@ -62,16 +62,16 @@ describe("unique keys", () => {
   });
 
   test("a column role is held by one column per team; custom columns are not limited", async () => {
-    const roleRows = await db.select().from(schema.columns).where(eq(schema.columns.teamId, a1.id));
+    const roleRows = await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a1.id));
     const withRole = roleRows.find((c) => c.role === "review")!;
     assert.ok(withRole);
-    await assert.rejects(db.insert(schema.columns).values({ teamId: a1.id, workspaceId: wsA, name: "Second review", position: 50, role: "review" }), unique);
-    await db.insert(schema.columns).values([
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Second review", position: 50, role: "review" }), unique);
+    await db.insert(schema.statuses).values([
       { teamId: a1.id, workspaceId: wsA, name: "Custom one", position: 51, role: null },
       { teamId: a1.id, workspaceId: wsA, name: "Custom two", position: 52, role: null },
     ]);
     // the same role in another team is fine
-    assert.ok((await db.select().from(schema.columns).where(eq(schema.columns.teamId, a2.id))).some((c) => c.role === "review"));
+    assert.ok((await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a2.id))).some((c) => c.role === "review"));
   });
 });
 
@@ -114,7 +114,7 @@ describe("a value outside its enum is refused", () => {
     ["memberships.role", () => db.execute(sql`update memberships set role = 'boss' where user_id = ${ada.id}`)],
     ["team_members.role", () => db.execute(sql`insert into team_members (team_id, workspace_id, user_id, role) values (${a1.id}, ${wsA}, ${ada.id}, 'god')`)],
     ["issues.priority", () => db.execute(sql`update issues set priority = 'asap'`)],
-    ["columns.role", () => db.execute(sql`update columns set role = 'qa' where team_id = ${a2.id} and role = 'todo'`)],
+    ["statuses.role", () => db.execute(sql`update statuses set role = 'qa' where team_id = ${a2.id} and role = 'todo'`)],
     ["nodes.layer", () => db.execute(sql`insert into nodes (team_id, workspace_id, layer, kind, name) values (${a1.id}, ${wsA}, 'cloud', 'service', 'x')`)],
     ["nodes.kind", () => db.execute(sql`insert into nodes (team_id, workspace_id, layer, kind, name) values (${a1.id}, ${wsA}, 'system', 'lambda', 'x')`)],
     ["nodes.status", () => db.execute(sql`insert into nodes (team_id, workspace_id, layer, kind, name, status) values (${a1.id}, ${wsA}, 'system', 'service', 'x', 'dead')`)],
@@ -138,7 +138,7 @@ describe("a value outside its enum is refused", () => {
   for (const [what, attempt] of bad) test(what, async () => assert.rejects(attempt(), checked));
 
   test("a null is still allowed where the column allows it (a custom column has no role)", async () => {
-    await db.insert(schema.columns).values({ teamId: a2.id, workspaceId: wsA, name: "No role", position: 70, role: null });
+    await db.insert(schema.statuses).values({ teamId: a2.id, workspaceId: wsA, name: "No role", position: 70, role: null });
   });
 });
 

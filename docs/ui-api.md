@@ -105,7 +105,7 @@ the reason.
 | `createTeamAction` | `POST /api/app/teams` | WH-95 | extends the GET already built; 201 |
 | `createConceptFromDescriptionAction` | `POST /api/app/teams/:key/onboarding/concept` | WH-98 | onboarding wizard |
 | `latestSeq` | none | unneeded | only fed the polling refresh; replaced by the SSE stream (WH-94) |
-| `moveIssueAction` | `POST /api/app/issues/:ref/move` | WH-96 | `{ column, index? , version? }`; the column by role or name, as in `move_issue` |
+| `moveIssueAction` | `POST /api/app/issues/:ref/move` | WH-96 | `{ status, index? , version? }`; the status by role or name, as in `move_issue` |
 | `createIssueAction` | `POST /api/app/teams/:key/issues` | WH-96 | 201; also serves createIssueFromActionItemAction |
 | `updateIssueAction` | `PATCH /api/app/issues/:ref` | WH-96 | `version` in the body; a stale one is a 409 `conflict` with `details.current` |
 | `deleteIssueAction` | `DELETE /api/app/issues/:ref` | WH-96 |  |
@@ -179,16 +179,16 @@ The board and the issue dialog. Everything needs a session. An issue is addresse
 
 | Endpoint | What it is |
 |---|---|
-| `GET /api/app/teams/:key/board` | the team page in one read: `team`, `columns` (id, name, role, position), `issues` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
+| `GET /api/app/teams/:key/board` | the team page in one read: `team`, `statuses` (id, name, role, position), `issues` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
 | `GET /api/app/teams/:key/queue` | the Bots menu: `{ bots }`, each agent key with its queue depth and live sessions in this team |
 | `PATCH /api/app/issues/:ref` | see "The version check" below |
-| `POST /api/app/issues/:ref/move` | `{ column, index?, version? }`: the column by id, name or role; `index` is the place in the column (the end when absent) |
+| `POST /api/app/issues/:ref/move` | `{ status, index?, version? }`: the status by id, name or role; `index` is the place in the status (the end when absent) |
 
-An issue in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
+An issue in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `statusId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the status's `name`.
 
 **Claiming.** Only agents claim an issue (over MCP or `/api/v1`). A person decides whether agents may pick an issue up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
 
-**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`column`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's workspace.
+**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`status`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's workspace.
 
 ### The version check
 
@@ -318,7 +318,7 @@ number that is not a whole number is a `404`.
 |---|---|
 | `GET /api/app/teams/:key/cycles` | `{ current, upcoming, past }`: each cycle is `{ number, name, goal, startsAt, endsAt, state, total, done, open }` (`current` is one or null; `past` is newest first). A cycle whose window has ended hands its unfinished issues on before this answers |
 | `POST /api/app/teams/:key/cycles` | `{ name?, goal?, startsAt?, endsAt? }`; 201 `{ cycle }`. No dates: from now for two weeks. A window must end after it starts and last one to fourteen days (`400`, naming `endsAt`); one that overlaps another cycle of the team is a `409` naming it |
-| `GET /api/app/teams/:key/cycles/:number` | `{ cycle }` with `issues` (`ref`, `title`, `priority`, `column`, `done`, `assigneeId`) and `landed` (the team's issues that reached Done while the window ran: `ref`, `title`, `doneAt`, `inCycle`) |
+| `GET /api/app/teams/:key/cycles/:number` | `{ cycle }` with `issues` (`ref`, `title`, `priority`, `status`, `done`, `assigneeId`) and `landed` (the team's issues that reached Done while the window ran: `ref`, `title`, `doneAt`, `inCycle`) |
 | `PATCH /api/app/teams/:key/cycles/:number` | any of `name`, `goal`, `startsAt`, `endsAt`; a cycle that has ended keeps its dates (`400`) |
 | `DELETE /api/app/teams/:key/cycles/:number` | `{ ok, number, released }`; its issues stay on the board in no cycle |
 
@@ -326,7 +326,7 @@ An issue joins a cycle with `cycle` (the number) on `POST .../issues` or `PATCH 
 ended is closed to new issues, and the database refuses a cycle of another team. Every issue answer carries `cycle` (a number or null), and the board answer carries `cycles`
 (`{ number, name, startsAt, endsAt, state }`, newest first) for the card chip and the filter.
 
-**Rollover.** Once a cycle has ended, every issue in it that is not in a done column (a custom column counts as open) moves to the team's next cycle, once: `cycles.rolled_over_at` is set whether or not anything
+**Rollover.** Once a cycle has ended, every issue in it that is not in a done status (a custom status counts as open) moves to the team's next cycle, once: `cycles.rolled_over_at` is set whether or not anything
 moved, so a second read, or two at once, changes nothing. With no next cycle, one of the same length is made, starting where the last ended and moved on by whole lengths if the team was away, so it holds today.
 It happens on reads of the cycles and the board, as the claim sweep does, as "Wheelhouse", and is announced as `cycle.rolled_over` (and `cycle.created`). Cycle changes are events (`cycle.created`, `cycle.updated`,
 `cycle.deleted`, `cycle.rolled_over`, entity `cycle`), so agents hear them in their queue. `/api/v1` and the MCP tools never show an issue's cycle.

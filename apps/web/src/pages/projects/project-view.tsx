@@ -214,7 +214,7 @@ export function ProjectView(props: { project: ProjectDetail }) {
                           <span className="font-mono text-[11px] text-muted">{x.ref}</span> {x.title}
                         </Link>
                         {milestoneName(x.milestoneId) && <span className="chip bg-accent/10 text-accent/90">{milestoneName(x.milestoneId)}</span>}
-                        <span className="chip bg-panel-2 text-muted">{x.column}</span>
+                        <span className="chip bg-panel-2 text-muted">{x.status}</span>
                       </li>
                     ))}
                   </ul>

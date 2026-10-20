@@ -184,8 +184,8 @@ describe("the projects endpoints", () => {
 describe("who sees what over HTTP", () => {
   test("the member of one team sees the other team only as totals: no key, no name, no title", async () => {
     const p = await make({ teams: [second] });
-    await issue(teamA, { title: "OWN-VISIBLE", projectId: p.id, column: "Done" });
-    await issue(second, { title: "SECOND-SECRET one", projectId: p.id, column: "Done" });
+    await issue(teamA, { title: "OWN-VISIBLE", projectId: p.id, status: "Done" });
+    await issue(second, { title: "SECOND-SECRET one", projectId: p.id, status: "Done" });
     await issue(second, { title: "SECOND-SECRET two", projectId: p.id });
     const r = await app("GET", `/api/app/projects/${p.id}`, member);
     assert.equal(r.status, 200, r.text);
@@ -230,7 +230,7 @@ describe("the old agent surface", () => {
     const t = await issue(teamA, { title: "For the agent", projectId: p.id });
     const board = await v1ok({ key: apiKey }, "get_board", { project: teamA });
     assert.equal(board.project.key, teamA, "`project` in the old shape is the team");
-    const card = board.columns.flatMap((c: { issues: Record<string, unknown>[] }) => c.issues).find((x: { ref: string }) => x.ref === t.ref) as Record<string, unknown>;
+    const card = board.statuses.flatMap((c: { issues: Record<string, unknown>[] }) => c.issues).find((x: { ref: string }) => x.ref === t.ref) as Record<string, unknown>;
     assert.ok(card, "the issue is on the agent's board");
     for (const k of ["projectId", "milestoneId", "cycle", "cycleId"]) assert.equal(k in card, false, k);
     const got = await v1ok({ key: apiKey }, "get_issue", { issue: t.ref });

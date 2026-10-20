@@ -10,7 +10,7 @@ import { ServiceError } from "./service-error";
  * Every function takes `now` so the whole thing can be tested against a fixed clock.
  */
 
-const { cycles, issues, columns, events, teams } = schema;
+const { cycles, issues, statuses, events, teams } = schema;
 export type CycleRow = typeof cycles.$inferSelect;
 export type CycleState = "upcoming" | "current" | "past";
 
@@ -83,7 +83,7 @@ export type CycleSummary = {
   startsAt: Date;
   endsAt: Date;
   state: CycleState;
-  /** Issues in the cycle now, how many of them are done, how many are still open (a custom column counts as open). */
+  /** Issues in the cycle now, how many of them are done, how many are still open (a custom status counts as open). */
   total: number;
   done: number;
   open: number;
@@ -95,10 +95,10 @@ async function summaries(q: Q, rows: CycleRow[], now: Date): Promise<CycleSummar
     .select({
       cycleId: issues.cycleId,
       total: sql<number>`count(*)::int`,
-      done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int`,
+      done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int`,
     })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(inArray(issues.cycleId, rows.map((r) => r.id)))
     .groupBy(issues.cycleId);
   const by = new Map(counts.map((c) => [c.cycleId, c]));
@@ -115,7 +115,7 @@ async function summaries(q: Q, rows: CycleRow[], now: Date): Promise<CycleSummar
 export type RolloverResult = { cycles: number; moved: number };
 
 /**
- * Cycles whose window has ended hand their unfinished issues (any column but a done one) to the next cycle of the team, once:
+ * Cycles whose window has ended hand their unfinished issues (any status but a done one) to the next cycle of the team, once:
  * `rolled_over_at` is set whether or not anything moved, so running it again, or from two requests at once, changes nothing. The
  * next cycle is the team's next one by start; if there is none, one of the same length is made, starting where this one ended and
  * moved on by whole lengths if the team was away, so it holds `now`. Reads call this, as the claim sweep does.
@@ -133,8 +133,8 @@ export async function rolloverCycles(teamId: string, now = new Date()): Promise<
       const unfinished = await tx
         .select({ id: issues.id, number: issues.number, version: issues.version })
         .from(issues)
-        .innerJoin(columns, eq(columns.id, issues.columnId))
-        .where(and(eq(issues.cycleId, c.id), sql`${columns.role} is distinct from 'done'`));
+        .innerJoin(statuses, eq(statuses.id, issues.statusId))
+        .where(and(eq(issues.cycleId, c.id), sql`${statuses.role} is distinct from 'done'`));
       if (unfinished.length) {
         let [next] = await tx.select().from(cycles).where(and(eq(cycles.teamId, teamId), gte(cycles.startsAt, c.endsAt))).orderBy(asc(cycles.startsAt)).limit(1);
         if (!next) {
@@ -258,12 +258,12 @@ export async function deleteCycle(actor: Actor, teamRef: string, number: number)
 export type Landed = { ref: string; title: string; issueId: string; doneAt: Date; inCycle: boolean };
 
 /**
- * Issues that reached a done column inside [from, to), from the event log (an older event only recorded the column's name, so
- * that is matched against the team's done columns). An issue counts once, at its first move to done in the window, and an issue
+ * Issues that reached a done status inside [from, to), from the event log (an older event only recorded the status's name, so
+ * that is matched against the team's done statuses). An issue counts once, at its first move to done in the window, and an issue
  * since deleted is not listed. `inCycle` says whether it is in that cycle now.
  */
 export async function landedBetween(q: Q, teamId: string, from: Date, to: Date, cycleId?: string): Promise<Landed[]> {
-  const doneNames = new Set((await q.select({ name: columns.name }).from(columns).where(and(eq(columns.teamId, teamId), eq(columns.role, "done")))).map((c) => c.name));
+  const doneNames = new Set((await q.select({ name: statuses.name }).from(statuses).where(and(eq(statuses.teamId, teamId), eq(statuses.role, "done")))).map((c) => c.name));
   const moves = await q
     .select()
     .from(events)
@@ -284,7 +284,7 @@ export async function landedBetween(q: Q, teamId: string, from: Date, to: Date, 
 }
 
 export type CycleDetail = CycleSummary & {
-  issues: { ref: string; title: string; priority: string; column: string; done: boolean; assigneeId: string | null }[];
+  issues: { ref: string; title: string; priority: string; status: string; done: boolean; assigneeId: string | null }[];
   /** Issues that reached done while the cycle ran (the window, not only the issues in it), and which of them are in it. */
   landed: Landed[];
 };
@@ -296,16 +296,16 @@ export async function getCycle(actor: Actor, teamRef: string, number: number, no
   const c = await resolveCycle(db, team.id, number);
   const [summary] = await summaries(db, [c], now);
   const inCycle = await db
-    .select({ number: issues.number, title: issues.title, priority: issues.priority, column: columns.name, role: columns.role, assigneeId: issues.assigneeId })
+    .select({ number: issues.number, title: issues.title, priority: issues.priority, status: statuses.name, role: statuses.role, assigneeId: issues.assigneeId })
     .from(issues)
-    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(eq(issues.cycleId, c.id))
     .orderBy(asc(issues.number));
   // A cycle that has not started has landed nothing; one that is running reports up to now.
   const landed = c.startsAt.getTime() > now.getTime() ? [] : await landedBetween(db, team.id, c.startsAt, new Date(Math.min(c.endsAt.getTime(), now.getTime() + 1)), c.id);
   return {
     ...summary,
-    issues: inCycle.map((t) => ({ ref: `${team.key}-${t.number}`, title: t.title, priority: t.priority, column: t.column, done: t.role === "done", assigneeId: t.assigneeId })),
+    issues: inCycle.map((t) => ({ ref: `${team.key}-${t.number}`, title: t.title, priority: t.priority, status: t.status, done: t.role === "done", assigneeId: t.assigneeId })),
     landed,
   };
 }

@@ -27,6 +27,6 @@ export function onboarding({ origin, teamKey }: { origin: string; teamKey?: stri
     cli: `npm install -g @shipstack/wheelhouse-cli\nwheelhouse login${urlFlag}\nwheelhouse init --project ${key}${urlFlag}`,
     // `read -s` keeps the key out of the terminal and out of shell history; the commands below only name the variable.
     mcp: `read -rs WHEELHOUSE_KEY; export WHEELHOUSE_KEY   # paste the key; nothing is shown\nclaude mcp add --transport http wheelhouse ${url}/mcp --header "Authorization: Bearer $WHEELHOUSE_KEY"`,
-    rest: `curl -X POST ${url}/api/v1/create_issue \\\n  -H "Authorization: Bearer $WHEELHOUSE_KEY" -H "Content-Type: application/json" \\\n  -d '{"project":"${key}","title":"Fix flaky login test","column":"Todo"}'`,
+    rest: `curl -X POST ${url}/api/v1/create_issue \\\n  -H "Authorization: Bearer $WHEELHOUSE_KEY" -H "Content-Type: application/json" \\\n  -d '{"project":"${key}","title":"Fix flaky login test","status":"Todo"}'`,
   };
 }

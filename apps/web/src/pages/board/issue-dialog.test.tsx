@@ -214,11 +214,11 @@ describe("the properties", () => {
     await user.click(await screen.findByRole("option", { name: option }));
   };
 
-  test("Status moves the issue by column id (not by name), and the board reads again", async () => {
+  test("Status moves the issue by status id (not by name), and the board reads again", async () => {
     const { server, d } = await open((s) => s.on("POST /api/app/issues/AA-2/move", { issue: T2 }));
     await pick(userEvent.setup(), d, "Status", "Review");
     await waitFor(() => expect(server.sent("POST /api/app/issues/AA-2/move")).toHaveLength(1));
-    expect(server.sent("POST /api/app/issues/AA-2/move")[0].body).toEqual({ column: "c-review" });
+    expect(server.sent("POST /api/app/issues/AA-2/move")[0].body).toEqual({ status: "c-review" });
     await waitFor(() => expect(server.sent("GET /api/app/teams/AA/board").length).toBeGreaterThan(1));
   });
 

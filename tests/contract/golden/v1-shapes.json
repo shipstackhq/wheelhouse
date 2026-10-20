@@ -11,7 +11,12 @@
     }
   ],
   "get_board": {
-    "columns": [
+    "project": {
+      "description": "string",
+      "key": "string",
+      "name": "string"
+    },
+    "statuses": [
       {
         "issues": [
           {
@@ -30,20 +35,13 @@
         ],
         "name": "string"
       }
-    ],
-    "project": {
-      "description": "string",
-      "key": "string",
-      "name": "string"
-    }
+    ]
   },
   "create_issue": {
     "agentClaimable": "boolean",
     "assigneeId": "null",
     "body": "string",
     "claimedByKeyId": "null",
-    "column": "string",
-    "columnId": "string",
     "createdAt": "string",
     "createdById": "string",
     "createdByKind": "string",
@@ -56,6 +54,8 @@
     "priority": "string",
     "projectId": "string",
     "ref": "string",
+    "status": "string",
+    "statusId": "string",
     "title": "string",
     "updatedAt": "string",
     "version": "number"
@@ -69,8 +69,8 @@
         "actorName": "string",
         "createdAt": "string",
         "data": {
-          "column": "string",
           "ref": "string",
+          "status": "string",
           "title": "string"
         },
         "entity": "string",
@@ -88,8 +88,6 @@
       "assigneeId": "null",
       "body": "string",
       "claimedByKeyId": "null",
-      "column": "string",
-      "columnId": "string",
       "createdAt": "string",
       "createdById": "string",
       "createdByKind": "string",
@@ -102,6 +100,8 @@
       "priority": "string",
       "projectId": "string",
       "ref": "string",
+      "status": "string",
+      "statusId": "string",
       "title": "string",
       "updatedAt": "string",
       "version": "number"
@@ -126,8 +126,8 @@
         "actorName": "string",
         "createdAt": "string",
         "data": {
-          "column": "string",
           "ref": "string",
+          "status": "string",
           "title": "string"
         },
         "entity": "string",
@@ -162,11 +162,11 @@
             "to": "string"
           }
         },
-        "column": "string",
         "commentId": "string",
         "from": "string",
         "fromRole": "string",
         "ref": "string",
+        "status": "string",
         "title": "string",
         "to": "string",
         "toRole": "string"

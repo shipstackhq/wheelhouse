@@ -120,8 +120,8 @@ describe("one cycle", () => {
       done: 1,
       open: 1,
       issues: [
-        { ref: "AA-1", title: "Take the money", priority: "high", column: "Done", done: true, assigneeId: null },
-        { ref: "AA-2", title: "Send the receipt", priority: "medium", column: "Todo", done: false, assigneeId: null },
+        { ref: "AA-1", title: "Take the money", priority: "high", status: "Done", done: true, assigneeId: null },
+        { ref: "AA-2", title: "Send the receipt", priority: "medium", status: "Todo", done: false, assigneeId: null },
       ],
       landed: [
         { ref: "AA-1", title: "Take the money", issueId: "t1", doneAt: days(-1), inCycle: true },
