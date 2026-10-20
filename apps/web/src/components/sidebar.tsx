@@ -210,42 +210,33 @@ export function Sidebar({
             <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
           </Group>
           <div className={clsx("relative", collapsed ? "md:mt-3 md:border-t md:border-line md:pt-3" : "")}>
-            <div className={clsx("mt-5 flex items-center justify-between", collapsed && "md:mt-0 md:justify-center")}>
-              <button
-                type="button"
-                onClick={toggleTeamsClosed}
-                aria-expanded={!teamsClosed}
-                aria-controls="group-teams"
-                className={clsx("flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50", collapsed && "md:hidden")}
-              >
-                <span className="min-w-0 flex-1 truncate">Teams</span>
-                <ChevronDownIcon className={clsx("shrink-0 text-base transition-transform", teamsClosed && "-rotate-90")} />
-              </button>
-              <span className="flex items-center gap-1">
-                {(() => {
-                  const search = (
-                    <button
-                      type="button"
-                      onClick={() => setSwitcher(true)}
-                      aria-label="Search teams (⌘K)"
-                      className={clsx("rounded p-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50", collapsed && "md:p-2")}
-                    >
-                      <SearchIcon className={clsx("text-base", collapsed && "md:text-xl")} />
-                    </button>
-                  );
-                  return collapsed ? (
-                    <Tip content="Search teams (⌘K)" side="right" align="center">
-                      {search}
-                    </Tip>
-                  ) : (
-                    search
-                  );
-                })()}
-                <Link to="/teams/new" aria-label="Create a team" className={clsx("rounded p-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50", collapsed && "md:hidden")}>
-                  <AddIcon className="text-base" />
-                </Link>
-              </span>
-            </div>
+            <SectionLabel
+              title="Teams"
+              closed={teamsClosed}
+              onToggle={toggleTeamsClosed}
+              controls="group-teams"
+              collapsed={collapsed}
+              gap="mt-5"
+              actions={
+                <>
+                  <button type="button" onClick={() => setSwitcher(true)} aria-label="Search teams (⌘K)" className="rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
+                    <SearchIcon className="text-base" />
+                  </button>
+                  <Link to="/teams/new" aria-label="Create a team" className="rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
+                    <AddIcon className="text-base" />
+                  </Link>
+                </>
+              }
+            />
+            {collapsed && (
+              <div className="hidden md:flex md:justify-center">
+                <Tip content="Search teams (⌘K)" side="right" align="center">
+                  <button type="button" onClick={() => setSwitcher(true)} aria-label="Search teams (⌘K)" className="rounded p-2 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
+                    <SearchIcon className="text-xl" />
+                  </button>
+                </Tip>
+              </div>
+            )}
             {switcher && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSwitcher(false)} />
@@ -430,25 +421,35 @@ function useFolded(title: string) {
   return [closed, toggle] as const;
 }
 
+/**
+ * The title row of a sidebar section: the label with its arrow right beside it (click to fold), and the section's own actions at the
+ * end of the row (shown on hover or focus on wide screens). Not drawn in the icon-only rail, which has no room for titles.
+ */
+function SectionLabel({ title, closed, onToggle, controls, collapsed, gap, actions }: { title: string; closed: boolean; onToggle: () => void; controls: string; collapsed: boolean; gap: string; actions?: React.ReactNode }) {
+  return (
+    <div className={clsx("group flex items-center rounded-md hover:bg-panel-2", gap, collapsed && "md:hidden")}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!closed}
+        aria-controls={controls}
+        className="flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50"
+      >
+        <span className="truncate">{title}</span>
+        <ChevronDownIcon aria-hidden className={clsx("shrink-0 text-sm transition-transform duration-150", closed && "-rotate-90")} />
+      </button>
+      <span className="flex-1" aria-hidden />
+      {actions && <span className="mr-1 flex items-center gap-0.5 md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">{actions}</span>}
+    </div>
+  );
+}
+
 function Group({ title, collapsed, gap, children }: { title: string; collapsed: boolean; gap: string; children: React.ReactNode }) {
   const [closed, toggle] = useFolded(title);
   const id = `group-${title.toLowerCase()}`;
   return (
     <div className={clsx(collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={!closed}
-        aria-controls={id}
-        className={clsx(
-          "flex w-full items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50",
-          gap,
-          collapsed && "md:hidden",
-        )}
-      >
-        <span className="min-w-0 flex-1 truncate">{title}</span>
-        <ChevronDownIcon className={clsx("shrink-0 text-base transition-transform", closed && "-rotate-90")} />
-      </button>
+      <SectionLabel title={title} closed={closed} onToggle={toggle} controls={id} collapsed={collapsed} gap={gap} />
       <div id={id} className={clsx("mt-0.5 space-y-0.5", closed && "hidden", closed && collapsed && "md:block")}>
         {children}
       </div>
