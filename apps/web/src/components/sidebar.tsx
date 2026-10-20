@@ -323,6 +323,9 @@ export function Sidebar({
               <NavLink href="/admin/invites" icon={NAV_ICONS.inviteWorkspace} collapsed={collapsed}>Invite a new workspace</NavLink>
             </Group>
           )}
+          <div className={clsx("mt-5", collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
+            <NavLink href="/settings" icon={NAV_ICONS.settings} collapsed={collapsed}>Settings</NavLink>
+          </div>
         </nav>
         <div className="border-t border-line p-2">{typeof profile === "function" ? profile(collapsed) : profile}</div>
       </aside>

@@ -1,4 +1,4 @@
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import type { Role, WorkspaceMember } from "@wheelhouse/api-client";
 import { InviteForm } from "../components/invite-form";
 import { AccessLog, TeamsAccess } from "../components/workspace-access";
@@ -6,7 +6,7 @@ import { PendingInvites } from "../components/pending-invites";
 import { Loaded } from "../components/query-state";
 import { SubmitButton } from "../components/submit-button";
 import { Select } from "../components/ui";
-import { failure, field, type FormState } from "../lib/form-state";
+import { failure, field } from "../lib/form-state";
 import { useWorkspace } from "../lib/queries";
 import { asRole, assignableRoles, canManagePeople } from "../lib/roles";
 import { useMe, useTeams } from "../lib/session";
@@ -57,11 +57,6 @@ export function WorkspacePage() {
 
               {canManage && <TeamsAccess />}
               {canManage && <AccessLog />}
-
-              <div className="card p-5">
-                <h2 className="font-medium">Your password</h2>
-                <ChangePasswordForm />
-              </div>
             </div>
           </div>
         );
@@ -109,27 +104,6 @@ function MemberRow({ member: m, mine, isYou }: { member: WorkspaceMember; mine: 
           {m.tags.map((t) => <span key={t} className="chip bg-bg text-muted">{t}</span>)}
         </div>
       )}
-    </form>
-  );
-}
-
-function ChangePasswordForm() {
-  const { api } = useServices();
-  const [state, action] = useActionState<FormState, FormData>(async (_prev, fd) => {
-    try {
-      await api.changePassword({ current: field(fd, "current"), next: field(fd, "next") });
-      return { ok: "Password updated" };
-    } catch (e) {
-      return failure(e);
-    }
-  }, undefined);
-  return (
-    <form action={action} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-      <input className="input" name="current" type="password" placeholder="Current password" aria-label="Current password" required autoComplete="current-password" />
-      <input className="input" name="next" type="password" placeholder="New password (12+)" aria-label="New password" required minLength={12} autoComplete="new-password" />
-      <SubmitButton className="btn">Update</SubmitButton>
-      {state?.error && <p className="text-sm text-danger sm:col-span-3" role="alert">{state.error}</p>}
-      {state?.ok && <p className="text-sm text-ok sm:col-span-3" role="status">{state.ok}</p>}
     </form>
   );
 }

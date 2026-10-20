@@ -34,6 +34,14 @@ describe("what the sidebar shows", () => {
     expect(screen.getByRole("button", { name: /^Workspace menu/ }).getAttribute("title")).toBe("Analytical Engines");
   });
 
+  test("Settings is the last item in the sidebar, after the admin section", () => {
+    renderIn(sidebar({ isAdmin: true }), "/t/AA");
+    const links = within(nav()).getAllByRole("link");
+    expect(links.at(-1)!.textContent).toBe("Settings");
+    expect(links.at(-1)!.getAttribute("href")).toBe("/settings");
+    expect(links.findIndex((a) => a.textContent === "Invite a new workspace")).toBeLessThan(links.length - 1);
+  });
+
   test("an account with no team says so, and the create link is there", () => {
     renderIn(sidebar({ teams: [] }), "/");
     expect(screen.getByText(/No teams yet/)).toBeTruthy();

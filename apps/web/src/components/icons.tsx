@@ -240,6 +240,7 @@ export const NAV_ICONS = {
   repos: { line: ReposIcon, fill: ReposFillIcon },
   teamMembers: { line: TeamMembersIcon, fill: TeamMembersFillIcon },
   teamSettings: { line: SettingsIcon, fill: SettingsFillIcon },
+  settings: { line: SettingsIcon, fill: SettingsFillIcon },
   people: { line: PeopleIcon, fill: PeopleFillIcon },
   agents: { line: icon(RiRobot3Line), fill: icon(RiRobot3Fill) },
   workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },

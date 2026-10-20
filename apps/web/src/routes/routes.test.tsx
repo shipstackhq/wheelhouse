@@ -10,6 +10,7 @@ const PORTED_PAGES: [path: string, heading: RegExp][] = [
   ["/teams/new", /^New team$/],
   ["/workspace", /^Analytical Engines$/],
   ["/agents", /^Agents & API keys$/],
+  ["/settings", /^Settings$/],
   ["/t/AA", /^Alpha$/],
 ];
 /** Team pages ported in WH-97 and WH-98, with something only that page shows. */

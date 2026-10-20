@@ -129,37 +129,10 @@ describe("the workspace page, for a member", () => {
     for (const chip of ["member", "backend", "lead"]) expect(within(grace).getByText(chip)).toBeTruthy();
   });
 
-  test("but can still change their own password", async () => {
+  test("the password form is not on this page: it lives under Settings", async () => {
     renderApp("/workspace", asMember);
-    expect(await screen.findByRole("heading", { name: "Your password" })).toBeTruthy();
-  });
-});
-
-describe("changing your password", () => {
-  const fill = async (current: string, next: string) => {
-    const user = userEvent.setup();
-    await user.type(await screen.findByLabelText("Current password"), current);
-    await user.type(screen.getByLabelText("New password"), next);
-    await user.click(screen.getByRole("button", { name: "Update" }));
-  };
-
-  test("sends both passwords and confirms", async () => {
-    const { server } = renderApp("/workspace", (s) => s.on("POST /api/app/me/password", { ok: true }));
-    await fill("old password 1", "a brand new passphrase");
-    expect((await screen.findByRole("status")).textContent).toBe("Password updated");
-    expect(server.sent("POST /api/app/me/password")[0].body).toEqual({ current: "old password 1", next: "a brand new passphrase" });
-  });
-
-  test("a wrong current password is shown as the server says it", async () => {
-    renderApp("/workspace", (s) => s.on("POST /api/app/me/password", apiError(400, "invalid", "Current password is wrong", { fields: { current: "Current password is wrong" } })));
-    await fill("not mine", "a brand new passphrase");
-    expect((await screen.findByRole("alert")).textContent).toBe("Current password is wrong");
-  });
-
-  test("the new password must be at least twelve characters, even before it is sent", async () => {
-    renderApp("/workspace");
-    expect(((await screen.findByLabelText("New password")) as HTMLInputElement).minLength).toBe(12);
-    expect((screen.getByLabelText("Current password") as HTMLInputElement).autocomplete).toBe("current-password");
+    await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
+    expect(screen.queryByRole("heading", { name: "Your password" })).toBeNull();
   });
 });
 

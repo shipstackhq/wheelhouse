@@ -2,6 +2,7 @@ import { type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
 import { AdminInvitesPage, AdminWorkspacePage, AdminWorkspacesPage } from "../pages/admin";
 import { AgentsPage } from "../pages/agents";
+import { SettingsPage } from "../pages/settings";
 import { ActivityPage } from "../pages/activity/activity";
 import { BoardPage } from "../pages/board";
 import { DecisionsPage } from "../pages/decisions";
@@ -60,6 +61,7 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "projects/:id", Component: ProjectPage },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
+            { path: "settings", Component: SettingsPage },
             {
               Component: RequireAdmin,
               children: [
