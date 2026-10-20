@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { useNavigate } from "react-router";
@@ -51,42 +50,6 @@ export function Avatar({ name, email, size = 32 }: { name: string; email: string
     >
       {initials(name, email)}
     </span>
-  );
-}
-
-/** The person's other workspaces, when they have any: choosing one moves this session there and drops everything read from the old one. */
-function WorkspaceSwitcher() {
-  const { api, queryClient } = useServices();
-  const navigate = useNavigate();
-  const query = useQuery({ queryKey: ["me", "workspaces"] as const, queryFn: () => api.workspaces.list() });
-  const list = query.data ?? [];
-  if (list.length < 2) return null;
-  const go = async (id: string) => {
-    try {
-      await api.workspaces.switchTo(id);
-    } catch {
-      return; // not offered any more (removed, suspended): the list refreshes on the next open
-    }
-    queryClient.clear();
-    navigate("/", { replace: true });
-  };
-  return (
-    <div className="border-t border-line px-1 py-1" role="group" aria-label="Workspaces">
-      <div className="px-2 py-1 text-xs text-muted">Workspaces</div>
-      {list.map((w) => (
-        <button
-          key={w.id}
-          type="button"
-          disabled={w.active}
-          aria-current={w.active ? "true" : undefined}
-          onClick={() => go(w.id)}
-          className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-panel-2 focus-visible:bg-panel-2 disabled:cursor-default disabled:hover:bg-transparent"
-        >
-          <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
-          <span className="shrink-0 text-xs text-muted">{w.active ? "current" : w.role}</span>
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -145,7 +108,6 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
               <span key={t} className="chip bg-bg text-muted">{t}</span>
             ))}
           </div>
-          <WorkspaceSwitcher />
           <div className="border-t border-line px-3 py-3">
             <ThemeSwitch />
           </div>

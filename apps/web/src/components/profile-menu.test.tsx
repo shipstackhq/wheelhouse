@@ -21,13 +21,7 @@ describe("the account menu", () => {
     expect(within(panel).getByLabelText("Dark mode")).toBeTruthy();
   });
 
-  test("with one workspace there is no switcher; with several it lists them, marks the current one, and switching moves the session and forgets everything read", async () => {
-    const one = renderIn(menu());
-    await userEvent.setup().click(screen.getByRole("button", { name: "Account menu" }));
-    await screen.findByText("Analytical Engines");
-    expect(screen.queryByRole("group", { name: "Workspaces" })).toBeNull();
-    one.unmount();
-
+  test("the workspace switcher is not in the account menu any more (it is at the top of the sidebar)", async () => {
     const two = serverWithData();
     two.on("GET /api/app/me/workspaces", {
       workspaces: [
@@ -35,21 +29,10 @@ describe("the account menu", () => {
         { id: "t2", name: "Difference Engines", role: "viewer", active: false },
       ],
     });
-    two.on("POST /api/app/me/workspace", { workspace: { id: "t2", name: "Difference Engines" } });
-    const { server, services, router } = renderIn(menu(), "/t/AA", two);
-    services.queryClient.setQueryData(["marker"], "from the old workspace");
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Account menu" }));
-    const group = await screen.findByRole("group", { name: "Workspaces" });
-    const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
-    expect(current.disabled).toBe(true);
-    expect(current.getAttribute("aria-current")).toBe("true");
-    expect(within(group).getByText("viewer")).toBeTruthy();
-    await user.click(within(group).getByRole("button", { name: /Difference Engines/ }));
-    await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
-    expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ workspaceId: "t2" });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
-    expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing from the old workspace lingers
+    renderIn(menu(), "/t/AA", two);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Account menu" }));
+    await screen.findByText("Analytical Engines");
+    expect(screen.queryByRole("group", { name: "Workspaces" })).toBeNull();
   });
 
   test("compact (the icon-only sidebar): only the avatar shows on the button, and the menu it opens is the same", async () => {

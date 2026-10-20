@@ -424,7 +424,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
         </section>
       ) : (
         <>
-          <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">
+          <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-xs sm:px-8 lg:px-12">
             <Link to={`/t/${teamKey}/docs`} className="shrink-0 text-muted hover:text-fg">
               <ArrowLeftIcon /> Docs
             </Link>

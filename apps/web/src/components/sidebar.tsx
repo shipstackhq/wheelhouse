@@ -3,8 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { Logo, WheelIcon } from "./logo";
 import { NavLink } from "./nav-link";
-import { ChevronDownIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, FolderIcon, MenuIcon, NAV_ICONS, type IconPair } from "./icons";
+import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
 import { Tip } from "./tip";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 
 type TeamItem = { key: string; name: string };
 
@@ -205,34 +206,41 @@ export function Sidebar({
             </button>
           </Tip>
         </div>
-        <div className={clsx("px-4 pb-2 text-xs text-muted", collapsed && "md:hidden")}>{workspaceName}</div>
+        <div className="px-2 pb-2">
+          <WorkspaceSwitcher name={workspaceName} collapsed={collapsed} />
+        </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
-          <div className="relative mt-3">
-            {(() => {
-              const trigger = (
-                <button
-                  type="button"
-                  onClick={() => setSwitcher(true)}
-                  aria-label={collapsed ? (current ? `Team: ${current.name}` : "Select a team") : undefined}
-                  className={clsx(
-                    "flex w-full items-center justify-between gap-2 rounded-md border border-line px-2 py-1.5 text-left outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50",
-                    collapsed && "md:justify-center md:px-0 md:py-2",
-                  )}
-                >
-                  {collapsed && <FolderIcon className="hidden shrink-0 text-xl md:block" />}
-                  <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{current ? current.name : "Select a team"}</span>
-                  <kbd className={clsx("font-mono text-[11px] text-muted", collapsed && "md:hidden")}>⌘K</kbd>
-                </button>
-              );
-              return collapsed ? (
-                <Tip content={current ? `${current.name} (⌘K)` : "Select a team (⌘K)"} side="right" align="center">
-                  {trigger}
-                </Tip>
-              ) : (
-                trigger
-              );
-            })()}
+          <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
+          <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
+          <div className={clsx("relative", collapsed ? "md:mt-3 md:border-t md:border-line md:pt-3" : "")}>
+            <div className={clsx("mt-5 flex items-center justify-between px-2", collapsed && "md:mt-0 md:justify-center md:px-0")}>
+              <span className={clsx("label normal-case tracking-normal", collapsed && "md:hidden")}>Teams</span>
+              <span className="flex items-center gap-1">
+                {(() => {
+                  const search = (
+                    <button
+                      type="button"
+                      onClick={() => setSwitcher(true)}
+                      aria-label="Search teams (⌘K)"
+                      className={clsx("rounded p-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50", collapsed && "md:p-2")}
+                    >
+                      <SearchIcon className={clsx("text-base", collapsed && "md:text-xl")} />
+                    </button>
+                  );
+                  return collapsed ? (
+                    <Tip content="Search teams (⌘K)" side="right" align="center">
+                      {search}
+                    </Tip>
+                  ) : (
+                    search
+                  );
+                })()}
+                <Link to="/teams/new" aria-label="Create a team" className={clsx("rounded p-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50", collapsed && "md:hidden")}>
+                  <AddIcon className="text-base" />
+                </Link>
+              </span>
+            </div>
             {switcher && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSwitcher(false)} />
@@ -283,19 +291,53 @@ export function Sidebar({
               </>
             )}
           </div>
-          {current &&
-            SECTIONS.map((g) => (
-              <Group key={g.group} title={g.group} collapsed={collapsed} gap="mt-4">
-                {g.items.map((i) => (
-                  <NavLink key={i.path} href={`/t/${current.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
-                    {i.label}
-                  </NavLink>
-                ))}
-              </Group>
-            ))}
+          <div className="mt-1 space-y-0.5">
+            {teams.length === 0 && <p className={clsx("px-2 py-1.5 text-xs text-muted", collapsed && "md:hidden")}>No teams yet. Teams you are a member of appear here.</p>}
+            {teams.map((t) => {
+              const active = t.key === current?.key;
+              const row = (
+                <Link
+                  to={`/t/${t.key}`}
+                  aria-current={active ? "true" : undefined}
+                  aria-label={collapsed ? t.name : undefined}
+                  className={clsx(
+                    "flex items-center gap-2 rounded-md px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+                    collapsed && "md:justify-center md:px-0 md:py-2",
+                    active ? "font-medium text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
+                  )}
+                >
+                  <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-muted transition-transform", active && "rotate-90", collapsed && "md:hidden")} />
+                  <span className={clsx("min-w-0 flex-1 truncate", collapsed && "md:hidden")}>{t.name}</span>
+                  <span className={clsx("font-mono text-[11px] text-muted", collapsed ? "hidden md:inline md:text-xs md:text-fg" : "")}>{t.key}</span>
+                </Link>
+              );
+              return (
+                <div key={t.key}>
+                  {collapsed ? (
+                    <Tip content={t.name} side="right" align="center">
+                      {row}
+                    </Tip>
+                  ) : (
+                    row
+                  )}
+                  {active && (
+                    <div className={clsx("ml-3 mt-0.5 space-y-2 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}>
+                      {SECTIONS.map((g) => (
+                        <div key={g.group} className={clsx("space-y-0.5", collapsed && "md:border-t md:border-line md:pt-1")}>
+                          {g.items.map((i) => (
+                            <NavLink key={i.path} href={`/t/${t.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
+                              {i.label}
+                            </NavLink>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
           <Group title="Workspace" collapsed={collapsed} gap="mt-5">
-            <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
-            <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
             <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
             <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
           </Group>

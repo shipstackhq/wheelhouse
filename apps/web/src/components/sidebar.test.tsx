@@ -15,25 +15,44 @@ const sidebar = (over: Partial<React.ComponentProps<typeof Sidebar>> = {}) => (
   <Sidebar teams={TEAMS} workspaceName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} />
 );
 const nav = () => screen.getByRole("navigation");
-const switcher = () => within(nav()).getByRole("button", { name: /Alpha|Beta|Gamma|Select a team/ });
+const switcher = () => within(nav()).getByRole("button", { name: "Search teams (⌘K)" });
 
 describe("what the sidebar shows", () => {
+  test("the workspace is at the top, the teams are their own section, and only the open team shows its sections", () => {
+    renderIn(sidebar(), "/t/BB/docs");
+    expect(within(nav()).getByText("Teams")).toBeTruthy();
+    const teams = within(nav()).getAllByRole("link").filter((a) => /^\/t\/[A-Z]+$/.test(a.getAttribute("href") ?? "") && /Alpha|Beta|Gamma/.test(a.textContent ?? ""));
+    expect(teams.map((a) => [a.textContent, a.getAttribute("href")])).toEqual([["AlphaAA", "/t/AA"], ["BetaBB", "/t/BB"], ["GammaCC", "/t/CC"]]);
+    expect(teams[1].getAttribute("aria-current")).toBe("true");
+    expect(teams[0].getAttribute("aria-current")).toBeNull();
+    expect(within(nav()).getAllByRole("link", { name: "Docs" })).toHaveLength(1); // only the open team's sections
+    expect(within(nav()).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/t/BB/docs");
+    const order = [...nav().querySelectorAll("a")].map((a) => a.textContent ?? "");
+    expect(order.indexOf("Initiatives")).toBeLessThan(order.indexOf("Projects"));
+    expect(order.indexOf("Projects")).toBeLessThan(order.findIndex((t) => t.startsWith("Alpha")));
+    expect(order.findIndex((t) => t.startsWith("Gamma"))).toBeLessThan(order.indexOf("Members"));
+    expect(screen.getByRole("button", { name: "Workspace menu" }).textContent).toContain("Analytical Engines");
+  });
+
+  test("an account with no team says so, and the create link is there", () => {
+    renderIn(sidebar({ teams: [] }), "/");
+    expect(screen.getByText(/No teams yet/)).toBeTruthy();
+    expect(within(nav()).getByRole("link", { name: "Create a team" }).getAttribute("href")).toBe("/teams/new");
+  });
+
   test("a team's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
     renderIn(sidebar(), "/t/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
     expect(links).toMatchObject({ Home: "/", Board: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", Repos: "/t/AA/repos", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
-    expect(screen.getByText("Work")).toBeTruthy();
-    expect(screen.getByText("Knowledge")).toBeTruthy();
-    expect(screen.getByText("Code")).toBeTruthy();
     expect(within(nav()).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true);
     expect(within(nav()).getByRole("link", { name: "Board" }).classList.contains("bg-panel-2")).toBe(false);
-    expect(screen.getByText("Analytical Engines")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Workspace menu" })).toBeTruthy();
     expect(screen.getByText("the profile")).toBeTruthy();
   });
 
-  test("with no team open there are no team sections and the switcher invites a choice", () => {
+  test("with no team open no team is expanded, and every team is still listed", () => {
     renderIn(sidebar(), "/workspace");
-    expect(switcher().textContent).toContain("Select a team");
+    for (const name of ["Alpha", "Beta", "Gamma"]) expect(within(nav()).getByRole("link", { name: new RegExp(name) })).toBeTruthy();
     expect(within(nav()).queryByRole("link", { name: "Board" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Members" }).classList.contains("bg-panel-2")).toBe(true);
   });
@@ -52,18 +71,18 @@ describe("what the sidebar shows", () => {
 describe("folding a section", () => {
   test("a section's title folds and unfolds its links, and the choice is remembered", async () => {
     const user = userEvent.setup();
-    const first = renderIn(sidebar(), "/t/AA");
-    const title = screen.getByRole("button", { name: "Knowledge" });
+    const first = renderIn(sidebar({ isAdmin: true }), "/t/AA");
+    const title = screen.getByRole("button", { name: "Workspace" });
     expect(title.getAttribute("aria-expanded")).toBe("true");
     await user.click(title);
     expect(title.getAttribute("aria-expanded")).toBe("false");
-    expect(document.getElementById("group-knowledge")!.className).toContain("hidden");
-    expect(document.getElementById("group-work")!.className).not.toContain("hidden");
+    expect(document.getElementById("group-workspace")!.className).toContain("hidden");
+    expect(document.getElementById("group-admin")!.className).not.toContain("hidden");
     first.unmount();
-    renderIn(sidebar(), "/t/AA");
-    expect(screen.getByRole("button", { name: "Knowledge" }).getAttribute("aria-expanded")).toBe("false");
-    await user.click(screen.getByRole("button", { name: "Knowledge" }));
-    expect(document.getElementById("group-knowledge")!.className).not.toContain("hidden");
+    renderIn(sidebar({ isAdmin: true }), "/t/AA");
+    expect(screen.getByRole("button", { name: "Workspace" }).getAttribute("aria-expanded")).toBe("false");
+    await user.click(screen.getByRole("button", { name: "Workspace" }));
+    expect(document.getElementById("group-workspace")!.className).not.toContain("hidden");
   });
 });
 
@@ -236,7 +255,7 @@ describe("collapsing to the icon-only rail", () => {
     expect(board.querySelector("span")!.className).toContain("md:sr-only");
     expect(board.getAttribute("href")).toBe("/t/AA");
     expect(screen.getByText("Analytical Engines").className).toContain("md:hidden");
-    expect(screen.getByText("Work").closest("button")!.className).toContain("md:hidden"); // the title makes way for a thin rule
+    expect(screen.getByText("Workspace").closest("button")!.className).toContain("md:hidden"); // the title makes way for a thin rule
     await user.click(expand);
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
     expect(aside().className).not.toContain("md:w-14");
@@ -289,17 +308,18 @@ describe("collapsing to the icon-only rail", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     const { router } = renderIn(sidebar(), "/t/AA/docs");
     const user = userEvent.setup();
-    await user.click(within(nav()).getByRole("button", { name: "Team: Alpha" }));
+    await user.click(within(nav()).getByRole("button", { name: "Search teams (⌘K)" }));
     await user.type(await screen.findByPlaceholderText("Search teams…"), "gam");
     await user.click(screen.getByRole("button", { name: /Gamma/ }));
     expect(router.state.location.pathname).toBe("/t/CC/docs"); // keeps the section
-    expect(within(nav()).getByRole("button", { name: "Team: Gamma" })).toBeTruthy();
+    expect(within(nav()).getByRole("link", { name: "Gamma" }).getAttribute("aria-current")).toBe("true"); // the rail names each team by its key and tooltip
   });
 
-  test("with no team open the collapsed switcher still invites a choice", () => {
+  test("with no team open the collapsed rail still lists the teams and offers the search", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     renderIn(sidebar(), "/workspace");
-    expect(within(nav()).getByRole("button", { name: "Select a team" })).toBeTruthy();
+    expect(within(nav()).getByRole("button", { name: "Search teams (⌘K)" })).toBeTruthy();
+    expect(within(nav()).getByRole("link", { name: "Beta" }).getAttribute("href")).toBe("/t/BB");
   });
 
   test("the account menu is told whether the rail is collapsed", async () => {
