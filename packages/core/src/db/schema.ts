@@ -168,8 +168,6 @@ export const invites = table(
     workspaceName: text("workspace_name"), // new_workspace only (optional)
     role: text("role", { enum: WORKSPACE_ROLES }).notNull().default("member"),
     tags: jsonb("tags").$type<string[]>().notNull().default([]),
-    // join_workspace only: the teams the person is put into when they accept, each with a team role (ADR-23).
-    teams: jsonb("teams").$type<{ teamId: string; role: TeamRole }[]>().notNull().default([]),
     tokenHash: text("token_hash").notNull().unique(),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
@@ -178,7 +176,26 @@ export const invites = table(
     usedBy: uuid("used_by").references(() => users.id, { onDelete: "set null" }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
-  (t) => [index("invites_workspace_idx").on(t.workspaceId, t.usedAt)],
+  (t) => [index("invites_workspace_idx").on(t.workspaceId, t.usedAt), unique("invites_id_workspace_id_unique").on(t.id, t.workspaceId)],
+);
+
+/**
+ * join_workspace invites only: the teams the person is put into when they accept, each with a team role (ADR-23). One row per
+ * team; the invite and the team must be in the same workspace, and deleting either removes the row.
+ */
+export const inviteTeams = table(
+  "invite_teams",
+  {
+    inviteId: uuid("invite_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    role: text("role", { enum: TEAM_ROLES }).notNull().default("editor"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.inviteId, t.teamId] }),
+    teamScope("invite_teams", t),
+    foreignKey({ name: "invite_teams_invite_fk", columns: [t.inviteId, t.workspaceId], foreignColumns: [invites.id, invites.workspaceId] }).onDelete("cascade"),
+  ],
 );
 
 export const apiKeys = table("api_keys", {
@@ -247,7 +264,6 @@ export const tickets = table(
     assigneeId: uuid("assignee_id"),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
-    labels: jsonb("labels").$type<string[]>().notNull().default([]),
     position: doublePrecision("position").notNull(),
     version: integer("version").notNull().default(1),
     createdByKind: text("created_by_kind", { enum: ["human", "agent"] }).notNull(),
@@ -257,6 +273,7 @@ export const tickets = table(
   },
   (t) => [
     teamScope("tickets", t),
+    unique("tickets_id_team_unique").on(t.id, t.teamId),
     index("tickets_team_idx").on(t.teamId),
     uniqueIndex("tickets_team_number_idx").on(t.teamId, t.number),
   ],
@@ -396,14 +413,67 @@ export const decisions = table(
     context: text("context").notNull().default(""),
     decision: text("decision").notNull().default(""),
     consequences: text("consequences").notNull().default(""),
-    nodeIds: jsonb("node_ids").$type<string[]>().notNull().default([]),
     authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
     authorName: text("author_name").notNull(),
     version: integer("version").notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [teamScope("decisions", t), uniqueIndex("decisions_team_number_idx").on(t.teamId, t.number)],
+  (t) => [teamScope("decisions", t), unique("decisions_id_team_unique").on(t.id, t.teamId), uniqueIndex("decisions_team_number_idx").on(t.teamId, t.number)],
+);
+
+/** The nodes an ADR applies to, inside one team. */
+export const decisionNodes = table(
+  "decision_nodes",
+  {
+    decisionId: uuid("decision_id").notNull(),
+    nodeId: uuid("node_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.decisionId, t.nodeId] }),
+    teamScope("decision_nodes", t),
+    foreignKey({ name: "decision_nodes_decision_fk", columns: [t.decisionId, t.teamId], foreignColumns: [decisions.id, decisions.teamId] }).onDelete("cascade"),
+    foreignKey({ name: "decision_nodes_node_fk", columns: [t.nodeId, t.teamId], foreignColumns: [nodes.id, nodes.teamId] }).onDelete("cascade"),
+    index("decision_nodes_node_idx").on(t.nodeId),
+  ],
+);
+
+/** A team's labels: one row per name (any case), so a label can be filtered, renamed or deleted in one place. */
+export const labels = table(
+  "labels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    name: text("name").notNull(),
+    color: text("color"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    teamScope("labels", t),
+    unique("labels_id_team_unique").on(t.id, t.teamId),
+    uniqueIndex("labels_team_name_idx").on(t.teamId, sql`lower(${t.name})`),
+  ],
+);
+
+/** The labels on a ticket (the ticket and the label are of the same team). Deleting either removes the row. */
+export const ticketLabels = table(
+  "ticket_labels",
+  {
+    ticketId: uuid("ticket_id").notNull(),
+    labelId: uuid("label_id").notNull(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ticketId, t.labelId] }),
+    teamScope("ticket_labels", t),
+    foreignKey({ name: "ticket_labels_ticket_fk", columns: [t.ticketId, t.teamId], foreignColumns: [tickets.id, tickets.teamId] }).onDelete("cascade"),
+    foreignKey({ name: "ticket_labels_label_fk", columns: [t.labelId, t.teamId], foreignColumns: [labels.id, labels.teamId] }).onDelete("cascade"),
+    index("ticket_labels_label_idx").on(t.labelId),
+  ],
 );
 
 /** Domain glossary; terms get hover cards wherever they appear in explainers. */

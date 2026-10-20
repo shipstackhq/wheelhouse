@@ -3,9 +3,10 @@ import * as schema from "../db/schema";
 import type { Finding, Q } from "./db-copy";
 
 /**
- * What a database must satisfy before migration 0021 can be applied (WH-114): the unique keys, the parent keys and a CHECK
- * for every enum column. It only reads, and it lists the rows that would make the migration fail so they can be fixed by
- * hand first (never by dropping them). Run it on a copy brought to the migration just before:
+ * What a database must satisfy before migrations 0021 (WH-114: the unique keys, the parent keys and a CHECK for every enum
+ * column) and 0022 (WH-115: no id or name in a JSON array that points at nothing) can be applied. It only reads, and it lists
+ * the rows that would make a migration fail so they can be fixed by hand first (never by dropping them). Run it on a copy
+ * brought to the migration just before 0021:
  *   pnpm db:migrate --to <copy> --through 0020 && pnpm db:preflight --to <copy>
  * The enum checks come from the same TypeScript enums the migration's CHECK constraints are made from.
  */
@@ -83,10 +84,37 @@ export async function preflight(q: Q): Promise<Finding[]> {
     );
   }
 
+  // 0022: the arrays that become rows. Anything that points at nothing would stop that migration; it is listed here instead.
+  const UUID = "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'";
+  if (await present(q, "decisions", "node_ids"))
+    await offenders(
+      "decisions.node_ids: every id is a node of the decision's team",
+      `select d.number, d.team_id, (e #>> '{}') as v from decisions d, jsonb_array_elements(d.node_ids) e
+       where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~* ${UUID} or not exists (select 1 from nodes n where n.id::text = lower(e #>> '{}') and n.team_id = d.team_id)`,
+      "every decision names only nodes of its own team",
+      (r) => `ADR-${r.number} of team ${r.team_id} names ${JSON.stringify(r.v)}`,
+    );
+  if (await present(q, "invites", "teams"))
+    await offenders(
+      "invites.teams: every entry is a team of the invite's workspace, with a team role",
+      `select i.id, g::text as v from invites i, jsonb_array_elements(i.teams) g
+       where i.workspace_id is null or jsonb_typeof(g->'teamId') <> 'string' or (g->>'teamId') !~* ${UUID} or (g->>'role') not in ('admin', 'editor', 'viewer')
+          or not exists (select 1 from teams t where t.id::text = lower(g->>'teamId') and t.workspace_id = i.workspace_id)`,
+      "every invite grants only teams of its own workspace",
+      (r) => `invite ${r.id} grants ${r.v}`,
+    );
+  if (await present(q, "tickets", "labels"))
+    await offenders(
+      "tickets.labels: every entry is text",
+      `select t.id, e::text as v from tickets t, jsonb_array_elements(t.labels) e where jsonb_typeof(e) <> 'string'`,
+      "every label is a string",
+      (r) => `ticket ${r.id} has the label ${r.v}`,
+    );
+
   let checked = 0;
   for (const { table, column, values } of enumColumns()) {
     if (!(await present(q, table, column))) {
-      err(`${table}.${column}: allowed values`, "skipped: the column is not in this database");
+      ok(`${table}.${column}: allowed values`, "not in this database yet (a later migration adds it)");
       continue;
     }
     checked++;
@@ -99,4 +127,39 @@ export async function preflight(q: Q): Promise<Finding[]> {
   }
   ok("enum columns", `${checked} checked against the TypeScript enums`);
   return out;
+}
+
+/**
+ * Remove the entries `preflight` lists for migration 0022 (a decision naming a node that is not of its team, an invite granting
+ * a team that is not of its workspace): only those entries, from their arrays, and nothing else. It says what it removed. This is
+ * the deliberate way to resolve them, never something a migration does on its own; run it on the database you mean to migrate.
+ */
+export async function resolveDangling(q: Q): Promise<string[]> {
+  const UUID = "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'";
+  const said: string[] = [];
+  if (await present(q, "decisions", "node_ids")) {
+    const rows = await q(
+      `select d.id, d.number, d.team_id, (e #>> '{}') as v from decisions d, jsonb_array_elements(d.node_ids) e
+       where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~* ${UUID} or not exists (select 1 from nodes n where n.id::text = lower(e #>> '{}') and n.team_id = d.team_id)`,
+    );
+    for (const r of rows) {
+      await q(
+        `update decisions set node_ids = (select coalesce(jsonb_agg(e), '[]'::jsonb) from jsonb_array_elements(node_ids) e where e <> to_jsonb($2::text)) where id = $1`,
+        [r.id, r.v],
+      );
+      said.push(`ADR-${r.number} of team ${r.team_id}: removed the node ${JSON.stringify(r.v)}, which is not a node of that team`);
+    }
+  }
+  if (await present(q, "invites", "teams")) {
+    const rows = await q(
+      `select i.id, g as grant_json from invites i, jsonb_array_elements(i.teams) g
+       where i.workspace_id is null or jsonb_typeof(g->'teamId') <> 'string' or (g->>'teamId') !~* ${UUID} or (g->>'role') not in ('admin', 'editor', 'viewer')
+          or not exists (select 1 from teams t where t.id::text = lower(g->>'teamId') and t.workspace_id = i.workspace_id)`,
+    );
+    for (const r of rows) {
+      await q(`update invites set teams = (select coalesce(jsonb_agg(g), '[]'::jsonb) from jsonb_array_elements(teams) g where g <> $2::jsonb) where id = $1`, [r.id, JSON.stringify(r.grant_json)]);
+      said.push(`invite ${r.id}: removed the grant ${JSON.stringify(r.grant_json)}, which is not a team of the invite's workspace`);
+    }
+  }
+  return said;
 }

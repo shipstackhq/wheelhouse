@@ -7,6 +7,7 @@ import { bus, deferPublish } from "./event-bus";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
 import { ServiceError } from "./service-error";
+import { cleanLabels, labelsOf, setDecisionNodes, setTicketLabels, withLabels, withNodeIds } from "./links";
 import { audit, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
 
 export { ServiceError };
@@ -190,7 +191,7 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
 
 // ───────────────────────── board / tickets ─────────────────────────
 
-export type TicketWithLinks = typeof tickets.$inferSelect & { ref: string; nodeIds: string[]; commentCount: number };
+export type TicketWithLinks = typeof tickets.$inferSelect & { ref: string; labels: string[]; nodeIds: string[]; commentCount: number };
 
 const CLAIM_TTL_MS = 24 * 3600e3;
 
@@ -240,6 +241,7 @@ export async function getBoard(actor: Actor, teamRef: string) {
   const ts = await db.select().from(tickets).where(eq(tickets.teamId, team.id)).orderBy(asc(tickets.position));
   const ids = ts.map((t) => t.id);
   const links = ids.length ? await db.select().from(ticketNodes).where(inArray(ticketNodes.ticketId, ids)) : [];
+  const labelMap = await labelsOf(db, ids);
   const counts = ids.length
     ? await db
         .select({ ticketId: comments.ticketId, n: sql<number>`count(*)::int` })
@@ -251,6 +253,7 @@ export async function getBoard(actor: Actor, teamRef: string) {
   const withLinks: TicketWithLinks[] = ts.map((t) => ({
     ...t,
     ref: `${team.key}-${t.number}`,
+    labels: labelMap.get(t.id) ?? [],
     nodeIds: links.filter((l) => l.ticketId === t.id).map((l) => l.nodeId),
     commentCount: countMap.get(t.id) ?? 0,
   }));
@@ -324,7 +327,8 @@ export async function getTicket(actor: Actor, ref: string) {
   // Pull requests GitHub reported against this ticket (WH-20). Loaded lazily: that module imports this one.
   const { pullRequestsForTicket } = await import("./github/service");
   const pullRequests = await pullRequestsForTicket(ticket.id);
-  return { ticket: { ...ticket, ref: r, column: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
+  const [withLabel] = await withLabels(db, [ticket]);
+  return { ticket: { ...withLabel, ref: r, column: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
 }
 
 async function positionAt(q: Q, columnId: string, index: number | undefined, excludeId?: string) {
@@ -376,12 +380,12 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
         priority: input.priority ?? "medium",
         assigneeId: input.assigneeId ?? null,
         agentClaimable: input.agentClaimable ?? actor.kind === "agent",
-        labels: input.labels ?? [],
         position,
         createdByKind: actor.kind,
         createdById: actor.id,
       })
       .returning();
+    await setTicketLabels(tx, team, t.id, input.labels ?? []);
     const ref = `${team.key}-${t.number}`;
     await emit(tx, actor, team.id, {
       type: "ticket.created",
@@ -390,7 +394,8 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
       summary: `created ${ref} "${t.title}" in ${col.name}`,
       data: { ref, column: col.name, title: t.title },
     });
-    return { ...t, ref, column: col.name };
+    const [withLabel] = await withLabels(tx, [t]);
+    return { ...withLabel, ref, column: col.name };
   });
 }
 
@@ -408,7 +413,8 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
   return db.transaction(async (tx) => {
     const resolved = await resolveTicket(actor, ref, tx, "edit");
     const { team, ref: r } = resolved;
-    const ticket = await lockRow(tx, tickets, resolved.ticket);
+    const locked = await lockRow(tx, tickets, resolved.ticket);
+    const [ticket] = await withLabels(tx, [locked]);
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
       throw new ServiceError("conflict", `${r} was changed (version ${ticket.version}, you had ${expectedVersion}). Re-read and retry.`, {
         current: ticket,
@@ -416,14 +422,24 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     }
     const clean: TicketInput = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
+    if (clean.labels) {
+      // Labels are stored once per name in any case and read back alphabetically, so a different order or case is no change.
+      const want = cleanLabels(clean.labels);
+      const key = (xs: string[]) => xs.map((x) => x.toLowerCase()).sort().join("\u0000");
+      if (key(want) === key(ticket.labels)) delete clean.labels;
+      else clean.labels = want;
+    }
     await assertAssignee(tx, team.id, clean.assigneeId);
     const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...ticket, ref: r };
-    const [t] = await tx
+    const { labels: newLabels, ...columnsPatch } = clean;
+    const [row] = await tx
       .update(tickets)
-      .set({ ...clean, version: ticket.version + 1, updatedAt: new Date() })
+      .set({ ...columnsPatch, version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
+    if (newLabels) await setTicketLabels(tx, team, row.id, newLabels);
+    const t = { ...row, labels: newLabels ?? ticket.labels };
     await emit(tx, actor, team.id, {
       type: "ticket.updated",
       entity: "ticket",
@@ -444,18 +460,20 @@ async function moveTicketTx(actor: Actor, ref: string, column: string, index?: n
   return db.transaction(async (tx) => {
     const resolved = await resolveTicket(actor, ref, tx, "edit");
     const { team, ref: r } = resolved;
-    const ticket = await lockRow(tx, tickets, resolved.ticket);
+    const locked = await lockRow(tx, tickets, resolved.ticket);
+    const [ticket] = await withLabels(tx, [locked]);
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
       throw new ServiceError("conflict", `${r} was changed since you read it`, { current: ticket });
     }
     const to = await resolveColumn(tx, team.id, column);
     const [from] = await tx.select().from(columns).where(eq(columns.id, ticket.columnId));
     const position = await positionAt(tx, to.id, index, ticket.id);
-    const [t] = await tx
+    const [moved] = await tx
       .update(tickets)
       .set({ columnId: to.id, position, version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
+    const t = { ...moved, labels: ticket.labels };
     if (from.id !== to.id) {
       await emit(tx, actor, team.id, {
         type: "ticket.moved",
@@ -494,11 +512,12 @@ export async function claimTicket(actor: Actor, ref: string) {
     if (!ticket.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the workspace`);
     if (ticket.claimedByKeyId && ticket.claimedByKeyId !== actor.id)
       throw new ServiceError("conflict", `${r} is already claimed by another agent`);
-    const [t] = await tx
+    const [claimed] = await tx
       .update(tickets)
       .set({ claimedByKeyId: actor.id, version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
+    const [t] = await withLabels(tx, [claimed]);
     await emit(tx, actor, team.id, { type: "ticket.claimed", entity: "ticket", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
     return { ...t, ref: r };
   });
@@ -571,7 +590,7 @@ export async function getGraph(actor: Actor, teamRef: string) {
     edges: es,
     ticketLinks: links.map((l) => ({ ...l, ref: `${team.key}-${l.number}` })),
     flows: fl.map((f) => ({ ...f, steps: f.steps.filter((s) => alive.has(s.nodeId)) })),
-    decisions: ds.map((d) => ({ ...d, nodeIds: d.nodeIds.filter((id) => alive.has(id)) })),
+    decisions: (await withNodeIds(db, ds)).map((d) => ({ ...d, nodeIds: d.nodeIds.filter((id) => alive.has(id)) })),
     terms: ts,
     // Nodes whose files are being changed in active sessions, and pending drafts.
     flux: await (await import("./sync")).fluxForTeam(team.id),
@@ -1564,7 +1583,7 @@ export type DecisionInput = {
 export async function listDecisions(actor: Actor, teamRef: string) {
   const db = await getDb();
   const team = await requireTeam(actor, teamRef);
-  return db.select().from(decisions).where(eq(decisions.teamId, team.id)).orderBy(asc(decisions.number));
+  return withNodeIds(db, await db.select().from(decisions).where(eq(decisions.teamId, team.id)).orderBy(asc(decisions.number)));
 }
 
 /** Create (no number) or update (number) an ADR. */
@@ -1577,8 +1596,9 @@ export async function upsertDecision(actor: Actor, teamRef: string, input: Decis
       const [d] = await tx.select().from(decisions).where(and(eq(decisions.teamId, team.id), eq(decisions.number, input.number))).for("update");
       if (!d) throw new ServiceError("not_found", `Decision ADR-${input.number} not found`);
       if (input.expectedVersion !== undefined && input.expectedVersion !== d.version) {
-        throw new ServiceError("conflict", `ADR-${d.number} was changed (version ${d.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: d });
+        throw new ServiceError("conflict", `ADR-${d.number} was changed (version ${d.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: (await withNodeIds(tx, [d]))[0] });
       }
+      const [current] = await withNodeIds(tx, [d]);
       const patch = {
         title: input.title,
         status: input.status,
@@ -1587,13 +1607,16 @@ export async function upsertDecision(actor: Actor, teamRef: string, input: Decis
         consequences: input.consequences,
         nodeIds,
       };
-      const changes = diff(d as unknown as Record<string, unknown>, patch as Record<string, unknown>);
-      if (!Object.keys(changes).length) return d;
-      const [u] = await tx
+      const changes = diff(current as unknown as Record<string, unknown>, patch as Record<string, unknown>);
+      if (!Object.keys(changes).length) return current;
+      const { nodeIds: newNodes, ...columnsPatch } = patch;
+      const [row] = await tx
         .update(decisions)
-        .set({ ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)), version: d.version + 1, updatedAt: new Date() })
+        .set({ ...Object.fromEntries(Object.entries(columnsPatch).filter(([, v]) => v !== undefined)), version: d.version + 1, updatedAt: new Date() })
         .where(eq(decisions.id, d.id))
         .returning();
+      if (newNodes) await setDecisionNodes(tx, team, row.id, newNodes);
+      const u = { ...row, nodeIds: newNodes ?? current.nodeIds };
       await emit(tx, actor, team.id, {
         type: "decision.updated",
         entity: "decision",
@@ -1619,11 +1642,11 @@ export async function upsertDecision(actor: Actor, teamRef: string, input: Decis
         context: input.context ?? "",
         decision: input.decision ?? "",
         consequences: input.consequences ?? "",
-        nodeIds: nodeIds ?? [],
         authorKind: actor.kind,
         authorName: actor.name,
       })
       .returning();
+    await setDecisionNodes(tx, team, d.id, nodeIds ?? []);
     await emit(tx, actor, team.id, {
       type: "decision.created",
       entity: "decision",
@@ -1631,7 +1654,7 @@ export async function upsertDecision(actor: Actor, teamRef: string, input: Decis
       summary: `recorded ADR-${d.number} "${d.title}"`,
       data: { number: d.number },
     });
-    return d;
+    return { ...d, nodeIds: [...new Set(nodeIds ?? [])] };
   });
 }
 
@@ -2391,19 +2414,7 @@ export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "desc
  * those files (WH-64 scope E).
  */
 /** Labels as stored: trimmed, no empties or repeats (case-insensitively, first spelling wins), at most 20 of at most 40 characters. */
-export function cleanDocLabels(labels: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of labels) {
-    const l = raw.trim().replace(/\s+/g, " ");
-    if (!l || seen.has(l.toLowerCase())) continue;
-    if (l.length > 40) throw new ServiceError("invalid", `A label is at most 40 characters ("${l.slice(0, 20)}…")`);
-    seen.add(l.toLowerCase());
-    out.push(l);
-  }
-  if (out.length > 20) throw new ServiceError("invalid", "A doc has at most 20 labels");
-  return out;
-}
+export const cleanDocLabels = (labels: string[]) => cleanLabels(labels, "doc");
 
 export async function updateDoc(actor: Actor, teamRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number) {
   const db = await getDb();

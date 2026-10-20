@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import * as svc from "./service";
+import { withLabels } from "./links";
 import { ServiceError } from "./service";
 import type { ChecklistState } from "./setup-checklist";
 
@@ -30,7 +31,7 @@ export type TicketView = {
   updatedAt: Date;
 };
 
-type TicketRow = typeof schema.tickets.$inferSelect & { ref: string };
+type TicketRow = typeof schema.tickets.$inferSelect & { ref: string; labels: string[] };
 
 export const ticketView = (t: TicketRow): TicketView => ({
   id: t.id,
@@ -179,7 +180,8 @@ async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>):
   } catch (e) {
     if (e instanceof ServiceError && e.code === "conflict" && (e.details as { current?: unknown } | undefined)?.current) {
       const now = await svc.resolveTicket(actor, ref);
-      throw new ServiceError("conflict", e.message, { current: ticketView({ ...now.ticket, ref: now.ref }) });
+      const [withLabel] = await withLabels(await getDb(), [now.ticket]);
+      throw new ServiceError("conflict", e.message, { current: ticketView({ ...withLabel, ref: now.ref }) });
     }
     throw e;
   }

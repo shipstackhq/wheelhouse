@@ -80,7 +80,7 @@ type FlowRow = typeof schema.flows.$inferSelect;
 export type FlowView = { id: string; name: string; description: string; steps: schema.FlowStep[]; version: number };
 export const flowView = (f: FlowRow): FlowView => ({ id: f.id, name: f.name, description: f.description, steps: f.steps, version: f.version });
 
-type DecisionRow = typeof schema.decisions.$inferSelect;
+type DecisionRow = typeof schema.decisions.$inferSelect & { nodeIds: string[] };
 export type DecisionView = {
   id: string;
   number: number;

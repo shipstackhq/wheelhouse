@@ -153,12 +153,14 @@ export async function createInvite(
         workspaceName,
         role,
         tags,
-        teams: grants,
         tokenHash: sha256(token),
         createdBy: issuer.userId,
         expiresAt,
       })
       .returning({ id: invites.id });
+    if (grants.length && input.kind === "join_workspace") {
+      await tx.insert(schema.inviteTeams).values(grants.map((g) => ({ inviteId: r.id, teamId: g.teamId, workspaceId: issuer.workspaceId, role: g.role })));
+    }
     return r;
   });
   console.info(`[invite] created ${row.id} kind=${input.kind} by=${issuer.userId}`);
@@ -191,7 +193,6 @@ export async function listInvites(issuer: Issuer, now = new Date()): Promise<Pen
       email: invites.email,
       role: invites.role,
       workspaceName: invites.workspaceName,
-      grants: invites.teams,
       createdAt: invites.createdAt,
       expiresAt: invites.expiresAt,
     })
@@ -199,15 +200,15 @@ export async function listInvites(issuer: Issuer, now = new Date()): Promise<Pen
     .where(and(pending(now), or(...scopes)))
     .orderBy(invites.createdAt)
     .then(async (rows) => {
-      const ids = [...new Set(rows.flatMap((r) => r.grants.map((g) => g.teamId)))];
-      const named = ids.length ? await db.select({ id: schema.teams.id, key: schema.teams.key, name: schema.teams.name }).from(schema.teams).where(inArray(schema.teams.id, ids)) : [];
-      return rows.map(({ grants, ...r }) => ({
-        ...r,
-        teams: grants.flatMap((g) => {
-          const p = named.find((n) => n.id === g.teamId);
-          return p ? [{ key: p.key, name: p.name, role: g.role }] : [];
-        }),
-      }));
+      const granted = rows.length
+        ? await db
+            .select({ inviteId: schema.inviteTeams.inviteId, key: schema.teams.key, name: schema.teams.name, role: schema.inviteTeams.role })
+            .from(schema.inviteTeams)
+            .innerJoin(schema.teams, eq(schema.teams.id, schema.inviteTeams.teamId))
+            .where(inArray(schema.inviteTeams.inviteId, rows.map((r) => r.id)))
+            .orderBy(schema.teams.key)
+        : [];
+      return rows.map((r) => ({ ...r, teams: granted.filter((g) => g.inviteId === r.id).map(({ key, name, role }) => ({ key, name, role })) }));
     });
 }
 
@@ -251,9 +252,10 @@ export async function peekInvite(token: string, now = new Date()) {
  * inviter's name. Shared by a new account accepting and an existing account accepting.
  */
 async function grantInviteTeams(tx: Tx, inv: typeof invites.$inferSelect, userId: string, workspaceId: string) {
-  if (!inv.teams.length) return;
+  const grants = await tx.select().from(schema.inviteTeams).where(eq(schema.inviteTeams.inviteId, inv.id));
+  if (!grants.length) return;
   const [issuer] = inv.createdBy ? await tx.select({ name: users.name }).from(users).where(eq(users.id, inv.createdBy)) : [];
-  for (const g of inv.teams) {
+  for (const g of grants) {
     const [p] = await tx.select({ id: schema.teams.id }).from(schema.teams).where(and(eq(schema.teams.id, g.teamId), eq(schema.teams.workspaceId, workspaceId)));
     if (!p) continue;
     await tx.insert(schema.teamMembers).values({ teamId: p.id, userId, workspaceId, role: g.role, addedBy: inv.createdBy }).onConflictDoNothing();
@@ -338,18 +340,13 @@ export async function peekInviteAsMember(user: { email: string }, token: string,
   if (!row || row.kind !== "join_workspace" || !row.workspaceId || row.email !== normalizeEmail(user.email)) return null;
   const [t] = await db.select({ name: workspaces.name, suspendedAt: workspaces.suspendedAt }).from(workspaces).where(eq(workspaces.id, row.workspaceId));
   if (!t || t.suspendedAt) return null;
-  const named = row.teams.length
-    ? await db.select({ id: schema.teams.id, key: schema.teams.key, name: schema.teams.name }).from(schema.teams).where(inArray(schema.teams.id, row.teams.map((g) => g.teamId)))
-    : [];
-  return {
-    email: row.email,
-    workspaceName: t.name,
-    role: row.role,
-    teams: row.teams.flatMap((g) => {
-      const p = named.find((n) => n.id === g.teamId);
-      return p ? [{ key: p.key, name: p.name, role: g.role }] : [];
-    }),
-  };
+  const granted = await db
+    .select({ key: schema.teams.key, name: schema.teams.name, role: schema.inviteTeams.role })
+    .from(schema.inviteTeams)
+    .innerJoin(schema.teams, eq(schema.teams.id, schema.inviteTeams.teamId))
+    .where(eq(schema.inviteTeams.inviteId, row.id))
+    .orderBy(schema.teams.key);
+  return { email: row.email, workspaceName: t.name, role: row.role, teams: granted };
 }
 
 /**

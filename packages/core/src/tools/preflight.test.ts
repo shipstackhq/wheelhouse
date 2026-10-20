@@ -57,3 +57,27 @@ test("--through stops at the migration it is given", async () => {
     await conn.close();
   }
 });
+
+test("references that point at nothing are listed before migration 0022 would stop on them", async () => {
+  const conn = await open();
+  try {
+    const q = conn.query;
+    await q(`insert into workspaces (name) values ('W1'), ('W2')`);
+    await q(`insert into teams (workspace_id, key, name) select id, case name when 'W1' then 'AA' else 'BB' end, 'T' from workspaces`);
+    await q(`insert into nodes (team_id, workspace_id, layer, kind, name) select id, workspace_id, 'system', 'service', 'n' from teams where key = 'AA'`);
+    await q(
+      `insert into decisions (team_id, workspace_id, number, title, author_kind, author_name, node_ids)
+       select t.id, t.workspace_id, 1, 'dangling', 'human', 'x', jsonb_build_array((select id::text from nodes limit 1), gen_random_uuid()::text, 'not-a-uuid') from teams t where key = 'AA'`,
+    );
+    await q(
+      `insert into invites (kind, email, workspace_id, token_hash, expires_at, teams)
+       select 'join_workspace', 'a@x.io', w.id, 'tok', now(), jsonb_build_array(jsonb_build_object('teamId', (select id::text from teams where key = 'BB'), 'role', 'editor')) from workspaces w where w.name = 'W1'`,
+    );
+    await q(`update tickets set labels = labels`);
+    const errors = new Map((await preflight(conn.query)).filter((f) => f.level === "error").map((f) => [f.check, f.detail]));
+    assert.match(errors.get("decisions.node_ids: every id is a node of the decision's team")!, /2 offender/);
+    assert.match(errors.get("invites.teams: every entry is a team of the invite's workspace, with a team role")!, /1 offender/);
+  } finally {
+    await conn.close();
+  }
+});
