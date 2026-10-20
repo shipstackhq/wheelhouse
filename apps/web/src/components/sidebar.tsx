@@ -187,8 +187,12 @@ export function Sidebar({
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
-          <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
-          <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
+          <Group title="Workspace" collapsed={collapsed} gap="mt-3">
+            <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
+            <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
+            <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
+            <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
+          </Group>
           <div className={clsx("relative", collapsed ? "md:mt-3 md:border-t md:border-line md:pt-3" : "")}>
             <div className={clsx("mt-5 flex items-center justify-between px-2", collapsed && "md:mt-0 md:justify-center md:px-0")}>
               <span className={clsx("label normal-case tracking-normal", collapsed && "md:hidden")}>Teams</span>
@@ -313,10 +317,6 @@ export function Sidebar({
               );
             })}
           </div>
-          <Group title="Workspace" collapsed={collapsed} gap="mt-5">
-            <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
-            <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
-          </Group>
           {isAdmin && (
             <Group title="Admin" collapsed={collapsed} gap="mt-5">
               <NavLink href="/admin/workspaces" icon={NAV_ICONS.workspaces} collapsed={collapsed}>Workspaces</NavLink>

@@ -29,8 +29,9 @@ describe("what the sidebar shows", () => {
     expect(within(nav()).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/t/BB/docs");
     const order = [...nav().querySelectorAll("a")].map((a) => a.textContent ?? "");
     expect(order.indexOf("Initiatives")).toBeLessThan(order.indexOf("Projects"));
-    expect(order.indexOf("Projects")).toBeLessThan(order.findIndex((t) => t.startsWith("Alpha")));
-    expect(order.findIndex((t) => t.startsWith("Gamma"))).toBeLessThan(order.indexOf("Members"));
+    expect(order.indexOf("Projects")).toBeLessThan(order.indexOf("Members"));
+    expect(order.indexOf("Members")).toBeLessThan(order.indexOf("Agents & API keys"));
+    expect(order.indexOf("Agents & API keys")).toBeLessThan(order.findIndex((t) => t.startsWith("Alpha"))); // the whole Workspace group is above the teams
     expect(screen.getByRole("button", { name: /^Workspace menu/ }).getAttribute("title")).toBe("Analytical Engines");
   });
 
