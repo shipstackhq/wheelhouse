@@ -107,6 +107,7 @@ export function Sidebar({
   useEffect(() => {
     if (currentKey) setOpenTeams((o) => (o.includes(currentKey) ? o : [...o, currentKey]));
   }, [currentKey]);
+  const [teamsClosed, toggleTeamsClosed] = useFolded("Teams");
   const [switcher, setSwitcher] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -209,8 +210,17 @@ export function Sidebar({
             <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
           </Group>
           <div className={clsx("relative", collapsed ? "md:mt-3 md:border-t md:border-line md:pt-3" : "")}>
-            <div className={clsx("mt-5 flex items-center justify-between px-2", collapsed && "md:mt-0 md:justify-center md:px-0")}>
-              <span className={clsx("label normal-case tracking-normal", collapsed && "md:hidden")}>Teams</span>
+            <div className={clsx("mt-5 flex items-center justify-between", collapsed && "md:mt-0 md:justify-center")}>
+              <button
+                type="button"
+                onClick={toggleTeamsClosed}
+                aria-expanded={!teamsClosed}
+                aria-controls="group-teams"
+                className={clsx("flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50", collapsed && "md:hidden")}
+              >
+                <span className="min-w-0 flex-1 truncate">Teams</span>
+                <ChevronDownIcon className={clsx("shrink-0 text-base transition-transform", teamsClosed && "-rotate-90")} />
+              </button>
               <span className="flex items-center gap-1">
                 {(() => {
                   const search = (
@@ -288,7 +298,7 @@ export function Sidebar({
               </>
             )}
           </div>
-          <div className="mt-1 space-y-0.5">
+          <div id="group-teams" className={clsx("mt-0.5 space-y-0.5", teamsClosed && "hidden", teamsClosed && collapsed && "md:block")}>
             {teams.length === 0 && <p className={clsx("px-2 py-1.5 text-xs text-muted", collapsed && "md:hidden")}>No teams yet. Teams you are a member of appear here.</p>}
             {teams.map((t) => {
               const here = t.key === current?.key;
@@ -404,7 +414,8 @@ function readClosedGroups(): string[] {
  * A titled group of links that folds away from its title (the choice is remembered). The title row is the same size as a link row.
  * As the rail the title goes (it would not fit), the links always show, and a thin rule separates the groups instead.
  */
-function Group({ title, collapsed, gap, children }: { title: string; collapsed: boolean; gap: string; children: React.ReactNode }) {
+/** Whether a titled section is folded, remembered per title. */
+function useFolded(title: string) {
   const [closed, setClosed] = useState(() => readClosedGroups().includes(title));
   const toggle = () =>
     setClosed((c) => {
@@ -416,6 +427,11 @@ function Group({ title, collapsed, gap, children }: { title: string; collapsed: 
       }
       return !c;
     });
+  return [closed, toggle] as const;
+}
+
+function Group({ title, collapsed, gap, children }: { title: string; collapsed: boolean; gap: string; children: React.ReactNode }) {
+  const [closed, toggle] = useFolded(title);
   const id = `group-${title.toLowerCase()}`;
   return (
     <div className={clsx(collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
