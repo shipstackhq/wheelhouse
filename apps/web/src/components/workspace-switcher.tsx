@@ -30,14 +30,14 @@ export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; c
         aria-label={`Workspace menu: ${name}`}
         title={name}
         className={clsx(
-          "group flex shrink-0 items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1.5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2 data-[state=open]:text-fg",
-          collapsed && "md:pr-1",
+          "group flex shrink-0 items-center gap-0.5 rounded-full py-0.5 pl-0.5 pr-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2 data-[state=open]:text-fg",
+          collapsed && "md:pr-0.5",
         )}
       >
-        <span aria-hidden className="grid size-7 place-items-center rounded-full bg-accent/15 text-xs font-semibold uppercase text-accent">
+        <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
           {name.trim().charAt(0) || "W"}
         </span>
-        <ChevronDownIcon aria-hidden className="text-base transition-transform group-data-[state=open]:rotate-180" />
+        <ChevronDownIcon aria-hidden className="text-sm transition-transform group-data-[state=open]:rotate-180" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content side={collapsed ? "right" : "bottom"} align="start" sideOffset={6} collisionPadding={8} className="z-50 w-60 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl">
