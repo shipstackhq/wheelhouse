@@ -46,6 +46,12 @@ export const onboardingQuery = (api: ApiClient, teamKey: string) => ({ queryKey:
 export const useDocs = (teamKey: string) => useQuery(docsQuery(useServices().api, teamKey));
 export const useRepos = (teamKey: string) => useQuery(reposQuery(useServices().api, teamKey));
 
+/** A team's cycles (WH-117): the list by when they are, and one with its tickets and what landed. */
+export const cyclesQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["cycles", teamKey] as const, queryFn: () => api.cycles.list(teamKey) });
+export const cycleQuery = (api: ApiClient, teamKey: string, number: number) => ({ queryKey: ["cycle", teamKey, number] as const, queryFn: () => api.cycles.get(teamKey, number) });
+export const useCycles = (teamKey: string) => useQuery(cyclesQuery(useServices().api, teamKey));
+export const useCycle = (teamKey: string, number: number) => useQuery(cycleQuery(useServices().api, teamKey, number));
+
 /** Who is in a team, the people who could still be added, and the workspace-level views of access (ADR-23). */
 export const teamMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey] as const, queryFn: () => api.teams.members(teamKey) });
 export const addableMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey, "addable"] as const, queryFn: () => api.teams.addableMembers(teamKey) });

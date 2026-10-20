@@ -14,6 +14,7 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
     items: [
       { path: "/overview", label: "Overview", icon: NAV_ICONS.overview },
       { path: "", label: "Board", icon: NAV_ICONS.board },
+      { path: "/cycles", label: "Cycles", icon: NAV_ICONS.cycles },
       { path: "/activity", label: "Activity", icon: NAV_ICONS.activity },
     ],
   },

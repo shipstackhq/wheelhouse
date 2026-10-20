@@ -17,6 +17,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
+import type { CycleOption } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { useServices } from "../../lib/services";
 import { neighbours, parseTicketParam } from "../../lib/ticket-nav";
@@ -24,15 +25,19 @@ import { dragOver, drop, findCol, group, type Items } from "./board-state";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Ticket } from "./shared";
 import { TicketDialog } from "./ticket-dialog";
-import { AgentIcon, CloseIcon, CommentIcon, NodeIcon } from "../../components/icons";
+import { AgentIcon, CloseIcon, CommentIcon, CyclesIcon, NodeIcon } from "../../components/icons";
+import { cycleTitle } from "../cycles/cycle-bits";
 
 /**
  * The kanban board. What is on screen is a local copy of the server's tickets, so a drag can move cards at once. The server's
  * copy replaces it whenever nothing is being dragged (that is how a teammate's or an agent's change shows up), and again, with the
  * real positions, when a drop has been saved.
  */
-export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[] }) {
+const NO_CYCLES: CycleOption[] = [];
+
+export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[]; cycles?: CycleOption[] }) {
   const { teamKey, columns, nodes, members } = props;
+  const cycles = props.cycles ?? NO_CYCLES;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
   const [items, setItems] = useState<Items>(() => group(columns, props.tickets));
@@ -173,6 +178,7 @@ export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[
                 onViewChange={(v) => changeView(c.id, v)}
                 members={members}
                 labels={labels}
+                cycles={cycles}
                 nodes={nodes}
                 onOpen={openTicket}
                 selected={openRef}
@@ -181,7 +187,7 @@ export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[
               />
             ))}
           </div>
-          <DragOverlay>{active ? <Card t={active} nodes={nodes} overlay /> : null}</DragOverlay>
+          <DragOverlay>{active ? <Card t={active} nodes={nodes} cycles={cycles} overlay /> : null}</DragOverlay>
         </DndContext>
       </div>
       {openRef && (
@@ -192,6 +198,7 @@ export function Board(props: { teamKey: string; columns: Col[]; tickets: Ticket[
           columns={columns}
           nodes={nodes}
           members={members}
+          cycles={cycles}
           nav={nav}
           onNavigate={openTicket}
           onClose={() => openTicket(null)}
@@ -208,6 +215,7 @@ function Column(props: {
   onViewChange: (v: View) => void;
   members: Member[];
   labels: string[];
+  cycles: CycleOption[];
   nodes: NodeLite[];
   selected: string | null;
   teamKey: string;
@@ -255,7 +263,7 @@ function Column(props: {
       <div className="group/head flex items-center justify-between gap-2 px-3 py-2.5">
         <span className="text-sm font-medium">{col.name}</span>
         <div className="flex min-w-0 items-center gap-2">
-          <ColumnControls view={view} onChange={props.onViewChange} members={props.members} labels={props.labels} />
+          <ColumnControls view={view} onChange={props.onViewChange} members={props.members} labels={props.labels} cycles={props.cycles} />
           <span className="shrink-0 text-xs text-muted">
             {tickets.length === props.tickets.length ? tickets.length : `${tickets.length} of ${props.tickets.length}`}
           </span>
@@ -265,7 +273,7 @@ function Column(props: {
       <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tickets.map((t) => (
-            <SortableCard key={t.id} t={t} nodes={props.nodes} selected={props.selected === t.ref} onOpen={props.onOpen} />
+            <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} selected={props.selected === t.ref} onOpen={props.onOpen} />
           ))}
         </SortableContext>
         {adding ? (
@@ -306,7 +314,7 @@ function Column(props: {
   );
 }
 
-function SortableCard({ t, nodes, selected, onOpen }: { t: Ticket; nodes: NodeLite[]; selected: boolean; onOpen: (ref: string) => void }) {
+function SortableCard({ t, nodes, cycles, selected, onOpen }: { t: Ticket; nodes: NodeLite[]; cycles: CycleOption[]; selected: boolean; onOpen: (ref: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
     <div
@@ -318,13 +326,14 @@ function SortableCard({ t, nodes, selected, onOpen }: { t: Ticket; nodes: NodeLi
       className={clsx(isDragging && "opacity-30")}
       data-ticket={t.ref}
     >
-      <Card t={t} nodes={nodes} selected={selected} />
+      <Card t={t} nodes={nodes} cycles={cycles} selected={selected} />
     </div>
   );
 }
 
-function Card({ t, nodes, selected, overlay }: { t: Ticket; nodes: NodeLite[]; selected?: boolean; overlay?: boolean }) {
+function Card({ t, nodes, cycles, selected, overlay }: { t: Ticket; nodes: NodeLite[]; cycles: CycleOption[]; selected?: boolean; overlay?: boolean }) {
   const linked = t.nodeIds.map((id) => nodes.find((n) => n.id === id)).filter(Boolean) as NodeLite[];
+  const cycle = t.cycle == null ? null : (cycles.find((c) => c.number === t.cycle) ?? { number: t.cycle, name: "", startsAt: "", endsAt: "", state: "current" as const });
   return (
     <div
       className={clsx(
@@ -341,8 +350,13 @@ function Card({ t, nodes, selected, overlay }: { t: Ticket; nodes: NodeLite[]; s
         </div>
       </div>
       <div className="mt-1 leading-snug">{t.title}</div>
-      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable) && (
+      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
+          {cycle && (
+            <span className="chip bg-ok/10 text-ok" title={cycleTitle(cycle)} data-cycle-chip>
+              <CyclesIcon /> {cycle.number}
+            </span>
+          )}
           {t.labels.map((l) => (
             <span key={l} className="chip bg-bg text-muted">{l}</span>
           ))}

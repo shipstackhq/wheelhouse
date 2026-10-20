@@ -74,6 +74,15 @@ export async function setTicketLabels(q: Q, team: TeamRef, ticketId: string, nam
   }
 }
 
+// ───────── cycles ─────────
+
+/** Rows of tickets with the `cycle` number they are in (null when in none). */
+export async function withCycle<T extends { cycleId: string | null }>(q: Q, rows: T[]): Promise<(T & { cycle: number | null })[]> {
+  const ids = [...new Set(rows.map((r) => r.cycleId).filter((x): x is string => !!x))];
+  const numbers = ids.length ? new Map((await q.select({ id: schema.cycles.id, number: schema.cycles.number }).from(schema.cycles).where(inArray(schema.cycles.id, ids))).map((c) => [c.id, c.number])) : new Map<string, number>();
+  return rows.map((r) => ({ ...r, cycle: r.cycleId ? (numbers.get(r.cycleId) ?? null) : null }));
+}
+
 // ───────── decisions ─────────
 
 /** The nodes each ADR applies to. */

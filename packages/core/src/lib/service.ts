@@ -7,7 +7,7 @@ import { bus, deferPublish } from "./event-bus";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
 import { ServiceError } from "./service-error";
-import { cleanLabels, labelsOf, setDecisionNodes, setTicketLabels, withLabels, withNodeIds } from "./links";
+import { cleanLabels, labelsOf, setDecisionNodes, setTicketLabels, withCycle, withLabels, withNodeIds } from "./links";
 import { audit, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
 
 export { ServiceError };
@@ -191,7 +191,7 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
 
 // ───────────────────────── board / tickets ─────────────────────────
 
-export type TicketWithLinks = typeof tickets.$inferSelect & { ref: string; labels: string[]; nodeIds: string[]; commentCount: number };
+export type TicketWithLinks = typeof tickets.$inferSelect & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
 
 const CLAIM_TTL_MS = 24 * 3600e3;
 
@@ -237,11 +237,13 @@ export async function getBoard(actor: Actor, teamRef: string) {
   const db = await getDb();
   const team = await requireTeam(actor, teamRef);
   await expireStaleClaims(team.id);
+  await (await import("./cycles")).rolloverCycles(team.id);
   const cols = await db.select().from(columns).where(eq(columns.teamId, team.id)).orderBy(asc(columns.position));
   const ts = await db.select().from(tickets).where(eq(tickets.teamId, team.id)).orderBy(asc(tickets.position));
   const ids = ts.map((t) => t.id);
   const links = ids.length ? await db.select().from(ticketNodes).where(inArray(ticketNodes.ticketId, ids)) : [];
   const labelMap = await labelsOf(db, ids);
+  const cycleOf = new Map((await withCycle(db, ts)).map((t) => [t.id, t.cycle]));
   const counts = ids.length
     ? await db
         .select({ ticketId: comments.ticketId, n: sql<number>`count(*)::int` })
@@ -254,6 +256,7 @@ export async function getBoard(actor: Actor, teamRef: string) {
     ...t,
     ref: `${team.key}-${t.number}`,
     labels: labelMap.get(t.id) ?? [],
+    cycle: cycleOf.get(t.id) ?? null,
     nodeIds: links.filter((l) => l.ticketId === t.id).map((l) => l.nodeId),
     commentCount: countMap.get(t.id) ?? 0,
   }));
@@ -327,7 +330,7 @@ export async function getTicket(actor: Actor, ref: string) {
   // Pull requests GitHub reported against this ticket (WH-20). Loaded lazily: that module imports this one.
   const { pullRequestsForTicket } = await import("./github/service");
   const pullRequests = await pullRequestsForTicket(ticket.id);
-  const [withLabel] = await withLabels(db, [ticket]);
+  const [withLabel] = await withCycle(db, await withLabels(db, [ticket]));
   return { ticket: { ...withLabel, ref: r, column: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
 }
 
@@ -353,6 +356,8 @@ export type TicketInput = {
   assigneeId?: string | null;
   agentClaimable?: boolean;
   labels?: string[];
+  /** The number of one of the ticket's own team's cycles that has not ended; null takes it out of its cycle. */
+  cycle?: number | null;
 };
 
 export async function createTicket(actor: Actor, teamRef: string, input: TicketInput & { title: string; column?: string }) {
@@ -361,6 +366,7 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
     await assertAssignee(tx, team.id, input.assigneeId);
+    const cycle = input.cycle == null ? null : await (await import("./cycles")).cycleForTicket(tx, team.id, input.cycle);
     const col = await resolveColumn(tx, team.id, input.column ?? DEFAULT_COLUMNS[0]);
     const [{ ticketCounter }] = await tx
       .update(teams)
@@ -379,6 +385,7 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
         body: input.body ?? "",
         priority: input.priority ?? "medium",
         assigneeId: input.assigneeId ?? null,
+        cycleId: cycle?.id ?? null,
         agentClaimable: input.agentClaimable ?? actor.kind === "agent",
         position,
         createdByKind: actor.kind,
@@ -394,7 +401,7 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
       summary: `created ${ref} "${t.title}" in ${col.name}`,
       data: { ref, column: col.name, title: t.title },
     });
-    const [withLabel] = await withLabels(tx, [t]);
+    const [withLabel] = await withCycle(tx, await withLabels(tx, [t]));
     return { ...withLabel, ref, column: col.name };
   });
 }
@@ -414,7 +421,7 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     const resolved = await resolveTicket(actor, ref, tx, "edit");
     const { team, ref: r } = resolved;
     const locked = await lockRow(tx, tickets, resolved.ticket);
-    const [ticket] = await withLabels(tx, [locked]);
+    const [ticket] = await withCycle(tx, await withLabels(tx, [locked]));
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
       throw new ServiceError("conflict", `${r} was changed (version ${ticket.version}, you had ${expectedVersion}). Re-read and retry.`, {
         current: ticket,
@@ -432,14 +439,15 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     await assertAssignee(tx, team.id, clean.assigneeId);
     const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...ticket, ref: r };
-    const { labels: newLabels, ...columnsPatch } = clean;
+    const { labels: newLabels, cycle: newCycle, ...columnsPatch } = clean;
+    const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await (await import("./cycles")).cycleForTicket(tx, team.id, newCycle)).id };
     const [row] = await tx
       .update(tickets)
-      .set({ ...columnsPatch, version: ticket.version + 1, updatedAt: new Date() })
+      .set({ ...columnsPatch, ...cycleChange, version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
     if (newLabels) await setTicketLabels(tx, team, row.id, newLabels);
-    const t = { ...row, labels: newLabels ?? ticket.labels };
+    const t = { ...row, labels: newLabels ?? ticket.labels, cycle: newCycle === undefined ? ticket.cycle : newCycle };
     await emit(tx, actor, team.id, {
       type: "ticket.updated",
       entity: "ticket",
@@ -461,7 +469,7 @@ async function moveTicketTx(actor: Actor, ref: string, column: string, index?: n
     const resolved = await resolveTicket(actor, ref, tx, "edit");
     const { team, ref: r } = resolved;
     const locked = await lockRow(tx, tickets, resolved.ticket);
-    const [ticket] = await withLabels(tx, [locked]);
+    const [ticket] = await withCycle(tx, await withLabels(tx, [locked]));
     if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
       throw new ServiceError("conflict", `${r} was changed since you read it`, { current: ticket });
     }
@@ -473,7 +481,7 @@ async function moveTicketTx(actor: Actor, ref: string, column: string, index?: n
       .set({ columnId: to.id, position, version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
-    const t = { ...moved, labels: ticket.labels };
+    const t = { ...moved, labels: ticket.labels, cycle: ticket.cycle };
     if (from.id !== to.id) {
       await emit(tx, actor, team.id, {
         type: "ticket.moved",
@@ -517,7 +525,7 @@ export async function claimTicket(actor: Actor, ref: string) {
       .set({ claimedByKeyId: actor.id, version: ticket.version + 1, updatedAt: new Date() })
       .where(eq(tickets.id, ticket.id))
       .returning();
-    const [t] = await withLabels(tx, [claimed]);
+    const [t] = await withCycle(tx, await withLabels(tx, [claimed]));
     await emit(tx, actor, team.id, { type: "ticket.claimed", entity: "ticket", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
     return { ...t, ref: r };
   });

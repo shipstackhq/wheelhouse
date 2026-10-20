@@ -145,7 +145,7 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 
 // ───────── the board ─────────
 
-import type { BoardTicket, BoardView, Bot, TicketDetail } from "@wheelhouse/api-client";
+import type { BoardTicket, BoardView, Bot, CycleDetail, CycleSummary, TicketDetail } from "@wheelhouse/api-client";
 
 export const COLUMNS = [
   { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
@@ -170,6 +170,7 @@ export const ticket = (over: Partial<BoardTicket> = {}): BoardTicket => {
     agentClaimable: false,
     claimedByKeyId: null,
     labels: [],
+    cycle: null,
     position: n * 1000,
     version: 1,
     createdByKind: "human",
@@ -198,6 +199,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
     { id: "u1", name: "Ada Lovelace" },
     { id: "u2", name: "Grace Hopper" },
   ],
+  cycles: [],
   checklist: {
     items: [
       { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/t/${key}/repos` },
@@ -430,3 +432,23 @@ export const teamMembers = (over: Partial<TeamMembers> = {}): TeamMembers => ({
   ],
   ...over,
 });
+
+// ───────── cycles ─────────
+
+const DAY = 86_400_000;
+const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
+
+export const cycleSummary = (over: Partial<CycleSummary> = {}): CycleSummary => ({
+  number: 1,
+  name: "",
+  goal: "",
+  startsAt: inDays(-2),
+  endsAt: inDays(5),
+  state: "current",
+  total: 0,
+  done: 0,
+  open: 0,
+  ...over,
+});
+
+export const cycleDetail = (over: Partial<CycleDetail> = {}): CycleDetail => ({ ...cycleSummary(), tickets: [], landed: [], ...over });

@@ -231,6 +231,8 @@ export type TicketView = {
   agentClaimable: boolean;
   claimedByKeyId: string | null;
   labels: string[];
+  /** The number of the cycle it is in, or null. */
+  cycle: number | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -250,6 +252,27 @@ export type ChecklistItem = {
 };
 export type ChecklistState = { items: ChecklistItem[]; done: boolean; doneCount: number; total: number };
 
+// ───────── cycles ─────────
+
+export type CycleState = "upcoming" | "current" | "past";
+export type CycleOption = { number: number; name: string; startsAt: string; endsAt: string; state: CycleState };
+export type CycleSummary = CycleOption & {
+  goal: string;
+  /** Tickets in the cycle now, how many of them are done, and how many are still open. */
+  total: number;
+  done: number;
+  open: number;
+};
+export type CycleList = { current: CycleSummary | null; upcoming: CycleSummary[]; past: CycleSummary[] };
+export type CycleLanded = { ref: string; title: string; ticketId: string; doneAt: string; inCycle: boolean };
+export type CycleDetail = CycleSummary & {
+  tickets: { ref: string; title: string; priority: Priority; column: string; done: boolean; assigneeId: string | null }[];
+  /** Tickets that reached Done while the cycle ran, and which of them are in it. */
+  landed: CycleLanded[];
+};
+/** No dates: from now for two weeks. A cycle lasts one to fourteen days and does not overlap another of the team. */
+export type CycleInput = { name?: string; goal?: string; startsAt?: string; endsAt?: string };
+
 export type BoardColumn = { id: string; name: string; role: string | null; position: number };
 export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
 export type BoardMember = { id: string; name: string };
@@ -260,6 +283,8 @@ export type BoardView = {
   tickets: BoardTicket[];
   nodes: BoardNode[];
   members: BoardMember[];
+  /** The team's cycles, newest first: a card's chip names one, the filter lists them. */
+  cycles: CycleOption[];
   checklist: ChecklistState;
 };
 
@@ -294,6 +319,8 @@ export type TicketPatch = {
   assigneeId?: string | null;
   agentClaimable?: boolean;
   labels?: string[];
+  /** A cycle number of this team that has not ended; null takes the ticket out of its cycle. */
+  cycle?: number | null;
   version?: number;
 };
 export type NewTicket = Omit<TicketPatch, "version"> & { title: string; column?: string };

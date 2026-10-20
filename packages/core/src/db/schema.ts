@@ -262,6 +262,9 @@ export const tickets = table(
     // is `ON DELETE SET NULL (assignee_id)` (migration 0020; drizzle cannot express the column list), so leaving the
     // team unassigns the person's tickets without touching team_id.
     assigneeId: uuid("assignee_id"),
+    // The cycle the ticket is in, of its own team: the foreign key `(cycle_id, team_id)` to cycles is `ON DELETE SET NULL (cycle_id)`
+    // (migration 0023; drizzle cannot express the column list), so deleting a cycle takes its tickets out without touching team_id.
+    cycleId: uuid("cycle_id"),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     position: doublePrecision("position").notNull(),
@@ -275,7 +278,37 @@ export const tickets = table(
     teamScope("tickets", t),
     unique("tickets_id_team_unique").on(t.id, t.teamId),
     index("tickets_team_idx").on(t.teamId),
+    index("tickets_cycle_idx").on(t.cycleId),
     uniqueIndex("tickets_team_number_idx").on(t.teamId, t.number),
+  ],
+);
+
+/**
+ * A team's cycles (WH-117, ADR-11 revised: cycles belong to a team): an optional 1 to 14 day window with a goal. Numbered
+ * per team, never overlapping inside a team (the service checks that, under a lock on the team: an exclusion constraint needs an
+ * extension that PGlite does not load). Unfinished tickets move to the next cycle once the window has ended; `rolled_over_at` is
+ * what makes that happen exactly once.
+ */
+export const cycles = table(
+  "cycles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    number: integer("number").notNull(),
+    name: text("name").notNull().default(""),
+    goal: text("goal").notNull().default(""),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    rolledOverAt: timestamp("rolled_over_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    teamScope("cycles", t),
+    unique("cycles_id_team_unique").on(t.id, t.teamId),
+    uniqueIndex("cycles_team_number_idx").on(t.teamId, t.number),
+    index("cycles_team_starts_idx").on(t.teamId, t.startsAt),
+    check("cycles_window_check", sql`"ends_at" > "starts_at"`),
   ],
 );
 
@@ -511,7 +544,7 @@ export const events = table(
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
     type: text("type").notNull(), // e.g. ticket.created, ticket.moved, comment.created
-    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc"] }).notNull(),
+    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc", "cycle"] }).notNull(),
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),

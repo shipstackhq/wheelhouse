@@ -330,6 +330,15 @@ describe("the docs, repositories and onboarding endpoints (WH-98)", () => {
     assert.deepEqual([e.isConflict, e.current], [true, { id: "d1", version: 3 }]);
   });
 
+  test("cycles: list and get unwrap; create, update and delete go to the team's cycles by number", async () => {
+    const s = script([{ json: { current: null, upcoming: [], past: [] } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).cycles.list("WH"), { current: null, upcoming: [], past: [] });
+    assert.deepEqual(await sent((a) => a.cycles.get("WH", 3), { json: { cycle: { number: 3 } } }), { method: "GET", url: "/api/app/teams/WH/cycles/3", body: undefined });
+    assert.deepEqual(await sent((a) => a.cycles.create("WH", { name: "Spring", startsAt: "2026-10-20T00:00:00.000Z" }), { json: { cycle: {} } }), { method: "POST", url: "/api/app/teams/WH/cycles", body: { name: "Spring", startsAt: "2026-10-20T00:00:00.000Z" } });
+    assert.deepEqual(await sent((a) => a.cycles.update("WH", 3, { goal: "x" }), { json: { cycle: {} } }), { method: "PATCH", url: "/api/app/teams/WH/cycles/3", body: { goal: "x" } });
+    assert.deepEqual(await sent((a) => a.cycles.delete("WH", 3), { json: { ok: true } }), { method: "DELETE", url: "/api/app/teams/WH/cycles/3", body: undefined });
+  });
+
   test("repositories: list and retire unwrap; GitHub connect sends the repository's GitHub id as repoId", async () => {
     const s = script([{ json: { repositories: [{ id: "r1" }] } }]);
     assert.deepEqual(await createApiClient({ fetch: s.f }).repos.list("WH"), [{ id: "r1" }]);

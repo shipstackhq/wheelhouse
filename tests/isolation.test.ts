@@ -24,6 +24,7 @@ import { getDb, schema } from "@wheelhouse/core/db";
 import type { Actor } from "@wheelhouse/core/lib/access";
 import { actorForKey, sha256, userForSessionToken } from "@wheelhouse/core/lib/access";
 import * as svc from "@wheelhouse/core/lib/service";
+import * as cycles from "@wheelhouse/core/lib/cycles";
 import * as members from "@wheelhouse/core/lib/members";
 import { runTool, tools } from "@wheelhouse/core/lib/tools";
 import { askMap } from "@wheelhouse/core/lib/ask";
@@ -558,6 +559,50 @@ describe("team keys are per workspace (continued)", () => {
   });
 });
 
+describe("cycles stay inside their workspace and team (WH-117)", () => {
+  const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
+  const notFound = (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found";
+
+  test("workspace B cannot list, read, make, change or delete a cycle of A's team, and A's cycles are not changed", async () => {
+    const a = await cycles.createCycle(A.owner, A.teamKey, { name: "A-SECRET cycle", goal: "A-SECRET goal" });
+    const before = await fingerprint(A);
+    // A's team by its id: a key means B's own team of that key in B's workspace (keys are per workspace, tested above).
+    await assert.rejects(cycles.listCycles(B.owner, A.teamId), notFound);
+    await assert.rejects(cycles.getCycle(B.owner, A.teamId, a.number), notFound);
+    await assert.rejects(cycles.createCycle(B.owner, A.teamId, {}), notFound);
+    await assert.rejects(cycles.updateCycle(B.owner, A.teamId, a.number, { goal: "defaced" }), notFound);
+    await assert.rejects(cycles.deleteCycle(B.owner, A.teamId, a.number), notFound);
+    assert.equal((await cycles.getCycle(A.owner, A.teamKey, a.number)).goal, "A-SECRET goal");
+    assert.equal(await fingerprint(A), before);
+  });
+
+  test("B's list of its own cycles shows none of A's, even with the same number", async () => {
+    const b = await cycles.createCycle(B.owner, B.teamKey, { name: "B's own" });
+    const list = await cycles.listCycles(B.owner, B.teamKey);
+    const all = [list.current, ...list.upcoming, ...list.past].filter(Boolean);
+    assert.deepEqual(all.map((c) => c!.name), ["B's own"]);
+    assert.equal(b.number, 1, "numbers are per team: B's first cycle is 1, as A's is");
+  });
+
+  test("a ticket of B cannot join A's cycle: the service looks for the number in B's own team, and the database refuses the id", async () => {
+    const db = await getDb();
+    const aCycle = (await db.select().from(schema.cycles).where(eq(schema.cycles.teamId, A.teamId)))[0];
+    const bTicket = await svc.createTicket(B.owner, B.teamKey, { title: "B wants A's cycle" });
+    await assert.rejects(svc.updateTicket(B.owner, bTicket.ref, { cycle: 99 }), svc.ServiceError);
+    await assert.rejects(db.update(schema.tickets).set({ cycleId: aCycle.id }).where(eq(schema.tickets.id, bTicket.id)), refused);
+    await assert.rejects(svc.updateTicket(B.owner, A.ticketRef, { cycle: 1 }), notFound);
+    assert.equal((await svc.getTicket(B.owner, bTicket.ref)).ticket.cycle, null);
+  });
+
+  test("a cycle row cannot name a workspace other than its team's", async () => {
+    const db = await getDb();
+    await assert.rejects(
+      db.insert(schema.cycles).values({ teamId: A.teamId, workspaceId: B.workspaceId, number: 77, startsAt: new Date(), endsAt: new Date(Date.now() + 86_400_000) }),
+      refused,
+    );
+  });
+});
+
 describe("the database refuses a row that points across workspaces (WH-113)", () => {
   // Even code that skips the service layer cannot put workspace B's row on workspace A's team, or the reverse.
   const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
@@ -603,6 +648,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/sync.ts": "every entry point resolves through requireTeam first (tested)",
   "packages/core/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "packages/core/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
+  "packages/core/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and a ticket joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
   "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs, nodes and repositories inside it (tested)",
   "packages/core/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one team by key and the owner of that team's own workspace, and everything it changes goes through the service layer as that owner, so it can only reach that workspace's map (tested on a throwaway database)",
   "packages/core/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
@@ -718,6 +764,11 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "DELETE /api/app/teams/:key/docs/:ref": "svc.deleteDoc(actor): resolved inside the actor's team (tested)",
   "PUT /api/app/teams/:key/docs/:ref/nodes/:nodeId": "svc.linkDocNode(actor): the doc and the node are both resolved inside the actor's team, so another workspace's node is a 404 (tested)",
   "DELETE /api/app/teams/:key/docs/:ref/nodes/:nodeId": "svc.linkDocNode(actor, unlink): same scoping as linking (tested)",
+  "GET /api/app/teams/:key/cycles": "listCycles(actor, key): requireTeam(actor, key); only that team's cycles and counts (tested)",
+  "POST /api/app/teams/:key/cycles": "createCycle(actor, key): requireTeam(actor, key, edit), the team's row locked, the cycle made in that team only (tested)",
+  "GET /api/app/teams/:key/cycles/:number": "getCycle(actor, key, number): requireTeam(actor, key); the number is resolved inside that team, so another team's or workspace's cycle is a 404 (tested)",
+  "PATCH /api/app/teams/:key/cycles/:number": "updateCycle(actor, key, number): requireTeam(actor, key, edit), the cycle resolved inside that team (tested)",
+  "DELETE /api/app/teams/:key/cycles/:number": "deleteCycle(actor, key, number): requireTeam(actor, key, edit), the cycle resolved inside that team (tested)",
   "GET /api/app/teams/:key/repositories": "svc.listRepositories(actor): rows are selected by the team found through requireTeam(actor); the answer is a view without installation ids (tested)",
   "POST /api/app/teams/:key/repositories": "svc.createRepository(actor): the team through requireTeam(actor); humans only (tested)",
   "GET /api/app/teams/:key/repositories/github": "githubStatus(human): installations are listed by the person's workspace id, and only for owners; repositories GitHub lists are asked per installation (tested against a fake GitHub)",

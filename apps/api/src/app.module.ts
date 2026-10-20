@@ -21,12 +21,13 @@ import { CsrfGuard, SessionGuard } from "./web/endpoints";
 import { DocsController } from "./web/docs.controller";
 import { MapController } from "./web/map.controller";
 import { RepositoriesController } from "./web/repositories.controller";
+import { CyclesController } from "./web/cycles.controller";
 import { MeController } from "./web/me.controller";
 import { TeamMembersController } from "./web/team-members.controller";
 import { TeamsController } from "./web/teams.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, TicketsController, MapController, DocsController, RepositoriesController],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, TicketsController, MapController, DocsController, RepositoriesController, CyclesController],
   providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard],
 })
 export class AppModule {}

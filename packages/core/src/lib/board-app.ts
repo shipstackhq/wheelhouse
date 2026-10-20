@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import * as svc from "./service";
-import { withLabels } from "./links";
+import { withCycle, withLabels } from "./links";
+import { cycleOptions, type CycleOption } from "./cycles";
 import { ServiceError } from "./service";
 import type { ChecklistState } from "./setup-checklist";
 
@@ -24,6 +25,8 @@ export type TicketView = {
   agentClaimable: boolean;
   claimedByKeyId: string | null;
   labels: string[];
+  /** The number of the cycle it is in, or null. */
+  cycle: number | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -31,7 +34,7 @@ export type TicketView = {
   updatedAt: Date;
 };
 
-type TicketRow = typeof schema.tickets.$inferSelect & { ref: string; labels: string[] };
+type TicketRow = typeof schema.tickets.$inferSelect & { ref: string; labels: string[]; cycle: number | null };
 
 export const ticketView = (t: TicketRow): TicketView => ({
   id: t.id,
@@ -45,6 +48,7 @@ export const ticketView = (t: TicketRow): TicketView => ({
   agentClaimable: t.agentClaimable,
   claimedByKeyId: t.claimedByKeyId,
   labels: t.labels,
+  cycle: t.cycle,
   position: t.position,
   version: t.version,
   createdByKind: t.createdByKind,
@@ -62,6 +66,8 @@ export type BoardView = {
   /** Just enough of the map to show and link nodes. The map itself is another page. */
   nodes: { id: string; name: string; kind: string; parentId: string | null; layer: string }[];
   members: { id: string; name: string }[];
+  /** The team's cycles, newest first: a ticket's chip names one, the board filters by one. */
+  cycles: CycleOption[];
   checklist: ChecklistState;
 };
 
@@ -80,12 +86,14 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
       .innerJoin(schema.users, eq(schema.users.id, schema.teamMembers.userId))
       .where(eq(schema.teamMembers.teamId, board.team.id)),
   ]);
+  const cycles = await cycleOptions(db, board.team.id);
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
     columns: board.columns.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
     tickets: board.tickets.map((t) => ({ ...ticketView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
     nodes,
     members,
+    cycles,
     checklist,
   };
 }
@@ -157,6 +165,10 @@ export function ticketInput(b: Record<string, unknown>, o: { create: boolean }):
     if (!Array.isArray(b.labels) || b.labels.some((l) => typeof l !== "string")) bad("labels", "labels must be a list of text");
     out.labels = b.labels as string[];
   }
+  if (b.cycle !== undefined) {
+    if (b.cycle !== null && (typeof b.cycle !== "number" || !Number.isSafeInteger(b.cycle))) bad("cycle", "cycle must be a cycle number, or null for none");
+    out.cycle = b.cycle as number | null;
+  }
   return out;
 }
 
@@ -180,7 +192,8 @@ async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>):
   } catch (e) {
     if (e instanceof ServiceError && e.code === "conflict" && (e.details as { current?: unknown } | undefined)?.current) {
       const now = await svc.resolveTicket(actor, ref);
-      const [withLabel] = await withLabels(await getDb(), [now.ticket]);
+      const db = await getDb();
+      const [withLabel] = await withCycle(db, await withLabels(db, [now.ticket]));
       throw new ServiceError("conflict", e.message, { current: ticketView({ ...withLabel, ref: now.ref }) });
     }
     throw e;

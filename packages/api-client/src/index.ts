@@ -51,6 +51,10 @@ import type {
   Repository,
   RepositoryInput,
   CreatedKey,
+  CycleDetail,
+  CycleInput,
+  CycleList,
+  CycleSummary,
   CreateInviteInput,
   DashboardWidgets,
   InvitePeek,
@@ -313,6 +317,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<{ ok: true }>("PUT", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
       unlinkNode: (teamKey: string, ref: string, nodeId: string) =>
         request<{ ok: true }>("DELETE", `${team(teamKey)}/docs/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
+    },
+
+    cycles: {
+      /** The team's cycles by when they are. An ended cycle has handed its unfinished tickets on before this answers. */
+      list: (teamKey: string) => request<CycleList>("GET", `${team(teamKey)}/cycles`),
+      /** One cycle: its tickets and what landed while it ran. */
+      get: async (teamKey: string, number: number) => (await request<{ cycle: CycleDetail }>("GET", `${team(teamKey)}/cycles/${number}`)).cycle,
+      create: async (teamKey: string, input: CycleInput) => (await request<{ cycle: CycleSummary }>("POST", `${team(teamKey)}/cycles`, input)).cycle,
+      update: async (teamKey: string, number: number, patch: CycleInput) => (await request<{ cycle: CycleSummary }>("PATCH", `${team(teamKey)}/cycles/${number}`, patch)).cycle,
+      /** Its tickets stay on the board, in no cycle. */
+      delete: (teamKey: string, number: number) => request<{ ok: true; number: number; released: number }>("DELETE", `${team(teamKey)}/cycles/${number}`),
     },
 
     repos: {

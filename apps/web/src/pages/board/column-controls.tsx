@@ -1,6 +1,6 @@
 import { DropdownMenu } from "radix-ui";
 import clsx from "clsx";
-import type { BoardMember as Member, BoardTicket } from "@wheelhouse/api-client";
+import type { BoardMember as Member, BoardTicket, CycleOption } from "@wheelhouse/api-client";
 import { CheckIcon, CloseIcon } from "../../components/icons";
 
 type Ticket = BoardTicket;
@@ -11,11 +11,12 @@ export type View = {
   priority: string[];
   assignee: string[]; // member ids, or "none" for unassigned
   label: string[];
+  cycle: string[]; // cycle numbers as text, or "none" for tickets in no cycle
   flags: Flag[];
   sort: { key: SortKey; dir: "asc" | "desc" } | null; // null = manual (drag order)
 };
 
-export const EMPTY_VIEW: View = { priority: [], assignee: [], label: [], flags: [], sort: null };
+export const EMPTY_VIEW: View = { priority: [], assignee: [], label: [], cycle: [], flags: [], sort: null };
 
 const PRIORITIES = ["urgent", "high", "medium", "low"];
 const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -45,15 +46,16 @@ const FLAG_TEST: Record<Flag, (t: Ticket) => boolean> = {
   hasComments: (t) => t.commentCount > 0,
 };
 
-export const isFiltered = (v: View) => v.priority.length + v.assignee.length + v.label.length + v.flags.length > 0;
-/** Each of priority/assignee/label is one filter; every flag is its own. */
-const filterCount = (v: View) => [v.priority, v.assignee, v.label].filter((g) => g.length > 0).length + v.flags.length;
+export const isFiltered = (v: View) => v.priority.length + v.assignee.length + v.label.length + v.cycle.length + v.flags.length > 0;
+/** Each of priority/assignee/label/cycle is one filter; every flag is its own. */
+const filterCount = (v: View) => [v.priority, v.assignee, v.label, v.cycle].filter((g) => g.length > 0).length + v.flags.length;
 
 /** Filters combine with AND; several values inside one filter combine with OR. */
 export function matches(t: Ticket, v: View) {
   if (v.priority.length && !v.priority.includes(t.priority)) return false;
   if (v.assignee.length && !v.assignee.includes(t.assigneeId ?? "none")) return false;
   if (v.label.length && !t.labels.some((l) => v.label.includes(l))) return false;
+  if (v.cycle.length && !v.cycle.includes(t.cycle == null ? "none" : String(t.cycle))) return false;
   return v.flags.every((f) => FLAG_TEST[f](t));
 }
 
@@ -86,6 +88,7 @@ export function describeFilter(v: View, members: Member[]) {
   if (v.assignee.length)
     return v.assignee.length === 1 ? (v.assignee[0] === "none" ? "Unassigned" : (members.find((m) => m.id === v.assignee[0])?.name ?? "Assignee")) : `${v.assignee.length} assignees`;
   if (v.label.length) return v.label.length === 1 ? v.label[0] : `${v.label.length} labels`;
+  if (v.cycle.length) return v.cycle.length === 1 ? (v.cycle[0] === "none" ? "No cycle" : `Cycle ${v.cycle[0]}`) : `${v.cycle.length} cycles`;
   return FLAGS.find((f) => f.value === v.flags[0])?.label ?? "";
 }
 
@@ -167,9 +170,11 @@ export function ColumnControls(props: {
   onChange: (v: View) => void;
   members: Member[];
   labels: string[];
+  cycles?: CycleOption[];
   className?: string;
 }) {
   const { view, onChange, members, labels } = props;
+  const cycles = props.cycles ?? [];
   const filtered = isFiltered(view);
   const set = (patch: Partial<View>) => onChange({ ...view, ...patch });
 
@@ -180,7 +185,7 @@ export function ColumnControls(props: {
           active={filtered}
           label={describeFilter(view, members)}
           name="Filter"
-          onClear={() => onChange({ ...view, priority: [], assignee: [], label: [], flags: [] })}
+          onClear={() => onChange({ ...view, priority: [], assignee: [], label: [], cycle: [], flags: [] })}
         />
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="start" sideOffset={6} collisionPadding={8} className={clsx(MENU, "max-h-96 overflow-y-auto")}>
@@ -205,6 +210,18 @@ export function ColumnControls(props: {
                 {l}
               </Check>
             ))}
+            {cycles.length > 0 && <div className={HEAD}>Cycle</div>}
+            {cycles.length > 0 && (
+              <Check checked={view.cycle.includes("none")} onSelect={() => set({ cycle: toggle(view.cycle, "none") })}>
+                No cycle
+              </Check>
+            )}
+            {cycles.map((c) => (
+              <Check key={c.number} checked={view.cycle.includes(String(c.number))} onSelect={() => set({ cycle: toggle(view.cycle, String(c.number)) })}>
+                {c.name ? `Cycle ${c.number}: ${c.name}` : `Cycle ${c.number}`}
+                {c.state === "current" && <span className="ml-1 text-xs text-ok">now</span>}
+              </Check>
+            ))}
             <div className={HEAD}>Ticket</div>
             {FLAGS.map((f) => (
               <Check key={f.value} checked={view.flags.includes(f.value)} onSelect={() => set({ flags: toggle(view.flags, f.value) })}>
@@ -214,7 +231,7 @@ export function ColumnControls(props: {
             {filtered && (
               <>
                 <DropdownMenu.Separator className="my-1 h-px bg-line" />
-                <DropdownMenu.Item className={clsx(ITEM, "text-muted")} onSelect={() => set({ priority: [], assignee: [], label: [], flags: [] })}>
+                <DropdownMenu.Item className={clsx(ITEM, "text-muted")} onSelect={() => set({ priority: [], assignee: [], label: [], cycle: [], flags: [] })}>
                   Clear
                 </DropdownMenu.Item>
               </>

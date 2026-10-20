@@ -8,6 +8,7 @@ import { DecisionsPage } from "../pages/decisions";
 import { DocsPage } from "../pages/docs";
 import { GlossaryPage } from "../pages/glossary";
 import { OnboardingPage } from "../pages/onboarding";
+import { CyclePage, CyclesPage } from "../pages/cycles";
 import { ReposPage } from "../pages/repos";
 import { MapPage } from "../pages/map";
 import { TeamMembersPage } from "../pages/members";
@@ -75,6 +76,8 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "decisions/:number", Component: DecisionsPage },
                 { path: "glossary", Component: GlossaryPage },
                 { path: "glossary/:termId", Component: GlossaryPage },
+                { path: "cycles", Component: CyclesPage },
+                { path: "cycles/:number", Component: CyclePage },
                 { path: "repos", Component: ReposPage },
                 { path: "members", Component: TeamMembersPage },
                 { path: "settings", Component: TeamSettingsPage },

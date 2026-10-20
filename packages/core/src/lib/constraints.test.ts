@@ -164,7 +164,9 @@ describe("the TypeScript enums and the CHECK constraints agree", () => {
       select c.conname, pg_get_constraintdef(c.oid) as def
       from pg_constraint c where c.contype = 'c' and c.connamespace = 'public'::regnamespace and c.conname like '%\\_check'`);
     const list = (Array.isArray(res) ? res : (res as unknown as { rows: unknown[] }).rows) as { conname: string; def: string }[];
-    const inDb = new Map(list.map((r) => [r.conname, valuesIn(r.def)]));
+    // CHECKs that are about a rule, not about an enum, are named here.
+    const notEnums = new Set(["cycles_window_check"]);
+    const inDb = new Map(list.filter((r) => !notEnums.has(r.conname)).map((r) => [r.conname, valuesIn(r.def)]));
     const expected = enumColumns();
     assert.ok(expected.length >= 30, `found only ${expected.length} enum columns`);
     for (const e of expected) {

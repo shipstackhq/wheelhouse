@@ -184,7 +184,7 @@ The board and the ticket dialog. Everything needs a session. A ticket is address
 | `PATCH /api/app/tickets/:ref` | see "The version check" below |
 | `POST /api/app/tickets/:ref/move` | `{ column, index?, version? }`: the column by id, name or role; `index` is the place in the column (the end when absent) |
 
-A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
+A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
 
 **Claiming.** Only agents claim a ticket (over MCP or `/api/v1`). A person decides whether agents may pick a ticket up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
 
@@ -307,3 +307,26 @@ A person who belongs to several workspaces works in one at a time, chosen per se
 | `focus` | **team only** (`404` without `?team=`): what has waited longest for review, what has sat longest in progress, agents gone quiet, decisions still proposed, member count and the caller's role. "How long" is time since the ticket last moved into its column |
 
 The page is `/t/:key/overview` ("Overview", first in the team sidebar). It draws the same widget components as the home page, inside a scope that says which team (`lib/dashboard-scope`), so a widget added to `TEAM_WIDGETS` in `pages/dashboard/registry.tsx` appears on every team's Overview. It stays live through the team's own event stream (opened by the team layout) and a 30 s tick. The home page's team rows link to it.
+
+## Built by WH-117: cycles per team
+
+A team's optional cycles: a window of one to fourteen days with a goal (ADR-11, revised: cycles belong to a team). Everything needs a session; a team of another
+workspace, or one the person is not on, is a `404`; changing cycles needs a team editor (viewers read). A cycle is addressed by its number inside the team, and a
+number that is not a whole number is a `404`.
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/app/teams/:key/cycles` | `{ current, upcoming, past }`: each cycle is `{ number, name, goal, startsAt, endsAt, state, total, done, open }` (`current` is one or null; `past` is newest first). A cycle whose window has ended hands its unfinished tickets on before this answers |
+| `POST /api/app/teams/:key/cycles` | `{ name?, goal?, startsAt?, endsAt? }`; 201 `{ cycle }`. No dates: from now for two weeks. A window must end after it starts and last one to fourteen days (`400`, naming `endsAt`); one that overlaps another cycle of the team is a `409` naming it |
+| `GET /api/app/teams/:key/cycles/:number` | `{ cycle }` with `tickets` (`ref`, `title`, `priority`, `column`, `done`, `assigneeId`) and `landed` (the team's tickets that reached Done while the window ran: `ref`, `title`, `doneAt`, `inCycle`) |
+| `PATCH /api/app/teams/:key/cycles/:number` | any of `name`, `goal`, `startsAt`, `endsAt`; a cycle that has ended keeps its dates (`400`) |
+| `DELETE /api/app/teams/:key/cycles/:number` | `{ ok, number, released }`; its tickets stay on the board in no cycle |
+
+A ticket joins a cycle with `cycle` (the number) on `POST .../tickets` or `PATCH /api/app/tickets/:ref`; `null` takes it out. The number is looked up in the ticket's own team, a cycle that has
+ended is closed to new tickets, and the database refuses a cycle of another team. Every ticket answer carries `cycle` (a number or null), and the board answer carries `cycles`
+(`{ number, name, startsAt, endsAt, state }`, newest first) for the card chip and the filter.
+
+**Rollover.** Once a cycle has ended, every ticket in it that is not in a done column (a custom column counts as open) moves to the team's next cycle, once: `cycles.rolled_over_at` is set whether or not anything
+moved, so a second read, or two at once, changes nothing. With no next cycle, one of the same length is made, starting where the last ended and moved on by whole lengths if the team was away, so it holds today.
+It happens on reads of the cycles and the board, as the claim sweep does, as "Wheelhouse", and is announced as `cycle.rolled_over` (and `cycle.created`). Cycle changes are events (`cycle.created`, `cycle.updated`,
+`cycle.deleted`, `cycle.rolled_over`, entity `cycle`), so agents hear them in their queue. `/api/v1` and the MCP tools never show a ticket's cycle.

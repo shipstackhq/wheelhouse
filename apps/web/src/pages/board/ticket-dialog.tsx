@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog } from "radix-ui";
 import ReactMarkdown from "react-markdown";
+import type { CycleOption } from "@wheelhouse/api-client";
 import remarkGfm from "remark-gfm";
 import { AutoGrowTextarea } from "../../components/auto-grow-textarea";
 import { DescriptionEditor } from "../../components/description-editor";
@@ -17,6 +18,7 @@ import { useServices } from "../../lib/services";
 import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/ticket-nav";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite } from "./shared";
 import { DiscussionThread } from "./thread";
+import { cycleTitle } from "../cycles/cycle-bits";
 import { AgentIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, NodeIcon } from "../../components/icons";
 
 /**
@@ -31,12 +33,15 @@ export function TicketDialog(props: {
   columns: Col[];
   nodes: NodeLite[];
   members: Member[];
+  /** The team's cycles, for the Cycle field. */
+  cycles?: CycleOption[];
   /** Position among the tickets of the same column, as the board shows them. */
   nav: Neighbours;
   onNavigate: (ref: string) => void;
   onClose: () => void;
 }) {
   const { ticketRef, columns, nodes, members, nav, onNavigate, onClose } = props;
+  const cycles = props.cycles ?? [];
   const { api, queryClient } = useServices();
   const query = useQuery(ticketQuery(api, ticketRef));
   const data = query.data ?? null;
@@ -327,6 +332,19 @@ export function TicketDialog(props: {
                       onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { assigneeId: v || null, version: t.version }))}
                     />
                   </Field>
+                  {(cycles.length > 0 || t.cycle != null) && (
+                    <Field label="Cycle">
+                      <Select
+                        value={t.cycle == null ? "" : String(t.cycle)}
+                        // A cycle that has ended is closed to new tickets, but a ticket already in one still shows it.
+                        options={[
+                          { value: "", label: "No cycle" },
+                          ...cycles.filter((c) => c.state !== "past" || c.number === t.cycle).map((c) => ({ value: String(c.number), label: cycleTitle(c) })),
+                        ]}
+                        onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { cycle: v ? Number(v) : null, version: t.version }))}
+                      />
+                    </Field>
+                  )}
                   <Field label="AI">
                     <label className="flex h-[34px] items-center gap-2 text-sm">
                       <input

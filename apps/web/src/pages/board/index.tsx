@@ -27,7 +27,7 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
         <BoardFilterBar labels={labels} selected={selected} onChange={setSelected} />
       </div>
       <div className="min-h-0 flex-1">
-        <Board teamKey={board.team.key} columns={columns} tickets={board.tickets} nodes={board.nodes} members={board.members} />
+        <Board teamKey={board.team.key} columns={columns} tickets={board.tickets} nodes={board.nodes} members={board.members} cycles={board.cycles} />
       </div>
     </div>
   );
