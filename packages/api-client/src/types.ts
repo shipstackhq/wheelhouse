@@ -331,6 +331,53 @@ export type ProjectInput = {
   version?: number;
 };
 export type MilestoneInput = { name?: string; description?: string; targetDate?: string | null; index?: number };
+export type InitiativeStatus = "planned" | "active" | "paused" | "done";
+export type InitiativeSummary = {
+  id: string;
+  parentId: string | null;
+  name: string;
+  description: string;
+  status: InitiativeStatus;
+  health: ProjectHealth;
+  targetDate: string | null;
+  owner: { id: string; name: string } | null;
+  /** Rolled up from the tickets of every project below, each ticket once. */
+  total: number;
+  done: number;
+  /** Projects linked to this initiative itself, and initiatives directly under it. */
+  projectCount: number;
+  childCount: number;
+  /** 1 for a top initiative; at most 3. */
+  depth: number;
+  version: number;
+  canEdit: boolean;
+  updatedAt: string;
+};
+export type InitiativeProject = { id: string; name: string; status: ProjectStatus; health: ProjectHealth; targetDate: string | null; total: number; done: number; direct: boolean };
+export type InitiativeDetail = InitiativeSummary & {
+  /** From the top initiative down to the parent. */
+  path: { id: string; name: string }[];
+  children: InitiativeSummary[];
+  /** Projects of the viewer's teams that it reaches. `direct`: linked here rather than only through a sub-initiative. */
+  projects: InitiativeProject[];
+  /** The other projects it reaches: how many and their totals, never a name. */
+  hidden: { count: number; total: number; done: number };
+  /** Projects the viewer sees that are not linked here yet (only when they can edit it). */
+  linkable: { id: string; name: string }[];
+};
+export type InitiativeInput = {
+  name?: string;
+  description?: string;
+  status?: InitiativeStatus;
+  targetDate?: string | null;
+  owner?: string | null;
+  parentId?: string | null;
+  /** `null` clears a health that was set by hand. */
+  healthOverride?: ProjectHealthValue | null;
+  /** Its place among its siblings, from 0. */
+  index?: number;
+  version?: number;
+};
 export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
 
 export type BoardColumn = { id: string; name: string; role: string | null; position: number };

@@ -26,6 +26,7 @@ import { actorForKey, sha256, userForSessionToken } from "@wheelhouse/core/lib/a
 import * as svc from "@wheelhouse/core/lib/service";
 import * as cycles from "@wheelhouse/core/lib/cycles";
 import * as projects from "@wheelhouse/core/lib/projects";
+import * as initiatives from "@wheelhouse/core/lib/initiatives";
 import * as members from "@wheelhouse/core/lib/members";
 import { runTool, tools } from "@wheelhouse/core/lib/tools";
 import { askMap } from "@wheelhouse/core/lib/ask";
@@ -669,6 +670,40 @@ describe("projects stay inside their workspace, and show other teams only as tot
   });
 });
 
+describe("initiatives stay inside their workspace and show projects of other teams only as totals (WH-119)", () => {
+  const notFound = (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found";
+  const refused = (e: unknown) => ["23503", "23514"].includes((e as { cause?: { code?: string } }).cause?.code ?? "");
+  let aInitiative: Awaited<ReturnType<typeof initiatives.createInitiative>>;
+  let aProject: Awaited<ReturnType<typeof projects.createProject>>;
+  before(async () => {
+    aProject = await projects.createProject(A.owner, { name: "A-SECRET project", leadTeam: A.teamId });
+    aInitiative = await initiatives.createInitiative(A.owner, { name: "A-SECRET initiative", description: "A-SECRET description" });
+    await initiatives.linkProject(A.owner, aInitiative.id, aProject.id);
+  });
+
+  test("another workspace sees none of it and changes none of it, whoever asks", async () => {
+    assert.ok(!JSON.stringify(await initiatives.listInitiatives(B.owner)).includes("A-SECRET"));
+    await assert.rejects(initiatives.getInitiative(B.owner, aInitiative.id), notFound);
+    await assert.rejects(initiatives.updateInitiative(B.owner, aInitiative.id, { name: "defaced" }), notFound);
+    await assert.rejects(initiatives.deleteInitiative(B.owner, aInitiative.id), notFound);
+    await assert.rejects(initiatives.linkProject(B.owner, aInitiative.id, aProject.id), notFound);
+    await assert.rejects(initiatives.unlinkProject(B.owner, aInitiative.id, aProject.id), notFound);
+    assert.equal((await initiatives.getInitiative(A.owner, aInitiative.id)).name, "A-SECRET initiative");
+  });
+
+  test("B cannot hang its initiative under A's, nor group A's project, and the database agrees", async () => {
+    await assert.rejects(initiatives.createInitiative(B.owner, { name: "steal", parentId: aInitiative.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    const mine = await initiatives.createInitiative(B.owner, { name: "B's own" });
+    await assert.rejects(initiatives.linkProject(B.owner, mine.id, aProject.id), notFound);
+    const db = await getDb();
+    await assert.rejects(db.insert(schema.initiativeProjects).values({ initiativeId: mine.id, projectId: aProject.id, workspaceId: B.workspaceId }), refused);
+    const unlinked = await projects.createProject(A.owner, { name: "A-SECRET second", leadTeam: A.teamId });
+    await assert.rejects(db.insert(schema.initiativeProjects).values({ initiativeId: aInitiative.id, projectId: unlinked.id, workspaceId: B.workspaceId }), refused);
+    await assert.rejects(db.update(schema.initiatives).set({ parentId: aInitiative.id }).where(eq(schema.initiatives.id, mine.id)), refused);
+    assert.deepEqual((await initiatives.listInitiatives(B.owner)).map((i) => i.name), ["B's own"]);
+  });
+});
+
 describe("the database refuses a row that points across workspaces (WH-113)", () => {
   // Even code that skips the service layer cannot put workspace B's row on workspace A's team, or the reverse.
   const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
@@ -716,6 +751,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
   "packages/core/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and a ticket joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
   "packages/core/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; ticket detail is read only for the viewer's own teams and every other team is counted, never named; a ticket reaches a project only through its own team's project_teams row, which the database enforces (tested)",
+  "packages/core/src/lib/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no ticket is ever listed; the database refuses a parent or a project of another workspace (tested)",
   "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs, nodes and repositories inside it (tested)",
   "packages/core/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one team by key and the owner of that team's own workspace, and everything it changes goes through the service layer as that owner, so it can only reach that workspace's map (tested on a throwaway database)",
   "packages/core/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
@@ -836,6 +872,13 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/teams/:key/cycles/:number": "getCycle(actor, key, number): requireTeam(actor, key); the number is resolved inside that team, so another team's or workspace's cycle is a 404 (tested)",
   "PATCH /api/app/teams/:key/cycles/:number": "updateCycle(actor, key, number): requireTeam(actor, key, edit), the cycle resolved inside that team (tested)",
   "DELETE /api/app/teams/:key/cycles/:number": "deleteCycle(actor, key, number): requireTeam(actor, key, edit), the cycle resolved inside that team (tested)",
+  "GET /api/app/initiatives": "listInitiatives(actor): the caller's workspace only, empty for a guest (tested)",
+  "POST /api/app/initiatives": "createInitiative(actor): a human who is not a guest or a viewer; the parent must be in the caller's workspace and one they own or administer (tested)",
+  "GET /api/app/initiatives/:id": "getInitiative(actor, id): the caller's workspace only; projects of the viewer's teams in full, the rest as totals (tested)",
+  "PATCH /api/app/initiatives/:id": "updateInitiative(actor, id): the owner or a workspace admin; the tree is locked so no cycle or fourth level can form; checked against its version (tested)",
+  "DELETE /api/app/initiatives/:id": "deleteInitiative(actor, id): the owner or a workspace admin; soft delete, children move up, projects untouched (tested)",
+  "POST /api/app/initiatives/:id/projects": "linkProject(actor, id): the owner or a workspace admin, and a project the person sees through openProject() (tested)",
+  "DELETE /api/app/initiatives/:id/projects/:projectId": "unlinkProject(actor, id, projectId): the owner or a workspace admin, and a project the person sees (tested)",
   "GET /api/app/projects": "listProjects(actor): through project_visibility (people on a team that takes part, never a guest) in the caller's workspace (tested)",
   "POST /api/app/projects": "createProject(actor): the lead team and each extra team through requireTeam(actor, key, edit), so only teams the person edits take part; made in the caller's own workspace (tested)",
   "GET /api/app/projects/:id": "getProject(actor, id): openProject needs the person on a team that takes part; ticket detail only for their own teams, the others as totals (tested)",

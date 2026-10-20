@@ -145,7 +145,7 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 
 // ───────── the board ─────────
 
-import type { BoardTicket, BoardView, Bot, CycleDetail, CycleSummary, ProjectDetail, ProjectSummary, TicketDetail } from "@wheelhouse/api-client";
+import type { BoardTicket, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, TicketDetail } from "@wheelhouse/api-client";
 
 export const COLUMNS = [
   { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
@@ -484,5 +484,37 @@ export const projectDetail = (over: Partial<ProjectDetail> = {}): ProjectDetail 
   teams: [{ key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, tickets: [] }],
   others: { count: 0, total: 0, done: 0 },
   addableTeams: [],
+  ...over,
+});
+
+// ───────── initiatives ─────────
+
+export const initiativeSummary = (over: Partial<InitiativeSummary> = {}): InitiativeSummary => ({
+  id: "i1",
+  parentId: null,
+  name: "Enterprise ready",
+  description: "",
+  status: "active",
+  health: { derived: "on_track", override: null, value: "on_track" },
+  targetDate: "2026-12-31",
+  owner: { id: "u1", name: "Ada Lovelace" },
+  total: 0,
+  done: 0,
+  projectCount: 0,
+  childCount: 0,
+  depth: 1,
+  version: 1,
+  canEdit: true,
+  updatedAt: "2026-10-20T00:00:00.000Z",
+  ...over,
+});
+
+export const initiativeDetail = (over: Partial<InitiativeDetail> = {}): InitiativeDetail => ({
+  ...initiativeSummary(),
+  path: [],
+  children: [],
+  projects: [],
+  hidden: { count: 0, total: 0, done: 0 },
+  linkable: [],
   ...over,
 });

@@ -66,6 +66,9 @@ import type {
   ProjectDetail,
   ProjectInput,
   ProjectSummary,
+  InitiativeDetail,
+  InitiativeInput,
+  InitiativeSummary,
   Role,
   WorkspaceMember,
   WorkspaceOverview,
@@ -342,6 +345,20 @@ export function createApiClient(options: ApiClientOptions = {}) {
         (await request<{ project: ProjectDetail }>("PATCH", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, patch)).project,
       deleteMilestone: async (id: string, milestoneId: string) =>
         (await request<{ project: ProjectDetail }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`)).project,
+    },
+
+    initiatives: {
+      /** Every initiative of the workspace, parents before their children, with roll-up progress. Empty for a guest. */
+      list: async () => (await request<{ initiatives: InitiativeSummary[] }>("GET", "/api/app/initiatives")).initiatives,
+      get: async (id: string) => (await request<{ initiative: InitiativeDetail }>("GET", `/api/app/initiatives/${encodeURIComponent(id)}`)).initiative,
+      create: async (input: InitiativeInput & { name: string }) => (await request<{ initiative: InitiativeDetail }>("POST", "/api/app/initiatives", input)).initiative,
+      /** With `version`, an initiative changed since rejects with a 409. */
+      update: async (id: string, patch: InitiativeInput) => (await request<{ initiative: InitiativeDetail }>("PATCH", `/api/app/initiatives/${encodeURIComponent(id)}`, patch)).initiative,
+      /** Its sub-initiatives move up; the projects stay. */
+      delete: (id: string) => request<{ ok: true; moved: number; unlinked: number }>("DELETE", `/api/app/initiatives/${encodeURIComponent(id)}`),
+      linkProject: async (id: string, projectId: string) => (await request<{ initiative: InitiativeDetail }>("POST", `/api/app/initiatives/${encodeURIComponent(id)}/projects`, { projectId })).initiative,
+      unlinkProject: async (id: string, projectId: string) =>
+        (await request<{ initiative: InitiativeDetail }>("DELETE", `/api/app/initiatives/${encodeURIComponent(id)}/projects/${encodeURIComponent(projectId)}`)).initiative,
     },
 
     cycles: {

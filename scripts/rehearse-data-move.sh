@@ -94,7 +94,7 @@ step "4b. the database suites on the real Postgres that holds the imported data 
 TEST_DATABASE_URL="$PGURL" pnpm --silent exec tsx --conditions=react-server --test --test-force-exit --test-concurrency=1 \
   packages/core/src/lib/queue.test.ts tests/invites.test.ts packages/core/src/lib/workspaces-admin.test.ts tests/isolation.test.ts \
   packages/core/src/lib/version-lock.test.ts packages/core/src/tools/db-copy.test.ts packages/core/src/lib/workspace-scope.test.ts \
-  packages/core/src/lib/constraints.test.ts packages/core/src/lib/join-tables.test.ts packages/core/src/lib/cycles.test.ts packages/core/src/lib/projects.test.ts > "$W/dbsuites.log" 2>&1
+  packages/core/src/lib/constraints.test.ts packages/core/src/lib/join-tables.test.ts packages/core/src/lib/cycles.test.ts packages/core/src/lib/projects.test.ts packages/core/src/lib/initiatives.test.ts > "$W/dbsuites.log" 2>&1
 grep -E "^ℹ (tests|pass|fail)" "$W/dbsuites.log" | tr '\n' ' '; echo
 if grep -qE "^ℹ fail 0" "$W/dbsuites.log"; then ok "the database suites pass on Postgres 18 with the imported data in it"; else bad "database suites failed on Postgres (see $W/dbsuites.log)"; grep -E "^✖|^  ✖" "$W/dbsuites.log" | head -10; fi
 done_step

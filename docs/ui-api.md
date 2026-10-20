@@ -359,3 +359,24 @@ anything else), the milestone must be that project's, changing the project drops
 compared with the share of tickets done (a gap over a quarter is at risk, over a half is off track); a project with no dates and no tickets has none. **Events:** workspace-level changes go to `workspace_events`; what matters to a
 team (a project made or deleted, its status or date changed, a team joining or leaving, a milestone changing, a ticket joining or leaving) is also in that team's `events` (`project.*`, entity `project`), so its agents hear it.
 `/api/v1` and the MCP never show a ticket's project or milestone, and their `project` is still the team.
+
+## Built by WH-119: initiatives (goals that group projects)
+
+An initiative groups projects, and other initiatives under it, up to **three levels** (a fourth, or a move that would make a cycle or put a branch past three levels, is a `400` naming `parentId`). It belongs to the workspace and holds no tickets
+and no teams. Everything needs a session. **Every member except a guest sees every initiative**; a guest gets an empty list and a `404` for one. What an initiative shows of a project follows the project's own rule: projects of teams you
+are on are listed, and the rest are only **counted and totalled** (`hidden`), never named, and no initiative answer ever contains a ticket title.
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api/app/initiatives` | `{ initiatives }`: all of them as a flat list, parents before their children, each `{ id, parentId, name, description, status, health, targetDate, owner, total, done, projectCount, childCount, depth, version, canEdit, updatedAt }` |
+| `POST /api/app/initiatives` | `{ name, description?, status?, targetDate?, owner?, parentId?, healthOverride? }`; 201 `{ initiative }`. The owner defaults to you; viewers cannot create; a parent must be one you own or administer |
+| `GET /api/app/initiatives/:id` | `{ initiative }` with `path` (ancestors, top first), `children`, `projects` (`id, name, status, health, targetDate, total, done, direct`: only those of your teams), `hidden` (`{ count, total, done }`), `linkable` (projects you see that are not linked here yet; only if you can edit) |
+| `PATCH /api/app/initiatives/:id` | any create field, `healthOverride: null` to clear it, `parentId` (null for the top) and `index` to move it among its siblings, `version` for the lock (`409` when stale). The owner, or a workspace owner or admin |
+| `DELETE /api/app/initiatives/:id` | `{ ok, moved, unlinked }`: a soft delete. Its sub-initiatives move up to its parent, its links go, the projects are untouched |
+| `POST /api/app/initiatives/:id/projects` | `{ projectId }`: link a project you can see (one you cannot is a `404`); `409` if already linked |
+| `DELETE /api/app/initiatives/:id/projects/:projectId` | unlink; the project and its tickets are untouched |
+
+**Roll-up:** `total` and `done` sum the tickets of every project linked to the initiative or to any initiative under it. A ticket is in one project, so it counts **once** however many links lead to its project. Deleted projects and
+initiatives stop counting. **Health** is the project rule from the initiative's target date (only an `active` initiative has one; a value set by hand wins). **Events:** every change is appended to `workspace_events` (entity `initiative`:
+`initiative.created`, `.updated`, `.deleted`, `.project_linked`, `.project_unlinked`); the table is append-only (a trigger refuses any update or delete, except the cascade of deleting the whole workspace). Initiatives do not appear in a team's
+`events`, `/api/v1` or the MCP. Not OKRs, and no metric correlation (ADR-10).

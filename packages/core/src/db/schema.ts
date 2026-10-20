@@ -651,6 +651,59 @@ export const events = table(
 // Per-agent read pointer into `events` (the AI queue).
 export const WORKSPACE_EVENT_ENTITIES = ["project", "initiative"] as const;
 
+export const INITIATIVE_STATUSES = ["planned", "active", "paused", "done"] as const;
+export type InitiativeStatus = (typeof INITIATIVE_STATUSES)[number];
+/** How deep initiatives may nest (a soft limit, kept by the service). */
+export const INITIATIVE_MAX_DEPTH = 3;
+
+/**
+ * Initiatives (WH-119): a goal that groups projects, and other initiatives under it up to three levels. An initiative belongs to
+ * the workspace, not to a team. It holds no tickets and no teams: its progress is rolled up from the tickets of its projects and
+ * of its sub-initiatives. Deleting is soft (`deleted_at`) and never touches the projects.
+ */
+export const initiatives = table(
+  "initiatives",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    parentId: uuid("parent_id"),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    // A member of the workspace; leaving the workspace clears it (the key is in migration 0025: SET NULL on one column).
+    ownerId: uuid("owner_id"),
+    status: text("status", { enum: INITIATIVE_STATUSES }).notNull().default("planned"),
+    targetDate: date("target_date", { mode: "string" }),
+    healthOverride: text("health_override", { enum: PROJECT_HEALTH }),
+    position: doublePrecision("position").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("initiatives_id_workspace_id_unique").on(t.id, t.workspaceId),
+    foreignKey({ name: "initiatives_parent_fk", columns: [t.parentId, t.workspaceId], foreignColumns: [t.id, t.workspaceId] }),
+    check("initiatives_not_own_parent_check", sql`"parent_id" is null or "parent_id" <> "id"`),
+    index("initiatives_workspace_idx").on(t.workspaceId, t.parentId),
+  ],
+);
+
+/** The projects an initiative groups. A project can be in several initiatives; a ticket is still counted once in a roll-up. */
+export const initiativeProjects = table(
+  "initiative_projects",
+  {
+    initiativeId: uuid("initiative_id").notNull(),
+    projectId: uuid("project_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.initiativeId, t.projectId] }),
+    foreignKey({ name: "initiative_projects_initiative_fk", columns: [t.initiativeId, t.workspaceId], foreignColumns: [initiatives.id, initiatives.workspaceId] }).onDelete("cascade"),
+    foreignKey({ name: "initiative_projects_project_fk", columns: [t.projectId, t.workspaceId], foreignColumns: [projects.id, projects.workspaceId] }).onDelete("cascade"),
+    index("initiative_projects_project_idx").on(t.projectId),
+  ],
+);
+
 /**
  * The append-only change log of what belongs to the workspace and not to one team: projects and, with WH-119, initiatives. Same
  * shape as `events` without a team. A change that matters to a team (a ticket joins a project, a milestone moves) is also written to

@@ -58,6 +58,12 @@ export const projectQuery = (api: ApiClient, id: string) => ({ queryKey: ["proje
 export const useProjects = () => useQuery(projectsQuery(useServices().api));
 export const useProject = (id: string) => useQuery(projectQuery(useServices().api, id));
 
+/** Initiatives (WH-119): every one in the workspace as a flat list in tree order, and one with its sub-initiatives and projects. */
+export const initiativesQuery = (api: ApiClient) => ({ queryKey: ["initiatives"] as const, queryFn: () => api.initiatives.list() });
+export const initiativeQuery = (api: ApiClient, id: string) => ({ queryKey: ["initiative", id] as const, queryFn: () => api.initiatives.get(id) });
+export const useInitiatives = () => useQuery(initiativesQuery(useServices().api));
+export const useInitiative = (id: string) => useQuery(initiativeQuery(useServices().api, id));
+
 /** Who is in a team, the people who could still be added, and the workspace-level views of access (ADR-23). */
 export const teamMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey] as const, queryFn: () => api.teams.members(teamKey) });
 export const addableMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey, "addable"] as const, queryFn: () => api.teams.addableMembers(teamKey) });

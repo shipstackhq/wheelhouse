@@ -107,14 +107,14 @@ export async function openProject(q: Q, actor: Actor, id: string, need: "read" |
 
 // ───────── events ─────────
 
-async function workspaceEvent(q: Q, actor: Actor, e: { type: string; entityId: string; summary: string; data?: Record<string, unknown> }) {
+export async function workspaceEvent(q: Q, actor: Actor, e: { type: string; entityId: string; summary: string; data?: Record<string, unknown>; entity?: "project" | "initiative" }) {
   await q.insert(workspaceEvents).values({
     workspaceId: actor.workspaceId,
     actorKind: actor.kind,
     actorId: actor.id,
     actorName: actor.name,
     type: e.type,
-    entity: "project",
+    entity: e.entity ?? "project",
     entityId: e.entityId,
     summary: e.summary,
     data: e.data ?? {},
@@ -307,11 +307,11 @@ export type ProjectInput = {
   version?: unknown;
 };
 
-const bad = (field: string, message: string): never => {
+export const bad = (field: string, message: string): never => {
   throw new ServiceError("invalid", message, { fields: { [field]: message } });
 };
 
-function text(v: unknown, field: string, max: number, required = false): string | undefined {
+export function text(v: unknown, field: string, max: number, required = false): string | undefined {
   if (v === undefined) return required ? bad(field, `${field} is required`) : undefined;
   if (typeof v !== "string") return bad(field, `${field} must be text`);
   const t = v.trim();
@@ -320,14 +320,14 @@ function text(v: unknown, field: string, max: number, required = false): string 
   return t;
 }
 
-function day(v: unknown, field: string): string | null | undefined {
+export function day(v: unknown, field: string): string | null | undefined {
   if (v === undefined) return undefined;
   if (v === null || v === "") return null;
   if (typeof v !== "string" || !DATE_RE.test(v) || Number.isNaN(Date.parse(`${v}T00:00:00Z`)) || new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) !== v) return bad(field, `${field} must be a date like 2026-12-31`);
   return v;
 }
 
-function oneOf<T extends string>(v: unknown, list: readonly T[], field: string): T | undefined {
+export function oneOf<T extends string>(v: unknown, list: readonly T[], field: string): T | undefined {
   if (v === undefined) return undefined;
   if (typeof v !== "string" || !(list as readonly string[]).includes(v)) return bad(field, `${field} must be one of ${list.join(", ")}`);
   return v as T;

@@ -95,6 +95,8 @@ import {
   RiBuilding2Fill,
   RiLoopRightLine,
   RiRocket2Line,
+  RiFlag2Line,
+  RiFlag2Fill,
   RiRocket2Fill,
   RiLoopRightFill,
   RiMailAddLine,
@@ -212,6 +214,8 @@ export const InviteWorkspaceIcon = icon(RiMailAddLine);
 export const InviteWorkspaceFillIcon = icon(RiMailAddFill);
 export const ProjectsIcon = icon(RiRocket2Line);
 export const ProjectsFillIcon = icon(RiRocket2Fill);
+export const InitiativesIcon = icon(RiFlag2Line);
+export const InitiativesFillIcon = icon(RiFlag2Fill);
 export const CyclesIcon = icon(RiLoopRightLine);
 export const CyclesFillIcon = icon(RiLoopRightFill);
 export const CollapseSidebarIcon = icon(RiSidebarFoldLine);
@@ -225,6 +229,7 @@ export const NAV_ICONS = {
   board: { line: BoardIcon, fill: BoardFillIcon },
   cycles: { line: CyclesIcon, fill: CyclesFillIcon },
   projects: { line: ProjectsIcon, fill: ProjectsFillIcon },
+  initiatives: { line: InitiativesIcon, fill: InitiativesFillIcon },
   activity: { line: ActivityIcon, fill: ActivityFillIcon },
   map: { line: MapIcon, fill: MapFillIcon },
   docs: { line: FileIcon, fill: FileFillIcon },
