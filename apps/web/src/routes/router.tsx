@@ -1,8 +1,9 @@
-import { type RouteObject } from "react-router";
+import { Navigate, type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
 import { AdminInvitesPage, AdminWorkspacePage, AdminWorkspacesPage } from "../pages/admin";
 import { AgentsPage } from "../pages/agents";
-import { SettingsPage } from "../pages/settings";
+import { PasswordSettingsPage, ProfileSettingsPage, TeamsSettingsPage, WorkspaceSettingsPage } from "../pages/settings/pages";
+import { SettingsLayout } from "../pages/settings/settings-layout";
 import { ActivityPage } from "../pages/activity/activity";
 import { BoardPage } from "../pages/board";
 import { DecisionsPage } from "../pages/decisions";
@@ -50,6 +51,21 @@ export function buildRoutes(services: Services): RouteObject[] {
           ],
         },
         {
+          path: "settings",
+          Component: SettingsLayout,
+          loader: requireSignedIn(services),
+          children: [
+            { index: true, element: <Navigate to="profile" replace /> },
+            { path: "profile", Component: ProfileSettingsPage },
+            { path: "password", Component: PasswordSettingsPage },
+            { path: "workspace", Component: WorkspaceSettingsPage },
+            { path: "members", Component: WorkspacePage },
+            { path: "agents", Component: AgentsPage },
+            { path: "teams", Component: TeamsSettingsPage },
+            { path: "*", Component: NotFound },
+          ],
+        },
+        {
           Component: AppLayout,
           loader: requireSignedIn(services),
           children: [
@@ -61,7 +77,6 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "projects/:id", Component: ProjectPage },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
-            { path: "settings", Component: SettingsPage },
             {
               Component: RequireAdmin,
               children: [

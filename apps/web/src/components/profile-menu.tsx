@@ -3,6 +3,7 @@ import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { useNavigate } from "react-router";
 import type { Role } from "@wheelhouse/api-client";
+import { forgetAppLocation } from "../lib/app-location";
 import { useServices } from "../lib/services";
 import { ThemeSwitch } from "./theme-toggle";
 import { InstallButton, clearOfflineData } from "./pwa";
@@ -67,6 +68,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
       /* the server could not be reached: the person still leaves; the session expires on its own */
     } finally {
       queryClient.clear(); // nothing from this person's session may linger in memory
+      forgetAppLocation();
       navigate("/login", { replace: true });
     }
   }

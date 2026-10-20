@@ -8,6 +8,7 @@ import { PwaRegister } from "../components/pwa";
 import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
+import { useRememberAppLocation } from "../lib/app-location";
 import { useMe, useTeams } from "../lib/session";
 import { NotFound } from "./errors";
 
@@ -82,6 +83,7 @@ export function InviteLayout() {
 export function AppLayout() {
   const me = useMe().data;
   const teams = useTeams().data;
+  useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
   // The session ended while the page was open (signed out in another tab, expired): the cache says so, go and sign in.
   if (me === null) return <Navigate to="/login" replace />;
   if (!me || !teams) return <FullPageSkeleton />;
