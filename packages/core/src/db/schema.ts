@@ -15,9 +15,26 @@ import {
   unique,
   foreignKey,
   type AnyPgColumn,
+  type PgColumn,
+  check,
 } from "drizzle-orm/pg-core";
 import { COLUMN_ROLES } from "../lib/column-roles";
 import { sql } from "drizzle-orm";
+
+/**
+ * `pgTable`, plus a CHECK constraint for every column declared with an `enum`: the TypeScript values are the source of
+ * truth and the database refuses anything else (WH-114). The constraint is named `<table>_<column>_check`; a test compares
+ * each one in the database with its enum.
+ */
+const table = ((name: string, columns: Record<string, unknown>, extra?: (t: never) => unknown[]) =>
+  pgTable(name, columns as never, (t) => {
+    // The columns handed to this callback are wrappers: the enum is on their `config`.
+    const enumOf = (c: PgColumn) => ((c as unknown as { config?: { enumValues?: string[] } }).config?.enumValues ?? c.enumValues) as string[] | undefined;
+    const checks = (Object.values(t) as PgColumn[])
+      .filter((c) => (enumOf(c)?.length ?? 0) > 0)
+      .map((c) => check(`${name}_${c.name}_check`, sql.raw(`"${c.name}" in (${enumOf(c)!.map((v) => `'${v}'`).join(", ")})`)));
+    return [...checks, ...((extra ? extra(t as never) : []) as never[])];
+  })) as unknown as typeof pgTable;
 
 /**
  * Workspace roles (ADR-23). A role decides what a person may do around teams (create them, manage people, pay); it never
@@ -40,15 +57,18 @@ const teamScope = (table: string, t: { teamId: AnyPgColumn; workspaceId: AnyPgCo
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
-export const users = pgTable("users", {
+export const users = table("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
   createdAt: createdAt(),
-});
+}, (t) => [
+  // `email` is unique as written; this makes it unique however it is cased, so the code lower-casing it is not what holds it.
+  uniqueIndex("users_email_lower_idx").on(sql`lower(${t.email})`),
+]);
 
-export const sessions = pgTable("sessions", {
+export const sessions = table("sessions", {
   id: text("id").primaryKey(), // sha256 of the cookie token
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -57,7 +77,7 @@ export const sessions = pgTable("sessions", {
   createdAt: createdAt(),
 });
 
-export const workspaces = pgTable("workspaces", {
+export const workspaces = table("workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   // The workspace's address (`/w/<slug>` later). Created from the name; the default only keeps rows that skip it unique.
@@ -73,7 +93,7 @@ export const workspaces = pgTable("workspaces", {
   suspendedReason: text("suspended_reason"),
 });
 
-export const memberships = pgTable(
+export const memberships = table(
   "memberships",
   {
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -90,7 +110,7 @@ export const memberships = pgTable(
  * no other way in. Only people are listed: agent keys still work across their whole workspace until scoped keys arrive.
  * `workspace_id` repeats the team's workspace so every row can be checked against it without a join.
  */
-export const teamMembers = pgTable(
+export const teamMembers = table(
   "team_members",
   {
     teamId: uuid("team_id").notNull(),
@@ -114,7 +134,10 @@ export const teamMembers = pgTable(
  * from `events`, which is the product activity feed that agent cursors read; never updated or deleted. `team_id` is null
  * for workspace-level actions and has no foreign key, so a deleted team keeps its history.
  */
-export const auditEvents = pgTable(
+/** What an audit entry is about. */
+export const AUDIT_TARGET_TYPES = ["user", "team", "membership"] as const;
+
+export const auditEvents = table(
   "audit_events",
   {
     seq: bigserial("seq", { mode: "number" }).primaryKey(),
@@ -124,7 +147,7 @@ export const auditEvents = pgTable(
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
     action: text("action").notNull(), // e.g. team.member_added, team.admin_joined, workspace.role_changed
-    targetType: text("target_type").notNull(), // user | team | membership
+    targetType: text("target_type", { enum: AUDIT_TARGET_TYPES }).notNull(),
     targetId: text("target_id"),
     before: jsonb("before").$type<Record<string, unknown> | null>(),
     after: jsonb("after").$type<Record<string, unknown> | null>(),
@@ -135,7 +158,7 @@ export const auditEvents = pgTable(
 
 // Invite-only signup (WH-49). Only the SHA-256 of the token is stored; the plain token is shown once.
 // kind new_workspace: the invitee gets a fresh workspace and owns it. kind join_workspace: the invitee joins workspace_id.
-export const invites = pgTable(
+export const invites = table(
   "invites",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -158,7 +181,7 @@ export const invites = pgTable(
   (t) => [index("invites_workspace_idx").on(t.workspaceId, t.usedAt)],
 );
 
-export const apiKeys = pgTable("api_keys", {
+export const apiKeys = table("api_keys", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
@@ -177,7 +200,7 @@ export const apiKeys = pgTable("api_keys", {
 export const KEY_CAPABILITIES = ["docs:write"] as const;
 export type KeyCapability = (typeof KEY_CAPABILITIES)[number];
 
-export const teams = pgTable("teams", {
+export const teams = table("teams", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   key: text("key").notNull(), // short prefix like "WH" for ticket refs
@@ -185,9 +208,13 @@ export const teams = pgTable("teams", {
   description: text("description").notNull().default(""),
   ticketCounter: integer("ticket_counter").notNull().default(0),
   createdAt: createdAt(),
-}, (t) => [unique("teams_id_workspace_id_unique").on(t.id, t.workspaceId)]);
+}, (t) => [
+  unique("teams_id_workspace_id_unique").on(t.id, t.workspaceId),
+  // A team key ("WH") is what a ticket ref starts with: one per workspace, whatever its case.
+  uniqueIndex("teams_workspace_key_idx").on(t.workspaceId, sql`lower(${t.key})`),
+]);
 
-export const columns = pgTable("columns", {
+export const columns = table("columns", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull(),
   workspaceId: uuid("workspace_id").notNull(),
@@ -195,11 +222,15 @@ export const columns = pgTable("columns", {
   position: doublePrecision("position").notNull(),
   // What stage of work this column stands for (WH-86); rules and reports use it, never the name. Null: a custom column.
   role: text("role", { enum: COLUMN_ROLES }),
-}, (t) => [teamScope("columns", t)]);
+}, (t) => [
+  teamScope("columns", t),
+  // One column per role per team (ADR-15); custom columns have no role and there can be any number of them.
+  uniqueIndex("columns_team_role_idx").on(t.teamId, t.role).where(sql`role is not null`),
+]);
 
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 
-export const tickets = pgTable(
+export const tickets = table(
   "tickets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -231,7 +262,7 @@ export const tickets = pgTable(
   ],
 );
 
-export const comments = pgTable("comments", {
+export const comments = table("comments", {
   id: uuid("id").primaryKey().defaultRandom(),
   ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
   authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
@@ -275,7 +306,7 @@ export type Index = { name?: string; columns: string[]; unique?: boolean };
 export const CARDINALITIES = ["1-1", "n-1", "1-n", "n-m"] as const;
 export type EdgeMeta = { fromColumn?: string; toColumn?: string; cardinality?: (typeof CARDINALITIES)[number]; onDelete?: string; derived?: boolean };
 
-export const nodes = pgTable("nodes", {
+export const nodes = table("nodes", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull(),
   workspaceId: uuid("workspace_id").notNull(),
@@ -316,9 +347,14 @@ export const nodes = pgTable("nodes", {
   placed: boolean("placed").notNull().default(false),
   version: integer("version").notNull().default(1),
   updatedAt: updatedAt(),
-}, (t) => [teamScope("nodes", t)]);
+}, (t) => [
+  teamScope("nodes", t),
+  // The parent is a node of the same team; deleting it removes the nested ones (the service already does).
+  unique("nodes_id_team_unique").on(t.id, t.teamId),
+  foreignKey({ name: "nodes_parent_fk", columns: [t.parentId, t.teamId], foreignColumns: [t.id, t.teamId] }).onDelete("cascade"),
+]);
 
-export const edges = pgTable("edges", {
+export const edges = table("edges", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull(),
   workspaceId: uuid("workspace_id").notNull(),
@@ -334,7 +370,7 @@ export const edges = pgTable("edges", {
 export type FlowStep = { nodeId: string; title: string; detail: string };
 
 /** A named, ordered walk across nodes that explains how something works end to end. */
-export const flows = pgTable("flows", {
+export const flows = table("flows", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull(),
   workspaceId: uuid("workspace_id").notNull(),
@@ -348,7 +384,7 @@ export const flows = pgTable("flows", {
 export const DECISION_STATUSES = ["proposed", "accepted", "superseded", "rejected"] as const;
 
 /** Lightweight ADRs: the "why" behind non-obvious choices, attached to nodes. */
-export const decisions = pgTable(
+export const decisions = table(
   "decisions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -371,7 +407,7 @@ export const decisions = pgTable(
 );
 
 /** Domain glossary; terms get hover cards wherever they appear in explainers. */
-export const terms = pgTable(
+export const terms = table(
   "terms",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -385,7 +421,7 @@ export const terms = pgTable(
   (t) => [teamScope("terms", t), uniqueIndex("terms_team_term_idx").on(t.teamId, t.term)],
 );
 
-export const ticketNodes = pgTable(
+export const ticketNodes = table(
   "ticket_nodes",
   {
     ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
@@ -395,7 +431,7 @@ export const ticketNodes = pgTable(
 );
 
 // Append-only change log. Powers the activity feed and the AI queue.
-export const events = pgTable(
+export const events = table(
   "events",
   {
     seq: bigserial("seq", { mode: "number" }).primaryKey(),
@@ -418,7 +454,7 @@ export const events = pgTable(
 );
 
 // Per-agent read pointer into `events` (the AI queue).
-export const agentCursors = pgTable(
+export const agentCursors = table(
   "agent_cursors",
   {
     apiKeyId: uuid("api_key_id").notNull().references(() => apiKeys.id, { onDelete: "cascade" }),
@@ -444,7 +480,7 @@ export const REPO_LIFECYCLES = ["live", "being_replaced", "planned", "retired"] 
  * (or the GitHub repo id once connected), used to find-or-create the right
  * row per team on each report.
  */
-export const repositories = pgTable(
+export const repositories = table(
   "repositories",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -471,7 +507,7 @@ export const repositories = pgTable(
   (t) => [teamScope("repositories", t), index("repositories_team_idx").on(t.teamId), uniqueIndex("repositories_team_slug_idx").on(t.teamId, t.slug)],
 );
 
-export const teamFiles = pgTable(
+export const teamFiles = table(
   "team_files",
   {
     teamId: uuid("team_id").notNull(),
@@ -494,7 +530,7 @@ export type SessionFile = { hash: string | null; at: string; external?: boolean;
  * files it has changed but not landed, which ticket it's on, when it last
  * checked in. Drives "in flux" on the map and the reconciliation check.
  */
-export const workSessions = pgTable(
+export const workSessions = table(
   "work_sessions",
   {
     id: text("id").primaryKey(), // client-provided session id (Claude Code session_id)
@@ -525,7 +561,7 @@ export const workSessions = pgTable(
  * A map update written against code that hasn't landed yet. Published when the
  * code lands on the default branch, discarded if the work is abandoned.
  */
-export const nodeDrafts = pgTable(
+export const nodeDrafts = table(
   "node_drafts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -549,7 +585,7 @@ export const nodeDrafts = pgTable(
 
 // Which workspace an installation of the App belongs to. A row exists only after the installing person proved, through
 // GitHub's own sign-in, that they administer that installation: an installation id alone is a public number.
-export const githubInstallations = pgTable("github_installations", {
+export const githubInstallations = table("github_installations", {
   installationId: text("installation_id").primaryKey(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
   accountLogin: text("account_login").notNull().default(""),
@@ -559,14 +595,14 @@ export const githubInstallations = pgTable("github_installations", {
 });
 
 // Deliveries we have already handled (GitHub retries), so a redelivery changes nothing.
-export const githubDeliveries = pgTable("github_deliveries", {
+export const githubDeliveries = table("github_deliveries", {
   id: text("id").primaryKey(), // X-GitHub-Delivery
   event: text("event").notNull(),
   receivedAt: createdAt(),
 });
 
 // A pull request seen on a connected repository, with the state of its checks.
-export const pullRequests = pgTable(
+export const pullRequests = table(
   "pull_requests",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -588,7 +624,7 @@ export const pullRequests = pgTable(
   (t) => [uniqueIndex("pull_requests_repo_number_idx").on(t.repositoryId, t.number)],
 );
 
-export const pullRequestTickets = pgTable(
+export const pullRequestTickets = table(
   "pull_request_tickets",
   {
     pullRequestId: uuid("pull_request_id").notNull().references(() => pullRequests.id, { onDelete: "cascade" }),
@@ -604,7 +640,7 @@ export const pullRequestTickets = pgTable(
 // locking like tickets, soft delete with a 30-day purge. Agents read them over
 // MCP/REST; writing requires a key with the "docs:write" capability or a human.
 
-export const docs = pgTable(
+export const docs = table(
   "docs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -642,6 +678,9 @@ export const docs = pgTable(
   },
   (t) => [
     teamScope("docs", t),
+    // The parent is a doc of the same team.
+    unique("docs_id_team_unique").on(t.id, t.teamId),
+    foreignKey({ name: "docs_parent_fk", columns: [t.parentId, t.teamId], foreignColumns: [t.id, t.teamId] }).onDelete("cascade"),
     index("docs_team_idx").on(t.teamId),
     // Unique per (team, parent, slug) among live docs. Partial index: deleted docs don't block reusing a slug.
     uniqueIndex("docs_team_parent_slug_idx").on(t.teamId, t.parentId, t.slug).where(sql`deleted_at is null`),
@@ -657,7 +696,7 @@ export const docs = pgTable(
  * are title/body, not explainer/column fields) differs enough that sharing one
  * table would need a polymorphic entityId/kind column for no real gain at this scale.
  */
-export const docDrafts = pgTable(
+export const docDrafts = table(
   "doc_drafts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
@@ -678,7 +717,7 @@ export const docDrafts = pgTable(
 );
 
 /** Links a doc to a map node, mirroring ticket_nodes, so a node's page can list "read these docs". */
-export const docNodes = pgTable(
+export const docNodes = table(
   "doc_nodes",
   {
     docId: uuid("doc_id").notNull().references(() => docs.id, { onDelete: "cascade" }),
