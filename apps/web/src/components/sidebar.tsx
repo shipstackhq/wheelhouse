@@ -47,6 +47,9 @@ const fade = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { dur
 const TEAM_COLORS = ["text-sky-500", "text-emerald-500", "text-amber-500", "text-rose-500", "text-violet-500", "text-teal-500", "text-orange-500", "text-fuchsia-500", "text-lime-500", "text-indigo-500"];
 const teamColor = (key: string) => TEAM_COLORS[[...key].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % TEAM_COLORS.length];
 
+/** How rows slide into place while a team is dragged: a stiff, well-damped spring, so they settle at once instead of wobbling. */
+const reorderSpring = { type: "spring", stiffness: 900, damping: 50, mass: 0.5 } as const;
+
 const RECENT_KEY = "wh:recent-teams";
 const COLLAPSED_KEY = "wh:sidebar-collapsed";
 
@@ -440,7 +443,7 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
     </div>
   );
   return (
-      <Reorder.Item as="div" value={t.key} dragListener={false} dragControls={controls} onDragEnd={onDragEnd} whileDrag={{ zIndex: 20 }} className="relative">
+      <Reorder.Item as="div" value={t.key} dragListener={false} dragControls={controls} onDragEnd={onDragEnd} whileDrag={{ zIndex: 20 }} transition={reorderSpring} dragTransition={{ bounceStiffness: 900, bounceDamping: 50 }} className="relative">
       {collapsed ? (
         <Tip content={t.name} side="right" align="center">
           {row}
