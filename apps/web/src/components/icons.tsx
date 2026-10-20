@@ -99,6 +99,8 @@ import {
   RiRocket2Line,
   RiFlag2Line,
   RiBox3Line,
+  RiBox3Fill,
+  RiMoreFill,
   RiFlag2Fill,
   RiRocket2Fill,
   RiLoopRightFill,
@@ -218,7 +220,8 @@ export const InviteWorkspaceFillIcon = icon(RiMailAddFill);
 export const ProjectsIcon = icon(RiRocket2Line);
 export const ProjectsFillIcon = icon(RiRocket2Fill);
 /** A stand-in for a team's own icon, until a team can be given one. */
-export const TeamGlyphIcon = icon(RiBox3Line);
+export const TeamGlyphIcon = icon(RiBox3Fill);
+export const MoreFillIcon = icon(RiMoreFill);
 export const InitiativesIcon = icon(RiFlag2Line);
 export const InitiativesFillIcon = icon(RiFlag2Fill);
 export const CyclesIcon = icon(RiLoopRightLine);

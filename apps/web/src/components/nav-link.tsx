@@ -4,6 +4,12 @@ import type { IconPair } from "./icons";
 import { LinkPending, useLinkPending } from "./link-pending";
 import { Tip } from "./tip";
 
+/** The one size of a sidebar item (links, team rows): padding, gap and icon, as the full row and as the icon-only rail. */
+export const NAV_ITEM = "flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+export const NAV_ITEM_RAIL = "md:justify-center md:px-0 md:py-2";
+export const NAV_ICON = "shrink-0 text-lg";
+export const NAV_ICON_RAIL = "md:text-xl";
+
 /**
  * A sidebar link. With an `icon` pair, the place you are on shows the solid icon and the others the outline one. `collapsed` is
  * the icon-only rail (tablet and up): the label stays for screen readers, and a tooltip names the place. On a phone the drawer is
