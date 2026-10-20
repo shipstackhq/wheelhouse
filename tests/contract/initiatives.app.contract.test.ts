@@ -56,8 +56,8 @@ const project = async (leadTeam: string, name: string) => {
   assert.equal(r.status, 201, r.text);
   return r.json.project as { id: string };
 };
-const ticket = async (team: string, body: Record<string, unknown>) => {
-  const r = await app("POST", `/api/app/teams/${team}/tickets`, owner, { body: { title: `t ${++n}`, ...body } });
+const issue = async (team: string, body: Record<string, unknown>) => {
+  const r = await app("POST", `/api/app/teams/${team}/issues`, owner, { body: { title: `t ${++n}`, ...body } });
   assert.equal(r.status, 201, r.text);
 };
 
@@ -108,8 +108,8 @@ describe("the initiatives endpoints", () => {
     const top = await make({ status: "active" });
     const sub = await make({ parentId: top.id });
     const p = await project(teamA, `Linked ${n}`);
-    await ticket(teamA, { projectId: p.id, column: "Done" });
-    await ticket(teamA, { projectId: p.id });
+    await issue(teamA, { projectId: p.id, column: "Done" });
+    await issue(teamA, { projectId: p.id });
     for (const id of [top.id, sub.id]) assert.equal((await app("POST", `/api/app/initiatives/${id}/projects`, owner, { body: { projectId: p.id } })).status, 201);
     assert.equal((await app("POST", `/api/app/initiatives/${sub.id}/projects`, owner, { body: { projectId: p.id } })).status, 409);
     const got = (await app("GET", `/api/app/initiatives/${top.id}`, owner)).json.initiative as Initiative;
@@ -122,11 +122,11 @@ describe("the initiatives endpoints", () => {
 });
 
 describe("who sees what", () => {
-  test("a member sees another team's project inside an initiative only as totals, never a name or a ticket", async () => {
+  test("a member sees another team's project inside an initiative only as totals, never a name or an issue", async () => {
     const top = await make({ status: "active" });
     const secret = await project(teamB, "SECRET-PROJECT");
-    await ticket(teamB, { projectId: secret.id, title: "SECRET-TICKET", column: "Done" });
-    await ticket(teamB, { projectId: secret.id, title: "SECRET-TICKET-2" });
+    await issue(teamB, { projectId: secret.id, title: "SECRET-ISSUE", column: "Done" });
+    await issue(teamB, { projectId: secret.id, title: "SECRET-ISSUE-2" });
     assert.equal((await app("POST", `/api/app/initiatives/${top.id}/projects`, owner, { body: { projectId: secret.id } })).status, 201);
     const asMember = await app("GET", `/api/app/initiatives/${top.id}`, member);
     assert.equal(asMember.status, 200, asMember.text);

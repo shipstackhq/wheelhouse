@@ -27,4 +27,4 @@ TABLES="$(psql_admin -d "$TARGET" -tAc "select count(*) from information_schema.
 
 gunzip -c "$DUMP" | docker exec -i "$PG_CONTAINER" psql -U "$RESTORE_USER" -d "$TARGET" -v ON_ERROR_STOP=1 -q >/dev/null
 echo "restored $DUMP into $TARGET. Row counts:"
-psql_admin -d "$TARGET" -tAc "select 'users '||count(*) from users union all select 'tickets '||count(*) from tickets union all select 'events '||count(*) from events union all select 'migrations '||count(*) from drizzle.__drizzle_migrations"
+psql_admin -d "$TARGET" -tAc "select 'users '||count(*) from users union all select 'issues '||count(*) from issues union all select 'events '||count(*) from events union all select 'migrations '||count(*) from drizzle.__drizzle_migrations"

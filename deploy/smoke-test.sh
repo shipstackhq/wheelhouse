@@ -55,7 +55,7 @@ curl -sN -m 12 -b "$WORK/jar" "$BASE/api/teams/SMK/stream" > "$WORK/stream" 2>/d
 SSE=$!
 sleep 3
 check "the stream said 'ready' while still open (not held back by the proxy)" grep -q 'event: ready' "$WORK/stream"
-post /api/app/teams/SMK/tickets '{"title":"live"}' >/dev/null
+post /api/app/teams/SMK/issues '{"title":"live"}' >/dev/null
 sleep 3
 check "a change arrived on the open stream within seconds" grep -q 'event: change' "$WORK/stream"
 check "the stream is not compressed" bash -c "! grep -qi 'content-encoding' <(curl -sNI -m 3 -H 'Accept-Encoding: gzip' -b '$WORK/jar' '$BASE/api/teams/SMK/stream' 2>/dev/null | head -20)"
@@ -82,7 +82,7 @@ printf 'PG_CONTAINER=%s\nPG_DUMP_USER=wheelhouse\nPG_DB=wheelhouse\n' "$PGNAME" 
 DUMP="$(ls -1 "$WORK"/ops/backups/nightly-*.sql.gz | head -1)"
 RESULT="$(cd "$WORK/ops" && ./restore.sh "$DUMP" 2>&1)" && ok "restore.sh restored it into a scratch database" || { bad "restore.sh"; echo "$RESULT"; }
 EXPECTED="$(node -p "require('./packages/core/drizzle/meta/_journal.json').entries.length")"
-check "the restored database has the user, the ticket and all $EXPECTED migrations" bash -c "grep -q '^users 1' <<<'$RESULT' && grep -q '^tickets 1' <<<'$RESULT' && grep -q '^migrations $EXPECTED' <<<'$RESULT'"
+check "the restored database has the user, the issue and all $EXPECTED migrations" bash -c "grep -q '^users 1' <<<'$RESULT' && grep -q '^issues 1' <<<'$RESULT' && grep -q '^migrations $EXPECTED' <<<'$RESULT'"
 check "restore refuses to restore over a database that has tables" bash -c "cd '$WORK/ops' && ! ./restore.sh '$DUMP' >/dev/null 2>&1"
 
 echo "==> shutdown"

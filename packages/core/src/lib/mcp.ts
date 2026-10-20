@@ -13,16 +13,16 @@ import { getPrompt, listPromptDefs } from "./prompts";
 export const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const INSTRUCTIONS = `Wheelhouse is your team's shared kanban board + knowledge map.
-Start of a session: call get_briefing (compact project context) instead of exploring the codebase; before working a ticket call get_ticket_context and read the files it lists first.
+Start of a session: call get_briefing (compact project context) instead of exploring the codebase; before working an issue call get_issue_context and read the files it lists first.
 Board workflow:
-1. At the start of a task call get_changes for the project and handle what the team changed (new/edited/moved tickets, comments addressed to you). It also lists staleNodes: map nodes whose code changed. Then ack_changes with the highest seq handled.
-2. Before working a ticket: get_ticket, move it to "In Progress" (claim_ticket if it's agent-claimable).
-3. Talk to the team via comment on the ticket: questions, decisions, a summary of what you changed.
-4. When done, move it to "Review". Create tickets for follow-up work you discover.
+1. At the start of a task call get_changes for the project and handle what the team changed (new/edited/moved issues, comments addressed to you). It also lists staleNodes: map nodes whose code changed. Then ack_changes with the highest seq handled.
+2. Before working an issue: get_issue, move it to "In Progress" (claim_issue if it's agent-claimable).
+3. Talk to the team via comment on the issue: questions, decisions, a summary of what you changed.
+4. When done, move it to "Review". Create issues for follow-up work you discover.
 Knowledge map (concept → system → code layers, linked by "implements"):
 5. Read it before structural work (get_graph, get_node). It's how humans understand the codebase without reading code, so keep it true.
 6. After finishing work: report_changes with the files you touched, then re-describe any node that became stale (or mark_fresh), add nodes/edges/implements for new parts, update affected flows, and record an ADR for non-obvious choices.
-Pass expected_version on ticket edits; on a conflict, re-read — a human changed it.
+Pass expected_version on issue edits; on a conflict, re-read — a human changed it.
 Prompts: brief (load the briefing), map_codebase (bootstrap the map), map_schema (tables + relationships), refresh_map (fix stale nodes), explain.`;
 
 type RpcReq = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: Record<string, unknown> };

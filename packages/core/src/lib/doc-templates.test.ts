@@ -1,8 +1,8 @@
 /**
  * Doc templates (WH-65): the five static templates, threading `template` through
  * createDoc, the list_doc_templates tool, and the action-item extraction logic that backs
- * the docs UI's "Create ticket" affordance. Cross-workspace isolation for the new
- * createTicketFromActionItemAction lives in isolation.test.ts (list_doc_templates itself
+ * the docs UI's "Create issue" affordance. Cross-workspace isolation for the new
+ * createIssueFromActionItemAction lives in isolation.test.ts (list_doc_templates itself
  * is static/global, so it's registered there with no attacks to run).
  */
 process.env.PGLITE_DIR = "memory://";
@@ -43,7 +43,7 @@ describe("doc templates: definitions", () => {
   });
 
   const expectedHeadings: Record<string, string[]> = {
-    spec: ["Problem", "Users", "Goals", "Non-goals", "Approach", "Open questions", "Related tickets"],
+    spec: ["Problem", "Users", "Goals", "Non-goals", "Approach", "Open questions", "Related issues"],
     "decision-record": ["Context", "Options considered", "Decision", "Consequences"],
     runbook: ["When to use this", "Steps", "How to verify", "How to roll back", "Owner"],
     "meeting-notes": ["Who", "Decisions", "Action items"],

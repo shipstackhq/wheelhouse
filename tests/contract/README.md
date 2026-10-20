@@ -32,14 +32,14 @@ pnpm test:contract --base-url http://127.0.0.1:3460 --fixtures tests/contract/.w
 ```
 
 The server must use the seeded database (`PGLITE_DIR` or `DATABASE_URL` from the env file) and the fake GitHub's address for
-`GITHUB_API_URL` and `GITHUB_WEB_URL`. Never point it at a database that holds real data: the tests create and change tickets.
+`GITHUB_API_URL` and `GITHUB_WEB_URL`. Never point it at a database that holds real data: the tests create and change issues.
 
 ## What is in here
 
 | File | Covers |
 |---|---|
 | `mcp.contract.test.ts` | JSON-RPC protocol, auth, rate limit, the tool list and prompts (golden), tool errors |
-| `v1.contract.test.ts` | REST envelope, error codes, ticket lifecycle, optimistic locking, roles in `move_ticket`, sessions |
+| `v1.contract.test.ts` | REST envelope, error codes, issue lifecycle, optimistic locking, roles in `move_issue`, sessions |
 | `auth.contract.test.ts` | `wh_session` cookie, API keys, suspended workspaces, key-over-cookie precedence |
 | `isolation.contract.test.ts` | one workspace cannot read or change another's data |
 | `webhook.contract.test.ts` | signatures, framing, idempotency, push, pull request, CI, two workspaces sharing a repository id |
@@ -64,5 +64,5 @@ reviewed.
 
 - **Login, signup and logout.** In the Next app these were server actions, not HTTP routes, so they were never part of the frozen external contract; they are tested as `/api/app/auth/*` in suite `app`.
   The contract is the cookie they produce; the seed writes sessions directly. The new UI endpoints replacing them are WH-93.
-- **The web pages** themselves; that is the job of the page-port tickets.
+- **The web pages** themselves; that is the job of the page-port issues.
 - **`/api/health` returning 503** when the database is down.

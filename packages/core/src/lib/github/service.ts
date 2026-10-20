@@ -1,13 +1,13 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../access";
-import { addComment, createRepository, emit, requireTeam, moveTicket, ServiceError } from "../service";
+import { addComment, createRepository, emit, requireTeam, moveIssue, ServiceError } from "../service";
 import { land } from "../sync";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { decideMove, ciState, type CheckState } from "./pr-rules";
-import { parseTicketRefs, refsForTeam } from "./refs";
+import { parseIssueRefs, refsForTeam } from "./refs";
 
-const { githubDeliveries, githubInstallations, memberships, teams, pullRequests, pullRequestTickets, repositories, tickets, columns, events } = schema;
+const { githubDeliveries, githubInstallations, memberships, teams, pullRequests, pullRequestIssues, repositories, issues, columns, events } = schema;
 
 /** Writes made because of something GitHub reported are attributed to this actor, like the claim sweep's "Wheelhouse". */
 export const GITHUB_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
@@ -178,15 +178,15 @@ async function onPush(payload: Delivery["payload"], installationId: string | nul
   return { status: "handled", matched: targets.length, detail: `${files.length} file(s)` };
 }
 
-async function ticketsByRefs(teamId: string, teamKey: string, refs: { key: string; number: number }[]) {
+async function issuesByRefs(teamId: string, teamKey: string, refs: { key: string; number: number }[]) {
   const wanted = refsForTeam(refs, teamKey);
   if (!wanted.length) return [];
   const db = await getDb();
   const rows = await db
-    .select({ t: tickets, column: columns.name })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(and(eq(tickets.teamId, teamId), inArray(tickets.number, wanted.map((w) => w.number))));
+    .select({ t: issues, column: columns.name })
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(and(eq(issues.teamId, teamId), inArray(issues.number, wanted.map((w) => w.number))));
   return rows.map((r) => ({ ...r.t, column: r.column, ref: `${teamKey}-${r.t.number}` }));
 }
 
@@ -226,10 +226,10 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
       })
       .returning();
 
-    const refs = parseTicketRefs(pr.title, headBranch);
-    const linked = await ticketsByRefs(t.team.id, t.team.key, refs);
-    await db.delete(pullRequestTickets).where(eq(pullRequestTickets.pullRequestId, row.id));
-    if (linked.length) await db.insert(pullRequestTickets).values(linked.map((x) => ({ pullRequestId: row.id, ticketId: x.id }))).onConflictDoNothing();
+    const refs = parseIssueRefs(pr.title, headBranch);
+    const linked = await issuesByRefs(t.team.id, t.team.key, refs);
+    await db.delete(pullRequestIssues).where(eq(pullRequestIssues.pullRequestId, row.id));
+    if (linked.length) await db.insert(pullRequestIssues).values(linked.map((x) => ({ pullRequestId: row.id, issueId: x.id }))).onConflictDoNothing();
     await db.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, t.repo.id));
 
     const actor = githubActor(t.team.workspaceId, t.team.id);
@@ -237,8 +237,8 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
     for (const tk of linked) {
       if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
         await emit(db, actor, t.team.id, {
-          type: "ticket.pull_request",
-          entity: "ticket",
+          type: "issue.pull_request",
+          entity: "issue",
           entityId: tk.id,
           summary: `pull request #${pr.number} ${merged ? "merged" : action === "closed" ? "closed" : action === "ready_for_review" ? "is ready for review" : action} for ${tk.ref}: ${pr.title}`,
           data: { ref: tk.ref, number: pr.number, url: pr.html_url, state },
@@ -247,7 +247,7 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
       const [last] = await db
         .select({ at: events.createdAt, by: events.actorName, actorId: events.actorId })
         .from(events)
-        .where(and(eq(events.entityId, tk.id), eq(events.type, "ticket.moved")))
+        .where(and(eq(events.entityId, tk.id), eq(events.type, "issue.moved")))
         .orderBy(desc(events.seq))
         .limit(1);
       const current = boardColumns.find((c) => c.id === tk.columnId);
@@ -261,7 +261,7 @@ async function onPullRequest(payload: Delivery["payload"], installationId: strin
         lastMove: last && last.actorId !== GITHUB_ACTOR_ID ? { at: last.at, by: last.by } : null,
         now: new Date(),
       });
-      if (decision.move) await moveTicket(actor, tk.ref, decision.move);
+      if (decision.move) await moveIssue(actor, tk.ref, decision.move);
       if (decision.note) await addComment(actor, tk.ref, `Pull request [#${pr.number}](${pr.html_url}) ${decision.note}`);
     }
   }
@@ -289,16 +289,16 @@ async function onCheckRun(payload: Delivery["payload"], installationId: string |
       await db.update(pullRequests).set({ checks, ciState: next, updatedAt: new Date() }).where(eq(pullRequests.id, pr.id));
       touched++;
       if (next !== pr.ciState && (next === "failure" || next === "success")) {
-        const links = await db.select({ ticketId: pullRequestTickets.ticketId }).from(pullRequestTickets).where(eq(pullRequestTickets.pullRequestId, pr.id));
+        const links = await db.select({ issueId: pullRequestIssues.issueId }).from(pullRequestIssues).where(eq(pullRequestIssues.pullRequestId, pr.id));
         const actor = githubActor(t.team.workspaceId, t.team.id);
         for (const l of links) {
-          const [tk] = await db.select().from(tickets).where(eq(tickets.id, l.ticketId));
+          const [tk] = await db.select().from(issues).where(eq(issues.id, l.issueId));
           if (!tk) continue;
           const ref = `${t.team.key}-${tk.number}`;
           const failed = Object.entries(checks).filter(([, c]) => c.status === "completed" && c.conclusion && c.conclusion !== "success" && c.conclusion !== "neutral" && c.conclusion !== "skipped").map(([n]) => n);
           await emit(db, actor, t.team.id, {
-            type: "ticket.ci",
-            entity: "ticket",
+            type: "issue.ci",
+            entity: "issue",
             entityId: tk.id,
             summary: next === "failure" ? `CI failed on pull request #${pr.number} for ${ref}: ${failed.join(", ")}` : `CI passed on pull request #${pr.number} for ${ref}`,
             data: { ref, number: pr.number, ciState: next, failed },
@@ -313,8 +313,8 @@ async function onCheckRun(payload: Delivery["payload"], installationId: string |
 
 // ───────── reading ─────────
 
-/** Pull requests linked to a ticket, newest first, for the ticket view and for agents. */
-export async function pullRequestsForTicket(ticketId: string) {
+/** Pull requests linked to an issue, newest first, for the issue view and for agents. */
+export async function pullRequestsForIssue(issueId: string) {
   const db = await getDb();
   return db
     .select({
@@ -328,9 +328,9 @@ export async function pullRequestsForTicket(ticketId: string) {
       repository: repositories.displayName,
       updatedAt: pullRequests.updatedAt,
     })
-    .from(pullRequestTickets)
-    .innerJoin(pullRequests, eq(pullRequests.id, pullRequestTickets.pullRequestId))
+    .from(pullRequestIssues)
+    .innerJoin(pullRequests, eq(pullRequests.id, pullRequestIssues.pullRequestId))
     .innerJoin(repositories, eq(repositories.id, pullRequests.repositoryId))
-    .where(eq(pullRequestTickets.ticketId, ticketId))
+    .where(eq(pullRequestIssues.issueId, issueId))
     .orderBy(desc(pullRequests.updatedAt));
 }

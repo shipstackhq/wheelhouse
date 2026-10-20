@@ -65,16 +65,16 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
   const team = await svc.createTeam(actor, { name: `Contract ${letter}`, key: teamKey });
   // A team is reachable only by its members (ADR-23): the owner got in by creating it, the workspace's other member is added here.
   await db.insert(schema.teamMembers).values({ teamId: team.id, userId: member.id, workspaceId: t.id, role: "editor", addedBy: owner.id });
-  const ticket = await svc.createTicket(actor, teamKey, { title: `Contract ticket ${letter}` });
-  const webhookTicket = await svc.createTicket(actor, teamKey, { title: `Webhook ticket ${letter}` });
+  const issue = await svc.createIssue(actor, teamKey, { title: `Contract issue ${letter}` });
+  const webhookIssue = await svc.createIssue(actor, teamKey, { title: `Webhook issue ${letter}` });
   return {
     workspaceId: t.id,
     userId: owner.id,
     email: owner.email,
     memberEmail: member.email,
     teamKey,
-    ticketRef: ticket.ref,
-    webhookTicketRef: webhookTicket.ref,
+    issueRef: issue.ref,
+    webhookIssueRef: webhookIssue.ref,
     apiKey: await key("contract key"),
     apiKey2: await key("second contract key"),
     revokedKey: await key("revoked contract key", true),

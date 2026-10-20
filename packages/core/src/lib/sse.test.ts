@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { MemoryBus, type StreamEvent } from "./event-bus";
 import { eventStream, formatChange, formatHeartbeat, formatMarker, parseSince, REPLAY_CAP, type StreamDeps } from "./sse";
 
-const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T", teamId: "P", seq, type: "ticket.moved", summary: `s${seq}`, ...over });
+const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T", teamId: "P", seq, type: "issue.moved", summary: `s${seq}`, ...over });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Read everything the stream has produced so far (and whatever arrives in the next few ms). */
@@ -44,7 +44,7 @@ function harness(over: Partial<StreamDeps> & { rows?: StreamEvent[]; latest?: nu
 
 describe("wire format", () => {
   test("a change from the log carries its position as the event id, so a browser can resume", () => {
-    const out = formatChange(ev(42, { entity: "ticket", entityId: "t1", actorKind: "agent", actorName: "Laptop" }));
+    const out = formatChange(ev(42, { entity: "issue", entityId: "t1", actorKind: "agent", actorName: "Laptop" }));
     assert.match(out, /^id: 42\nevent: change\ndata: \{.*\}\n\n$/);
     const data = JSON.parse(out.split("data: ")[1]);
     assert.deepEqual(Object.keys(data).sort(), ["actorKind", "actorName", "entity", "entityId", "seq", "summary", "type"]);

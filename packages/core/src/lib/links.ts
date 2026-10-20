@@ -4,18 +4,18 @@ import { ServiceError } from "./service-error";
 import type { Q } from "./service";
 
 /**
- * Labels on tickets, nodes an ADR applies to, and teams an invite puts someone in were JSON arrays; they are rows now
+ * Labels on issues, nodes an ADR applies to, and teams an invite puts someone in were JSON arrays; they are rows now
  * (WH-115), so the database checks them and a delete removes them. These functions read and write those rows and hand
  * back the arrays the rest of the code, the web app and the MCP always saw.
  */
 
-const { labels, ticketLabels, decisionNodes } = schema;
+const { labels, issueLabels, decisionNodes } = schema;
 type TeamRef = { id: string; workspaceId: string };
 
 // ───────── labels ─────────
 
 /** Labels as stored: trimmed, no empties or repeats (case-insensitively, first spelling wins), at most 20 of at most 40 characters. */
-export function cleanLabels(input: string[], what = "ticket"): string[] {
+export function cleanLabels(input: string[], what = "issue"): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of input) {
@@ -29,28 +29,28 @@ export function cleanLabels(input: string[], what = "ticket"): string[] {
   return out;
 }
 
-/** The label names on each ticket, alphabetical (the join has no order of its own). */
-export async function labelsOf(q: Q, ticketIds: string[]): Promise<Map<string, string[]>> {
-  const out = new Map<string, string[]>(ticketIds.map((id) => [id, []]));
-  if (!ticketIds.length) return out;
+/** The label names on each issue, alphabetical (the join has no order of its own). */
+export async function labelsOf(q: Q, issueIds: string[]): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>(issueIds.map((id) => [id, []]));
+  if (!issueIds.length) return out;
   const rows = await q
-    .select({ ticketId: ticketLabels.ticketId, name: labels.name })
-    .from(ticketLabels)
-    .innerJoin(labels, eq(labels.id, ticketLabels.labelId))
-    .where(inArray(ticketLabels.ticketId, ticketIds))
+    .select({ issueId: issueLabels.issueId, name: labels.name })
+    .from(issueLabels)
+    .innerJoin(labels, eq(labels.id, issueLabels.labelId))
+    .where(inArray(issueLabels.issueId, issueIds))
     .orderBy(asc(sql`lower(${labels.name})`));
-  for (const r of rows) out.get(r.ticketId)!.push(r.name);
+  for (const r of rows) out.get(r.issueId)!.push(r.name);
   return out;
 }
 
-/** Rows of tickets with their `labels` names on them. */
+/** Rows of issues with their `labels` names on them. */
 export async function withLabels<T extends { id: string }>(q: Q, rows: T[]): Promise<(T & { labels: string[] })[]> {
   const map = await labelsOf(q, rows.map((r) => r.id));
   return rows.map((r) => ({ ...r, labels: map.get(r.id) ?? [] }));
 }
 
-/** Make a ticket carry exactly these label names, creating the team's labels that do not exist yet (a name matches in any case). */
-export async function setTicketLabels(q: Q, team: TeamRef, ticketId: string, names: string[]) {
+/** Make an issue carry exactly these label names, creating the team's labels that do not exist yet (a name matches in any case). */
+export async function setIssueLabels(q: Q, team: TeamRef, issueId: string, names: string[]) {
   const want = cleanLabels(names);
   if (want.length) {
     await q
@@ -65,18 +65,18 @@ export async function setTicketLabels(q: Q, team: TeamRef, ticketId: string, nam
         .where(and(eq(labels.teamId, team.id), inArray(sql`lower(${labels.name})`, want.map((n) => n.toLowerCase()))))
     : [];
   const ids = rows.map((r) => r.id);
-  await q.delete(ticketLabels).where(and(eq(ticketLabels.ticketId, ticketId), ids.length ? notInArray(ticketLabels.labelId, ids) : undefined));
+  await q.delete(issueLabels).where(and(eq(issueLabels.issueId, issueId), ids.length ? notInArray(issueLabels.labelId, ids) : undefined));
   if (ids.length) {
     await q
-      .insert(ticketLabels)
-      .values(ids.map((labelId) => ({ ticketId, labelId, teamId: team.id, workspaceId: team.workspaceId })))
+      .insert(issueLabels)
+      .values(ids.map((labelId) => ({ issueId, labelId, teamId: team.id, workspaceId: team.workspaceId })))
       .onConflictDoNothing();
   }
 }
 
 // ───────── cycles ─────────
 
-/** Rows of tickets with the `cycle` number they are in (null when in none). */
+/** Rows of issues with the `cycle` number they are in (null when in none). */
 export async function withCycle<T extends { cycleId: string | null }>(q: Q, rows: T[]): Promise<(T & { cycle: number | null })[]> {
   const ids = [...new Set(rows.map((r) => r.cycleId).filter((x): x is string => !!x))];
   const numbers = ids.length ? new Map((await q.select({ id: schema.cycles.id, number: schema.cycles.number }).from(schema.cycles).where(inArray(schema.cycles.id, ids))).map((c) => [c.id, c.number])) : new Map<string, number>();

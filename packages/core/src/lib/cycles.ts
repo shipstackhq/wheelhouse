@@ -5,12 +5,12 @@ import { emit, requireTeam, type Q, type Tx } from "./service";
 import { ServiceError } from "./service-error";
 
 /**
- * Cycles (WH-117): an optional window of one to fourteen days with a goal, belonging to a team (ADR-11, revised). A ticket joins
+ * Cycles (WH-117): an optional window of one to fourteen days with a goal, belonging to a team (ADR-11, revised). An issue joins
  * when it is ready, not at the start; when the window ends, what is not done moves to the next cycle once. No points, no velocity.
  * Every function takes `now` so the whole thing can be tested against a fixed clock.
  */
 
-const { cycles, tickets, columns, events, teams } = schema;
+const { cycles, issues, columns, events, teams } = schema;
 export type CycleRow = typeof cycles.$inferSelect;
 export type CycleState = "upcoming" | "current" | "past";
 
@@ -64,8 +64,8 @@ async function resolveCycle(q: Q, teamId: string, number: number): Promise<Cycle
   return c;
 }
 
-/** The cycle of this team with that number, for a ticket to join. A cycle that has ended is closed to new tickets. */
-export async function cycleForTicket(q: Q, teamId: string, number: number, now = new Date()): Promise<CycleRow> {
+/** The cycle of this team with that number, for an issue to join. A cycle that has ended is closed to new issues. */
+export async function cycleForIssue(q: Q, teamId: string, number: number, now = new Date()): Promise<CycleRow> {
   const c = await resolveCycle(q, teamId, number).catch((e) => {
     if (e instanceof ServiceError && e.code === "not_found") return bad("cycle", `This team has no cycle ${number}`);
     throw e;
@@ -83,7 +83,7 @@ export type CycleSummary = {
   startsAt: Date;
   endsAt: Date;
   state: CycleState;
-  /** Tickets in the cycle now, how many of them are done, how many are still open (a custom column counts as open). */
+  /** Issues in the cycle now, how many of them are done, how many are still open (a custom column counts as open). */
   total: number;
   done: number;
   open: number;
@@ -93,14 +93,14 @@ async function summaries(q: Q, rows: CycleRow[], now: Date): Promise<CycleSummar
   if (!rows.length) return [];
   const counts = await q
     .select({
-      cycleId: tickets.cycleId,
+      cycleId: issues.cycleId,
       total: sql<number>`count(*)::int`,
       done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int`,
     })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(inArray(tickets.cycleId, rows.map((r) => r.id)))
-    .groupBy(tickets.cycleId);
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(inArray(issues.cycleId, rows.map((r) => r.id)))
+    .groupBy(issues.cycleId);
   const by = new Map(counts.map((c) => [c.cycleId, c]));
   return rows.map((c) => {
     const n = by.get(c.id);
@@ -115,7 +115,7 @@ async function summaries(q: Q, rows: CycleRow[], now: Date): Promise<CycleSummar
 export type RolloverResult = { cycles: number; moved: number };
 
 /**
- * Cycles whose window has ended hand their unfinished tickets (any column but a done one) to the next cycle of the team, once:
+ * Cycles whose window has ended hand their unfinished issues (any column but a done one) to the next cycle of the team, once:
  * `rolled_over_at` is set whether or not anything moved, so running it again, or from two requests at once, changes nothing. The
  * next cycle is the team's next one by start; if there is none, one of the same length is made, starting where this one ended and
  * moved on by whole lengths if the team was away, so it holds `now`. Reads call this, as the claim sweep does.
@@ -131,10 +131,10 @@ export async function rolloverCycles(teamId: string, now = new Date()): Promise<
     const ended = await tx.select().from(cycles).where(and(eq(cycles.teamId, teamId), lte(cycles.endsAt, now), isNull(cycles.rolledOverAt))).orderBy(asc(cycles.startsAt));
     for (const c of ended) {
       const unfinished = await tx
-        .select({ id: tickets.id, number: tickets.number, version: tickets.version })
-        .from(tickets)
-        .innerJoin(columns, eq(columns.id, tickets.columnId))
-        .where(and(eq(tickets.cycleId, c.id), sql`${columns.role} is distinct from 'done'`));
+        .select({ id: issues.id, number: issues.number, version: issues.version })
+        .from(issues)
+        .innerJoin(columns, eq(columns.id, issues.columnId))
+        .where(and(eq(issues.cycleId, c.id), sql`${columns.role} is distinct from 'done'`));
       if (unfinished.length) {
         let [next] = await tx.select().from(cycles).where(and(eq(cycles.teamId, teamId), gte(cycles.startsAt, c.endsAt))).orderBy(asc(cycles.startsAt)).limit(1);
         if (!next) {
@@ -145,13 +145,13 @@ export async function rolloverCycles(teamId: string, now = new Date()): Promise<
           [next] = await tx.insert(cycles).values({ teamId, workspaceId: c.workspaceId, number: Number(max) + 1, startsAt, endsAt: new Date(startsAt.getTime() + len) }).returning();
           await emit(tx, systemActor(c.workspaceId, teamId), teamId, { type: "cycle.created", entity: "cycle", entityId: next.id, summary: `started ${cycleLabel(next)} after ${cycleLabel(c)} ended`, data: { number: next.number, after: c.number } });
         }
-        await tx.update(tickets).set({ cycleId: next.id, version: sql`${tickets.version} + 1`, updatedAt: now }).where(inArray(tickets.id, unfinished.map((t) => t.id)));
+        await tx.update(issues).set({ cycleId: next.id, version: sql`${issues.version} + 1`, updatedAt: now }).where(inArray(issues.id, unfinished.map((t) => t.id)));
         const [team] = await tx.select({ key: teams.key }).from(teams).where(eq(teams.id, teamId));
         await emit(tx, systemActor(c.workspaceId, teamId), teamId, {
           type: "cycle.rolled_over",
           entity: "cycle",
           entityId: c.id,
-          summary: `${unfinished.length} unfinished ticket${unfinished.length === 1 ? "" : "s"} moved from ${cycleLabel(c)} to ${cycleLabel(next)}`,
+          summary: `${unfinished.length} unfinished issue${unfinished.length === 1 ? "" : "s"} moved from ${cycleLabel(c)} to ${cycleLabel(next)}`,
           data: { from: c.number, to: next.number, moved: unfinished.length, refs: unfinished.map((t) => `${team.key}-${t.number}`) },
         });
         result.moved += unfinished.length;
@@ -240,26 +240,26 @@ export async function updateCycle(actor: Actor, teamRef: string, number: number,
   return (await summaries(db, [row], now))[0];
 }
 
-/** Delete a cycle. Its tickets stay on the board, in no cycle. */
+/** Delete a cycle. Its issues stay on the board, in no cycle. */
 export async function deleteCycle(actor: Actor, teamRef: string, number: number) {
   const team = await requireTeam(actor, teamRef, "edit");
   const db = await getDb();
   return db.transaction(async (tx) => {
     const c = await resolveCycle(tx, team.id, number);
-    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(tickets).where(eq(tickets.cycleId, c.id));
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(issues).where(eq(issues.cycleId, c.id));
     await tx.delete(cycles).where(eq(cycles.id, c.id));
-    await emit(tx, actor, team.id, { type: "cycle.deleted", entity: "cycle", entityId: c.id, summary: `deleted ${cycleLabel(c)}${Number(n) ? ` (${n} ticket${Number(n) === 1 ? "" : "s"} left it)` : ""}`, data: { number: c.number } });
+    await emit(tx, actor, team.id, { type: "cycle.deleted", entity: "cycle", entityId: c.id, summary: `deleted ${cycleLabel(c)}${Number(n) ? ` (${n} issue${Number(n) === 1 ? "" : "s"} left it)` : ""}`, data: { number: c.number } });
     return { ok: true, number: c.number, released: Number(n) };
   });
 }
 
 // ───────── what landed ─────────
 
-export type Landed = { ref: string; title: string; ticketId: string; doneAt: Date; inCycle: boolean };
+export type Landed = { ref: string; title: string; issueId: string; doneAt: Date; inCycle: boolean };
 
 /**
- * Tickets that reached a done column inside [from, to), from the event log (an older event only recorded the column's name, so
- * that is matched against the team's done columns). A ticket counts once, at its first move to done in the window, and a ticket
+ * Issues that reached a done column inside [from, to), from the event log (an older event only recorded the column's name, so
+ * that is matched against the team's done columns). An issue counts once, at its first move to done in the window, and an issue
  * since deleted is not listed. `inCycle` says whether it is in that cycle now.
  */
 export async function landedBetween(q: Q, teamId: string, from: Date, to: Date, cycleId?: string): Promise<Landed[]> {
@@ -267,7 +267,7 @@ export async function landedBetween(q: Q, teamId: string, from: Date, to: Date, 
   const moves = await q
     .select()
     .from(events)
-    .where(and(eq(events.teamId, teamId), eq(events.type, "ticket.moved"), gte(events.createdAt, from), lt(events.createdAt, to)))
+    .where(and(eq(events.teamId, teamId), eq(events.type, "issue.moved"), gte(events.createdAt, from), lt(events.createdAt, to)))
     .orderBy(asc(events.seq));
   const first = new Map<string, (typeof moves)[number]>();
   for (const e of moves) {
@@ -276,16 +276,16 @@ export async function landedBetween(q: Q, teamId: string, from: Date, to: Date, 
     if (toDone && !first.has(e.entityId)) first.set(e.entityId, e);
   }
   if (!first.size) return [];
-  const rows = await q.select({ id: tickets.id, title: tickets.title, cycleId: tickets.cycleId, number: tickets.number }).from(tickets).where(inArray(tickets.id, [...first.keys()]));
+  const rows = await q.select({ id: issues.id, title: issues.title, cycleId: issues.cycleId, number: issues.number }).from(issues).where(inArray(issues.id, [...first.keys()]));
   const [team] = await q.select({ key: teams.key }).from(teams).where(eq(teams.id, teamId));
   return rows
-    .map((t) => ({ ref: `${team.key}-${t.number}`, title: t.title, ticketId: t.id, doneAt: first.get(t.id)!.createdAt, inCycle: !!cycleId && t.cycleId === cycleId }))
+    .map((t) => ({ ref: `${team.key}-${t.number}`, title: t.title, issueId: t.id, doneAt: first.get(t.id)!.createdAt, inCycle: !!cycleId && t.cycleId === cycleId }))
     .sort((a, b) => a.doneAt.getTime() - b.doneAt.getTime() || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
 }
 
 export type CycleDetail = CycleSummary & {
-  tickets: { ref: string; title: string; priority: string; column: string; done: boolean; assigneeId: string | null }[];
-  /** Tickets that reached done while the cycle ran (the window, not only the tickets in it), and which of them are in it. */
+  issues: { ref: string; title: string; priority: string; column: string; done: boolean; assigneeId: string | null }[];
+  /** Issues that reached done while the cycle ran (the window, not only the issues in it), and which of them are in it. */
   landed: Landed[];
 };
 
@@ -296,16 +296,16 @@ export async function getCycle(actor: Actor, teamRef: string, number: number, no
   const c = await resolveCycle(db, team.id, number);
   const [summary] = await summaries(db, [c], now);
   const inCycle = await db
-    .select({ number: tickets.number, title: tickets.title, priority: tickets.priority, column: columns.name, role: columns.role, assigneeId: tickets.assigneeId })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(eq(tickets.cycleId, c.id))
-    .orderBy(asc(tickets.number));
+    .select({ number: issues.number, title: issues.title, priority: issues.priority, column: columns.name, role: columns.role, assigneeId: issues.assigneeId })
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(eq(issues.cycleId, c.id))
+    .orderBy(asc(issues.number));
   // A cycle that has not started has landed nothing; one that is running reports up to now.
   const landed = c.startsAt.getTime() > now.getTime() ? [] : await landedBetween(db, team.id, c.startsAt, new Date(Math.min(c.endsAt.getTime(), now.getTime() + 1)), c.id);
   return {
     ...summary,
-    tickets: inCycle.map((t) => ({ ref: `${team.key}-${t.number}`, title: t.title, priority: t.priority, column: t.column, done: t.role === "done", assigneeId: t.assigneeId })),
+    issues: inCycle.map((t) => ({ ref: `${team.key}-${t.number}`, title: t.title, priority: t.priority, column: t.column, done: t.role === "done", assigneeId: t.assigneeId })),
     landed,
   };
 }
@@ -318,7 +318,7 @@ export async function cycleOptions(q: Q, teamId: string, now = new Date()): Prom
   return rows.map((c) => ({ number: c.number, name: c.name, startsAt: c.startsAt, endsAt: c.endsAt, state: stateOf(c, now) }));
 }
 
-/** The cycle numbers of a set of tickets' cycle ids, for views that show a chip. */
+/** The cycle numbers of a set of issues' cycle ids, for views that show a chip. */
 export async function cycleNumbers(q: Q, cycleIds: (string | null)[]): Promise<Map<string, number>> {
   const ids = [...new Set(cycleIds.filter((x): x is string => !!x))];
   if (!ids.length) return new Map();

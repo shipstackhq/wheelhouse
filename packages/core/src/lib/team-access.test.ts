@@ -86,9 +86,9 @@ before(async () => {
   p2 = await team(sam, `PB${L}`);
   q1 = await team(zed, `QA${L}`);
   await scopeKeyToAllTeams(await getDb(), keyA.id, A.id); // as migration 0026 did for every key that existed: both teams of A, nothing of B
-  await svc.createTicket(ada, p1.key, { title: "secret of P1" });
-  await svc.createTicket(sam, p2.key, { title: "secret of P2" });
-  await svc.createTicket(zed, q1.key, { title: "secret of workspace B" });
+  await svc.createIssue(ada, p1.key, { title: "secret of P1" });
+  await svc.createIssue(sam, p2.key, { title: "secret of P2" });
+  await svc.createIssue(zed, q1.key, { title: "secret of workspace B" });
 });
 
 describe("the rule", () => {
@@ -118,13 +118,13 @@ describe("reading", () => {
 
   test("a workspace owner is not a member of a team made by someone else", async () => {
     await assert.rejects(() => svc.getBoard(ada, p2.key), code("not_found"));
-    await assert.rejects(() => svc.getTicket(ada, `${p2.key}-1`), code("not_found"));
+    await assert.rejects(() => svc.getIssue(ada, `${p2.key}-1`), code("not_found"));
   });
 
   test("a team of another workspace is not_found for everyone here, even by uuid", async () => {
     await assert.rejects(() => svc.requireTeam(ada, q1.id), code("not_found"));
     await assert.rejects(() => svc.requireTeam(zed, p1.id), code("not_found"));
-    await assert.rejects(() => svc.getTicket(zed, `${p1.key}-1`), code("not_found"));
+    await assert.rejects(() => svc.getIssue(zed, `${p1.key}-1`), code("not_found"));
   });
 
   test("lists show only your own teams: a workspace admin in none sees none; an agent key sees the teams it is scoped to", async () => {
@@ -149,15 +149,15 @@ describe("reading", () => {
 
 describe("writing", () => {
   test("an editor writes; a viewer, a guest viewer and a workspace viewer made editor can only read", async () => {
-    await svc.createTicket(bob, p1.key, { title: "bob's ticket" });
+    await svc.createIssue(bob, p1.key, { title: "bob's issue" });
     for (const [who, label] of [[cy, "team viewer"], [gus, "guest viewer"], [dee, "workspace viewer"]] as const) {
-      await assert.rejects(() => svc.createTicket(who, p1.key, { title: "no" }), code("forbidden"), label);
+      await assert.rejects(() => svc.createIssue(who, p1.key, { title: "no" }), code("forbidden"), label);
       const board = await svc.getBoard(who, p1.key);
-      assert.ok(board.tickets.length >= 1, `${label} can still read`);
+      assert.ok(board.issues.length >= 1, `${label} can still read`);
     }
-    const t = (await svc.getBoard(ada, p1.key)).tickets[0];
+    const t = (await svc.getBoard(ada, p1.key)).issues[0];
     await assert.rejects(() => svc.addComment(cy, `${p1.key}-${t.number}`, "hi"), code("forbidden"));
-    await assert.rejects(() => svc.moveTicket(dee, `${p1.key}-${t.number}`, "Done"), code("forbidden"));
+    await assert.rejects(() => svc.moveIssue(dee, `${p1.key}-${t.number}`, "Done"), code("forbidden"));
   });
 
   test("an editor cannot change who is in the team or delete it; an admin can", async () => {
@@ -195,7 +195,7 @@ describe("agents and the system", () => {
     assert.ok((await svc.getBoard(keyA, p1.key)).team);
     assert.ok((await svc.getBoard(keyA, p2.key)).team);
     await assert.rejects(() => svc.requireTeam(keyA, q1.key), code("not_found"));
-    await svc.createTicket(keyA, p2.key, { title: "from a key" });
+    await svc.createIssue(keyA, p2.key, { title: "from a key" });
   });
 
   test("a system actor reaches only the one team it is for, and is never mistaken for a member", async () => {
@@ -222,12 +222,12 @@ describe("a key scoped to teams (WH-120)", () => {
     assert.deepEqual((await svc.listTeams(k)).map((t) => t.key), [p1.key]);
     assert.ok((await svc.getBoard(k, p1.key)).team);
     await assert.rejects(() => svc.getBoard(k, p2.key), code("not_found"));
-    await assert.rejects(() => svc.getTicket(k, `${p2.key}-1`), code("not_found"));
-    await assert.rejects(() => svc.createTicket(k, p2.key, { title: "planted" }), code("not_found"));
+    await assert.rejects(() => svc.getIssue(k, `${p2.key}-1`), code("not_found"));
+    await assert.rejects(() => svc.createIssue(k, p2.key, { title: "planted" }), code("not_found"));
     const other = await svc.requireTeam(k, p2.key).catch((e) => e.message);
     const none = await svc.requireTeam(k, "ZZZZ").catch((e) => e.message);
     assert.equal(other.replace(p2.key, "X"), none.replace("ZZZZ", "X"));
-    assert.ok((await svc.createTicket(k, p1.key, { title: "allowed" })).ref);
+    assert.ok((await svc.createIssue(k, p1.key, { title: "allowed" })).ref);
     assert.equal(await roleOnTeam(await db(), k, p1.id), "editor", "an editor on its teams, never an admin");
     await assert.rejects(() => svc.updateTeam(k, p1.key, { name: "x" }), code("forbidden"));
   });
@@ -396,7 +396,7 @@ describe("invites that carry teams", () => {
     const newbie: Actor = { kind: "human", id: userId, name: "Newbie", workspaceId: ada.workspaceId };
     assert.deepEqual((await svc.listTeams(newbie)).map((p) => p.key), [p1.key]);
     await assert.rejects(() => svc.requireTeam(newbie, p2.key), code("not_found"));
-    await assert.rejects(() => svc.createTicket(newbie, p1.key, { title: "no" }), code("forbidden")); // the viewer role they were given
+    await assert.rejects(() => svc.createIssue(newbie, p1.key, { title: "no" }), code("forbidden")); // the viewer role they were given
     const log = await pmem.listAudit(ada, { teamRef: p1.key });
     const line = log.find((a) => a.action === "team.member_added" && a.targetId === userId)!;
     assert.deepEqual([line.actorName, line.after], ["ada", { role: "viewer", via: "invite" }]);
@@ -448,7 +448,7 @@ describe("live streams", () => {
     const adaScope = await workspaceScope()(ada);
     const samScope = await workspaceScope()(sam);
     const keyScope = await workspaceScope()(keyA);
-    const ev = (teamId: string) => ({ workspaceId: ada.workspaceId, teamId, type: "ticket.created" });
+    const ev = (teamId: string) => ({ workspaceId: ada.workspaceId, teamId, type: "issue.created" });
     assert.equal(adaScope.allow?.(ev(p1.id)), true);
     assert.equal(adaScope.allow?.(ev(p2.id)), false);
     assert.equal(samScope.allow?.(ev(p2.id)), true);
@@ -462,7 +462,7 @@ describe("live streams", () => {
   test("an open dashboard stream follows joins and removals, and a team stream ends when its person is removed", async () => {
     const stream = await person(ada.workspaceId, "member", "watcher");
     const scope = await workspaceScope()(stream);
-    const ev = (teamId: string) => ({ workspaceId: ada.workspaceId, teamId, type: "ticket.created" });
+    const ev = (teamId: string) => ({ workspaceId: ada.workspaceId, teamId, type: "issue.created" });
     assert.equal(scope.allow?.(ev(p1.id)), false);
     await addTo(ada, p1.key, stream, "viewer");
     assert.equal(await scope.recheck?.(), true);
@@ -490,17 +490,17 @@ describe("the per-team dashboard (WH-107)", () => {
     one = await team(owner, `DA${L}`);
     two = await team(owner, `DB${L}`);
     await addTo(owner, one.key, viewer, "viewer");
-    // team one: 3 tickets (one done, one in progress for 9 days, one in review for 4 days); team two: 1 urgent ticket
-    const t1 = await svc.createTicket(owner, one.key, { title: "done one" });
-    const t2 = await svc.createTicket(owner, one.key, { title: "slow one", priority: "high" });
-    const t3 = await svc.createTicket(owner, one.key, { title: "waiting one" });
-    await svc.moveTicket(owner, `${one.key}-${t1.number}`, "done");
-    await svc.moveTicket(owner, `${one.key}-${t2.number}`, "in_progress");
-    await svc.moveTicket(owner, `${one.key}-${t3.number}`, "review");
-    await svc.createTicket(owner, two.key, { title: "urgent elsewhere", priority: "urgent" });
-    // age the moves: the events say when each ticket arrived in its column
+    // team one: 3 issues (one done, one in progress for 9 days, one in review for 4 days); team two: 1 urgent issue
+    const t1 = await svc.createIssue(owner, one.key, { title: "done one" });
+    const t2 = await svc.createIssue(owner, one.key, { title: "slow one", priority: "high" });
+    const t3 = await svc.createIssue(owner, one.key, { title: "waiting one" });
+    await svc.moveIssue(owner, `${one.key}-${t1.number}`, "done");
+    await svc.moveIssue(owner, `${one.key}-${t2.number}`, "in_progress");
+    await svc.moveIssue(owner, `${one.key}-${t3.number}`, "review");
+    await svc.createIssue(owner, two.key, { title: "urgent elsewhere", priority: "urgent" });
+    // age the moves: the events say when each issue arrived in its column
     const db = await getDb();
-    const moved = await db.select().from(schema.events).where(and(eq(schema.events.teamId, one.id), eq(schema.events.type, "ticket.moved")));
+    const moved = await db.select().from(schema.events).where(and(eq(schema.events.teamId, one.id), eq(schema.events.type, "issue.moved")));
     for (const e of moved) {
       const age = e.summary.includes(`${one.key}-${t2.number}`) ? 9 : e.summary.includes(`${one.key}-${t3.number}`) ? 4 : 1;
       await db.update(schema.events).set({ createdAt: days(age) }).where(eq(schema.events.seq, e.seq));
@@ -515,16 +515,16 @@ describe("the per-team dashboard (WH-107)", () => {
     assert.equal(mine.open, 2); // slow + waiting; the done one is not open
     assert.equal(mine.inProgress, 1);
     assert.equal(mine.inReview, 1);
-    assert.equal(all.open, mine.open + 1); // plus the other team's ticket
+    assert.equal(all.open, mine.open + 1); // plus the other team's issue
     const progress = await metrics.teamProgress(owner, one.id);
     assert.deepEqual(progress.map((p) => [p.key, p.total, p.done]), [[one.key, 3, 1]]);
-    assert.equal(progress[0].urgent, 1); // the high-priority one only; the urgent ticket belongs to the other team
+    assert.equal(progress[0].urgent, 1); // the high-priority one only; the urgent issue belongs to the other team
   });
 
   test("attention, activity and throughput read only that team", async () => {
     const att = await metrics.needsAttention(owner, one.id);
     assert.deepEqual(att.review.map((r) => r.title), ["waiting one"]);
-    assert.deepEqual(att.urgent, []); // the urgent ticket is in the other team
+    assert.deepEqual(att.urgent, []); // the urgent issue is in the other team
     assert.deepEqual((await metrics.needsAttention(owner, two.id)).urgent.map((u) => u.title), ["urgent elsewhere"]);
     const feed = await metrics.recentActivity(owner, 50, one.id);
     assert.ok(feed.length > 0 && feed.every((e) => e.teamKey === one.key));
@@ -537,7 +537,7 @@ describe("the per-team dashboard (WH-107)", () => {
     const f = await metrics.teamFocus(owner, one.id);
     assert.deepEqual(f.aging.map((a) => [a.title, a.days]), [["slow one", 9]]);
     assert.deepEqual(f.waitingReview.map((a) => [a.title, a.days]), [["waiting one", 4]]);
-    assert.deepEqual([f.tickets, f.members.count, f.members.myRole, f.proposedDecisions], [3, 2, "admin", 0]);
+    assert.deepEqual([f.issues, f.members.count, f.members.myRole, f.proposedDecisions], [3, 2, "admin", 0]);
     assert.equal((await metrics.teamFocus(viewer, one.id)).members.myRole, "viewer");
   });
 
@@ -545,7 +545,7 @@ describe("the per-team dashboard (WH-107)", () => {
     assert.equal((await metrics.summary(viewer, two.id)).teams, 0);
     assert.equal((await metrics.summary(viewer, two.id)).open, 0);
     const f = await metrics.teamFocus(viewer, two.id);
-    assert.deepEqual([f.aging, f.waitingReview, f.tickets, f.members.count], [[], [], 0, 0]);
+    assert.deepEqual([f.aging, f.waitingReview, f.issues, f.members.count], [[], [], 0, 0]);
     // and a viewer sees the workspace dashboard limited to the one team they are in
     assert.equal((await metrics.summary(viewer)).teams, 1);
   });
@@ -555,7 +555,7 @@ describe("the per-team dashboard (WH-107)", () => {
     const s = await metrics.summary(owner, e.id);
     assert.deepEqual([s.teams, s.open, s.completed7d, s.agentsActive7d], [1, 0, 0, 0]);
     const f = await metrics.teamFocus(owner, e.id);
-    assert.deepEqual([f.aging, f.waitingReview, f.quiet, f.tickets], [[], [], [], 0]);
+    assert.deepEqual([f.aging, f.waitingReview, f.quiet, f.issues], [[], [], [], 0]);
     assert.equal((await metrics.teamProgress(owner, e.id))[0].pct, 0);
   });
 });

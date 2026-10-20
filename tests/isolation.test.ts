@@ -31,7 +31,7 @@ import * as initiatives from "@wheelhouse/core/lib/initiatives";
 import * as members from "@wheelhouse/core/lib/members";
 import { runTool, tools } from "@wheelhouse/core/lib/tools";
 import { askMap } from "@wheelhouse/core/lib/ask";
-import { briefing, ticketContext } from "@wheelhouse/core/lib/briefing";
+import { briefing, issueContext } from "@wheelhouse/core/lib/briefing";
 import * as metrics from "@wheelhouse/core/lib/metrics";
 import { resolveDraft } from "@wheelhouse/core/lib/sync";
 import * as sync from "@wheelhouse/core/lib/sync";
@@ -48,8 +48,8 @@ type Side = {
   key: string;
   teamKey: string;
   teamId: string;
-  ticketRef: string;
-  ticketId: string;
+  issueRef: string;
+  issueId: string;
 };
 let A: Side & {
   nodeName: string;
@@ -86,11 +86,11 @@ async function seedSide(label: "A" | "B") {
   const team = await svc.createTeam(human, { name: `${tag} team`, key: teamKey });
   // Both workspaces also have a team with the same key, to prove keys are per workspace.
   await svc.createTeam(human, { name: `${tag} shared-key team`, key: "SH" });
-  const t = await svc.createTicket(human, teamKey, { title: `${tag} ticket`, body: `${tag} body`, priority: "high" });
-  await svc.createTicket(human, "SH", { title: `${tag} shared ticket` });
+  const t = await svc.createIssue(human, teamKey, { title: `${tag} issue`, body: `${tag} body`, priority: "high" });
+  await svc.createIssue(human, "SH", { title: `${tag} shared issue` });
   await scopeKeyToAllTeams(db, k.id, workspace.id);
   await svc.addComment(human, t.ref, `${tag} comment`);
-  return { workspaceId: workspace.id, owner: human, ownerEmail, ownerId: owner.id, agent, keyId: k.id, key, teamKey, teamId: team.id, ticketRef: t.ref, ticketId: t.id, tag };
+  return { workspaceId: workspace.id, owner: human, ownerEmail, ownerId: owner.id, agent, keyId: k.id, key, teamKey, teamId: team.id, issueRef: t.ref, issueId: t.id, tag };
 }
 
 async function seedMap(s: Awaited<ReturnType<typeof seedSide>>) {
@@ -104,7 +104,7 @@ async function seedMap(s: Awaited<ReturnType<typeof seedSide>>) {
     columns: [{ name: "id", type: "uuid", pk: true }] as never,
   });
   await svc.upsertEdge(s.owner, k, { from: sys.id, to: concept.id, kind: "implements" });
-  await svc.linkTicketNode(s.owner, s.ticketRef, sys.name);
+  await svc.linkIssueNode(s.owner, s.issueRef, sys.name);
   await svc.upsertFlow(s.owner, k, { name: `${s.tag} flow`, steps: [{ node: sys.name, title: `${s.tag} step` }] });
   await svc.upsertDecision(s.owner, k, { title: `${s.tag} decision`, nodes: [sys.name] });
   await svc.upsertTerm(s.owner, k, { term: `${s.tag} term`, definition: `${s.tag} definition`, node: sys.name });
@@ -117,7 +117,7 @@ const fingerprint = async (s: { workspaceId: string; teamId: string; keyId: stri
   const db = await getDb();
   const ps = (await db.select({ id: schema.teams.id }).from(schema.teams).where(eq(schema.teams.workspaceId, s.workspaceId))).map((p) => p.id);
   const keys = (await db.select({ id: schema.apiKeys.id }).from(schema.apiKeys).where(eq(schema.apiKeys.workspaceId, s.workspaceId))).map((p) => p.id);
-  const tix = ps.length ? (await db.select({ id: schema.tickets.id }).from(schema.tickets).where(inArray(schema.tickets.teamId, ps))).map((t) => t.id) : [];
+  const tix = ps.length ? (await db.select({ id: schema.issues.id }).from(schema.issues).where(inArray(schema.issues.teamId, ps))).map((t) => t.id) : [];
   const ns = ps.length ? (await db.select({ id: schema.nodes.id }).from(schema.nodes).where(inArray(schema.nodes.teamId, ps))).map((t) => t.id) : [];
   const byTeam = <T extends { teamId: unknown }>(tbl: T & { teamId: never }) => ps.length ? db.select().from(tbl as never).where(inArray(tbl.teamId as never, ps)) : [];
   const parts = {
@@ -126,15 +126,15 @@ const fingerprint = async (s: { workspaceId: string; teamId: string; keyId: stri
     keys: await db.select().from(schema.apiKeys).where(eq(schema.apiKeys.workspaceId, s.workspaceId)),
     teams: await db.select().from(schema.teams).where(eq(schema.teams.workspaceId, s.workspaceId)),
     columns: await byTeam(schema.columns as never),
-    tickets: await byTeam(schema.tickets as never),
-    comments: tix.length ? await db.select().from(schema.comments).where(inArray(schema.comments.ticketId, tix)) : [],
+    issues: await byTeam(schema.issues as never),
+    comments: tix.length ? await db.select().from(schema.comments).where(inArray(schema.comments.issueId, tix)) : [],
     nodes: await byTeam(schema.nodes as never),
     edges: await byTeam(schema.edges as never),
     flows: await byTeam(schema.flows as never),
     decisions: await byTeam(schema.decisions as never),
     terms: await byTeam(schema.terms as never),
     docs: await byTeam(schema.docs as never),
-    ticketNodes: tix.length ? await db.select().from(schema.ticketNodes).where(inArray(schema.ticketNodes.ticketId, tix)) : [],
+    issueNodes: tix.length ? await db.select().from(schema.issueNodes).where(inArray(schema.issueNodes.issueId, tix)) : [],
     sessions: await byTeam(schema.workSessions as never),
     drafts: await byTeam(schema.nodeDrafts as never),
     docDrafts: await byTeam(schema.docDrafts as never),
@@ -168,7 +168,7 @@ before(async () => {
     .values({ workspaceId: a.workspaceId, name: "A-SECRET spare key", prefix: "wh_spare", keyHash: sha256(`spare-${RUN}`), createdBy: a.ownerId })
     .returning();
   await scopeKeyToAllTeams(db, spare.id, a.workspaceId);
-  await svc.createTicket(a.agent, a.teamKey, { title: "A-SECRET agent ticket" }); // an event written by A's agent
+  await svc.createIssue(a.agent, a.teamKey, { title: "A-SECRET agent issue" }); // an event written by A's agent
   A = {
     ...a,
     nodeName: map.sys.name,
@@ -201,12 +201,12 @@ const attacks = {
   list_projects: () => [{}],
   create_project: () => [{ name: "B project", key: "BX" }],
   get_board: () => [{ project: A.teamKey }, { project: A.teamId }],
-  get_ticket: () => [{ ticket: A.ticketRef }, { ticket: A.ticketId }],
-  create_ticket: () => [{ project: A.teamKey, title: "B writes into A" }, { project: A.teamId, title: "B writes into A", link_nodes: [A.nodeName] }],
-  update_ticket: () => [{ ticket: A.ticketRef, title: "hijacked" }, { ticket: A.ticketId, body: "hijacked" }],
-  move_ticket: () => [{ ticket: A.ticketRef, column: "Done" }],
-  claim_ticket: () => [{ ticket: A.ticketRef }],
-  comment: () => [{ ticket: A.ticketRef, body: "B comments on A" }],
+  get_issue: () => [{ issue: A.issueRef }, { issue: A.issueId }],
+  create_issue: () => [{ project: A.teamKey, title: "B writes into A" }, { project: A.teamId, title: "B writes into A", link_nodes: [A.nodeName] }],
+  update_issue: () => [{ issue: A.issueRef, title: "hijacked" }, { issue: A.issueId, body: "hijacked" }],
+  move_issue: () => [{ issue: A.issueRef, column: "Done" }],
+  claim_issue: () => [{ issue: A.issueRef }],
+  comment: () => [{ issue: A.issueRef, body: "B comments on A" }],
   get_changes: () => [{ project: A.teamKey }, { project: A.teamId }],
   ack_changes: () => [{ project: A.teamKey, seq: 999999 }],
   resume_session: () => [{ project: A.teamKey, mode: "replay" as const }],
@@ -220,12 +220,12 @@ const attacks = {
   delete_node: () => [{ project: A.teamKey, node: A.nodeName }, { project: A.teamKey, node: A.nodeId }],
   upsert_edge: () => [{ project: A.teamKey, from: A.nodeName, to: A.dataName }],
   unlink_nodes: () => [{ project: A.teamKey, from: A.nodeName, to: "A-SECRET concept" }],
-  link_ticket_node: () => [{ ticket: A.ticketRef, node: A.nodeName }, { ticket: A.ticketRef, node: A.nodeName, unlink: true }],
+  link_issue_node: () => [{ issue: A.issueRef, node: A.nodeName }, { issue: A.issueRef, node: A.nodeName, unlink: true }],
   get_schema: () => [{ project: A.teamKey }],
   upsert_table: () => [{ project: A.teamKey, name: A.dataName, summary: "hijacked", columns: [{ name: "id", type: "uuid" }] }],
   get_briefing: () => [{ project: A.teamKey }],
-  get_ticket_context: () => [{ ticket: A.ticketRef }],
-  delete_ticket: () => [{ ticket: A.ticketRef }, { ticket: A.ticketId }],
+  get_issue_context: () => [{ issue: A.issueRef }],
+  delete_issue: () => [{ issue: A.issueRef }, { issue: A.issueId }],
   delete_project: () => [{ project: A.teamKey }, { project: A.teamId }],
   session_sync: () => [{ project: A.teamKey, session: "b-session", files: ["src/a/x.ts"] }],
   session_status: () => [{ project: A.teamKey, session: A.sessionId }],
@@ -288,7 +288,7 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
             assert.ok(harmless.has(name), `${label}: succeeded against workspace A's identifiers`);
             const text = JSON.stringify(result);
             assert.ok(!MARK.test(text), `${label}: returned workspace A data`);
-            for (const id of [A.teamId, A.ticketId, A.nodeId, A.ownerId, A.keyId]) assert.ok(!text.includes(id), `${label}: returned an id of workspace A`);
+            for (const id of [A.teamId, A.issueId, A.nodeId, A.ownerId, A.keyId]) assert.ok(!text.includes(id), `${label}: returned an id of workspace A`);
           }
         }
       }
@@ -343,9 +343,9 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     const listed = (await runTool(narrow, "list_projects", {})) as { key: string }[];
     assert.deepEqual(listed.map((p) => p.key), ["SH"]);
     assert.ok(!JSON.stringify(listed).includes(A.teamId));
-    assert.equal(((await runTool(narrow, "get_ticket", { ticket: "SH-1" })) as { ticket: { title: string } }).ticket.title, "A-SECRET shared ticket");
-    await runTool(narrow, "comment", { ticket: "SH-1", body: "from the narrow key" });
-    await assert.rejects(runTool(narrow, "comment", { ticket: A.ticketRef, body: "no" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    assert.equal(((await runTool(narrow, "get_issue", { issue: "SH-1" })) as { issue: { title: string } }).issue.title, "A-SECRET shared issue");
+    await runTool(narrow, "comment", { issue: "SH-1", body: "from the narrow key" });
+    await assert.rejects(runTool(narrow, "comment", { issue: A.issueRef, body: "no" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
   });
 
   test("a key with no team and a key scoped to AA each reach only what they are given", async () => {
@@ -359,9 +359,9 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     const none = await mk("A none key", []);
     const aa = await mk("A AA key", [A.teamId]);
     assert.deepEqual(await runTool(none, "list_projects", {}), []);
-    await assert.rejects(runTool(none, "get_ticket", { ticket: A.ticketRef }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    assert.equal(((await runTool(aa, "get_ticket", { ticket: A.ticketRef })) as { ticket: { title: string } }).ticket.title, "A-SECRET ticket");
-    await assert.rejects(runTool(aa, "get_ticket", { ticket: "SH-1" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(runTool(none, "get_issue", { issue: A.issueRef }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    assert.equal(((await runTool(aa, "get_issue", { issue: A.issueRef })) as { issue: { title: string } }).issue.title, "A-SECRET issue");
+    await assert.rejects(runTool(aa, "get_issue", { issue: "SH-1" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
@@ -375,7 +375,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
 
 describe("the attacks are real: the same calls work for the owner", () => {
   test("workspace A's own agent and human can do what B was refused", async () => {
-    assert.equal((await runTool(A.agent, "get_ticket", { ticket: A.ticketRef }) as { ticket: { title: string } }).ticket.title, "A-SECRET ticket");
+    assert.equal((await runTool(A.agent, "get_issue", { issue: A.issueRef }) as { issue: { title: string } }).issue.title, "A-SECRET issue");
     await runTool(A.owner, "get_node", { project: A.teamKey, node: A.nodeName });
     await runTool(A.agent, "get_board", { project: A.teamId });
     await runTool(A.agent, "session_status", { project: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof svc.ServiceError));
@@ -383,17 +383,17 @@ describe("the attacks are real: the same calls work for the owner", () => {
 });
 
 describe("team keys are per workspace", () => {
-  test("two workspaces with a team called SH each see their own tickets", async () => {
-    const a = (await runTool(A.owner, "get_ticket", { ticket: "SH-1" })) as { ticket: { title: string } };
-    const b = (await runTool(B.owner, "get_ticket", { ticket: "SH-1" })) as { ticket: { title: string } };
-    assert.equal(a.ticket.title, "A-SECRET shared ticket");
-    assert.equal(b.ticket.title, "B-OWN shared ticket");
+  test("two workspaces with a team called SH each see their own issues", async () => {
+    const a = (await runTool(A.owner, "get_issue", { issue: "SH-1" })) as { issue: { title: string } };
+    const b = (await runTool(B.owner, "get_issue", { issue: "SH-1" })) as { issue: { title: string } };
+    assert.equal(a.issue.title, "A-SECRET shared issue");
+    assert.equal(b.issue.title, "B-OWN shared issue");
   });
 
 });
 
 describe("what B can see is only B's", () => {
-  test("B's own board, graph, activity, queue, briefing and ticket context hold nothing of A's", async () => {
+  test("B's own board, graph, activity, queue, briefing and issue context hold nothing of A's", async () => {
     const calls: Promise<unknown>[] = [
       runTool(B.owner, "get_board", { project: B.teamKey }),
       runTool(B.owner, "get_graph", { project: B.teamKey }),
@@ -401,7 +401,7 @@ describe("what B can see is only B's", () => {
       runTool(B.owner, "list_projects", {}),
       runTool(B.agent, "get_changes", { project: B.teamKey }),
       briefing(B.agent, B.teamKey),
-      ticketContext(B.agent, B.ticketRef),
+      issueContext(B.agent, B.issueRef),
       svc.listEvents(B.owner, B.teamKey),
       svc.queueStatus(B.owner, B.teamKey),
     ];
@@ -409,7 +409,7 @@ describe("what B can see is only B's", () => {
       const text = JSON.stringify(r);
       assert.ok(text.length > 20, "a real answer, not an empty one");
       assert.ok(!MARK.test(text), "no workspace A data");
-      for (const id of [A.teamId, A.ticketId, A.nodeId, A.ownerId, A.keyId, A.workspaceId]) assert.ok(!text.includes(id));
+      for (const id of [A.teamId, A.issueId, A.nodeId, A.ownerId, A.keyId, A.workspaceId]) assert.ok(!text.includes(id));
     }
   });
 
@@ -441,10 +441,10 @@ describe("what B can see is only B's", () => {
 });
 
 describe("briefing, context and Ask", () => {
-  test("briefing and ticket context refuse workspace A's team and ticket", async () => {
+  test("briefing and issue context refuse workspace A's team and issue", async () => {
     await assert.rejects(briefing(B.agent, A.teamKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(ticketContext(B.agent, A.ticketRef), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(ticketContext(B.owner, A.ticketId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(issueContext(B.agent, A.issueRef), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(issueContext(B.owner, A.issueId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
   });
 
   test("Ask refuses workspace A's team before it would call the model", async () => {
@@ -514,15 +514,15 @@ describe("members, keys and assignees", () => {
     assert.equal(await members.updateMember(B.workspaceId, B.owner.id, { userId: B.owner.id, role: "member", tags: [] }), false);
   });
 
-  test("a ticket cannot be assigned to someone outside the workspace (regression)", async () => {
+  test("an issue cannot be assigned to someone outside the workspace (regression)", async () => {
     const before = await fingerprint(A);
-    await assert.rejects(svc.updateTicket(B.owner, B.ticketRef, { assigneeId: A.ownerId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.createTicket(B.owner, B.teamKey, { title: "x", assigneeId: A.ownerId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.updateTicket(B.owner, B.ticketRef, { assigneeId: "not-a-uuid" }), svc.ServiceError);
-    await assert.rejects(svc.updateTicket(B.owner, B.ticketRef, { assigneeId: crypto.randomUUID() }), svc.ServiceError);
-    const own = await svc.updateTicket(B.owner, B.ticketRef, { assigneeId: B.owner.id });
+    await assert.rejects(svc.updateIssue(B.owner, B.issueRef, { assigneeId: A.ownerId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(svc.createIssue(B.owner, B.teamKey, { title: "x", assigneeId: A.ownerId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(svc.updateIssue(B.owner, B.issueRef, { assigneeId: "not-a-uuid" }), svc.ServiceError);
+    await assert.rejects(svc.updateIssue(B.owner, B.issueRef, { assigneeId: crypto.randomUUID() }), svc.ServiceError);
+    const own = await svc.updateIssue(B.owner, B.issueRef, { assigneeId: B.owner.id });
     assert.equal(own.assigneeId, B.owner.id, "an own-workspace assignee still works");
-    assert.equal((await svc.updateTicket(B.owner, B.ticketRef, { assigneeId: null })).assigneeId, null);
+    assert.equal((await svc.updateIssue(B.owner, B.issueRef, { assigneeId: null })).assigneeId, null);
     assert.equal(await fingerprint(A), before);
   });
 });
@@ -661,14 +661,14 @@ describe("cycles stay inside their workspace and team (WH-117)", () => {
     assert.equal(b.number, 1, "numbers are per team: B's first cycle is 1, as A's is");
   });
 
-  test("a ticket of B cannot join A's cycle: the service looks for the number in B's own team, and the database refuses the id", async () => {
+  test("an issue of B cannot join A's cycle: the service looks for the number in B's own team, and the database refuses the id", async () => {
     const db = await getDb();
     const aCycle = (await db.select().from(schema.cycles).where(eq(schema.cycles.teamId, A.teamId)))[0];
-    const bTicket = await svc.createTicket(B.owner, B.teamKey, { title: "B wants A's cycle" });
-    await assert.rejects(svc.updateTicket(B.owner, bTicket.ref, { cycle: 99 }), svc.ServiceError);
-    await assert.rejects(db.update(schema.tickets).set({ cycleId: aCycle.id }).where(eq(schema.tickets.id, bTicket.id)), refused);
-    await assert.rejects(svc.updateTicket(B.owner, A.ticketRef, { cycle: 1 }), notFound);
-    assert.equal((await svc.getTicket(B.owner, bTicket.ref)).ticket.cycle, null);
+    const bIssue = await svc.createIssue(B.owner, B.teamKey, { title: "B wants A's cycle" });
+    await assert.rejects(svc.updateIssue(B.owner, bIssue.ref, { cycle: 99 }), svc.ServiceError);
+    await assert.rejects(db.update(schema.issues).set({ cycleId: aCycle.id }).where(eq(schema.issues.id, bIssue.id)), refused);
+    await assert.rejects(svc.updateIssue(B.owner, A.issueRef, { cycle: 1 }), notFound);
+    assert.equal((await svc.getIssue(B.owner, bIssue.ref)).issue.cycle, null);
   });
 
   test("a cycle row cannot name a workspace other than its team's", async () => {
@@ -687,7 +687,7 @@ describe("projects stay inside their workspace, and show other teams only as tot
 
   test("workspace B cannot list, open, change, delete, add to or take from A's project, and A's project is not changed", async () => {
     aProject = await projects.createProject(A.owner, { name: "A-SECRET project", description: "A-SECRET description", leadTeam: A.teamId });
-    await svc.createTicket(A.owner, A.teamKey, { title: "A-SECRET in the project", projectId: aProject.id });
+    await svc.createIssue(A.owner, A.teamKey, { title: "A-SECRET in the project", projectId: aProject.id });
     const before = await fingerprint(A);
     assert.ok(!(await projects.listProjects(B.owner)).some((p) => p.id === aProject.id));
     assert.ok(!JSON.stringify(await projects.listProjects(B.owner)).includes("A-SECRET"));
@@ -709,13 +709,13 @@ describe("projects stay inside their workspace, and show other teams only as tot
     assert.deepEqual((await projects.listProjects(B.owner)).map((p) => p.name), ["B's own"]);
   });
 
-  test("a ticket of B cannot be put in A's project, through the service or around it", async () => {
+  test("an issue of B cannot be put in A's project, through the service or around it", async () => {
     const db = await getDb();
-    const bTicket = await svc.createTicket(B.owner, B.teamKey, { title: "B wants A's project" });
-    await assert.rejects(svc.updateTicket(B.owner, bTicket.ref, { projectId: aProject.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not exist/.test(e.message));
-    await assert.rejects(db.update(schema.tickets).set({ projectId: aProject.id }).where(eq(schema.tickets.id, bTicket.id)), refused);
-    await assert.rejects(svc.updateTicket(B.owner, A.ticketRef, { projectId: aProject.id }), notFound);
-    assert.equal((await svc.getTicket(B.owner, bTicket.ref)).ticket.projectId, null);
+    const bIssue = await svc.createIssue(B.owner, B.teamKey, { title: "B wants A's project" });
+    await assert.rejects(svc.updateIssue(B.owner, bIssue.ref, { projectId: aProject.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not exist/.test(e.message));
+    await assert.rejects(db.update(schema.issues).set({ projectId: aProject.id }).where(eq(schema.issues.id, bIssue.id)), refused);
+    await assert.rejects(svc.updateIssue(B.owner, A.issueRef, { projectId: aProject.id }), notFound);
+    assert.equal((await svc.getIssue(B.owner, bIssue.ref)).issue.projectId, null);
   });
 
   test("project rows cannot be made to name the other workspace", async () => {
@@ -734,11 +734,11 @@ describe("projects stay inside their workspace, and show other teams only as tot
     const { addTeamMember } = await import("@wheelhouse/core/lib/team-members");
     await addTeamMember(A.owner, a2.key, { userId: u.id, role: "editor" });
     await projects.addProjectTeam(A.owner, aProject.id, a2.key);
-    await svc.createTicket(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, column: "Done" });
+    await svc.createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, column: "Done" });
     const second: Actor = { kind: "human", id: u.id, name: u.name, workspaceId: A.workspaceId };
     const seen = await projects.getProject(second, aProject.id);
     assert.deepEqual(seen.teams.map((t) => t.key), [a2.key]);
-    assert.deepEqual(seen.others, { count: 1, total: 1, done: 0 }, "the other team has one open ticket");
+    assert.deepEqual(seen.others, { count: 1, total: 1, done: 0 }, "the other team has one open issue");
     const text = JSON.stringify(seen);
     assert.ok(!text.includes("A-SECRET in the project") && !text.includes(A.teamKey), "no title and no key of the team they are not on");
     assert.ok(!(await projects.listProjects(B.owner)).some((p) => p.id === aProject.id), "and B still sees none of it");
@@ -797,10 +797,10 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
     await assert.rejects(db.insert(schema.teamMembers).values({ teamId: A.teamId, workspaceId: A.workspaceId, userId: B.owner.id, role: "admin" }), refused);
   });
 
-  test("a ticket of A cannot be assigned to someone from B, through the service or around it", async () => {
+  test("an issue of A cannot be assigned to someone from B, through the service or around it", async () => {
     const db = await getDb();
-    await assert.rejects(svc.updateTicket(A.owner, A.ticketRef, { assigneeId: B.owner.id }), svc.ServiceError);
-    await assert.rejects(db.update(schema.tickets).set({ assigneeId: B.owner.id }).where(eq(schema.tickets.id, A.ticketId)), refused);
+    await assert.rejects(svc.updateIssue(A.owner, A.issueRef, { assigneeId: B.owner.id }), svc.ServiceError);
+    await assert.rejects(db.update(schema.issues).set({ assigneeId: B.owner.id }).where(eq(schema.issues.id, A.issueId)), refused);
   });
 });
 
@@ -819,14 +819,14 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "packages/core/src/lib/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
   "packages/core/src/lib/metrics.ts": "everything derived from the caller's workspace's team ids",
   "packages/core/src/lib/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
-  "packages/core/src/lib/service.ts": "every function resolves through requireTeam / resolveTicket (tested)",
+  "packages/core/src/lib/service.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "packages/core/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "packages/core/src/lib/sync.ts": "every entry point resolves through requireTeam first (tested)",
   "packages/core/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "packages/core/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
-  "packages/core/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and a ticket joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
-  "packages/core/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; ticket detail is read only for the viewer's own teams and every other team is counted, never named; a ticket reaches a project only through its own team's project_teams row, which the database enforces (tested)",
-  "packages/core/src/lib/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no ticket is ever listed; the database refuses a parent or a project of another workspace (tested)",
+  "packages/core/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
+  "packages/core/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
+  "packages/core/src/lib/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
   "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs, nodes and repositories inside it (tested)",
   "packages/core/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one team by key and the owner of that team's own workspace, and everything it changes goes through the service layer as that owner, so it can only reach that workspace's map (tested on a throwaway database)",
   "packages/core/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
@@ -909,15 +909,15 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/admin/workspaces/:id/suspend": "instance admins only; needs the workspace's exact name; refuses the admin's own workspace (tested)",
   "POST /api/app/admin/workspaces/:id/restore": "instance admins only (tested)",
   "GET /api/app/teams/:key/board": "boardView(actor): the team is resolved through requireTeam(actor), so another workspace's is a 404; members are this workspace's memberships only (tested)",
-  "POST /api/app/teams/:key/tickets": "svc.createTicket(actor): the team through requireTeam(actor) (another workspace's is a 404), the column resolved inside that team, the assignee must be a member of the actor's workspace (tested)",
+  "POST /api/app/teams/:key/issues": "svc.createIssue(actor): the team through requireTeam(actor) (another workspace's is a 404), the column resolved inside that team, the assignee must be a member of the actor's workspace (tested)",
   "GET /api/app/teams/:key/queue": "svc.queueStatus(actor): the team through requireTeam(actor); the keys are this workspace's (tested)",
-  "GET /api/app/tickets/:ref": "svc.getTicket(actor): resolveTicket joins the team and requires its workspace to be the actor's, so another workspace's ticket is a 404 (tested, including two workspaces with the same key)",
-  "PATCH /api/app/tickets/:ref": "svc.updateTicket(actor): resolveTicket is workspace scoped; a stale version is a 409 that returns the trimmed current ticket and changes nothing; the assignee must be on the actor's workspace (tested)",
-  "POST /api/app/tickets/:ref/move": "svc.moveTicket(actor): resolveTicket is workspace scoped and the column is resolved inside the ticket's own team (tested)",
-  "DELETE /api/app/tickets/:ref": "svc.deleteTicket(actor): resolveTicket is workspace scoped (tested)",
-  "POST /api/app/tickets/:ref/comments": "svc.addComment(actor): resolveTicket is workspace scoped (tested)",
-  "PUT /api/app/tickets/:ref/nodes/:nodeId": "svc.linkTicketNode(actor): the ticket is workspace scoped and the node is resolved inside the ticket's own team, so another workspace's node is a 404 (tested)",
-  "DELETE /api/app/tickets/:ref/nodes/:nodeId": "svc.linkTicketNode(actor, unlink): same scoping as linking (tested)",
+  "GET /api/app/issues/:ref": "svc.getIssue(actor): resolveIssue joins the team and requires its workspace to be the actor's, so another workspace's issue is a 404 (tested, including two workspaces with the same key)",
+  "PATCH /api/app/issues/:ref": "svc.updateIssue(actor): resolveIssue is workspace scoped; a stale version is a 409 that returns the trimmed current issue and changes nothing; the assignee must be on the actor's workspace (tested)",
+  "POST /api/app/issues/:ref/move": "svc.moveIssue(actor): resolveIssue is workspace scoped and the column is resolved inside the issue's own team (tested)",
+  "DELETE /api/app/issues/:ref": "svc.deleteIssue(actor): resolveIssue is workspace scoped (tested)",
+  "POST /api/app/issues/:ref/comments": "svc.addComment(actor): resolveIssue is workspace scoped (tested)",
+  "PUT /api/app/issues/:ref/nodes/:nodeId": "svc.linkIssueNode(actor): the issue is workspace scoped and the node is resolved inside the issue's own team, so another workspace's node is a 404 (tested)",
+  "DELETE /api/app/issues/:ref/nodes/:nodeId": "svc.linkIssueNode(actor, unlink): same scoping as linking (tested)",
   "GET /api/app/teams/:key/graph": "graphView(actor): the team through requireTeam(actor) (another workspace's is a 404); every table is read by that team's id (tested)",
   "PUT /api/app/teams/:key/nodes": "svc.upsertNode(actor): the team through requireTeam(actor); a node is found only inside that team, so another workspace's node id is a 404; a stale version is a 409 that changes nothing (tested)",
   "DELETE /api/app/teams/:key/nodes/:id": "svc.deleteNode(actor): the node is resolved inside the actor's team, so another workspace's is a 404 (tested)",
@@ -957,11 +957,11 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "DELETE /api/app/initiatives/:id/projects/:projectId": "unlinkProject(actor, id, projectId): the owner or a workspace admin, and a project the person sees (tested)",
   "GET /api/app/projects": "listProjects(actor): through project_visibility (people on a team that takes part, never a guest) in the caller's workspace (tested)",
   "POST /api/app/projects": "createProject(actor): the lead team and each extra team through requireTeam(actor, key, edit), so only teams the person edits take part; made in the caller's own workspace (tested)",
-  "GET /api/app/projects/:id": "getProject(actor, id): openProject needs the person on a team that takes part; ticket detail only for their own teams, the others as totals (tested)",
+  "GET /api/app/projects/:id": "getProject(actor, id): openProject needs the person on a team that takes part; issue detail only for their own teams, the others as totals (tested)",
   "PATCH /api/app/projects/:id": "updateProject(actor, id): openProject(edit), or admin to change the lead; the row is locked and checked against its version (tested)",
-  "DELETE /api/app/projects/:id": "deleteProject(actor, id): openProject(admin); soft delete, its tickets released (tested)",
+  "DELETE /api/app/projects/:id": "deleteProject(actor, id): openProject(admin); soft delete, its issues released (tested)",
   "POST /api/app/projects/:id/teams": "addProjectTeam(actor, id): openProject(edit) and requireTeam(actor, team, edit): nobody is pulled in (tested)",
-  "DELETE /api/app/projects/:id/teams/:key": "removeProjectTeam(actor, id, key): the project's editors or an admin of that team; never the lead team; tickets are released only on request (tested)",
+  "DELETE /api/app/projects/:id/teams/:key": "removeProjectTeam(actor, id, key): the project's editors or an admin of that team; never the lead team; issues are released only on request (tested)",
   "POST /api/app/projects/:id/milestones": "createMilestone(actor, id): openProject(edit) (tested)",
   "PATCH /api/app/projects/:id/milestones/:milestoneId": "updateMilestone(actor, id, mid): openProject(edit); the milestone is looked up inside that project only (tested)",
   "DELETE /api/app/projects/:id/milestones/:milestoneId": "deleteMilestone(actor, id, mid): openProject(edit); looked up inside that project only (tested)",

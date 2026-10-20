@@ -183,7 +183,7 @@ do not send to the server, so it stays out of Caddy's access logs. New passwords
 
 Admins (`ADMIN_EMAILS`) get **Workspaces** in the sidebar: every workspace on the server with its owners, seats, team count
 and last activity, and a detail page with members, invites and API keys (the prefix only, never the key). You see
-names, emails and counts, **never what a workspace wrote** (tickets, comments, the map).
+names, emails and counts, **never what a workspace wrote** (issues, comments, the map).
 
 **Suspend** cuts a whole workspace off and is reversible. You type the workspace's exact name to confirm, and optionally a reason
 that only admins see. At once: every member is signed out, their sign-in is refused ("This workspace has been suspended"),
@@ -237,7 +237,7 @@ docker exec PG_CONTAINER psql -U PG_SUPERUSER -d postgres -c 'drop database whee
 
 With a GitHub App, GitHub tells Wheelhouse about every push to a connected repository's default branch (so people and
 agents see each other's changes, and map nodes whose code changed are flagged, whether or not anyone runs the plugin),
-links pull requests to the tickets they name, and shows CI results on those tickets. Without it everything else works;
+links pull requests to the issues they name, and shows CI results on those issues. Without it everything else works;
 repositories linked from a machine with the plugin or CLI keep reporting from there.
 
 A self-hosted Wheelhouse needs **its own** GitHub App (ours cannot reach your server). Create it under your account or
@@ -275,9 +275,9 @@ What to know:
   only reach a repository that a workspace connected through *its own* installation. An installation is tied to the workspace
   whose owner proved, through GitHub's sign-in, that they administer it; no one can claim someone else's.
 - **Nothing but metadata.** Wheelhouse reads which files changed and their git hashes. It never stores file contents.
-- **Pull requests move tickets with care.** Opened (not draft) moves a ticket to Review, closed without merging moves it
-  back to In Progress, merged leaves it in Review for a person, a ticket in Done is never moved, and a ticket someone
-  moved in the last ten minutes is left alone (the comment says so). Tickets are found by a ref such as `WH-12` in the
+- **Pull requests move issues with care.** Opened (not draft) moves an issue to Review, closed without merging moves it
+  back to In Progress, merged leaves it in Review for a person, an issue in Done is never moved, and an issue someone
+  moved in the last ten minutes is left alone (the comment says so). Issues are found by a ref such as `WH-12` in the
   pull request title or branch name.
 - **Test it** from the App's *Advanced* tab: *Recent deliveries* shows each webhook's response and lets you redeliver.
   `200` with `"status":"ignored"` means the delivery was understood but is not about a connected repository.

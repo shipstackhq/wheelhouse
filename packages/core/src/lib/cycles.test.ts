@@ -1,6 +1,6 @@
 /**
- * Cycles (WH-117) against a real database, on a fixed clock: a ticket joins only its own team's cycle, the end of a cycle hands
- * its unfinished tickets on exactly once, and the cycle view and the "what landed" report match what really moved to Done.
+ * Cycles (WH-117) against a real database, on a fixed clock: an issue joins only its own team's cycle, the end of a cycle hands
+ * its unfinished issues on exactly once, and the cycle view and the "what landed" report match what really moved to Done.
  * Runs on an in-memory PGlite (`pnpm test`), or a real Postgres with TEST_DATABASE_URL.
  */
 if (process.env.TEST_DATABASE_URL) {
@@ -27,7 +27,7 @@ const code = (c: svc.ServiceError["code"]) => (e: unknown) => e instanceof svc.S
 
 const D = (s: string) => new Date(`${s}T12:00:00.000Z`);
 const DAY = 86_400_000;
-// Joining a cycle uses the real clock (a cycle that has ended is closed), so the tests that put tickets in cycles hang their windows
+// Joining a cycle uses the real clock (a cycle that has ended is closed), so the tests that put issues in cycles hang their windows
 // on this moment; the clock the cycle functions are given is then set a known number of days after it.
 const T0 = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000);
 const at = (days: number) => new Date(T0.getTime() + days * DAY);
@@ -55,9 +55,9 @@ before(async () => {
   await addTeamMember(ada, a.key, { userId: vic.id, role: "viewer" });
 });
 
-const ticket = async (team: { key: string }, title: string, over: Partial<svc.TicketInput> & { column?: string } = {}) => svc.createTicket(ada, team.key, { title: `${title} ${++n}`, ...over });
+const issue = async (team: { key: string }, title: string, over: Partial<svc.IssueInput> & { column?: string } = {}) => svc.createIssue(ada, team.key, { title: `${title} ${++n}`, ...over });
 const cycleRow = async (team: { id: string }, number: number) => (await db.select().from(schema.cycles).where(and(eq(schema.cycles.teamId, team.id), eq(schema.cycles.number, number))))[0];
-const cycleOf = async (ref: string) => (await svc.getTicket(ada, ref)).ticket.cycle;
+const cycleOf = async (ref: string) => (await svc.getIssue(ada, ref)).issue.cycle;
 
 describe("making cycles", () => {
   test("a cycle is numbered per team, with a goal, and shows up as upcoming, current or past against the clock", async () => {
@@ -123,65 +123,65 @@ describe("making cycles", () => {
   });
 });
 
-describe("tickets in cycles", () => {
-  test("a ticket joins and leaves its own team's cycle, which shows on the ticket and the board", async () => {
-    const t = await ticket(a, "joins", { cycle: 1 });
+describe("issues in cycles", () => {
+  test("an issue joins and leaves its own team's cycle, which shows on the issue and the board", async () => {
+    const t = await issue(a, "joins", { cycle: 1 });
     assert.equal(t.cycle, 1);
     assert.equal(await cycleOf(t.ref), 1);
-    assert.equal((await svc.getBoard(ada, a.key)).tickets.find((x) => x.id === t.id)!.cycle, 1);
-    const left = await svc.updateTicket(ada, t.ref, { cycle: null });
+    assert.equal((await svc.getBoard(ada, a.key)).issues.find((x) => x.id === t.id)!.cycle, 1);
+    const left = await svc.updateIssue(ada, t.ref, { cycle: null });
     assert.equal(left.cycle, null);
-    const back = await svc.updateTicket(ada, t.ref, { cycle: 2 });
+    const back = await svc.updateIssue(ada, t.ref, { cycle: 2 });
     assert.equal(back.cycle, 2);
-    const [ev] = await db.select().from(schema.events).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "ticket.updated")));
+    const [ev] = await db.select().from(schema.events).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "issue.updated")));
     assert.ok(ev.summary.includes("cycle"));
   });
 
-  test("a ticket cannot be put in another team's cycle: the service refuses, and so does the database", async () => {
-    const t = await ticket(a, "stays home");
-    await assert.rejects(svc.updateTicket(ada, t.ref, { cycle: 99 }), (e: unknown) => /no cycle 99/.test((e as Error).message));
+  test("an issue cannot be put in another team's cycle: the service refuses, and so does the database", async () => {
+    const t = await issue(a, "stays home");
+    await assert.rejects(svc.updateIssue(ada, t.ref, { cycle: 99 }), (e: unknown) => /no cycle 99/.test((e as Error).message));
     const theirs = await cycleRow(b, 1);
-    // number 1 exists in both teams; the service resolves it in the ticket's own team, never in the other
-    assert.equal((await svc.updateTicket(ada, t.ref, { cycle: 1 })).cycle, 1);
-    assert.equal((await db.select().from(schema.tickets).where(eq(schema.tickets.id, t.id)))[0].cycleId, (await cycleRow(a, 1)).id);
-    await assert.rejects(db.update(schema.tickets).set({ cycleId: theirs.id }).where(eq(schema.tickets.id, t.id)), foreign);
-    await assert.rejects(ticket(a, "born elsewhere", { cycle: 77 }), code("invalid"));
+    // number 1 exists in both teams; the service resolves it in the issue's own team, never in the other
+    assert.equal((await svc.updateIssue(ada, t.ref, { cycle: 1 })).cycle, 1);
+    assert.equal((await db.select().from(schema.issues).where(eq(schema.issues.id, t.id)))[0].cycleId, (await cycleRow(a, 1)).id);
+    await assert.rejects(db.update(schema.issues).set({ cycleId: theirs.id }).where(eq(schema.issues.id, t.id)), foreign);
+    await assert.rejects(issue(a, "born elsewhere", { cycle: 77 }), code("invalid"));
   });
 
-  test("a cycle that has ended is closed to new tickets", async () => {
+  test("a cycle that has ended is closed to new issues", async () => {
     const t = await svc.createTeam(ada, { name: "Closed", key: `${L}C` });
     const now = new Date();
     const past = await cy.createCycle(ada, t.key, { startsAt: new Date(now.getTime() - 5 * DAY), endsAt: new Date(now.getTime() - 2 * DAY) }, new Date(now.getTime() - 4 * DAY));
-    await assert.rejects(svc.createTicket(ada, t.key, { title: "late", cycle: past.number }), (e: unknown) => /has ended/.test((e as Error).message));
+    await assert.rejects(svc.createIssue(ada, t.key, { title: "late", cycle: past.number }), (e: unknown) => /has ended/.test((e as Error).message));
   });
 
-  test("deleting a cycle takes its tickets out of it and leaves them on the board", async () => {
+  test("deleting a cycle takes its issues out of it and leaves them on the board", async () => {
     const t = await svc.createTeam(ada, { name: "Deletes", key: `${L}D` });
     await cy.createCycle(ada, t.key, { startsAt: at(-1), endsAt: at(6) }, T0);
-    const x = await svc.createTicket(ada, t.key, { title: "x", cycle: 1 });
+    const x = await svc.createIssue(ada, t.key, { title: "x", cycle: 1 });
     const gone = await cy.deleteCycle(ada, t.key, 1);
     assert.deepEqual([gone.ok, gone.released], [true, 1]);
-    const after = (await svc.getTicket(ada, x.ref)).ticket;
+    const after = (await svc.getIssue(ada, x.ref)).issue;
     assert.equal(after.cycle, null);
     assert.equal(after.teamId, t.id, "team_id is left alone");
   });
 });
 
 describe("rollover", () => {
-  // A fresh team: cycle 1 (Aug 3 to Aug 10) holds two open tickets, one in a custom column, and one done; cycle 2 follows.
+  // A fresh team: cycle 1 (Aug 3 to Aug 10) holds two open issues, one in a custom column, and one done; cycle 2 follows.
   const setup = async (key: string, withNext: boolean) => {
     const t = await svc.createTeam(ada, { name: `Roll ${key}`, key });
     const start = at(-1);
     await cy.createCycle(ada, t.key, { startsAt: start, endsAt: new Date(start.getTime() + 7 * DAY) }, start);
     if (withNext) await cy.createCycle(ada, t.key, { startsAt: new Date(start.getTime() + 7 * DAY), endsAt: new Date(start.getTime() + 14 * DAY) }, start);
-    const todo = await svc.createTicket(ada, t.key, { title: "still todo", cycle: 1, column: "Todo" });
-    const doing = await svc.createTicket(ada, t.key, { title: "in progress", cycle: 1, column: "In Progress" });
-    const done = await svc.createTicket(ada, t.key, { title: "finished", cycle: 1, column: "Done" });
-    const outside = await svc.createTicket(ada, t.key, { title: "no cycle", column: "Todo" });
+    const todo = await svc.createIssue(ada, t.key, { title: "still todo", cycle: 1, column: "Todo" });
+    const doing = await svc.createIssue(ada, t.key, { title: "in progress", cycle: 1, column: "In Progress" });
+    const done = await svc.createIssue(ada, t.key, { title: "finished", cycle: 1, column: "Done" });
+    const outside = await svc.createIssue(ada, t.key, { title: "no cycle", column: "Todo" });
     return { t, start, todo, doing, done, outside };
   };
 
-  test("when a cycle ends, exactly its unfinished tickets move to the next cycle, once", async () => {
+  test("when a cycle ends, exactly its unfinished issues move to the next cycle, once", async () => {
     const { t, start, todo, doing, done, outside } = await setup(`${L}E`, true);
     const during = new Date(start.getTime() + 3 * DAY);
     assert.deepEqual(await cy.rolloverCycles(t.id, during), { cycles: 0, moved: 0 }, "nothing happens while it runs");
@@ -190,23 +190,23 @@ describe("rollover", () => {
     assert.deepEqual(first, { cycles: 1, moved: 2 });
     assert.equal(await cycleOf(todo.ref), 2);
     assert.equal(await cycleOf(doing.ref), 2);
-    assert.equal(await cycleOf(done.ref), 1, "a done ticket stays in the cycle it finished in");
+    assert.equal(await cycleOf(done.ref), 1, "a done issue stays in the cycle it finished in");
     assert.equal(await cycleOf(outside.ref), null);
     const [ev] = await db.select().from(schema.events).where(and(eq(schema.events.teamId, t.id), eq(schema.events.type, "cycle.rolled_over")));
     assert.deepEqual([ev.actorName, ev.entity, (ev.data as { moved: number; from: number; to: number }).moved, (ev.data as { from: number }).from, (ev.data as { to: number }).to], ["Wheelhouse", "cycle", 2, 1, 2]);
     assert.equal((await cycleRow(t, 1)).rolledOverAt?.getTime(), after.getTime());
   });
 
-  test("it is idempotent: again, or from many requests at once, changes nothing, even if a ticket came back", async () => {
+  test("it is idempotent: again, or from many requests at once, changes nothing, even if an issue came back", async () => {
     const { t, start, todo } = await setup(`${L}F`, true);
     const after = new Date(start.getTime() + 8 * DAY);
-    const version = (await svc.getTicket(ada, todo.ref)).ticket.version;
+    const version = (await svc.getIssue(ada, todo.ref)).issue.version;
     const runs = await Promise.all([1, 2, 3, 4].map(() => cy.rolloverCycles(t.id, after)));
-    assert.equal(runs.reduce((n, r) => n + r.moved, 0), 2, "exactly the two open tickets, once across all the runs");
-    assert.equal((await svc.getTicket(ada, todo.ref)).ticket.version, version + 1, "a moved ticket's version moves once");
+    assert.equal(runs.reduce((n, r) => n + r.moved, 0), 2, "exactly the two open issues, once across all the runs");
+    assert.equal((await svc.getIssue(ada, todo.ref)).issue.version, version + 1, "a moved issue's version moves once");
     assert.deepEqual(await cy.rolloverCycles(t.id, after), { cycles: 0, moved: 0 });
-    // Put a ticket back in the cycle that has been rolled over: a second sweep does not take it out again (it happens once per cycle).
-    await db.update(schema.tickets).set({ cycleId: (await cycleRow(t, 1)).id }).where(eq(schema.tickets.id, todo.id));
+    // Put an issue back in the cycle that has been rolled over: a second sweep does not take it out again (it happens once per cycle).
+    await db.update(schema.issues).set({ cycleId: (await cycleRow(t, 1)).id }).where(eq(schema.issues.id, todo.id));
     assert.deepEqual(await cy.rolloverCycles(t.id, after), { cycles: 0, moved: 0 });
     assert.equal(await cycleOf(todo.ref), 1);
     assert.equal((await db.select().from(schema.events).where(and(eq(schema.events.teamId, t.id), eq(schema.events.type, "cycle.rolled_over")))).length, 1);
@@ -239,7 +239,7 @@ describe("rollover", () => {
     const t = await svc.createTeam(ada, { name: "Quiet", key: `${L}Q` });
     const start = at(-1);
     await cy.createCycle(ada, t.key, { startsAt: start, endsAt: new Date(start.getTime() + 7 * DAY) }, start);
-    await svc.createTicket(ada, t.key, { title: "all done", cycle: 1, column: "Done" });
+    await svc.createIssue(ada, t.key, { title: "all done", cycle: 1, column: "Done" });
     assert.deepEqual(await cy.rolloverCycles(t.id, new Date(start.getTime() + 9 * DAY)), { cycles: 1, moved: 0 });
     assert.equal((await db.select().from(schema.cycles).where(eq(schema.cycles.teamId, t.id))).length, 1, "no cycle is made for nobody");
   });
@@ -249,80 +249,80 @@ describe("rollover", () => {
     const after = new Date(start.getTime() + 8 * DAY);
     const list = await cy.listCycles(ada, t.key, after);
     assert.equal(list.current!.number, 2);
-    assert.equal(list.current!.open, 2, "the two open tickets are in the current cycle");
+    assert.equal(list.current!.open, 2, "the two open issues are in the current cycle");
     assert.equal((list.past[0] as cy.CycleSummary).done, 1);
     assert.equal(await cycleOf(todo.ref), 2);
   });
 });
 
 describe("the cycle view and what landed", () => {
-  /** Move a ticket to Done, then say it happened at `at` (events take the database's clock; the test sets the day it means). */
+  /** Move an issue to Done, then say it happened at `at` (events take the database's clock; the test sets the day it means). */
   const finish = async (team: { key: string; id: string }, ref: string, at: Date) => {
-    const t = await svc.getTicket(ada, ref);
-    await svc.moveTicket(ada, ref, "Done");
-    const moves = await db.select({ seq: schema.events.seq }).from(schema.events).where(and(eq(schema.events.entityId, t.ticket.id), eq(schema.events.type, "ticket.moved")));
+    const t = await svc.getIssue(ada, ref);
+    await svc.moveIssue(ada, ref, "Done");
+    const moves = await db.select({ seq: schema.events.seq }).from(schema.events).where(and(eq(schema.events.entityId, t.issue.id), eq(schema.events.type, "issue.moved")));
     const latest = Math.max(...moves.map((m) => m.seq));
     await db.update(schema.events).set({ createdAt: at }).where(eq(schema.events.seq, latest));
     void team;
   };
 
-  test("the report lists exactly the tickets that reached Done inside the window, once each, oldest first", async () => {
+  test("the report lists exactly the issues that reached Done inside the window, once each, oldest first", async () => {
     const t = await svc.createTeam(ada, { name: "Landed", key: `${L}L` });
     const start = at(-1);
     const end = new Date(start.getTime() + 7 * DAY);
     await cy.createCycle(ada, t.key, { name: "Autumn", startsAt: start, endsAt: end }, start);
-    const inside1 = await svc.createTicket(ada, t.key, { title: "inside, in the cycle", cycle: 1 });
-    const inside2 = await svc.createTicket(ada, t.key, { title: "inside, not in the cycle" });
-    const before = await svc.createTicket(ada, t.key, { title: "done before", cycle: 1 });
-    const after = await svc.createTicket(ada, t.key, { title: "done after", cycle: 1 });
-    const bounced = await svc.createTicket(ada, t.key, { title: "done, reopened, done again", cycle: 1 });
-    const open = await svc.createTicket(ada, t.key, { title: "still open", cycle: 1 });
+    const inside1 = await svc.createIssue(ada, t.key, { title: "inside, in the cycle", cycle: 1 });
+    const inside2 = await svc.createIssue(ada, t.key, { title: "inside, not in the cycle" });
+    const before = await svc.createIssue(ada, t.key, { title: "done before", cycle: 1 });
+    const after = await svc.createIssue(ada, t.key, { title: "done after", cycle: 1 });
+    const bounced = await svc.createIssue(ada, t.key, { title: "done, reopened, done again", cycle: 1 });
+    const open = await svc.createIssue(ada, t.key, { title: "still open", cycle: 1 });
     await finish(t, before.ref, new Date(start.getTime() - 1000));
     await finish(t, inside2.ref, new Date(start.getTime() + 3 * DAY));
     await finish(t, inside1.ref, new Date(start.getTime() + 1 * DAY));
     await finish(t, after.ref, end); // the window is [start, end): the end itself is the next cycle's
     await finish(t, bounced.ref, new Date(start.getTime() + 2 * DAY));
-    await svc.moveTicket(ada, bounced.ref, "In Progress");
+    await svc.moveIssue(ada, bounced.ref, "In Progress");
     await finish(t, bounced.ref, new Date(start.getTime() + 4 * DAY));
 
-    const same = (v: cy.CycleDetail) => assert.deepEqual(v.landed.map((l) => l.ref), [inside1.ref, bounced.ref, inside2.ref], "inside the window only, by when they landed, a reopened ticket once");
-    // While it runs: five tickets are in it, four are done, one is open.
+    const same = (v: cy.CycleDetail) => assert.deepEqual(v.landed.map((l) => l.ref), [inside1.ref, bounced.ref, inside2.ref], "inside the window only, by when they landed, a reopened issue once");
+    // While it runs: five issues are in it, four are done, one is open.
     const mid = await cy.getCycle(ada, t.key, 1, new Date(end.getTime() - 3600_000));
     same(mid);
     assert.deepEqual([mid.total, mid.done, mid.open], [5, 4, 1]);
-    assert.deepEqual(mid.tickets.filter((x) => !x.done).map((x) => x.ref), [open.ref]);
+    assert.deepEqual(mid.issues.filter((x) => !x.done).map((x) => x.ref), [open.ref]);
     assert.deepEqual(mid.landed.map((l) => l.inCycle), [true, true, false], "and which of them were in the cycle");
     assert.equal(mid.landed.find((l) => l.ref === bounced.ref)!.doneAt.getTime(), start.getTime() + 2 * DAY, "at its first time in the window");
     assert.equal(mid.name, "Autumn");
-    // Once it has ended the open ticket has moved on, and the report is the same list (the window did not change).
+    // Once it has ended the open issue has moved on, and the report is the same list (the window did not change).
     const over = await cy.getCycle(ada, t.key, 1, new Date(end.getTime() + DAY));
     same(over);
     assert.deepEqual([over.total, over.done, over.open], [4, 4, 0]);
-    assert.equal(await cycleOf(open.ref), 2, "the open ticket is in the next cycle");
+    assert.equal(await cycleOf(open.ref), 2, "the open issue is in the next cycle");
   });
 
   test("a cycle that has not started has landed nothing; a running one reports up to now", async () => {
     const t = await svc.createTeam(ada, { name: "Soon", key: `${L}S` });
     await cy.createCycle(ada, t.key, { startsAt: at(-1), endsAt: at(6) }, T0);
     await cy.createCycle(ada, t.key, { startsAt: at(6), endsAt: at(13) }, T0);
-    const x = await svc.createTicket(ada, t.key, { title: "x", cycle: 1 });
+    const x = await svc.createIssue(ada, t.key, { title: "x", cycle: 1 });
     await finish(t, x.ref, T0);
     assert.deepEqual((await cy.getCycle(ada, t.key, 1, new Date(T0.getTime() + 1000))).landed.map((l) => l.ref), [x.ref]);
     assert.deepEqual((await cy.getCycle(ada, t.key, 2, T0)).landed, [], "an upcoming cycle has landed nothing");
     assert.deepEqual((await cy.getCycle(ada, t.key, 1, at(-1))).landed, [], "asked at the moment it began, nothing had landed yet");
   });
 
-  test("older events that only named the column still count, and a deleted ticket is not listed", async () => {
+  test("older events that only named the column still count, and a deleted issue is not listed", async () => {
     const t = await svc.createTeam(ada, { name: "Old", key: `${L}T` });
     const start = at(-1);
     await cy.createCycle(ada, t.key, { startsAt: start, endsAt: new Date(start.getTime() + 7 * DAY) }, start);
-    const x = await svc.createTicket(ada, t.key, { title: "old style", cycle: 1 });
-    const y = await svc.createTicket(ada, t.key, { title: "will be deleted", cycle: 1 });
+    const x = await svc.createIssue(ada, t.key, { title: "old style", cycle: 1 });
+    const y = await svc.createIssue(ada, t.key, { title: "will be deleted", cycle: 1 });
     await finish(t, x.ref, new Date(start.getTime() + DAY));
     await finish(t, y.ref, new Date(start.getTime() + DAY));
-    const evX = (await db.select().from(schema.events).where(and(eq(schema.events.entityId, x.id), eq(schema.events.type, "ticket.moved"))))[0];
+    const evX = (await db.select().from(schema.events).where(and(eq(schema.events.entityId, x.id), eq(schema.events.type, "issue.moved"))))[0];
     await db.update(schema.events).set({ data: { ref: x.ref, from: "Backlog", to: "Done" } }).where(eq(schema.events.seq, evX.seq));
-    await svc.deleteTicket(ada, y.ref);
+    await svc.deleteIssue(ada, y.ref);
     const view = await cy.getCycle(ada, t.key, 1, new Date(start.getTime() + 3 * DAY));
     assert.deepEqual(view.landed.map((l) => l.ref), [x.ref]);
   });

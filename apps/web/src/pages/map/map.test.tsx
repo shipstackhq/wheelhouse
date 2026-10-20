@@ -53,14 +53,14 @@ describe("the lenses", () => {
   test("?lens= opens another layer, and a layer with nothing yet says what belongs there", async () => {
     open("/t/AA/map?lens=data");
     expect((await tab(/Data/)).getAttribute("aria-selected")).toBe("true");
-    const { unmount } = open("/t/BB/map", (s) => s.on("GET /api/app/teams/BB/graph", graph("BB", { nodes: MAP_NODES.filter((n) => n.layer === "system"), edges: [], flows: [], decisions: [], terms: [], ticketLinks: [], flux: {} })));
+    const { unmount } = open("/t/BB/map", (s) => s.on("GET /api/app/teams/BB/graph", graph("BB", { nodes: MAP_NODES.filter((n) => n.layer === "system"), edges: [], flows: [], decisions: [], terms: [], issueLinks: [], flux: {} })));
     unmount();
-    open("/t/BB/map?lens=code", (s) => s.on("GET /api/app/teams/BB/graph", graph("BB", { nodes: MAP_NODES.filter((n) => n.layer === "system"), edges: [], flows: [], decisions: [], terms: [], ticketLinks: [], flux: {} })));
+    open("/t/BB/map?lens=code", (s) => s.on("GET /api/app/teams/BB/graph", graph("BB", { nodes: MAP_NODES.filter((n) => n.layer === "system"), edges: [], flows: [], decisions: [], terms: [], issueLinks: [], flux: {} })));
     expect(await screen.findByText("Nothing on the Code layer yet")).toBeTruthy();
   });
 
   test("a team with no map explains how to make one, and offers to start by hand", async () => {
-    open("/t/AA/map", (s) => s.on("GET /api/app/teams/AA/graph", graph("AA", { nodes: [], edges: [], flows: [], decisions: [], terms: [], ticketLinks: [], flux: {} })));
+    open("/t/AA/map", (s) => s.on("GET /api/app/teams/AA/graph", graph("AA", { nodes: [], edges: [], flows: [], decisions: [], terms: [], issueLinks: [], flux: {} })));
     expect(await screen.findByText("No knowledge map yet")).toBeTruthy();
     expect(screen.getByRole("button", { name: "+ Start one by hand" })).toBeTruthy();
   });
@@ -78,7 +78,7 @@ describe("the lenses", () => {
 });
 
 describe("containers and collapsing", () => {
-  test("a container starts collapsed to its header, says how many modules it hides and how many tickets touch it", async () => {
+  test("a container starts collapsed to its header, says how many modules it hides and how many issues touch it", async () => {
     open();
     await waitFor(() => expect(nodeEl("API")).toBeTruthy());
     const api = nodeEl("API")!;
@@ -134,7 +134,7 @@ describe("the node panel", () => {
     expect(within(p).getByText("Why we charge")).toBeTruthy();
   });
 
-  test("it shows what a node is connected to: depends on, used by, implements, implemented by, contents, flows, decisions and tickets", async () => {
+  test("it shows what a node is connected to: depends on, used by, implements, implemented by, contents, flows, decisions and issues", async () => {
     open("/t/AA/map?node=s-api");
     const p = await panel();
     expect(within(p).getByText("Used by")).toBeTruthy();

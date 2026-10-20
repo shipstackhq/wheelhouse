@@ -81,7 +81,7 @@ export function GithubConnect({ teamKey }: { teamKey: string }) {
       <div>
         <h2 className="font-medium">GitHub</h2>
         <p className="mt-1 text-sm text-muted">
-          Connecting a repository through GitHub means every push to its default branch is reported, whoever made it and whether or not they run the plugin, and its pull requests and CI results show on the tickets they mention.
+          Connecting a repository through GitHub means every push to its default branch is reported, whoever made it and whether or not they run the plugin, and its pull requests and CI results show on the issues they mention.
         </p>
       </div>
       {note && <p role="status" className={note.bad ? "text-sm text-danger" : "text-sm text-ok"}>{note.text}</p>}

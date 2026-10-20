@@ -23,7 +23,7 @@ describe("the projects list", () => {
     expect(within(sso).getByText("active", { selector: ".chip" })).toBeTruthy();
     expect(within(sso).getByText("On track")).toBeTruthy();
     expect(sso.textContent).toContain("Led by Ada Lovelace · 2 teams");
-    expect(within(sso).getByLabelText("4 of 10 tickets done")).toBeTruthy();
+    expect(within(sso).getByLabelText("4 of 10 issues done")).toBeTruthy();
     expect(sso.getAttribute("href")).toBe("/projects/p1");
     const old = await card("Old migration");
     expect(within(old).getByText("completed", { selector: ".chip" })).toBeTruthy();
@@ -98,7 +98,7 @@ describe("one project", () => {
       teams: [
         {
           key: "AA", name: "Alpha", role: "admin", lead: true, total: 2, done: 1,
-          tickets: [
+          issues: [
             { ref: "AA-1", title: "Add the button", priority: "high", column: "Done", done: true, milestoneId: "m1" },
             { ref: "AA-2", title: "Wire the callback", priority: "medium", column: "Todo", done: false, milestoneId: null },
           ],
@@ -110,7 +110,7 @@ describe("one project", () => {
     });
   const page = (d = detail(), setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp("/projects/p1", (s) => (s.on("GET /api/app/projects/p1", { project: d }), setup(s)));
 
-  test("what it is, how it is going, the milestones with their counts, the viewer's own teams with tickets, and the others only as totals", async () => {
+  test("what it is, how it is going, the milestones with their counts, the viewer's own teams with issues, and the others only as totals", async () => {
     page();
     await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
     expect(screen.getByText("Single sign-on for everyone")).toBeTruthy();
@@ -120,15 +120,15 @@ describe("one project", () => {
     const teams = screen.getByRole("region", { name: "Teams" });
     expect(within(teams).getByText("lead team")).toBeTruthy();
     expect(within(teams).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/t/AA?t=AA-2");
-    expect(within(teams).getAllByText("Beta").length).toBeGreaterThan(0); // a milestone chip on the ticket in it
-    expect(teams.querySelector("[data-others]")!.textContent).toBe("2 teams you are not in: 1 of 4 tickets done.");
+    expect(within(teams).getAllByText("Beta").length).toBeGreaterThan(0); // a milestone chip on the issue in it
+    expect(teams.querySelector("[data-others]")!.textContent).toBe("2 teams you are not in: 1 of 4 issues done.");
     expect(teams.textContent).not.toMatch(/BB|Beta team/);
   });
 
   test("with one other team it says so in the singular; with none there is no line", async () => {
     const { unmount } = page(detail({ others: { count: 1, total: 1, done: 0 } }));
     await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
-    expect(document.querySelector("[data-others]")!.textContent).toBe("1 team you are not in: 0 of 1 ticket done.");
+    expect(document.querySelector("[data-others]")!.textContent).toBe("1 team you are not in: 0 of 1 issue done.");
     unmount();
     page(detail({ others: { count: 0, total: 0, done: 0 } }));
     await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
@@ -136,7 +136,7 @@ describe("one project", () => {
   });
 
   test("someone who cannot edit sees no edit, delete, milestone or team controls", async () => {
-    page(detail({ canEdit: false, canAdmin: false, addableTeams: [], teams: [{ key: "AA", name: "Alpha", role: "viewer", lead: true, total: 0, done: 0, tickets: [] }] }));
+    page(detail({ canEdit: false, canAdmin: false, addableTeams: [], teams: [{ key: "AA", name: "Alpha", role: "viewer", lead: true, total: 0, done: 0, issues: [] }] }));
     await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
     for (const name of ["Edit", "Delete", "Add milestone", "Bring in"]) expect(screen.queryByRole("button", { name }), name).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Health" })).toBeNull();
@@ -187,16 +187,16 @@ describe("one project", () => {
     expect(server.sent("PATCH /api/app/projects/p1/milestones/m2")[0].body).toEqual({ index: 0 });
     await user.click(screen.getByRole("button", { name: "Delete Beta" }));
     const confirm = await screen.findByRole("alertdialog");
-    expect(confirm.textContent).toContain("Its 3 tickets stay in the project, in no milestone.");
+    expect(confirm.textContent).toContain("Its 3 issues stay in the project, in no milestone.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/projects/p1/milestones/m1")).toHaveLength(1));
   });
 
-  test("bringing a team in sends its key; taking one out is refused with its tickets and then done on request", async () => {
+  test("bringing a team in sends its key; taking one out is refused with its issues and then done on request", async () => {
     const two = detail({
       teams: [
-        { key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, tickets: [] },
-        { key: "BB", name: "Beta", role: "editor", lead: false, total: 2, done: 0, tickets: [] },
+        { key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, issues: [] },
+        { key: "BB", name: "Beta", role: "editor", lead: false, total: 2, done: 0, issues: [] },
       ],
       others: { count: 0, total: 0, done: 0 },
       addableTeams: [{ key: "CC", name: "Gamma" }],
@@ -204,7 +204,7 @@ describe("one project", () => {
     let calls = 0;
     const { server } = page(two, (s) => {
       s.on("POST /api/app/projects/p1/teams", created(two));
-      s.on("DELETE /api/app/projects/p1/teams/BB", () => (++calls === 1 ? apiError(409, "conflict", "Beta has 2 tickets in this project. Release them with the team, or move them out first.") : { ok: true, released: 2 }));
+      s.on("DELETE /api/app/projects/p1/teams/BB", () => (++calls === 1 ? apiError(409, "conflict", "Beta has 2 issues in this project. Release them with the team, or move them out first.") : { ok: true, released: 2 }));
     });
     const user = userEvent.setup();
     expect(screen.queryByRole("button", { name: "Take Alpha out" })).toBeNull(); // the lead team cannot go
@@ -215,13 +215,13 @@ describe("one project", () => {
     expect(server.sent("POST /api/app/projects/p1/teams")[0].body).toEqual({ team: "CC" });
     await user.click(screen.getByRole("button", { name: "Take Beta out" }));
     const confirm = await screen.findByRole("alertdialog");
-    expect(confirm.textContent).toContain("Beta has 2 tickets in this project");
+    expect(confirm.textContent).toContain("Beta has 2 issues in this project");
     await user.click(within(confirm).getByRole("button", { name: "Release and take out" }));
-    await waitFor(() => expect(server.sent("DELETE /api/app/projects/p1/teams/BB?releaseTickets=1")).toHaveLength(1));
-    expect(server.calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/app/projects/p1/teams/BB", "/api/app/projects/p1/teams/BB?releaseTickets=1"]);
+    await waitFor(() => expect(server.sent("DELETE /api/app/projects/p1/teams/BB?releaseIssues=1")).toHaveLength(1));
+    expect(server.calls.filter((c) => c.method === "DELETE").map((c) => c.url)).toEqual(["/api/app/projects/p1/teams/BB", "/api/app/projects/p1/teams/BB?releaseIssues=1"]);
   });
 
-  test("deleting asks first, says the tickets stay on their boards, and goes back to the list", async () => {
+  test("deleting asks first, says the issues stay on their boards, and goes back to the list", async () => {
     const { server, router } = page(detail(), (s) => {
       s.on("DELETE /api/app/projects/p1", { ok: true, released: 6 });
       s.on("GET /api/app/projects", { projects: [] });
@@ -229,7 +229,7 @@ describe("one project", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Delete" }));
     const confirm = await screen.findByRole("alertdialog");
-    expect(confirm.textContent).toContain("Its 6 tickets stay on their boards, in no project.");
+    expect(confirm.textContent).toContain("Its 6 issues stay on their boards, in no project.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/projects/p1")).toHaveLength(1));
     await waitFor(() => expect(router.state.location.pathname).toBe("/projects"));

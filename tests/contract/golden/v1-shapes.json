@@ -4,17 +4,16 @@
       "createdAt": "string",
       "description": "string",
       "id": "string",
+      "issueCounter": "number",
       "key": "string",
       "name": "string",
-      "teamId": "string",
-      "ticketCounter": "number"
+      "teamId": "string"
     }
   ],
   "get_board": {
     "columns": [
       {
-        "name": "string",
-        "tickets": [
+        "issues": [
           {
             "agentClaimable": "boolean",
             "claimed": "boolean",
@@ -28,7 +27,8 @@
             "title": "string",
             "version": "number"
           }
-        ]
+        ],
+        "name": "string"
       }
     ],
     "project": {
@@ -37,7 +37,7 @@
       "name": "string"
     }
   },
-  "create_ticket": {
+  "create_issue": {
     "agentClaimable": "boolean",
     "assigneeId": "null",
     "body": "string",
@@ -60,7 +60,7 @@
     "updatedAt": "string",
     "version": "number"
   },
-  "get_ticket": {
+  "get_issue": {
     "comments": [],
     "history": [
       {
@@ -83,18 +83,7 @@
         "type": "string"
       }
     ],
-    "nodes": [],
-    "project": {
-      "createdAt": "string",
-      "description": "string",
-      "id": "string",
-      "key": "string",
-      "name": "string",
-      "teamId": "string",
-      "ticketCounter": "number"
-    },
-    "pullRequests": [],
-    "ticket": {
+    "issue": {
       "agentClaimable": "boolean",
       "assigneeId": "null",
       "body": "string",
@@ -116,7 +105,18 @@
       "title": "string",
       "updatedAt": "string",
       "version": "number"
-    }
+    },
+    "nodes": [],
+    "project": {
+      "createdAt": "string",
+      "description": "string",
+      "id": "string",
+      "issueCounter": "number",
+      "key": "string",
+      "name": "string",
+      "teamId": "string"
+    },
+    "pullRequests": []
   },
   "get_changes": {
     "changes": [

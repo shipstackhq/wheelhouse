@@ -1,14 +1,14 @@
 /**
- * What a pull request event does to the ticket it names (WH-20). Pure, so the rules can be tested exactly.
+ * What a pull request event does to the issue it names (WH-20). Pure, so the rules can be tested exactly.
  *
  *   (columns are found by role: review, in_progress, done; names do not matter)
  *   opened / reopened / ready for review  -> Review
- *   merged                               -> Review if it was earlier; otherwise left alone (a person closes the ticket)
+ *   merged                               -> Review if it was earlier; otherwise left alone (a person closes the issue)
  *   closed without merging               -> back to In Progress, but only from Review
  *   draft pull requests                  -> left alone until they are ready
- *   a ticket in Done                     -> never moved
- *   a ticket in a custom column (no role) -> never moved: a person put it outside the workflow on purpose (WH-86)
- *   the ticket was moved by someone else in the last few minutes -> left alone, and the comment says so
+ *   an issue in Done                     -> never moved
+ *   an issue in a custom column (no role) -> never moved: a person put it outside the workflow on purpose (WH-86)
+ *   the issue was moved by someone else in the last few minutes -> left alone, and the comment says so
  */
 
 import { columnForRole, hasRole, type RoleColumn } from "../column-roles";
@@ -21,11 +21,11 @@ export type MoveInput = {
   action: PrAction;
   merged: boolean;
   draft: boolean;
-  /** The column the ticket is in now. */
+  /** The column the issue is in now. */
   column: RoleColumn;
   /** The team's columns in board order, so "earlier than the review column" can be decided. */
   columns: RoleColumn[];
-  /** When someone other than GitHub last moved this ticket, and who. */
+  /** When someone other than GitHub last moved this issue, and who. */
   lastMove?: { at: Date; by: string } | null;
   now: Date;
   recentMs?: number;
@@ -37,8 +37,8 @@ const same = (a: RoleColumn, b: RoleColumn) => (a.id !== undefined && b.id !== u
 const NONE: MoveDecision = { move: null, note: null };
 
 export function decideMove(i: MoveInput): MoveDecision {
-  if (!i.column.role) return NONE; // custom columns are outside the workflow; automation never moves a ticket out of one
-  // Columns are found by role, never by name, so a board can rename them (WH-86). No review column: leave tickets alone.
+  if (!i.column.role) return NONE; // custom columns are outside the workflow; automation never moves an issue out of one
+  // Columns are found by role, never by name, so a board can rename them (WH-86). No review column: leave issues alone.
   const review = columnForRole(i.columns, "review");
   const progress = columnForRole(i.columns, "in_progress");
   const inReviewOrDone = hasRole(i.column, "review", "done");
@@ -63,7 +63,7 @@ export function decideMove(i: MoveInput): MoveDecision {
     target = review;
     why = i.action === "reopened" ? "reopened" : "opened";
   } else {
-    return NONE; // pushes, edits and label changes never move a ticket
+    return NONE; // pushes, edits and label changes never move an issue
   }
 
   if (!target) return NONE;

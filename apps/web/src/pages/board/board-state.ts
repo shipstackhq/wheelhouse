@@ -1,17 +1,17 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import type { Col, Ticket } from "./shared";
+import type { Col, Issue } from "./shared";
 
 /**
- * The board's tickets by column, and what a drag does to them. Kept apart from the component so the rules can be tested
+ * The board's issues by column, and what a drag does to them. Kept apart from the component so the rules can be tested
  * without a pointer: dnd-kit only reports "this id is over that id", and everything below works from those two ids.
  */
-export type Items = Record<string, Ticket[]>;
+export type Items = Record<string, Issue[]>;
 
-/** Tickets by column id, each column in position order. A ticket whose column is not in the list is dropped. */
-export function group(cols: Col[], tickets: Ticket[]): Items {
+/** Issues by column id, each column in position order. An issue whose column is not in the list is dropped. */
+export function group(cols: Col[], issues: Issue[]): Items {
   const m: Items = {};
   for (const c of cols) m[c.id] = [];
-  for (const t of [...tickets].sort((a, b) => a.position - b.position)) m[t.columnId]?.push(t);
+  for (const t of [...issues].sort((a, b) => a.position - b.position)) m[t.columnId]?.push(t);
   return m;
 }
 

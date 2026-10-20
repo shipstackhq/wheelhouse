@@ -25,11 +25,11 @@ import {
  *   - "in flux" nodes: anchored files changed in an active session, not landed
  *   - drafts: map updates written against unlanded code, published on landing
  *   - drift: landed content differs from what a node was described against
- *   - session debt: what a session still owes (ticket update, map updates)
+ *   - session debt: what a session still owes (issue update, map updates)
  * Board state is never deferred; only map explanations wait for landed code.
  */
 
-const { nodes, teamFiles, workSessions, nodeDrafts, docs, docDrafts, events, tickets, teams } = schema;
+const { nodes, teamFiles, workSessions, nodeDrafts, docs, docDrafts, events, issues, teams } = schema;
 
 const ACTIVE_MS = 12 * 3600e3;
 const EXPLAINER_KEYS = ["summary", "purpose", "responsibilities", "interfaces", "gotchas", "details", "columns", "indexes", "anchors", "status"] as const;
@@ -171,13 +171,13 @@ export async function sessionEnd(actor: Actor, teamRef: string, sessionId: strin
   return { ok: true };
 }
 
-/** Called when an agent works a ticket: binds the ticket to its most recent active session. */
-export async function noteTicketActivity(actor: Actor, teamId: string, ticketId: string) {
+/** Called when an agent works an issue: binds the issue to its most recent active session. */
+export async function noteIssueActivity(actor: Actor, teamId: string, issueId: string) {
   if (actor.kind !== "agent") return;
   const [s] = await activeSessions(teamId, actor.id);
   if (!s) return;
   const db = await getDb();
-  await db.update(workSessions).set({ ticketId, lastSeenAt: new Date() }).where(eq(workSessions.id, s.id));
+  await db.update(workSessions).set({ issueId, lastSeenAt: new Date() }).where(eq(workSessions.id, s.id));
 }
 
 // ───────── drafts ─────────
@@ -590,7 +590,7 @@ export async function land(actor: Actor, teamRef: string, r: LandReport) {
 // ───────── debt ─────────
 
 /**
- * What a session still owes before it should end a turn: a ticket that reflects
+ * What a session still owes before it should end a turn: an issue that reflects
  * the work, and map updates (drafts, edits or confirmations) for the nodes whose
  * files it changed. `clean` means nothing is owed.
  */
@@ -600,40 +600,40 @@ export async function sessionStatus(actor: Actor, teamRef: string, sessionId: st
   const [s] = await db.select().from(workSessions).where(and(eq(workSessions.id, sessionId), eq(workSessions.teamId, team.id)));
   // Only the agent's own changes create debt; external (human) edits are just in flux.
   const touched = s ? Object.entries(s.files).filter(([, f]) => !f.external).map(([p]) => p) : [];
-  if (!s || !touched.length) return { clean: true, files: [], ticket: null, nodes: [], unmapped: [], message: "" };
+  if (!s || !touched.length) return { clean: true, files: [], issue: null, nodes: [], unmapped: [], message: "" };
 
   const since = s.firstChangeAt ?? s.startedAt;
   const keyId = s.apiKeyId;
 
-  // Ticket: the one bound to this session, else the latest ticket this key worked on since the session started.
-  let ticket = s.ticketId ? (await db.select().from(tickets).where(eq(tickets.id, s.ticketId)))[0] : undefined;
-  if (!ticket && keyId) {
+  // Issue: the one bound to this session, else the latest issue this key worked on since the session started.
+  let issue = s.issueId ? (await db.select().from(issues).where(eq(issues.id, s.issueId)))[0] : undefined;
+  if (!issue && keyId) {
     const [e] = await db
       .select()
       .from(events)
-      .where(and(eq(events.teamId, team.id), eq(events.actorId, keyId), eq(events.entity, "ticket"), gte(events.createdAt, s.startedAt)))
+      .where(and(eq(events.teamId, team.id), eq(events.actorId, keyId), eq(events.entity, "issue"), gte(events.createdAt, s.startedAt)))
       .orderBy(desc(events.seq))
       .limit(1);
-    if (e) ticket = (await db.select().from(tickets).where(eq(tickets.id, e.entityId)))[0];
-    if (ticket) await db.update(workSessions).set({ ticketId: ticket.id }).where(eq(workSessions.id, s.id));
+    if (e) issue = (await db.select().from(issues).where(eq(issues.id, e.entityId)))[0];
+    if (issue) await db.update(workSessions).set({ issueId: issue.id }).where(eq(workSessions.id, s.id));
   }
   const [proj] = await db.select().from(teams).where(eq(teams.id, team.id));
-  const ref = ticket ? `${proj.key}-${ticket.number}` : null;
-  let ticketOk = false;
-  if (ticket && keyId) {
+  const ref = issue ? `${proj.key}-${issue.number}` : null;
+  let issueOk = false;
+  if (issue && keyId) {
     const [upd] = await db
       .select({ seq: events.seq })
       .from(events)
       .where(
         and(
-          eq(events.entityId, ticket.id),
+          eq(events.entityId, issue.id),
           eq(events.actorId, keyId),
-          inArray(events.type, ["comment.created", "ticket.moved", "ticket.updated"]),
+          inArray(events.type, ["comment.created", "issue.moved", "issue.updated"]),
           gt(events.createdAt, since),
         ),
       )
       .limit(1);
-    ticketOk = !!upd;
+    issueOk = !!upd;
   }
 
   // Map: affected nodes must have a draft/confirmation from this session, or an edit by this key since the change.
@@ -675,17 +675,17 @@ export async function sessionStatus(actor: Actor, teamRef: string, sessionId: st
     .map((a) => ({ name: a.node.name, layer: a.node.layer, files: a.files }));
 
   const lines: string[] = [];
-  if (!ticket) lines.push(`- No ticket is tracking this work. Claim or create a ticket in ${proj.key} and move it to In Progress (claim_ticket / create_ticket + move_ticket).`);
-  else if (!ticketOk) lines.push(`- ${ref} hasn't been updated since you started changing files. Comment what you changed, and move it to Review if the work is done.`);
+  if (!issue) lines.push(`- No issue is tracking this work. Claim or create an issue in ${proj.key} and move it to In Progress (claim_issue / create_issue + move_issue).`);
+  else if (!issueOk) lines.push(`- ${ref} hasn't been updated since you started changing files. Comment what you changed, and move it to Review if the work is done.`);
   for (const o of owed)
     lines.push(
       `- Map node ${o.layer}:${o.name} covers files you changed (${o.files.slice(0, 3).join(", ")}${o.files.length > 3 ? "…" : ""}). Update its explanation with upsert_node${o.layer === "data" ? "/upsert_table" : ""}, or call mark_fresh if it's still accurate.`,
     );
-  const clean = !!ticket && ticketOk && !owed.length;
+  const clean = !!issue && issueOk && !owed.length;
   return {
     clean,
     files: touched,
-    ticket: ticket ? { ref, title: ticket.title, updated: ticketOk } : null,
+    issue: issue ? { ref, title: issue.title, updated: issueOk } : null,
     nodes: owed,
     unmapped,
     message: clean
@@ -699,15 +699,15 @@ export async function sessionStatus(actor: Actor, teamRef: string, sessionId: st
 /** Per-node in-flux info: which active sessions are changing its files, and pending drafts. */
 export async function fluxForTeam(teamId: string) {
   const db = await getDb();
-  const [sessions, drafts, ns, keyTickets] = await Promise.all([
+  const [sessions, drafts, ns, keyIssues] = await Promise.all([
     activeSessions(teamId),
     db.select().from(nodeDrafts).where(and(eq(nodeDrafts.teamId, teamId), eq(nodeDrafts.status, "pending"))),
     teamNodes(teamId),
-    db.select({ id: tickets.id, number: tickets.number }).from(tickets).where(eq(tickets.teamId, teamId)),
+    db.select({ id: issues.id, number: issues.number }).from(issues).where(eq(issues.teamId, teamId)),
   ]);
   const [proj] = await db.select({ key: teams.key }).from(teams).where(eq(teams.id, teamId));
-  const tnum = new Map(keyTickets.map((t) => [t.id, `${proj?.key}-${t.number}`]));
-  const out: Record<string, { sessions: { id: string; by: string; ticket: string | null; files: string[] }[]; drafts: typeof drafts }> = {};
+  const tnum = new Map(keyIssues.map((t) => [t.id, `${proj?.key}-${t.number}`]));
+  const out: Record<string, { sessions: { id: string; by: string; issue: string | null; files: string[] }[]; drafts: typeof drafts }> = {};
   for (const s of sessions) {
     const files = Object.keys(s.files);
     if (!files.length) continue;
@@ -715,7 +715,7 @@ export async function fluxForTeam(teamId: string) {
     for (const f of files) for (const n of bestMatches(ns, f)) hit.add(n.id);
     for (const id of hit) {
       const n = ns.find((x) => x.id === id)!;
-      (out[id] ??= { sessions: [], drafts: [] }).sessions.push({ id: s.id, by: s.actorName, ticket: s.ticketId ? (tnum.get(s.ticketId) ?? null) : null, files: anchoredBy(n, files) });
+      (out[id] ??= { sessions: [], drafts: [] }).sessions.push({ id: s.id, by: s.actorName, issue: s.issueId ? (tnum.get(s.issueId) ?? null) : null, files: anchoredBy(n, files) });
     }
   }
   for (const d of drafts) (out[d.nodeId] ??= { sessions: [], drafts: [] }).drafts.push(d);

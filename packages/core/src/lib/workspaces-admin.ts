@@ -6,7 +6,7 @@ import type { WorkspaceRole } from "../db/schema";
 /**
  * Instance-admin view of the workspaces on this server, and the switch that cuts a whole workspace off (WH-52).
  *
- * Metadata only: names, emails, counts, dates. Nothing a workspace wrote (tickets, comments, the map) is read here.
+ * Metadata only: names, emails, counts, dates. Nothing a workspace wrote (issues, comments, the map) is read here.
  * Suspending is reversible: it records who/when/why on the workspace, signs its members out, and the checks in
  * auth.ts and invites.ts refuse the workspace while the flag is set. Restoring clears the flag.
  */

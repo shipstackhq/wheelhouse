@@ -27,7 +27,7 @@ describe("a team's Overview", () => {
 
   test("the workspace dashboard asks for no team, and never for Focus", async () => {
     const { server } = renderApp("/");
-    await screen.findByText("Open tickets");
+    await screen.findByText("Open issues");
     await widget("Team progress");
     const calls = dashboardCalls(server);
     expect(calls.length).toBeGreaterThan(0);
@@ -38,14 +38,14 @@ describe("a team's Overview", () => {
   test("the key numbers say 'in this team' and count the agents that acted there", async () => {
     renderApp("/t/AA/overview");
     const tile = async (label: string) => (await screen.findByText(label)).closest(".card") as HTMLElement;
-    expect(within(await tile("Open tickets")).getByText("in this team")).toBeTruthy();
+    expect(within(await tile("Open issues")).getByText("in this team")).toBeTruthy();
     expect(within(await tile("Agents active")).getByText("changed something in 7 days")).toBeTruthy();
     expect(screen.queryByText("Agents connected")).toBeNull();
     expect((await screen.findByRole("link", { name: /Stale map nodes.*described/ })).getAttribute("href")).toBe("/t/AA/map"); // the tile is the link
     expect(screen.getByRole("link", { name: /Stale docs.*possibly out of date/ }).getAttribute("href")).toBe("/t/AA/docs");
   });
 
-  test("Focus lists what waited longest, what sat longest and agents gone quiet, each linking to its ticket", async () => {
+  test("Focus lists what waited longest, what sat longest and agents gone quiet, each linking to its issue", async () => {
     renderApp("/t/AA/overview");
     const focus = await widget("Focus");
     const section = (title: RegExp) => within(focus).getByText(title).parentElement as HTMLElement; // the label sits inside its section
@@ -66,10 +66,10 @@ describe("a team's Overview", () => {
     expect(within(focus).getByRole("link", { name: "1 member · you are admin" })).toBeTruthy();
   });
 
-  test("a team with no tickets says how to start, not that nothing is stuck", async () => {
-    renderApp("/t/AA/overview", (s) => s.on("GET /api/app/dashboard/focus", focusData({ aging: [], waitingReview: [], quiet: [], tickets: 0 })));
+  test("a team with no issues says how to start, not that nothing is stuck", async () => {
+    renderApp("/t/AA/overview", (s) => s.on("GET /api/app/dashboard/focus", focusData({ aging: [], waitingReview: [], quiet: [], issues: 0 })));
     const focus = await widget("Focus");
-    expect(within(focus).getByText(/No tickets yet/)).toBeTruthy();
+    expect(within(focus).getByText(/No issues yet/)).toBeTruthy();
     expect(within(focus).getByRole("link", { name: /Add the first one on the board/ }).getAttribute("href")).toBe("/t/AA");
     expect(within(focus).queryByText(/Nothing is stuck/)).toBeNull();
   });

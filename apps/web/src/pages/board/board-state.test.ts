@@ -1,29 +1,29 @@
 import { describe, expect, test } from "vitest";
 import { dragOver, drop, findCol, group, type Items } from "./board-state";
-import { COLUMNS, ticket } from "../../test/data";
+import { COLUMNS, issue } from "../../test/data";
 
 /**
  * What a drag does to the board, from the two ids dnd-kit reports. (A pointer cannot be driven in jsdom; the real drag is checked
  * in a browser, and these rules are what that drag runs.)
  */
-const a = ticket({ number: 1, title: "a", columnId: "c-todo", position: 1000 });
-const b = ticket({ number: 2, title: "b", columnId: "c-todo", position: 2000 });
-const c = ticket({ number: 3, title: "c", columnId: "c-todo", position: 3000 });
-const d = ticket({ number: 4, title: "d", columnId: "c-review", position: 1000 });
+const a = issue({ number: 1, title: "a", columnId: "c-todo", position: 1000 });
+const b = issue({ number: 2, title: "b", columnId: "c-todo", position: 2000 });
+const c = issue({ number: 3, title: "c", columnId: "c-todo", position: 3000 });
+const d = issue({ number: 4, title: "d", columnId: "c-review", position: 1000 });
 const cols = COLUMNS.map(({ id, name }) => ({ id, name }));
 const board = () => group(cols, [c, a, d, b]);
 const refs = (items: Items, col: string) => items[col].map((t) => t.ref);
 
 describe("group", () => {
-  test("every column is there, even an empty one, and each is in position order whatever order the tickets arrive in", () => {
+  test("every column is there, even an empty one, and each is in position order whatever order the issues arrive in", () => {
     const items = board();
     expect(Object.keys(items)).toEqual(COLUMNS.map((x) => x.id));
     expect(refs(items, "c-todo")).toEqual([a.ref, b.ref, c.ref]);
     expect(items["c-backlog"]).toEqual([]);
   });
 
-  test("a ticket in a column the board does not have is left out rather than breaking it", () => {
-    expect(group(cols, [ticket({ columnId: "gone" })])["gone"]).toBeUndefined();
+  test("an issue in a column the board does not have is left out rather than breaking it", () => {
+    expect(group(cols, [issue({ columnId: "gone" })])["gone"]).toBeUndefined();
   });
 });
 

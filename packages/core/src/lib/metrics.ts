@@ -12,7 +12,7 @@ import type { SessionView } from "./session-buckets";
  * Day buckets are UTC calendar days.
  */
 
-const { teams, columns, tickets, events, nodes, docs, apiKeys } = schema;
+const { teams, columns, issues, events, nodes, docs, apiKeys } = schema;
 
 const DAY = 864e5;
 export const dayKey = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
@@ -37,7 +37,7 @@ export function setRequestMemo(m: Memo) {
 const snapshot = (actor: Actor, teamId?: string) => (memoised ??= memo(loadSnapshot))(actor.workspaceId, actor.kind === "human" && !actor.system ? actor.id : "*", teamId ?? "*");
 
 /**
- * Teams, columns, tickets, recent events for one workspace, limited to the teams `viewer` can open, and to one team when
+ * Teams, columns, issues, recent events for one workspace, limited to the teams `viewer` can open, and to one team when
  * `teamId` is given (the caller has already resolved it through requireTeam, so it is one the viewer can open; it is
  * intersected with what they can open anyway, so a stray id yields an empty snapshot rather than someone else's numbers).
  */
@@ -50,10 +50,10 @@ const loadSnapshot = async (workspaceId: string, viewer: string, teamId: string)
     .where(and(eq(teams.workspaceId, workspaceId), visible ? inArray(teams.id, visible) : undefined, teamId === "*" ? undefined : eq(teams.id, teamId)))
     .orderBy(asc(teams.createdAt));
   const pids = ps.map((p) => p.id);
-  if (!pids.length) return { teams: ps, columns: [], tickets: [], events: [], nodes: [], docs: [] };
+  if (!pids.length) return { teams: ps, columns: [], issues: [], events: [], nodes: [], docs: [] };
   const [cs, ts, es, ns, ds] = await Promise.all([
     db.select().from(columns).where(inArray(columns.teamId, pids)).orderBy(asc(columns.position)),
-    db.select().from(tickets).where(inArray(tickets.teamId, pids)),
+    db.select().from(issues).where(inArray(issues.teamId, pids)),
     db
       .select()
       .from(events)
@@ -68,7 +68,7 @@ const loadSnapshot = async (workspaceId: string, viewer: string, teamId: string)
       .from(docs)
       .where(and(inArray(docs.teamId, pids), isNull(docs.deletedAt))),
   ]);
-  return { teams: ps, columns: cs, tickets: ts, events: es, nodes: ns, docs: ds };
+  return { teams: ps, columns: cs, issues: ts, events: es, nodes: ns, docs: ds };
 };
 
 type Snap = Awaited<ReturnType<typeof snapshot>>;
@@ -84,7 +84,7 @@ function columnRoles(s: Snap) {
 function completions(s: Snap) {
   const doneNames = new Map<string, Set<string>>();
   for (const c of s.columns) if (c.role === "done") doneNames.set(c.teamId, (doneNames.get(c.teamId) ?? new Set()).add(c.name));
-  return s.events.filter((e) => e.type === "ticket.moved" && (e.data?.toRole ? e.data.toRole === "done" : doneNames.get(e.teamId)?.has(String(e.data?.to)) ?? false));
+  return s.events.filter((e) => e.type === "issue.moved" && (e.data?.toRole ? e.data.toRole === "done" : doneNames.get(e.teamId)?.has(String(e.data?.to)) ?? false));
 }
 
 // ───────── widgets ─────────
@@ -92,7 +92,7 @@ function completions(s: Snap) {
 export async function summary(actor: Actor, teamId?: string) {
   const s = await snapshot(actor, teamId);
   const roles = columnRoles(s);
-  const open = s.tickets.filter((t) => !roles.doneIds.has(t.columnId));
+  const open = s.issues.filter((t) => !roles.doneIds.has(t.columnId));
   const now = Date.now();
   const within = (d: Date, from: number, to: number) => {
     const age = now - new Date(d).getTime();
@@ -130,7 +130,7 @@ export async function teamProgress(actor: Actor, teamId?: string) {
   const roles = columnRoles(s);
   return s.teams.map((p) => {
     const cols = roles.byTeam.get(p.id) ?? [];
-    const ts = s.tickets.filter((t) => t.teamId === p.id);
+    const ts = s.issues.filter((t) => t.teamId === p.id);
     const stages = cols.map((c) => ({ id: c.id, name: c.name, count: ts.filter((t) => t.columnId === c.id).length }));
     const done = ts.filter((t) => roles.doneIds.has(t.columnId)).length;
     const lastEvent = s.events.find((e) => e.teamId === p.id);
@@ -153,13 +153,13 @@ export async function teamProgress(actor: Actor, teamId?: string) {
   });
 }
 
-/** Tickets created vs completed per day. */
+/** Issues created vs completed per day. */
 export async function throughput(actor: Actor, days = 14, teamId?: string) {
   const s = await snapshot(actor, teamId);
   const keys = lastNDays(days);
   const created = new Map<string, number>();
   const completed = new Map<string, number>();
-  for (const e of s.events) if (e.type === "ticket.created") created.set(dayKey(e.createdAt), (created.get(dayKey(e.createdAt)) ?? 0) + 1);
+  for (const e of s.events) if (e.type === "issue.created") created.set(dayKey(e.createdAt), (created.get(dayKey(e.createdAt)) ?? 0) + 1);
   for (const e of completions(s)) completed.set(dayKey(e.createdAt), (completed.get(dayKey(e.createdAt)) ?? 0) + 1);
   return keys.map((day) => ({ day, created: created.get(day) ?? 0, completed: completed.get(day) ?? 0 }));
 }
@@ -212,14 +212,14 @@ export async function needsAttention(actor: Actor, teamId?: string) {
   const roles = columnRoles(s);
   const pkey = new Map(s.teams.map((p) => [p.id, p.key]));
   const doneIds = roles.doneIds;
-  const ref = (t: Snap["tickets"][number]) => `${pkey.get(t.teamId)}-${t.number}`;
+  const ref = (t: Snap["issues"][number]) => `${pkey.get(t.teamId)}-${t.number}`;
   const byUpdated = (a: { updatedAt: Date }, b: { updatedAt: Date }) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-  const review = s.tickets
+  const review = s.issues
     .filter((t) => roles.review.has(t.columnId))
     .sort(byUpdated)
     .slice(0, 6)
     .map((t) => ({ ref: ref(t), title: t.title, teamKey: pkey.get(t.teamId)!, byAgent: t.createdByKind === "agent" || !!t.claimedByKeyId, updatedAt: t.updatedAt }));
-  const urgent = s.tickets
+  const urgent = s.issues
     .filter((t) => !doneIds.has(t.columnId) && t.priority === "urgent")
     .sort(byUpdated)
     .slice(0, 6)
@@ -243,8 +243,8 @@ export async function recentActivity(actor: Actor, limit = 12, teamId?: string) 
 
 /**
  * Sync health: where the board/map are drifting from real work.
- * - work in flux with no ticket bound to the session
- * - agent-claimed tickets with no activity from that agent for a while
+ * - work in flux with no issue bound to the session
+ * - agent-claimed issues with no activity from that agent for a while
  * - map drafts waiting for their code to land
  */
 export async function syncHealth(actor: Actor, teamId?: string) {
@@ -262,13 +262,13 @@ export async function syncHealth(actor: Actor, teamId?: string) {
     .where(and(inArray(schema.workSessions.teamId, pids), isNull(schema.workSessions.endedAt), gte(schema.workSessions.lastSeenAt, new Date(Date.now() - 12 * 3600e3))));
   const untracked = sessions
     .map((x) => ({ ...x, own: Object.entries(x.files).filter(([, f]) => !f.external).map(([p]) => p) }))
-    .filter((x) => x.own.length && !x.ticketId)
+    .filter((x) => x.own.length && !x.issueId)
     .map((x) => ({ id: x.id, teamKey: pkey.get(x.teamId)!, by: x.actorName, files: x.own, since: x.firstChangeAt ?? x.startedAt }));
 
   const QUIET_MS = 2 * 3600e3;
   const keys = await db.select({ id: apiKeys.id, name: apiKeys.name }).from(apiKeys).where(eq(apiKeys.workspaceId, actor.workspaceId));
   const keyName = new Map(keys.map((k) => [k.id, k.name]));
-  const quiet = s.tickets
+  const quiet = s.issues
     .filter((t) => t.claimedByKeyId && !doneIds.has(t.columnId))
     .map((t) => {
       const last = s.events.find((e) => e.entityId === t.id && e.actorId === t.claimedByKeyId);
@@ -295,22 +295,22 @@ export async function syncHealth(actor: Actor, teamId?: string) {
 
 /**
  * The most important things about ONE team, ranked for a quick look: work that has sat longest in progress, what has waited
- * longest for review, agents that claimed a ticket and went quiet, decisions still only proposed, and who is in the team.
- * "How long" is time since the ticket last moved into its current column (from the event log; a ticket that has not moved in the
+ * longest for review, agents that claimed an issue and went quiet, decisions still only proposed, and who is in the team.
+ * "How long" is time since the issue last moved into its current column (from the event log; an issue that has not moved in the
  * 28 days the snapshot reads is dated from its last update, which is never later than when it moved).
  */
 export async function teamFocus(actor: Actor, teamId: string) {
   const s = await snapshot(actor, teamId);
   const p = s.teams[0];
-  if (!p) return { aging: [], waitingReview: [], quiet: [], proposedDecisions: 0, members: { count: 0, myRole: null as null | string }, tickets: 0 };
+  if (!p) return { aging: [], waitingReview: [], quiet: [], proposedDecisions: 0, members: { count: 0, myRole: null as null | string }, issues: 0 };
   const roles = columnRoles(s);
   const now = Date.now();
   const colName = new Map(s.columns.map((c) => [c.id, c.name]));
-  const since = (t: Snap["tickets"][number]) => {
-    const moved = s.events.find((e) => e.entityId === t.id && e.type === "ticket.moved");
+  const since = (t: Snap["issues"][number]) => {
+    const moved = s.events.find((e) => e.entityId === t.id && e.type === "issue.moved");
     return new Date(moved?.createdAt ?? t.updatedAt).getTime();
   };
-  const row = (t: Snap["tickets"][number]) => ({
+  const row = (t: Snap["issues"][number]) => ({
     ref: `${p.key}-${t.number}`,
     title: t.title,
     column: colName.get(t.columnId) ?? "",
@@ -319,8 +319,8 @@ export async function teamFocus(actor: Actor, teamId: string) {
     byAgent: !!t.claimedByKeyId,
   });
   const oldestFirst = (a: { days: number }, b: { days: number }) => b.days - a.days;
-  const aging = s.tickets.filter((t) => roles.inProgress.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
-  const waitingReview = s.tickets.filter((t) => roles.review.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
+  const aging = s.issues.filter((t) => roles.inProgress.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
+  const waitingReview = s.issues.filter((t) => roles.review.has(t.columnId)).map(row).sort(oldestFirst).slice(0, 5);
 
   const db = await getDb();
   const [{ n: proposed }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.decisions).where(and(eq(schema.decisions.teamId, p.id), eq(schema.decisions.status, "proposed")));
@@ -332,6 +332,6 @@ export async function teamFocus(actor: Actor, teamId: string) {
     quiet: sync.quiet.slice(0, 5),
     proposedDecisions: Number(proposed),
     members: { count: Number(members), myRole: await roleOnTeam(db, actor, p.id) },
-    tickets: s.tickets.length,
+    issues: s.issues.length,
   };
 }

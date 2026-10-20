@@ -1,5 +1,5 @@
 /**
- * Projects (WH-118) against a real database: the keys that keep a ticket inside a team that takes part, who sees what (plan
+ * Projects (WH-118) against a real database: the keys that keep an issue inside a team that takes part, who sees what (plan
  * section 5, including the totals-only view of teams you are not on), health and progress on a fixed clock, teams and milestones.
  * Runs on an in-memory PGlite (`pnpm test`), or a real Postgres with TEST_DATABASE_URL.
  */
@@ -76,8 +76,8 @@ before(async () => {
 });
 
 const project = (over: Record<string, unknown> = {}, as: Actor = ada) => pr.createProject(as, { name: `P ${++n}`, leadTeam: ta.key, ...over });
-const ticketIn = async (team: { key: string }, projectId: string | null, over: Partial<svc.TicketInput> & { column?: string } = {}) => svc.createTicket(ada, team.key, { title: `t ${++n}`, projectId, ...over });
-const rawSet = (id: string, set: Partial<typeof schema.tickets.$inferInsert>) => db.update(schema.tickets).set(set).where(eq(schema.tickets.id, id));
+const issueIn = async (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { column?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
+const rawSet = (id: string, set: Partial<typeof schema.issues.$inferInsert>) => db.update(schema.issues).set(set).where(eq(schema.issues.id, id));
 
 describe("making a project", () => {
   test("a project has a lead team that takes part, a lead user, a status and dates; the other teams are named by key", async () => {
@@ -113,28 +113,28 @@ describe("making a project", () => {
 });
 
 describe("what the database refuses", () => {
-  test("a ticket reaches a project only through a team that takes part", async () => {
+  test("an issue reaches a project only through a team that takes part", async () => {
     const p = await project(); // team A only
-    const inB = await ticketIn(tb, null);
+    const inB = await issueIn(tb, null);
     await assert.rejects(rawSet(inB.id, { projectId: p.id }), foreign);
-    await assert.rejects(ticketIn(tb, p.id), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not take part/.test(e.message));
-    await assert.rejects(svc.updateTicket(ada, inB.ref, { projectId: p.id }), (e: unknown) => /does not take part/.test((e as Error).message));
-    assert.equal((await svc.getTicket(ada, inB.ref)).ticket.projectId, null);
-    const inA = await ticketIn(ta, p.id);
+    await assert.rejects(issueIn(tb, p.id), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not take part/.test(e.message));
+    await assert.rejects(svc.updateIssue(ada, inB.ref, { projectId: p.id }), (e: unknown) => /does not take part/.test((e as Error).message));
+    assert.equal((await svc.getIssue(ada, inB.ref)).issue.projectId, null);
+    const inA = await issueIn(ta, p.id);
     assert.equal(inA.projectId, p.id);
   });
 
-  test("a milestone belongs to the ticket's project, and a milestone needs a project", async () => {
+  test("a milestone belongs to the issue's project, and a milestone needs a project", async () => {
     const p1 = await project();
     const p2 = await project();
     const m1 = (await pr.createMilestone(ada, p1.id, { name: "Beta" })).milestones[0];
-    const t = await ticketIn(ta, p1.id);
+    const t = await issueIn(ta, p1.id);
     await assert.rejects(rawSet(t.id, { milestoneId: (await pr.createMilestone(ada, p2.id, { name: "Other" })).milestones[0].id }), foreign);
-    await assert.rejects(svc.updateTicket(ada, t.ref, { milestoneId: (await pr.getProject(ada, p2.id)).milestones[0].id }), (e: unknown) => /not in this ticket's project/.test((e as Error).message));
-    const free = await ticketIn(ta, null);
+    await assert.rejects(svc.updateIssue(ada, t.ref, { milestoneId: (await pr.getProject(ada, p2.id)).milestones[0].id }), (e: unknown) => /not in this issue's project/.test((e as Error).message));
+    const free = await issueIn(ta, null);
     await assert.rejects(rawSet(free.id, { milestoneId: m1.id }), checked);
-    await assert.rejects(svc.updateTicket(ada, free.ref, { milestoneId: m1.id }), (e: unknown) => /needs a project/.test((e as Error).message));
-    assert.equal((await svc.updateTicket(ada, t.ref, { milestoneId: m1.id })).milestoneId, m1.id);
+    await assert.rejects(svc.updateIssue(ada, free.ref, { milestoneId: m1.id }), (e: unknown) => /needs a project/.test((e as Error).message));
+    assert.equal((await svc.updateIssue(ada, t.ref, { milestoneId: m1.id })).milestoneId, m1.id);
   });
 
   test("a project must have its lead team among its teams, checked when the transaction ends", async () => {
@@ -180,17 +180,17 @@ describe("what the database refuses", () => {
 });
 
 describe("who sees a project (plan section 5)", () => {
-  // P1: teams A (lead) and B. P2: team B only. A has 2 tickets in P1 (1 done); B has 3 (1 done).
+  // P1: teams A (lead) and B. P2: team B only. A has 2 issues in P1 (1 done); B has 3 (1 done).
   let p1: pr.ProjectDetail;
   let p2: pr.ProjectDetail;
   before(async () => {
     p1 = await project({ name: "Shared delivery", teams: [tb.key] });
     p2 = await pr.createProject(ada, { name: "Beta only", leadTeam: tb.key });
-    await ticketIn(ta, p1.id, { title: "A-SECRET open", column: "Todo" });
-    await ticketIn(ta, p1.id, { title: "A-SECRET done", column: "Done" });
-    await ticketIn(tb, p1.id, { title: "B-SECRET done", column: "Done" });
-    await ticketIn(tb, p1.id, { title: "B-SECRET open one", column: "Todo" });
-    await ticketIn(tb, p1.id, { title: "B-SECRET open two", column: "In Progress" });
+    await issueIn(ta, p1.id, { title: "A-SECRET open", column: "Todo" });
+    await issueIn(ta, p1.id, { title: "A-SECRET done", column: "Done" });
+    await issueIn(tb, p1.id, { title: "B-SECRET done", column: "Done" });
+    await issueIn(tb, p1.id, { title: "B-SECRET open one", column: "Todo" });
+    await issueIn(tb, p1.id, { title: "B-SECRET open two", column: "In Progress" });
   });
   const ids = async (who: Actor) => (await pr.listProjects(who)).map((p) => p.id);
 
@@ -209,10 +209,10 @@ describe("who sees a project (plan section 5)", () => {
     await assert.rejects(pr.getProject(gus, p1.id), code("not_found"));
   });
 
-  test("ticket detail is shown only for the viewer's own teams; the others are counted, never named", async () => {
+  test("issue detail is shown only for the viewer's own teams; the others are counted, never named", async () => {
     const forBob = await pr.getProject(bob, p1.id);
     assert.deepEqual(forBob.teams.map((t) => t.key), [ta.key]);
-    assert.deepEqual(forBob.teams[0].tickets.map((t) => t.title).sort(), ["A-SECRET done", "A-SECRET open"]);
+    assert.deepEqual(forBob.teams[0].issues.map((t) => t.title).sort(), ["A-SECRET done", "A-SECRET open"]);
     assert.deepEqual(forBob.others, { count: 1, total: 3, done: 1 });
     assert.deepEqual([forBob.total, forBob.done], [5, 2], "the project's own totals count every team");
     const text = JSON.stringify(forBob);
@@ -280,7 +280,7 @@ describe("health and progress", () => {
     assert.equal(pr.deriveHealth(p, dealt(5, 10), at(1)), "on_track", "before it starts nothing is behind");
   });
 
-  test("with only an end date, close and under half done is at risk; with no dates there is nothing to judge until there are tickets", () => {
+  test("with only an end date, close and under half done is at risk; with no dates there is nothing to judge until there are issues", () => {
     assert.equal(pr.deriveHealth(P("active", null, "2026-11-10"), dealt(1, 4), D("2026-11-08")), "at_risk");
     assert.equal(pr.deriveHealth(P("active", null, "2026-11-10"), dealt(3, 4), D("2026-11-08")), "on_track");
     assert.equal(pr.deriveHealth(P("active", null, "2026-12-30"), dealt(0, 4), D("2026-11-08")), "on_track");
@@ -288,13 +288,13 @@ describe("health and progress", () => {
     assert.equal(pr.deriveHealth(P("active", null, null), dealt(1, 3), D("2026-11-08")), "on_track");
   });
 
-  test("a project's progress is the tickets in it across its teams, and what people set wins over what is derived", async () => {
+  test("a project's progress is the issues in it across its teams, and what people set wins over what is derived", async () => {
     const p = await pr.createProject(ada, { name: "Counted", leadTeam: ta.key, teams: [tb.key], status: "active", startDate: "2026-11-01", targetDate: "2026-11-30" });
-    await ticketIn(ta, p.id, { column: "Done" });
-    await ticketIn(ta, p.id, { column: "Todo" });
-    await ticketIn(tb, p.id, { column: "Done" });
-    await ticketIn(tb, p.id, { column: "Review" });
-    const outside = await ticketIn(tb, null, { column: "Done" });
+    await issueIn(ta, p.id, { column: "Done" });
+    await issueIn(ta, p.id, { column: "Todo" });
+    await issueIn(tb, p.id, { column: "Done" });
+    await issueIn(tb, p.id, { column: "Review" });
+    const outside = await issueIn(tb, null, { column: "Done" });
     void outside;
     const view = (now: Date) => pr.getProject(ada, p.id, now);
     const early = await view(D("2026-11-03"));
@@ -311,10 +311,10 @@ describe("health and progress", () => {
     assert.equal((await view(D("2026-12-02"))).health.derived, null);
   });
 
-  test("a done ticket is one in a done column; a custom column counts as open", async () => {
+  test("a done issue is one in a done column; a custom column counts as open", async () => {
     const p = await pr.createProject(ada, { name: "Columns", leadTeam: ta.key });
-    await ticketIn(ta, p.id, { column: "Review" });
-    await ticketIn(ta, p.id, { column: "Done" });
+    await issueIn(ta, p.id, { column: "Review" });
+    await issueIn(ta, p.id, { column: "Done" });
     const v = await pr.getProject(ada, p.id);
     assert.deepEqual([v.total, v.done], [2, 1]);
   });
@@ -333,15 +333,15 @@ describe("the teams of a project", () => {
     assert.equal((await pr.getProject(bob, p.id)).addableTeams.length, 0, "bob edits only A, which is already in");
   });
 
-  test("a team with tickets in the project cannot leave until they are released, and they leave with it", async () => {
+  test("a team with issues in the project cannot leave until they are released, and they leave with it", async () => {
     const p = await project({ teams: [tb.key] });
     const m = (await pr.createMilestone(ada, p.id, { name: "M" })).milestones[0];
-    const t = await ticketIn(tb, p.id, { milestoneId: m.id });
-    await assert.rejects(pr.removeProjectTeam(ada, p.id, tb.key), (e: unknown) => e instanceof svc.ServiceError && e.code === "conflict" && /has 1 ticket/.test(e.message));
-    assert.equal((await svc.getTicket(ada, t.ref)).ticket.projectId, p.id, "nothing moved");
-    const gone = await pr.removeProjectTeam(ada, p.id, tb.key, { releaseTickets: true });
+    const t = await issueIn(tb, p.id, { milestoneId: m.id });
+    await assert.rejects(pr.removeProjectTeam(ada, p.id, tb.key), (e: unknown) => e instanceof svc.ServiceError && e.code === "conflict" && /has 1 issue/.test(e.message));
+    assert.equal((await svc.getIssue(ada, t.ref)).issue.projectId, p.id, "nothing moved");
+    const gone = await pr.removeProjectTeam(ada, p.id, tb.key, { releaseIssues: true });
     assert.deepEqual([gone.ok, gone.released], [true, 1]);
-    const after = (await svc.getTicket(ada, t.ref)).ticket;
+    const after = (await svc.getIssue(ada, t.ref)).issue;
     assert.deepEqual([after.projectId, after.milestoneId], [null, null]);
     assert.equal((await pr.getProject(ada, p.id)).teamCount, 1);
   });
@@ -378,8 +378,8 @@ describe("the teams of a project", () => {
   });
 });
 
-describe("milestones and a ticket's place in a project", () => {
-  test("milestones are ordered, renamed, moved and deleted; their counts are the tickets in them", async () => {
+describe("milestones and an issue's place in a project", () => {
+  test("milestones are ordered, renamed, moved and deleted; their counts are the issues in them", async () => {
     const p = await project();
     let v = await pr.createMilestone(ada, p.id, { name: "Alpha", targetDate: "2026-11-15" });
     v = await pr.createMilestone(ada, p.id, { name: "Beta", description: "Public" });
@@ -390,8 +390,8 @@ describe("milestones and a ticket's place in a project", () => {
     assert.deepEqual(v.milestones.map((m) => m.name), ["GA", "Alpha", "Beta"]);
     v = await pr.updateMilestone(ada, p.id, alpha.id, { name: "Alpha 1", targetDate: null });
     assert.deepEqual([v.milestones[1].name, v.milestones[1].targetDate], ["Alpha 1", null]);
-    await ticketIn(ta, p.id, { milestoneId: beta.id, column: "Done" });
-    await ticketIn(ta, p.id, { milestoneId: beta.id });
+    await issueIn(ta, p.id, { milestoneId: beta.id, column: "Done" });
+    await issueIn(ta, p.id, { milestoneId: beta.id });
     v = await pr.getProject(ada, p.id);
     assert.deepEqual(v.milestones.map((m) => [m.name, m.total, m.done]), [["GA", 0, 0], ["Alpha 1", 0, 0], ["Beta", 2, 1]]);
     await assert.rejects(pr.updateMilestone(ada, p.id, beta.id, { index: -1 }), code("invalid"));
@@ -399,7 +399,7 @@ describe("milestones and a ticket's place in a project", () => {
     await assert.rejects(pr.createMilestone(ada, p.id, { name: " " }), code("invalid"));
     v = await pr.deleteMilestone(ada, p.id, beta.id);
     assert.equal(v.milestones.length, 2);
-    assert.equal(v.total, 2, "its tickets stay in the project");
+    assert.equal(v.total, 2, "its issues stay in the project");
     assert.equal(v.milestones.every((m) => m.total === 0), true);
   });
 
@@ -412,29 +412,29 @@ describe("milestones and a ticket's place in a project", () => {
     assert.equal((await pr.getProject(ada, p2.id)).milestones[0].name, "Theirs");
   });
 
-  test("changing a ticket's project drops its milestone, a milestone alone keeps the project, and null leaves", async () => {
+  test("changing an issue's project drops its milestone, a milestone alone keeps the project, and null leaves", async () => {
     const p1 = await project({ teams: [tb.key] });
     const p2 = await project();
     const m1 = (await pr.createMilestone(ada, p1.id, { name: "One" })).milestones[0];
-    const t = await ticketIn(ta, p1.id, { milestoneId: m1.id });
+    const t = await issueIn(ta, p1.id, { milestoneId: m1.id });
     assert.deepEqual([t.projectId, t.milestoneId], [p1.id, m1.id]);
-    const moved = await svc.updateTicket(ada, t.ref, { projectId: p2.id });
+    const moved = await svc.updateIssue(ada, t.ref, { projectId: p2.id });
     assert.deepEqual([moved.projectId, moved.milestoneId], [p2.id, null]);
-    const back = await svc.updateTicket(ada, t.ref, { projectId: p1.id, milestoneId: m1.id });
+    const back = await svc.updateIssue(ada, t.ref, { projectId: p1.id, milestoneId: m1.id });
     assert.deepEqual([back.projectId, back.milestoneId], [p1.id, m1.id]);
-    const same = await svc.updateTicket(ada, t.ref, { projectId: p1.id });
+    const same = await svc.updateIssue(ada, t.ref, { projectId: p1.id });
     assert.equal(same.version, back.version, "the same project keeps its milestone and changes nothing");
-    const out = await svc.updateTicket(ada, t.ref, { projectId: null });
+    const out = await svc.updateIssue(ada, t.ref, { projectId: null });
     assert.deepEqual([out.projectId, out.milestoneId], [null, null]);
   });
 
-  test("a ticket joining or leaving a project is said to its team, and to nobody else's", async () => {
+  test("an issue joining or leaving a project is said to its team, and to nobody else's", async () => {
     const p = await project({ name: "Said" });
-    const t = await ticketIn(ta, null);
-    await svc.updateTicket(ada, t.ref, { projectId: p.id });
-    await svc.updateTicket(ada, t.ref, { projectId: null });
+    const t = await issueIn(ta, null);
+    await svc.updateIssue(ada, t.ref, { projectId: p.id });
+    await svc.updateIssue(ada, t.ref, { projectId: null });
     const mine = (await db.select().from(schema.events).where(and(eq(schema.events.teamId, ta.id), eq(schema.events.entityId, p.id)))).map((e) => e.type);
-    assert.deepEqual(mine.filter((x) => x.startsWith("project.ticket")), ["project.ticket_joined", "project.ticket_left"]);
+    assert.deepEqual(mine.filter((x) => x.startsWith("project.issue")), ["project.issue_joined", "project.issue_left"]);
     assert.deepEqual((await db.select().from(schema.events).where(and(eq(schema.events.teamId, tb.id), eq(schema.events.entityId, p.id)))).length, 0);
   });
 });
@@ -459,18 +459,18 @@ describe("changing and deleting a project", () => {
     assert.deepEqual(toB, ["project.created", "project.status_changed"]);
   });
 
-  test("deleting hides the project, keeps the tickets on their boards in no project, and needs the lead or a lead team admin", async () => {
+  test("deleting hides the project, keeps the issues on their boards in no project, and needs the lead or a lead team admin", async () => {
     const p = await project({ teams: [tb.key] });
     const m = (await pr.createMilestone(ada, p.id, { name: "M" })).milestones[0];
-    const a = await ticketIn(ta, p.id, { milestoneId: m.id });
-    const b = await ticketIn(tb, p.id);
+    const a = await issueIn(ta, p.id, { milestoneId: m.id });
+    const b = await issueIn(tb, p.id);
     await assert.rejects(pr.deleteProject(bob, p.id), code("forbidden"), "bob is an editor of the lead team, not its admin");
     const gone = await pr.deleteProject(ada, p.id);
     assert.deepEqual([gone.ok, gone.released], [true, 2]);
-    for (const ref of [a.ref, b.ref]) assert.deepEqual([(await svc.getTicket(ada, ref)).ticket.projectId, (await svc.getTicket(ada, ref)).ticket.milestoneId], [null, null]);
+    for (const ref of [a.ref, b.ref]) assert.deepEqual([(await svc.getIssue(ada, ref)).issue.projectId, (await svc.getIssue(ada, ref)).issue.milestoneId], [null, null]);
     assert.ok(!(await pr.listProjects(ada)).some((x) => x.id === p.id));
     await assert.rejects(pr.getProject(ada, p.id), code("not_found"));
-    await assert.rejects(ticketIn(ta, p.id), (e: unknown) => /does not exist/.test((e as Error).message));
+    await assert.rejects(issueIn(ta, p.id), (e: unknown) => /does not exist/.test((e as Error).message));
     assert.equal((await db.select().from(schema.projects).where(eq(schema.projects.id, p.id))).length, 1, "a soft delete keeps the row");
   });
 

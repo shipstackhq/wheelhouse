@@ -13,22 +13,22 @@ import { errorText } from "../../components/query-state";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { parseLabels } from "../../lib/labels";
-import { ticketQuery } from "../../lib/queries";
+import { issueQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
-import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/ticket-nav";
+import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/issue-nav";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite } from "./shared";
 import { DiscussionThread } from "./thread";
 import { cycleTitle } from "../cycles/cycle-bits";
 import { AgentIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, NodeIcon } from "../../components/icons";
 
 /**
- * A ticket opens in a large dialog: description and discussion on the left, properties and history on the right (stacked on
+ * An issue opens in a large dialog: description and discussion on the left, properties and history on the right (stacked on
  * narrow screens, full screen on phones). `?t=` stays the source of truth: the board mounts this when it is set and `onClose`
  * clears it, so refresh, back and shared links behave as before. Radix supplies the focus trap, Esc, scroll lock and focus restore.
- * The ticket is a query, so a change by anyone arrives through the live stream like everything else on the page.
+ * The issue is a query, so a change by anyone arrives through the live stream like everything else on the page.
  */
-export function TicketDialog(props: {
-  ticketRef: string;
+export function IssueDialog(props: {
+  issueRef: string;
   teamKey: string;
   columns: Col[];
   nodes: NodeLite[];
@@ -37,21 +37,21 @@ export function TicketDialog(props: {
   cycles?: CycleOption[];
   /** The projects the team takes part in, with their milestones, for the Project and Milestone fields. */
   projects?: TeamProjectOption[];
-  /** Position among the tickets of the same column, as the board shows them. */
+  /** Position among the issues of the same column, as the board shows them. */
   nav: Neighbours;
   onNavigate: (ref: string) => void;
   onClose: () => void;
 }) {
-  const { ticketRef, columns, nodes, members, nav, onNavigate, onClose } = props;
+  const { issueRef, columns, nodes, members, nav, onNavigate, onClose } = props;
   const cycles = props.cycles ?? [];
   const projects = props.projects ?? [];
   const { api, queryClient } = useServices();
-  const query = useQuery(ticketQuery(api, ticketRef));
+  const query = useQuery(issueQuery(api, issueRef));
   const data = query.data ?? null;
   const [error, setError] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState(false);
   const [body, setBody] = useState("");
-  // The ticket version the description edit started from: saving sends it, so a change made by someone else meanwhile is refused instead of overwritten.
+  // The issue version the description edit started from: saving sends it, so a change made by someone else meanwhile is refused instead of overwritten.
   const [bodyBase, setBodyBase] = useState(0);
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -60,12 +60,12 @@ export function TicketDialog(props: {
   const { confirm, dialogs } = useDialogs();
   const content = useRef<HTMLDivElement>(null);
 
-  const t = data?.ticket;
+  const t = data?.issue;
   // The title follows the saved one, except while the person is typing in it.
   const savedTitle = t?.title;
   useEffect(() => {
     if (savedTitle === undefined) return;
-    setTitle((cur) => (document.activeElement?.id === "ticket-title" ? cur : savedTitle));
+    setTitle((cur) => (document.activeElement?.id === "issue-title" ? cur : savedTitle));
   }, [savedTitle, t?.version]);
 
   const dirty = isDirty({ editingBody, body, savedBody: t?.body ?? "", comment, title, savedTitle: t?.title ?? title, labelsPending });
@@ -117,14 +117,14 @@ export function TicketDialog(props: {
     return () => window.removeEventListener("keydown", onKey);
   }, [nav.prev, nav.next, go]);
 
-  /** Read the ticket and the board again: after a change, and after a refusal (which shows what is true now). */
+  /** Read the issue and the board again: after a change, and after a refusal (which shows what is true now). */
   const reload = async () => {
     await Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: ["board", props.teamKey] })]);
   };
 
   /**
    * Runs a change, then reloads. A refusal (such as a version conflict) is shown after the reload, so what is on screen is
-   * the ticket as it is now, with the reason next to it. Resolves to whether the change was made.
+   * the issue as it is now, with the reason next to it. Resolves to whether the change was made.
    */
   const mutate = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -150,7 +150,7 @@ export function TicketDialog(props: {
   busyRef.current = busy;
   const saveLabels = async (labels: string[]) => {
     for (let i = 0; i < 20 && busyRef.current; i++) await new Promise((r) => setTimeout(r, 150));
-    return t ? mutate(() => api.tickets.update(t.ref, { labels, version: versionRef.current })) : false;
+    return t ? mutate(() => api.issues.update(t.ref, { labels, version: versionRef.current })) : false;
   };
 
   const nodeLabel = (n: NodeLite) => {
@@ -162,7 +162,7 @@ export function TicketDialog(props: {
     if (!t || !comment.trim()) return;
     const text = comment;
     setComment("");
-    void mutate(() => api.tickets.comment(t.ref, text));
+    void mutate(() => api.issues.comment(t.ref, text));
   };
 
   const loadError = query.isError && !data ? errorText(query.error) : null;
@@ -181,30 +181,30 @@ export function TicketDialog(props: {
           }}
           className="fixed inset-0 z-40 flex flex-col bg-panel text-fg outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(92vh,60rem)] sm:w-[min(96vw,64rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border sm:border-line sm:shadow-2xl"
         >
-          <Dialog.Title className="sr-only">{t ? `${t.ref}: ${t.title}` : `Ticket ${ticketRef}`}</Dialog.Title>
-          <Dialog.Description className="sr-only">Ticket description, discussion, properties and history.</Dialog.Description>
+          <Dialog.Title className="sr-only">{t ? `${t.ref}: ${t.title}` : `Issue ${issueRef}`}</Dialog.Title>
+          <Dialog.Description className="sr-only">Issue description, discussion, properties and history.</Dialog.Description>
 
           <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 sm:px-5">
             <div className="flex min-w-0 items-center gap-2 text-xs text-muted">
-              <span className="font-mono">{t?.ref ?? ticketRef}</span>
+              <span className="font-mono">{t?.ref ?? issueRef}</span>
               {t && <span>v{t.version}</span>}
               {t?.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent"><AgentIcon /> created by agent</span>}
             </div>
             <div className="flex items-center gap-1">
               {nav.total > 1 && nav.index >= 0 && (
                 <div className="flex items-center gap-1 text-xs text-muted">
-                  <button className="btn btn-ghost px-2 py-1" disabled={!nav.prev} onClick={() => go(nav.prev)} aria-label="Previous ticket in this column" title="Previous (←)">
+                  <button className="btn btn-ghost px-2 py-1" disabled={!nav.prev} onClick={() => go(nav.prev)} aria-label="Previous issue in this column" title="Previous (←)">
                     <ChevronLeftIcon />
                   </button>
                   <span className="tabular-nums" aria-live="polite">
                     {nav.index + 1} / {nav.total}
                   </span>
-                  <button className="btn btn-ghost px-2 py-1" disabled={!nav.next} onClick={() => go(nav.next)} aria-label="Next ticket in this column" title="Next (→)">
+                  <button className="btn btn-ghost px-2 py-1" disabled={!nav.next} onClick={() => go(nav.next)} aria-label="Next issue in this column" title="Next (→)">
                     <ChevronRightIcon />
                   </button>
                 </div>
               )}
-              <button className="btn btn-ghost px-2 py-1" onClick={() => void requestClose()} aria-label="Close ticket">
+              <button className="btn btn-ghost px-2 py-1" onClick={() => void requestClose()} aria-label="Close issue">
                 <CloseIcon />
               </button>
             </div>
@@ -219,12 +219,12 @@ export function TicketDialog(props: {
 
                 {/* The whole title always shows: it wraps onto as many lines as it needs. Enter saves; line breaks are not allowed. */}
                 <AutoGrowTextarea
-                  id="ticket-title"
+                  id="issue-title"
                   aria-label="Title"
                   className="bg-transparent text-xl font-semibold leading-snug outline-none"
                   value={title}
                   onChange={(e) => setTitle(singleLine(e.target.value))}
-                  onBlur={() => title.trim() && title !== t.title && void mutate(() => api.tickets.update(t.ref, { title, version: t.version }))}
+                  onBlur={() => title.trim() && title !== t.title && void mutate(() => api.issues.update(t.ref, { title, version: t.version }))}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.nativeEvent.isComposing) {
                       e.preventDefault();
@@ -253,7 +253,7 @@ export function TicketDialog(props: {
                     <div className="space-y-2">
                       {t.version !== bodyBase && (
                         <p role="status" className="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
-                          This ticket changed while you were editing (now v{t.version}). Saving will be refused so nothing is overwritten: copy your text, cancel, and apply it to the latest version.
+                          This issue changed while you were editing (now v{t.version}). Saving will be refused so nothing is overwritten: copy your text, cancel, and apply it to the latest version.
                         </p>
                       )}
                       <DescriptionEditor value={body} onChange={setBody} />
@@ -263,7 +263,7 @@ export function TicketDialog(props: {
                           disabled={busy}
                           onClick={async () => {
                             // Success leaves edit mode; a conflict keeps the draft and shows the server's message.
-                            if (await mutate(() => api.tickets.update(t.ref, { body, version: bodyBase }))) setEditingBody(false);
+                            if (await mutate(() => api.issues.update(t.ref, { body, version: bodyBase }))) setEditingBody(false);
                           }}
                         >
                           Save
@@ -318,33 +318,33 @@ export function TicketDialog(props: {
               <aside className="space-y-5 border-t border-line px-4 py-4 sm:px-5 md:min-h-0 md:overflow-y-auto md:border-l md:border-t-0">
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-1">
                   <Field label="Status">
-                    <Select value={t.columnId} options={columns.map((c) => ({ value: c.id, label: c.name }))} onValueChange={(v) => void mutate(() => api.tickets.move(t.ref, { column: v }))} />
+                    <Select value={t.columnId} options={columns.map((c) => ({ value: c.id, label: c.name }))} onValueChange={(v) => void mutate(() => api.issues.move(t.ref, { column: v }))} />
                   </Field>
                   <Field label="Priority">
                     <Select
                       triggerClassName={PRIORITY_STYLE[t.priority]}
                       value={t.priority}
                       options={["low", "medium", "high", "urgent"].map((p) => ({ value: p, label: p }))}
-                      onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { priority: v as typeof t.priority, version: t.version }))}
+                      onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { priority: v as typeof t.priority, version: t.version }))}
                     />
                   </Field>
                   <Field label="Assignee">
                     <Select
                       value={t.assigneeId ?? ""}
                       options={[{ value: "", label: "Unassigned" }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
-                      onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { assigneeId: v || null, version: t.version }))}
+                      onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { assigneeId: v || null, version: t.version }))}
                     />
                   </Field>
                   {(cycles.length > 0 || t.cycle != null) && (
                     <Field label="Cycle">
                       <Select
                         value={t.cycle == null ? "" : String(t.cycle)}
-                        // A cycle that has ended is closed to new tickets, but a ticket already in one still shows it.
+                        // A cycle that has ended is closed to new issues, but an issue already in one still shows it.
                         options={[
                           { value: "", label: "No cycle" },
                           ...cycles.filter((c) => c.state !== "past" || c.number === t.cycle).map((c) => ({ value: String(c.number), label: cycleTitle(c) })),
                         ]}
-                        onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { cycle: v ? Number(v) : null, version: t.version }))}
+                        onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { cycle: v ? Number(v) : null, version: t.version }))}
                       />
                     </Field>
                   )}
@@ -353,7 +353,7 @@ export function TicketDialog(props: {
                       <Select
                         value={t.projectId ?? ""}
                         options={[{ value: "", label: "No project" }, ...projects.map((x) => ({ value: x.id, label: x.name }))]}
-                        onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { projectId: v || null, version: t.version }))}
+                        onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { projectId: v || null, version: t.version }))}
                       />
                     </Field>
                   )}
@@ -362,7 +362,7 @@ export function TicketDialog(props: {
                       <Select
                         value={t.milestoneId ?? ""}
                         options={[{ value: "", label: "No milestone" }, ...(projects.find((x) => x.id === t.projectId)?.milestones ?? []).map((m) => ({ value: m.id, label: m.name }))]}
-                        onValueChange={(v) => void mutate(() => api.tickets.update(t.ref, { milestoneId: v || null, version: t.version }))}
+                        onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { milestoneId: v || null, version: t.version }))}
                       />
                     </Field>
                   )}
@@ -371,7 +371,7 @@ export function TicketDialog(props: {
                       <input
                         type="checkbox"
                         checked={t.agentClaimable}
-                        onChange={(e) => void mutate(() => api.tickets.update(t.ref, { agentClaimable: e.target.checked, version: t.version }))}
+                        onChange={(e) => void mutate(() => api.issues.update(t.ref, { agentClaimable: e.target.checked, version: t.version }))}
                       />
                       <span className={t.agentClaimable ? "text-agent" : "text-muted"}>Agents may pick up</span>
                     </label>
@@ -389,7 +389,7 @@ export function TicketDialog(props: {
                         <Link className="hover:underline" to={`/t/${props.teamKey}/map?node=${n.id}`}>
                           <NodeIcon /> {nodeLabel(nodes.find((x) => x.id === n.id) ?? { ...n, layer: "" })}
                         </Link>
-                        <button className="text-accent/60 hover:text-accent" aria-label={`Unlink ${n.name}`} onClick={() => void mutate(() => api.tickets.unlink(t.ref, n.id))}>
+                        <button className="text-accent/60 hover:text-accent" aria-label={`Unlink ${n.name}`} onClick={() => void mutate(() => api.issues.unlink(t.ref, n.id))}>
                           <CloseIcon />
                         </button>
                       </span>
@@ -400,7 +400,7 @@ export function TicketDialog(props: {
                         value=""
                         placeholder="+ link node"
                         options={nodes.filter((n) => !linkedIds.has(n.id)).map((n) => ({ value: n.id, label: nodeLabel(n) }))}
-                        onValueChange={(v) => v && void mutate(() => api.tickets.link(t.ref, v))}
+                        onValueChange={(v) => v && void mutate(() => api.issues.link(t.ref, v))}
                       />
                     ) : (
                       <span className="text-xs text-muted">No nodes on the map yet.</span>
@@ -417,10 +417,10 @@ export function TicketDialog(props: {
                   <button
                     className="btn btn-danger"
                     onClick={async () => {
-                      if (!(await confirm({ title: `Delete ${t.ref}?`, description: "This removes the ticket and its comments.", confirmLabel: "Delete", danger: true }))) return;
+                      if (!(await confirm({ title: `Delete ${t.ref}?`, description: "This removes the issue and its comments.", confirmLabel: "Delete", danger: true }))) return;
                       setBusy(true);
                       try {
-                        await api.tickets.remove(t.ref);
+                        await api.issues.remove(t.ref);
                         onClose();
                         await queryClient.invalidateQueries({ queryKey: ["board", props.teamKey] });
                       } catch (e) {
@@ -429,7 +429,7 @@ export function TicketDialog(props: {
                       }
                     }}
                   >
-                    Delete ticket
+                    Delete issue
                   </button>
                 </div>
               </aside>

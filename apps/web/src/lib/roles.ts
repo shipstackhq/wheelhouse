@@ -16,7 +16,7 @@ export const canManagePeople = (role: Role | null | undefined) => role === "owne
 
 export const TEAM_ROLES: { value: TeamRole; label: string; hint: string }[] = [
   { value: "admin", label: "admin", hint: "Manages who is in the team, its settings and repositories" },
-  { value: "editor", label: "editor", hint: "Creates and edits tickets, docs, the map and decisions" },
+  { value: "editor", label: "editor", hint: "Creates and edits issues, docs, the map and decisions" },
   { value: "viewer", label: "viewer", hint: "Reads everything and comments" },
 ];
 

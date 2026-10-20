@@ -4,7 +4,7 @@ import { CloseIcon, FilterIcon, SearchIcon } from "../../components/icons";
 
 /**
  * The board's filter row: a search box, a Filter button that picks labels, and the picked labels shown beside it as removable chips.
- * Dummy for now: it keeps the search text and the picked labels but does not yet narrow the tickets on the board.
+ * Dummy for now: it keeps the search text and the picked labels but does not yet narrow the issues on the board.
  */
 export function BoardFilterBar(props: { labels: string[]; selected: string[]; onChange: (selected: string[]) => void }) {
   const { labels, selected, onChange } = props;
@@ -16,15 +16,15 @@ export function BoardFilterBar(props: { labels: string[]; selected: string[]; on
         <input
           type="search"
           className="input !rounded-full !border-line !bg-panel-2 !py-1.5 !pl-9 text-sm focus:!border-accent"
-          placeholder="Search tickets"
-          aria-label="Search tickets"
+          placeholder="Search issues"
+          aria-label="Search issues"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted" />
       </div>
       <Popover.Root>
-        <Popover.Trigger className="btn gap-1.5 !rounded-full py-1 text-xs data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2" aria-label="Filter tickets by label">
+        <Popover.Trigger className="btn gap-1.5 !rounded-full py-1 text-xs data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2" aria-label="Filter issues by label">
           <FilterIcon /> Filter
           {selected.length > 0 && <span className="tabular-nums text-accent">{selected.length}</span>}
         </Popover.Trigger>
@@ -32,7 +32,7 @@ export function BoardFilterBar(props: { labels: string[]; selected: string[]; on
           <Popover.Content align="start" sideOffset={6} collisionPadding={8} className="z-50 max-h-72 w-60 overflow-y-auto rounded-lg border border-line bg-panel p-2 text-sm text-fg shadow-xl">
             <div className="label px-1">Labels</div>
             {labels.length === 0 ? (
-              <p className="px-1 py-2 text-xs text-muted">No labels on any ticket yet.</p>
+              <p className="px-1 py-2 text-xs text-muted">No labels on any issue yet.</p>
             ) : (
               labels.map((l) => (
                 <label key={l} className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-panel-2">

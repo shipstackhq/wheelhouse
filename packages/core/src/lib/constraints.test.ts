@@ -113,7 +113,7 @@ describe("a value outside its enum is refused", () => {
   const bad: [string, () => Promise<unknown>][] = [
     ["memberships.role", () => db.execute(sql`update memberships set role = 'boss' where user_id = ${ada.id}`)],
     ["team_members.role", () => db.execute(sql`insert into team_members (team_id, workspace_id, user_id, role) values (${a1.id}, ${wsA}, ${ada.id}, 'god')`)],
-    ["tickets.priority", () => db.execute(sql`update tickets set priority = 'asap'`)],
+    ["issues.priority", () => db.execute(sql`update issues set priority = 'asap'`)],
     ["columns.role", () => db.execute(sql`update columns set role = 'qa' where team_id = ${a2.id} and role = 'todo'`)],
     ["nodes.layer", () => db.execute(sql`insert into nodes (team_id, workspace_id, layer, kind, name) values (${a1.id}, ${wsA}, 'cloud', 'service', 'x')`)],
     ["nodes.kind", () => db.execute(sql`insert into nodes (team_id, workspace_id, layer, kind, name) values (${a1.id}, ${wsA}, 'system', 'lambda', 'x')`)],
@@ -130,7 +130,7 @@ describe("a value outside its enum is refused", () => {
   ];
   before(async () => {
     // rows for the update-style cases to act on
-    await svc.createTicket(ada, a2.key, { title: "for the priority check" });
+    await svc.createIssue(ada, a2.key, { title: "for the priority check" });
     const [x] = await db.insert(schema.nodes).values({ teamId: a2.id, workspaceId: wsA, layer: "system", kind: "service", name: "e1" }).returning();
     const [y] = await db.insert(schema.nodes).values({ teamId: a2.id, workspaceId: wsA, layer: "system", kind: "service", name: "e2" }).returning();
     await db.insert(schema.edges).values({ teamId: a2.id, workspaceId: wsA, fromNodeId: x.id, toNodeId: y.id });
@@ -165,7 +165,7 @@ describe("the TypeScript enums and the CHECK constraints agree", () => {
       from pg_constraint c where c.contype = 'c' and c.connamespace = 'public'::regnamespace and c.conname like '%\\_check'`);
     const list = (Array.isArray(res) ? res : (res as unknown as { rows: unknown[] }).rows) as { conname: string; def: string }[];
     // CHECKs that are about a rule, not about an enum, are named here.
-    const notEnums = new Set(["cycles_window_check", "projects_dates_check", "tickets_milestone_needs_project_check", "initiatives_not_own_parent_check"]);
+    const notEnums = new Set(["cycles_window_check", "projects_dates_check", "issues_milestone_needs_project_check", "initiatives_not_own_parent_check"]);
     const inDb = new Map(list.filter((r) => !notEnums.has(r.conname)).map((r) => [r.conname, valuesIn(r.def)]));
     const expected = enumColumns();
     assert.ok(expected.length >= 30, `found only ${expected.length} enum columns`);

@@ -2,7 +2,7 @@
 
 Kanban boards and architecture maps that a small team **and its AI agents** share.
 
-- **Board**: drag-and-drop tickets, markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
+- **Board**: drag-and-drop issues, markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
 - **Knowledge map**: React Flow canvas with four linked zoom levels:
   - **Concepts**: what the product does
   - **Systems**: what runs where
@@ -67,7 +67,7 @@ Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Po
 ## Layout
 
 ```
-packages/core/src/db/schema.ts   Drizzle schema (users, workspaces, teams, tickets, nodes, edges, events, agent_cursors…)
+packages/core/src/db/schema.ts   Drizzle schema (users, workspaces, teams, issues, nodes, edges, events, agent_cursors…)
 packages/core/drizzle/           migrations
 packages/core/src/lib/service.ts single write path: access checks, optimistic locking, event emission
 packages/core/src/lib/tools.ts   tool registry → exposed via /mcp and /api/v1/<tool>

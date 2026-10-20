@@ -16,7 +16,7 @@ export function CyclesPage() {
   );
 }
 
-/** `/t/:key/cycles/:number`: one cycle, its tickets, and what landed while it ran. */
+/** `/t/:key/cycles/:number`: one cycle, its issues, and what landed while it ran. */
 export function CyclePage() {
   const { key = "", number = "" } = useParams();
   const n = /^\d{1,9}$/.test(number) ? Number(number) : null;

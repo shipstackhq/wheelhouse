@@ -1,9 +1,9 @@
 import { DropdownMenu } from "radix-ui";
 import clsx from "clsx";
-import type { BoardMember as Member, BoardTicket, CycleOption } from "@wheelhouse/api-client";
+import type { BoardMember as Member, BoardIssue, CycleOption } from "@wheelhouse/api-client";
 import { CheckIcon, CloseIcon } from "../../components/icons";
 
-type Ticket = BoardTicket;
+type Issue = BoardIssue;
 
 export type Flag = "aiReady" | "claimed" | "byAgent" | "linked" | "hasComments";
 export type SortKey = "priority" | "created" | "updated" | "title" | "number" | "comments";
@@ -11,7 +11,7 @@ export type View = {
   priority: string[];
   assignee: string[]; // member ids, or "none" for unassigned
   label: string[];
-  cycle: string[]; // cycle numbers as text, or "none" for tickets in no cycle
+  cycle: string[]; // cycle numbers as text, or "none" for issues in no cycle
   flags: Flag[];
   sort: { key: SortKey; dir: "asc" | "desc" } | null; // null = manual (drag order)
 };
@@ -38,7 +38,7 @@ const SORTS: { value: SortKey; label: string }[] = [
   { value: "comments", label: "Comment count" },
 ];
 
-const FLAG_TEST: Record<Flag, (t: Ticket) => boolean> = {
+const FLAG_TEST: Record<Flag, (t: Issue) => boolean> = {
   aiReady: (t) => t.agentClaimable,
   claimed: (t) => !!t.claimedByKeyId,
   byAgent: (t) => t.createdByKind === "agent",
@@ -51,7 +51,7 @@ export const isFiltered = (v: View) => v.priority.length + v.assignee.length + v
 const filterCount = (v: View) => [v.priority, v.assignee, v.label, v.cycle].filter((g) => g.length > 0).length + v.flags.length;
 
 /** Filters combine with AND; several values inside one filter combine with OR. */
-export function matches(t: Ticket, v: View) {
+export function matches(t: Issue, v: View) {
   if (v.priority.length && !v.priority.includes(t.priority)) return false;
   if (v.assignee.length && !v.assignee.includes(t.assigneeId ?? "none")) return false;
   if (v.label.length && !t.labels.some((l) => v.label.includes(l))) return false;
@@ -59,11 +59,11 @@ export function matches(t: Ticket, v: View) {
   return v.flags.every((f) => FLAG_TEST[f](t));
 }
 
-export function applyView(tickets: Ticket[], v: View, alwaysShow?: (t: Ticket) => boolean): Ticket[] {
-  let out = isFiltered(v) ? tickets.filter((t) => matches(t, v) || alwaysShow?.(t)) : tickets;
+export function applyView(issues: Issue[], v: View, alwaysShow?: (t: Issue) => boolean): Issue[] {
+  let out = isFiltered(v) ? issues.filter((t) => matches(t, v) || alwaysShow?.(t)) : issues;
   if (v.sort) {
     const { key, dir } = v.sort;
-    const val = (t: Ticket): number | string => {
+    const val = (t: Issue): number | string => {
       switch (key) {
         case "priority": return PRIORITY_RANK[t.priority] ?? 9;
         case "created": return new Date(t.createdAt).getTime();
@@ -222,7 +222,7 @@ export function ColumnControls(props: {
                 {c.state === "current" && <span className="ml-1 text-xs text-ok">now</span>}
               </Check>
             ))}
-            <div className={HEAD}>Ticket</div>
+            <div className={HEAD}>Issue</div>
             {FLAGS.map((f) => (
               <Check key={f.value} checked={view.flags.includes(f.value)} onSelect={() => set({ flags: toggle(view.flags, f.value) })}>
                 {f.label}

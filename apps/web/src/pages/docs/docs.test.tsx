@@ -421,29 +421,29 @@ describe("attached files (anchors)", () => {
 describe("action items", () => {
   const withItems = doc({ body: "## Action items\n- [ ] Write the runbook\n- [x] Done already\n- [ ] Ask legal\n" });
 
-  test("each unchecked item can become a ticket; the box is then checked in the doc, against the version that was read", async () => {
+  test("each unchecked item can become an issue; the box is then checked in the doc, against the version that was read", async () => {
     const { server } = open(DOC, (s) => {
       serve(s, [withItems]);
-      s.on(`POST ${url("tickets")}`, () => Response.json({ ticket: { ref: "AA-5", title: "Write the runbook" } }, { status: 201 }));
+      s.on(`POST ${url("issues")}`, () => Response.json({ issue: { ref: "AA-5", title: "Write the runbook" } }, { status: 201 }));
       s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2 }) });
     });
     const user = userEvent.setup();
     const section = (await screen.findByText("Action items", { selector: "span.label" })).closest("section") as HTMLElement;
-    expect(within(section).getAllByRole("button", { name: "Create ticket" })).toHaveLength(2); // the checked one is not offered
-    await user.click(within(section).getAllByRole("button", { name: "Create ticket" })[0]);
-    await waitFor(() => expect(server.sent(`POST ${url("tickets")}`)).toHaveLength(1));
-    expect(server.sent(`POST ${url("tickets")}`)[0].body).toEqual({ title: "Write the runbook" });
+    expect(within(section).getAllByRole("button", { name: "Create issue" })).toHaveLength(2); // the checked one is not offered
+    await user.click(within(section).getAllByRole("button", { name: "Create issue" })[0]);
+    await waitFor(() => expect(server.sent(`POST ${url("issues")}`)).toHaveLength(1));
+    expect(server.sent(`POST ${url("issues")}`)[0].body).toEqual({ title: "Write the runbook" });
     await waitFor(() => expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(1));
     expect(server.sent(`PATCH ${url("docs/d-plan")}`)[0].body).toEqual({ body: "## Action items\n- [x] Write the runbook\n- [x] Done already\n- [ ] Ask legal\n", version: 1 });
   });
 
-  test("if the ticket cannot be made the box stays unchecked and the reason is shown", async () => {
+  test("if the issue cannot be made the box stays unchecked and the reason is shown", async () => {
     const { server } = open(DOC, (s) => {
       serve(s, [withItems]);
-      s.on(`POST ${url("tickets")}`, apiError(400, "invalid", "title is required"));
+      s.on(`POST ${url("issues")}`, apiError(400, "invalid", "title is required"));
     });
     const user = userEvent.setup();
-    await user.click((await screen.findAllByRole("button", { name: "Create ticket" }))[0]);
+    await user.click((await screen.findAllByRole("button", { name: "Create issue" }))[0]);
     expect(await screen.findByText("title is required")).toBeTruthy();
     expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(0);
   });

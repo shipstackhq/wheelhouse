@@ -82,9 +82,9 @@ describe("GET /api/app/teams/:key/graph", () => {
   test("an empty team: the team, nothing else, and whether Ask is on", async () => {
     const t = await workspace();
     const g = await graph(t.s);
-    assert.deepEqual(Object.keys(g).sort(), ["askEnabled", "decisions", "edges", "flows", "flux", "nodes", "team", "terms", "ticketLinks"]);
+    assert.deepEqual(Object.keys(g).sort(), ["askEnabled", "decisions", "edges", "flows", "flux", "issueLinks", "nodes", "team", "terms"]);
     assert.deepEqual(g.team, { id: t.team.id, key: "MAP", name: "Mapper team", description: "" });
-    assert.deepEqual([g.nodes, g.edges, g.flows, g.decisions, g.terms, g.ticketLinks, g.flux], [[], [], [], [], [], [], {}]);
+    assert.deepEqual([g.nodes, g.edges, g.flows, g.decisions, g.terms, g.issueLinks, g.flux], [[], [], [], [], [], [], {}]);
     assert.equal(g.askEnabled, true);
   });
 
@@ -97,7 +97,7 @@ describe("GET /api/app/teams/:key/graph", () => {
     assert.ok(!/teamId|describedHashes|driftPaths|staleSource/.test(JSON.stringify(g)), "no internal fields");
   });
 
-  test("everything on the map is there: edges, ticket links, flows, decisions and terms", async () => {
+  test("everything on the map is there: edges, issue links, flows, decisions and terms", async () => {
     const t = await workspace();
     const a = await node(t.s, { name: "Web", layer: "system" });
     const b = await node(t.s, { name: "API", layer: "system" });
@@ -105,8 +105,8 @@ describe("GET /api/app/teams/:key/graph", () => {
     await put(t.s, "/api/app/teams/MAP/flows", { name: "Sign in", steps: [{ node: a.id, title: "Open page" }, { node: b.id, title: "Check password", detail: "bcrypt" }] });
     await put(t.s, "/api/app/teams/MAP/decisions", { title: "Use REST", nodes: [b.id] });
     await put(t.s, "/api/app/teams/MAP/terms/Gateway", { definition: "The front door", node: a.id });
-    const tk = await app("POST", "/api/app/teams/MAP/tickets", t.s, { body: { title: "Build web" } });
-    await app("PUT", `/api/app/tickets/${tk.json.ticket.ref}/nodes/${a.id}`, t.s);
+    const tk = await app("POST", "/api/app/teams/MAP/issues", t.s, { body: { title: "Build web" } });
+    await app("PUT", `/api/app/issues/${tk.json.issue.ref}/nodes/${a.id}`, t.s);
     const g = await graph(t.s);
     assert.deepEqual(g.edges.map((e: { label: string; kind: string }) => [e.kind, e.label]), [["depends", "REST"]]);
     assert.deepEqual(Object.keys(g.edges[0]).sort(), ["fromNodeId", "id", "kind", "label", "meta", "toNodeId"]);
@@ -116,7 +116,7 @@ describe("GET /api/app/teams/:key/graph", () => {
     assert.deepEqual(Object.keys(g.decisions[0]).sort(), ["authorKind", "authorName", "consequences", "context", "decision", "id", "nodeIds", "number", "status", "title", "updatedAt", "version"]);
     assert.deepEqual(g.terms.map((x: { term: string; nodeId: string }) => [x.term, x.nodeId]), [["Gateway", a.id]]);
     assert.deepEqual(Object.keys(g.terms[0]).sort(), ["definition", "id", "nodeId", "term"]);
-    assert.deepEqual(g.ticketLinks.map((l: { nodeId: string; ref: string }) => [l.nodeId, l.ref]), [[a.id, "MAP-1"]]);
+    assert.deepEqual(g.issueLinks.map((l: { nodeId: string; ref: string }) => [l.nodeId, l.ref]), [[a.id, "MAP-1"]]);
   });
 
   test("another workspace's team is a 404", async () => {
@@ -695,8 +695,8 @@ describe("GET /api/app/teams/:key/activity", () => {
   test("the team's events, newest first, with who did what, linking data and nothing else", async () => {
     const t = await workspace();
     const n = await node(t.s, { name: "Gateway", layer: "system" });
-    const tk = (await app("POST", "/api/app/teams/MAP/tickets", t.s, { body: { title: "Do it" } })).json.ticket;
-    await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "Looks right" } });
+    const tk = (await app("POST", "/api/app/teams/MAP/issues", t.s, { body: { title: "Do it" } })).json.issue;
+    await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "Looks right" } });
     await put(t.s, "/api/app/teams/MAP/decisions", { title: "ADR" });
     const r = await app("GET", "/api/app/teams/MAP/activity", t.s);
     assert.equal(r.status, 200);
@@ -714,8 +714,8 @@ describe("GET /api/app/teams/:key/activity", () => {
 
   test("a comment's text is cut at 500 characters", async () => {
     const t = await workspace();
-    const tk = (await app("POST", "/api/app/teams/MAP/tickets", t.s, { body: { title: "Long" } })).json.ticket;
-    await app("POST", `/api/app/tickets/${tk.ref}/comments`, t.s, { body: { body: "x".repeat(900) } });
+    const tk = (await app("POST", "/api/app/teams/MAP/issues", t.s, { body: { title: "Long" } })).json.issue;
+    await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "x".repeat(900) } });
     const c = (await app("GET", "/api/app/teams/MAP/activity", t.s)).json.events.find((e: { type: string }) => e.type === "comment.created");
     assert.equal(c.data.body.length, 500);
   });

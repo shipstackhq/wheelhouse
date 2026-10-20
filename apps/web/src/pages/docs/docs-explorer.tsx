@@ -32,7 +32,7 @@ function PersonRow({ person }: { person: DocPerson }) {
 
 /**
  * `/t/:key/docs`: a tree on the left (parent/child via `parentId`, same pattern as the map), a rich-text or Markdown editor on the
- * right. Version conflicts surface the way the ticket dialog does: a banner when the doc changed under you, and a refused save that
+ * right. Version conflicts surface the way the issue dialog does: a banner when the doc changed under you, and a refused save that
  * never overwrites a concurrent edit.
  */
 export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index: DocsIndex; docId?: string }) {
@@ -141,14 +141,14 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   const linkedIds = new Set((detail?.nodes ?? []).map((n) => n.id));
 
   /**
-   * One-click "Create ticket" for an unchecked action item (WH-65). The ticket goes in the team's default column with the item's
+   * One-click "Create issue" for an unchecked action item (WH-65). The issue goes in the team's default column with the item's
    * text as title — one-shot, no bidirectional sync — then the box is checked in the doc body so it isn't offered twice.
    */
-  const createTicketFromActionItem = async (item: { text: string; line: number }) => {
+  const createIssueFromActionItem = async (item: { text: string; line: number }) => {
     if (!d) return;
     setActionItemBusy(item.line);
     try {
-      await api.tickets.create(teamKey, { title: item.text });
+      await api.issues.create(teamKey, { title: item.text });
       const lines = d.body.split("\n");
       lines[item.line] = lines[item.line].replace(/\[ \]/, "[x]");
       await api.docs.update(teamKey, d.id, { body: lines.join("\n"), version: d.version });
@@ -615,8 +615,8 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
                       {actionItems.map((item) => (
                         <li key={item.line} className="flex items-center justify-between gap-2 rounded-md border border-line bg-bg/50 px-3 py-1.5 text-sm">
                           <span>{item.text}</span>
-                          <button className="btn btn-ghost shrink-0 px-2 py-1 text-xs" disabled={actionItemBusy === item.line} onClick={() => void createTicketFromActionItem(item)}>
-                            {actionItemBusy === item.line ? "Creating…" : "Create ticket"}
+                          <button className="btn btn-ghost shrink-0 px-2 py-1 text-xs" disabled={actionItemBusy === item.line} onClick={() => void createIssueFromActionItem(item)}>
+                            {actionItemBusy === item.line ? "Creating…" : "Create issue"}
                           </button>
                         </li>
                       ))}

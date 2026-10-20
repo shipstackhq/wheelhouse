@@ -55,7 +55,7 @@ describe("API keys (Authorization: Bearer)", () => {
     const before = Date.now() - 5_000;
     await v1ok(asKey(fx.a.apiKey2), "list_projects");
     // The key list is a page of the app, not an API; the contract here is only that the call succeeds and is attributed.
-    const t = await v1ok(asKey(fx.a.apiKey2), "create_ticket", { project: fx.a.teamKey, title: `attrib ${before}` });
+    const t = await v1ok(asKey(fx.a.apiKey2), "create_issue", { project: fx.a.teamKey, title: `attrib ${before}` });
     assert.equal(t.createdByKind, "agent");
   });
 });

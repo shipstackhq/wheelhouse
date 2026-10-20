@@ -41,7 +41,7 @@ export function Projects(props: { projects: ProjectSummary[] }) {
           <div>
             <h2 className="text-lg font-semibold">Projects</h2>
             <p className="mt-1 text-sm text-muted">
-              An outcome that ends: a launch, a migration. A project can span several teams, each keeping its own board; you see the tickets of
+              An outcome that ends: a launch, a migration. A project can span several teams, each keeping its own board; you see the issues of
               the teams you are on and only totals for the others.
             </p>
           </div>

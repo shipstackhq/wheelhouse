@@ -14,7 +14,7 @@ export const createProjectAs = (actor: Actor, b: Body) => pr.createProject(actor
 export const updateProjectAs = (actor: Actor, id: string, b: Body) => pr.updateProject(actor, id, b);
 export const deleteProjectAs = (actor: Actor, id: string) => pr.deleteProject(actor, id);
 export const addProjectTeamAs = (actor: Actor, id: string, b: Body) => pr.addProjectTeam(actor, id, b.team);
-export const removeProjectTeamAs = (actor: Actor, id: string, teamKey: string, releaseTickets: boolean) => pr.removeProjectTeam(actor, id, teamKey, { releaseTickets });
+export const removeProjectTeamAs = (actor: Actor, id: string, teamKey: string, releaseIssues: boolean) => pr.removeProjectTeam(actor, id, teamKey, { releaseIssues });
 export const createMilestoneAs = (actor: Actor, id: string, b: Body) => pr.createMilestone(actor, id, b);
 export const updateMilestoneAs = (actor: Actor, id: string, milestoneId: string, b: Body) => pr.updateMilestone(actor, id, milestoneId, b);
 export const deleteMilestoneAs = (actor: Actor, id: string, milestoneId: string) => pr.deleteMilestone(actor, id, milestoneId);

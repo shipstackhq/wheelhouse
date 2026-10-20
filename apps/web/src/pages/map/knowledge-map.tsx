@@ -47,7 +47,7 @@ import { NodePanel } from "./node-panel";
 import { FlowEditor, type FlowDraft } from "./flow-editor";
 import { dagreLayout, treeLayout, elkLayout, violatesLeftToRight, breakCycles, type Direction } from "../../lib/map-layout";
 import { collapseKey, seenKey, loadCollapsed, saveCollapsed, remapCollapsedEdges } from "../../lib/map-collapse";
-import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, AskIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, ExpandIcon, MapIcon, PlayIcon, TicketIcon, TidyIcon, WarningIcon } from "../../components/icons";
+import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, AskIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, ExpandIcon, MapIcon, PlayIcon, IssueIcon, TidyIcon, WarningIcon } from "../../components/icons";
 
 export type Graph = GraphView;
 export type GNode = MapNode;
@@ -58,14 +58,14 @@ const LEAF_H = 64;
 type NodeData = {
   n: GNode;
   hasChildren: boolean;
-  tickets: number;
+  issues: number;
   dim: boolean;
   related: boolean;
   flowCurrent: boolean;
   flowVisited: boolean;
   onFocus: (id: string) => void;
   hlCols?: Set<string>; // data layer: highlighted column names
-  flux?: { by: string; ticket: string | null; drafts: number } | null;
+  flux?: { by: string; issue: string | null; drafts: number } | null;
   onColumnClick?: (nodeId: string, column: string) => void;
   /** WH-22: collapse state for a container node (undefined = not a container). */
   collapsed?: boolean;
@@ -80,7 +80,7 @@ function ringClass(d: NodeData) {
 // ───────── node rendering ─────────
 
 const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeData>>) {
-  const { n, hasChildren, tickets, dim, related, flowCurrent, flowVisited } = data;
+  const { n, hasChildren, issues, dim, related, flowCurrent, flowVisited } = data;
   const k = KIND_STYLE[n.kind] ?? KIND_STYLE.service;
   const ring = flowCurrent
     ? "ring-4 ring-accent/70"
@@ -124,7 +124,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
               +{data.hiddenCount} modules
             </span>
           )}
-          {tickets > 0 && <span className="chip bg-bg text-muted">{tickets} <TicketIcon /></span>}
+          {issues > 0 && <span className="chip bg-bg text-muted">{issues} <IssueIcon /></span>}
           {data.onToggleCollapse && (
             <button
               className="nodrag rounded px-1 text-[11px] text-muted hover:bg-panel-2 hover:text-fg"
@@ -163,7 +163,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
       <div className="flex items-center gap-1.5">
         <span className="text-xs" style={{ color: k.color }}>{k.icon}</span>
         <span className={clsx("truncate text-[13px] font-medium", n.layer === "code" && "font-mono text-[12px]")}>{n.name}</span>
-        {tickets > 0 && <span className="ml-auto text-[10px] text-muted">{tickets}<TicketIcon /></span>}
+        {issues > 0 && <span className="ml-auto text-[10px] text-muted">{issues}<IssueIcon /></span>}
       </div>
       {n.summary && <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{n.summary}</div>}
       <div className="mt-1 flex items-center gap-1.5">
@@ -177,7 +177,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
 
 /**
  * ERD card for the data layer: one row per column, with per-column handles for FK edges.
- * Reads like the sentence "one team has many tickets": parents sit left, children right.
+ * Reads like the sentence "one team has many issues": parents sit left, children right.
  * A relationship line leaves the child's FK column on its LEFT edge and enters the
  * parent's referenced column on its RIGHT edge (so drag from a child's left dot to a parent's right dot).
  */
@@ -242,7 +242,7 @@ function FluxBadge({ flux }: { flux: NonNullable<NodeData["flux"]> }) {
   return (
     <span
       className="chip bg-agent/15 text-[9px] text-agent"
-      title={`Being changed by ${flux.by}${flux.ticket ? ` (${flux.ticket})` : ""}; not landed yet${flux.drafts ? ` · ${flux.drafts} pending map update(s)` : ""}`}
+      title={`Being changed by ${flux.by}${flux.issue ? ` (${flux.issue})` : ""}; not landed yet${flux.drafts ? ` · ${flux.drafts} pending map update(s)` : ""}`}
     >
       <EditIcon /> in flux
     </span>
@@ -324,8 +324,8 @@ function toFlow(
   const visible = focusId && byId.get(focusId)?.layer === lens ? subtree(focusId, layerNodes) : new Set(layerNodes.map((n) => n.id));
   const kids = new Map<string, GNode[]>();
   for (const n of layerNodes) if (n.parentId) kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
-  const ticketCount = new Map<string, number>();
-  for (const l of g.ticketLinks) ticketCount.set(l.nodeId, (ticketCount.get(l.nodeId) ?? 0) + 1);
+  const issueCount = new Map<string, number>();
+  for (const l of g.issueLinks) issueCount.set(l.nodeId, (issueCount.get(l.nodeId) ?? 0) + 1);
 
   // WH-22: collapsed containers hide their whole subtree (but never the focus-drill root itself).
   const collapsedActive = !erd ? [...collapsedIds].filter((id) => id !== focusId && visible.has(id)) : [];
@@ -379,7 +379,7 @@ function toFlow(
       data: {
         n,
         hasChildren,
-        tickets: ticketCount.get(n.id) ?? 0,
+        issues: issueCount.get(n.id) ?? 0,
         dim: !!hl.related && !relatedOrHasRelated(n.id),
         related,
         flowCurrent: hl.current === n.id,
@@ -388,7 +388,7 @@ function toFlow(
         flux: g.flux[n.id]
           ? {
               by: g.flux[n.id].sessions[0]?.by ?? g.flux[n.id].drafts[0]?.authorName ?? "someone",
-              ticket: g.flux[n.id].sessions[0]?.ticket ?? null,
+              issue: g.flux[n.id].sessions[0]?.issue ?? null,
               drafts: g.flux[n.id].drafts.length,
             }
           : null,
@@ -1346,7 +1346,7 @@ function FlowsSidebar(props: {
       <div className="flex-1 space-y-1 overflow-y-auto p-2 text-sm">
         {props.graph.flows.length === 0 && (
           <p className="px-2 py-3 text-xs text-muted">
-            Flows are step-by-step walks through the map (“User signs up”, “Agent picks up a ticket”). They&apos;re the fastest way to understand
+            Flows are step-by-step walks through the map (“User signs up”, “Agent picks up an issue”). They&apos;re the fastest way to understand
             how things fit together.
           </p>
         )}

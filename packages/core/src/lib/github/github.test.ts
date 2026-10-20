@@ -17,7 +17,7 @@ import type { Actor } from "../access";
 import * as svc from "../service";
 import { land } from "../sync";
 import type { GithubApi } from "./api";
-import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForTicket, registerInstallation, targetsFor } from "./service";
+import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
 
 type Workspace = { owner: Actor; member: Actor; installation: string; repoSlug: string; repoRowId: string };
 let A: Workspace;
@@ -87,16 +87,16 @@ const push = (installation: string, over: Record<string, unknown> = {}) => ({
 });
 const deliver = (event: string, payload: Record<string, unknown>, id = `d-${uniq()}`) => handleDelivery({ event, deliveryId: id, payload }, fakeGithub.api);
 
-/** A ticket in `column`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
-async function ticketIn(workspace: Workspace, key: string, title: string, column: string) {
-  const t = await svc.createTicket(workspace.owner, key, { title });
-  if (column !== "Backlog") await svc.moveTicket(workspace.owner, t.ref, column);
+/** An issue in `column`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
+async function issueIn(workspace: Workspace, key: string, title: string, column: string) {
+  const t = await svc.createIssue(workspace.owner, key, { title });
+  if (column !== "Backlog") await svc.moveIssue(workspace.owner, t.ref, column);
   const db = await getDb();
-  await db.update(schema.events).set({ createdAt: new Date(Date.now() - 2 * 3600_000) }).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "ticket.moved")));
+  await db.update(schema.events).set({ createdAt: new Date(Date.now() - 2 * 3600_000) }).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "issue.moved")));
   return t;
 }
 async function columnOf(workspace: Workspace, ref: string) {
-  return (await svc.getTicket(workspace.owner, ref)).ticket.column;
+  return (await svc.getIssue(workspace.owner, ref)).issue.column;
 }
 const prPayload = (workspace: Workspace, action: string, over: Record<string, unknown> = {}, pr: Record<string, unknown> = {}) => ({
   action,
@@ -246,31 +246,31 @@ describe("pushes", () => {
 });
 
 describe("pull requests", () => {
-  test("opening one for AA-1 moves the ticket to Review and says so on the ticket", async () => {
-    const t = await ticketIn(A, "AA", "Pull request target", "In Progress");
+  test("opening one for AA-1 moves the issue to Review and says so on the issue", async () => {
+    const t = await issueIn(A, "AA", "Pull request target", "In Progress");
     const num = t.ref.split("-")[1];
     const r = await deliver("pull_request", prPayload(A, "opened", {}, { title: `AA-${num} do it`, number: 11 }));
     assert.equal(r.status, "handled");
     assert.equal(await columnOf(A, t.ref), "Review");
-    const detail = await svc.getTicket(A.owner, t.ref);
+    const detail = await svc.getIssue(A.owner, t.ref);
     assert.ok(detail.comments.some((c) => c.authorName === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
-    assert.ok(detail.history.some((e) => e.type === "ticket.pull_request"));
-    const prs = await pullRequestsForTicket(t.id);
+    assert.ok(detail.history.some((e) => e.type === "issue.pull_request"));
+    const prs = await pullRequestsForIssue(t.id);
     assert.equal(prs.length, 1);
     assert.equal(prs[0].number, 11);
-    assert.equal(detail.pullRequests.length, 1, "getTicket carries them for the ticket view and agents");
+    assert.equal(detail.pullRequests.length, 1, "getIssue carries them for the issue view and agents");
   });
 
-  test("the branch name links a ticket too, and another team's key in the same title does not", async () => {
-    const t = await ticketIn(A, "AA", "Linked by branch", "Todo");
+  test("the branch name links an issue too, and another team's key in the same title does not", async () => {
+    const t = await issueIn(A, "AA", "Linked by branch", "Todo");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 12, title: "Unrelated words BB-1 and API-9", head: { ref: `feature/aa-${num}-by-branch`, sha: "e".repeat(40) } }));
     assert.equal(await columnOf(A, t.ref), "Review");
-    assert.equal((await pullRequestsForTicket(t.id)).length, 1);
+    assert.equal((await pullRequestsForIssue(t.id)).length, 1);
   });
 
   test("a draft does not move anything until it is ready", async () => {
-    const t = await ticketIn(A, "AA", "Draft work", "In Progress");
+    const t = await issueIn(A, "AA", "Draft work", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 13, draft: true, title: `AA-${num} wip` }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
@@ -278,49 +278,49 @@ describe("pull requests", () => {
     assert.equal(await columnOf(A, t.ref), "Review");
   });
 
-  test("closed without merging puts a ticket in Review back to In Progress, with a comment", async () => {
-    const t = await ticketIn(A, "AA", "Abandoned", "In Progress");
+  test("closed without merging puts an issue in Review back to In Progress, with a comment", async () => {
+    const t = await issueIn(A, "AA", "Abandoned", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 14, title: `AA-${num} x` }));
     assert.equal(await columnOf(A, t.ref), "Review");
-    // The ticket moved a moment ago (by GitHub itself), which must not count as "someone else moved it".
+    // The issue moved a moment ago (by GitHub itself), which must not count as "someone else moved it".
     await deliver("pull_request", prPayload(A, "closed", {}, { number: 14, title: `AA-${num} x`, state: "closed", merged: false }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
-    assert.ok((await svc.getTicket(A.owner, t.ref)).comments.some((c) => /closed without merging/.test(c.body)));
+    assert.ok((await svc.getIssue(A.owner, t.ref)).comments.some((c) => /closed without merging/.test(c.body)));
   });
 
-  test("merged leaves a ticket in Review for a person to close", async () => {
-    const t = await ticketIn(A, "AA", "Merged work", "In Progress");
+  test("merged leaves an issue in Review for a person to close", async () => {
+    const t = await issueIn(A, "AA", "Merged work", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 15, title: `AA-${num} y` }));
     await deliver("pull_request", prPayload(A, "closed", {}, { number: 15, title: `AA-${num} y`, state: "closed", merged: true }));
     assert.equal(await columnOf(A, t.ref), "Review");
-    const prs = await pullRequestsForTicket(t.id);
+    const prs = await pullRequestsForIssue(t.id);
     assert.equal(prs[0].state, "merged");
   });
 
-  test("a person or agent who moved the ticket a moment ago is not overruled, and the comment says so", async () => {
-    const t = await ticketIn(A, "AA", "Just moved", "Todo");
+  test("a person or agent who moved the issue a moment ago is not overruled, and the comment says so", async () => {
+    const t = await issueIn(A, "AA", "Just moved", "Todo");
     const num = t.ref.split("-")[1];
-    await svc.moveTicket(A.owner, t.ref, "In Progress"); // by a person, seconds ago
+    await svc.moveIssue(A.owner, t.ref, "In Progress"); // by a person, seconds ago
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 16, title: `AA-${num} z` }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
-    assert.ok((await svc.getTicket(A.owner, t.ref)).comments.some((c) => c.authorName === "GitHub" && /moved it 1 minute ago, so the pull request \(opened\) did not move it/.test(c.body)));
+    assert.ok((await svc.getIssue(A.owner, t.ref)).comments.some((c) => c.authorName === "GitHub" && /moved it 1 minute ago, so the pull request \(opened\) did not move it/.test(c.body)));
   });
 
-  test("a ticket in Done is never moved", async () => {
-    const t = await ticketIn(A, "AA", "Already done", "Done");
+  test("an issue in Done is never moved", async () => {
+    const t = await issueIn(A, "AA", "Already done", "Done");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 17, title: `AA-${num} done` }));
     assert.equal(await columnOf(A, t.ref), "Done");
   });
 
-  test("a pull request on workspace A's repository never touches workspace B's tickets, even with a matching ref", async () => {
-    const t = await ticketIn(B, "BB", "Workspace B ticket", "In Progress");
+  test("a pull request on workspace A's repository never touches workspace B's issues, even with a matching ref", async () => {
+    const t = await issueIn(B, "BB", "Workspace B issue", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 18, title: `BB-${num} sneaky` }));
     assert.equal(await columnOf(B, t.ref), "In Progress");
-    assert.equal((await pullRequestsForTicket(t.id)).length, 0);
+    assert.equal((await pullRequestsForIssue(t.id)).length, 0);
   });
 
   test("a pull request from a repository nobody connected reaches nothing", async () => {
@@ -338,43 +338,43 @@ describe("checks", () => {
   });
 
   test("a failing check is recorded, flagged with an event and a comment, and a later pass clears it", async () => {
-    const t = await ticketIn(A, "AA", "Has CI", "In Progress");
+    const t = await issueIn(A, "AA", "Has CI", "In Progress");
     const num = t.ref.split("-")[1];
     const sha = "f".repeat(40);
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 21, title: `AA-${num} ci`, head: { ref: "ci", sha } }));
     await deliver("check_run", runPayload(A, "build", "in_progress", null, sha, 21));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, "pending");
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, "pending");
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", sha, 21));
-    let d = await svc.getTicket(A.owner, t.ref);
+    let d = await svc.getIssue(A.owner, t.ref);
     assert.equal(d.pullRequests[0].ciState, "failure");
-    assert.ok(d.history.some((e) => e.type === "ticket.ci" && /CI failed/.test(e.summary)));
+    assert.ok(d.history.some((e) => e.type === "issue.ci" && /CI failed/.test(e.summary)));
     assert.ok(d.comments.some((c) => /CI failed on pull request/.test(c.body) && /tests/.test(c.body)));
     await deliver("check_run", runPayload(A, "tests", "completed", "success", sha, 21));
     await deliver("check_run", runPayload(A, "build", "completed", "success", sha, 21));
-    d = await svc.getTicket(A.owner, t.ref);
+    d = await svc.getIssue(A.owner, t.ref);
     assert.equal(d.pullRequests[0].ciState, "success");
   });
 
   test("a result for an older commit is ignored, and a new commit starts a new round", async () => {
-    const t = await ticketIn(A, "AA", "New commit", "In Progress");
+    const t = await issueIn(A, "AA", "New commit", "In Progress");
     const num = t.ref.split("-")[1];
     const first = "1".repeat(40), second = "2".repeat(40);
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 22, title: `AA-${num} c`, head: { ref: "c", sha: first } }));
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", first, 22));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, "failure");
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, "failure");
     await deliver("pull_request", prPayload(A, "synchronize", {}, { number: 22, title: `AA-${num} c`, head: { ref: "c", sha: second } }));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, null, "the old commit's failure no longer counts");
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, null, "the old commit's failure no longer counts");
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", first, 22)); // a late result for the old commit
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, null);
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, null);
   });
 
   test("a check on workspace A's repository never changes a pull request of workspace B", async () => {
-    const t = await ticketIn(B, "BB", "B has CI", "In Progress");
+    const t = await issueIn(B, "BB", "B has CI", "In Progress");
     const num = t.ref.split("-")[1];
     const sha = "9".repeat(40);
     await deliver("pull_request", prPayload(B, "opened", {}, { number: 23, title: `BB-${num} ci`, head: { ref: "b", sha } }));
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", sha, 23));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, null);
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, null);
   });
 });
 
@@ -396,7 +396,7 @@ describe("other events", () => {
   test("deleting a team removes its pull requests along with it", async () => {
     const db = await getDb();
     const workspace = await makeWorkspace("Delta", "DD", "9004", "909090");
-    const t = await ticketIn(workspace, "DD", "Doomed", "In Progress");
+    const t = await issueIn(workspace, "DD", "Doomed", "In Progress");
     const num = t.ref.split("-")[1];
     await handleDelivery({ event: "pull_request", deliveryId: `d-${uniq()}`, payload: { action: "opened", repository: { id: 909090 }, installation: { id: 9004 }, pull_request: { number: 1, title: `DD-${num} x`, html_url: "u", user: { login: "d" }, state: "open", head: { ref: "x", sha: "7".repeat(40) } } } }, fakeGithub.api);
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 1);

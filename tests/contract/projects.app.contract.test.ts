@@ -14,7 +14,7 @@ type Project = {
   health: { derived: string | null; override: string | null; value: string | null };
   leadUser: { id: string; name: string } | null; leadTeam: { key: string; name: string } | null;
   milestones: { id: string; name: string; total: number; done: number }[];
-  teams: { key: string; lead: boolean; total: number; done: number; tickets: { ref: string; title: string }[] }[];
+  teams: { key: string; lead: boolean; total: number; done: number; issues: { ref: string; title: string }[] }[];
   others: { count: number; total: number; done: number };
   addableTeams: { key: string }[];
 };
@@ -52,10 +52,10 @@ const make = async (body: Record<string, unknown> = {}, s: Sess = owner) => {
   assert.equal(r.status, 201, r.text);
   return r.json.project as Project;
 };
-const ticket = async (team: string, body: Record<string, unknown>, s: Sess = owner) => {
-  const r = await app("POST", `/api/app/teams/${team}/tickets`, s, { body: { title: `t ${++n}`, ...body } });
+const issue = async (team: string, body: Record<string, unknown>, s: Sess = owner) => {
+  const r = await app("POST", `/api/app/teams/${team}/issues`, s, { body: { title: `t ${++n}`, ...body } });
   assert.equal(r.status, 201, r.text);
-  return r.json.ticket as { ref: string; projectId: string | null; milestoneId: string | null };
+  return r.json.issue as { ref: string; projectId: string | null; milestoneId: string | null };
 };
 
 describe("the projects endpoints", () => {
@@ -107,43 +107,43 @@ describe("the projects endpoints", () => {
     assert.equal((await app("GET", "/api/app/projects/not-an-id", owner)).status, 404);
   });
 
-  test("a ticket joins a project and milestone from the ticket's own endpoint, and the board names them", async () => {
+  test("an issue joins a project and milestone from the issue's own endpoint, and the board names them", async () => {
     const p = await make();
     const m = await app("POST", `/api/app/projects/${p.id}/milestones`, owner, { body: { name: "First step", targetDate: "2026-12-01" } });
     assert.equal(m.status, 201, m.text);
     const milestone = m.json.project.milestones[0];
-    const t = await ticket(teamA, { projectId: p.id, milestoneId: milestone.id });
+    const t = await issue(teamA, { projectId: p.id, milestoneId: milestone.id });
     assert.deepEqual([t.projectId, t.milestoneId], [p.id, milestone.id]);
     const board = (await app("GET", `/api/app/teams/${teamA}/board`, owner)).json;
     const opt = board.projects.find((x: { id: string }) => x.id === p.id);
     assert.deepEqual([opt.name, opt.milestones.map((x: { name: string }) => x.name)], [p.name, ["First step"]]);
-    assert.ok(board.tickets.some((x: { ref: string; projectId: string }) => x.ref === t.ref && x.projectId === p.id));
-    const out = await app("PATCH", `/api/app/tickets/${t.ref}`, owner, { body: { projectId: null } });
-    assert.deepEqual([out.json.ticket.projectId, out.json.ticket.milestoneId], [null, null]);
-    const bad = await app("PATCH", `/api/app/tickets/${t.ref}`, owner, { body: { milestoneId: milestone.id } });
+    assert.ok(board.issues.some((x: { ref: string; projectId: string }) => x.ref === t.ref && x.projectId === p.id));
+    const out = await app("PATCH", `/api/app/issues/${t.ref}`, owner, { body: { projectId: null } });
+    assert.deepEqual([out.json.issue.projectId, out.json.issue.milestoneId], [null, null]);
+    const bad = await app("PATCH", `/api/app/issues/${t.ref}`, owner, { body: { milestoneId: milestone.id } });
     assert.equal(bad.status, 400);
     assert.match(bad.json.error.details.fields.milestoneId, /needs a project/);
-    assert.equal((await app("PATCH", `/api/app/tickets/${t.ref}`, owner, { body: { projectId: 5 } })).status, 400);
+    assert.equal((await app("PATCH", `/api/app/issues/${t.ref}`, owner, { body: { projectId: 5 } })).status, 400);
   });
 
-  test("a team that does not take part cannot put a ticket in the project; the answer says why", async () => {
+  test("a team that does not take part cannot put an issue in the project; the answer says why", async () => {
     const p = await make(); // the seeded team only
-    const r = await app("POST", `/api/app/teams/${second}/tickets`, owner, { body: { title: "wrong team", projectId: p.id } });
+    const r = await app("POST", `/api/app/teams/${second}/issues`, owner, { body: { title: "wrong team", projectId: p.id } });
     assert.equal(r.status, 400);
     assert.match(r.json.error.details.fields.projectId, /does not take part/);
   });
 
-  test("teams: bring one in, refuse a second time, take it out (with its tickets, only when asked), never the lead team", async () => {
+  test("teams: bring one in, refuse a second time, take it out (with its issues, only when asked), never the lead team", async () => {
     const p = await make();
     const added = await app("POST", `/api/app/projects/${p.id}/teams`, owner, { body: { team: second } });
     assert.equal(added.status, 201, added.text);
     assert.equal(added.json.project.teamCount, 2);
     assert.equal((await app("POST", `/api/app/projects/${p.id}/teams`, owner, { body: { team: second } })).status, 409);
-    await ticket(second, { projectId: p.id });
+    await issue(second, { projectId: p.id });
     const refused = await app("DELETE", `/api/app/projects/${p.id}/teams/${second}`, owner);
     assert.equal(refused.status, 409);
-    assert.match(refused.json.error.message, /has 1 ticket/);
-    const gone = await app("DELETE", `/api/app/projects/${p.id}/teams/${second}?releaseTickets=1`, owner);
+    assert.match(refused.json.error.message, /has 1 issue/);
+    const gone = await app("DELETE", `/api/app/projects/${p.id}/teams/${second}?releaseIssues=1`, owner);
     assert.equal(gone.status, 200, gone.text);
     assert.deepEqual([gone.json.ok, gone.json.released], [true, 1]);
     const lead = await app("DELETE", `/api/app/projects/${p.id}/teams/${teamA}`, owner);
@@ -169,14 +169,14 @@ describe("the projects endpoints", () => {
     assert.equal((await app("POST", `/api/app/projects/${p.id}/milestones`, owner, { body: { name: " " } })).status, 400);
   });
 
-  test("deleting a project hides it and frees its tickets; a second delete is a 404", async () => {
+  test("deleting a project hides it and frees its issues; a second delete is a 404", async () => {
     const p = await make();
-    const t = await ticket(teamA, { projectId: p.id });
+    const t = await issue(teamA, { projectId: p.id });
     const d = await app("DELETE", `/api/app/projects/${p.id}`, owner);
     assert.equal(d.status, 200, d.text);
     assert.deepEqual([d.json.ok, d.json.released], [true, 1]);
     assert.equal((await app("GET", `/api/app/projects/${p.id}`, owner)).status, 404);
-    assert.equal((await app("GET", `/api/app/tickets/${t.ref}`, owner)).json.ticket.projectId, null);
+    assert.equal((await app("GET", `/api/app/issues/${t.ref}`, owner)).json.issue.projectId, null);
     assert.equal((await app("DELETE", `/api/app/projects/${p.id}`, owner)).status, 404);
   });
 });
@@ -184,14 +184,14 @@ describe("the projects endpoints", () => {
 describe("who sees what over HTTP", () => {
   test("the member of one team sees the other team only as totals: no key, no name, no title", async () => {
     const p = await make({ teams: [second] });
-    await ticket(teamA, { title: "OWN-VISIBLE", projectId: p.id, column: "Done" });
-    await ticket(second, { title: "SECOND-SECRET one", projectId: p.id, column: "Done" });
-    await ticket(second, { title: "SECOND-SECRET two", projectId: p.id });
+    await issue(teamA, { title: "OWN-VISIBLE", projectId: p.id, column: "Done" });
+    await issue(second, { title: "SECOND-SECRET one", projectId: p.id, column: "Done" });
+    await issue(second, { title: "SECOND-SECRET two", projectId: p.id });
     const r = await app("GET", `/api/app/projects/${p.id}`, member);
     assert.equal(r.status, 200, r.text);
     const seen = r.json.project as Project;
     assert.deepEqual(seen.teams.map((t) => t.key), [teamA]);
-    assert.deepEqual(seen.teams[0].tickets.map((t) => t.title), ["OWN-VISIBLE"]);
+    assert.deepEqual(seen.teams[0].issues.map((t) => t.title), ["OWN-VISIBLE"]);
     assert.deepEqual(seen.others, { count: 1, total: 2, done: 1 });
     assert.deepEqual([seen.total, seen.done], [3, 2]);
     for (const leak of ["SECOND-SECRET", second, "Second team"]) assert.ok(!r.text.includes(leak), `the member's answer must not contain ${leak}`);
@@ -227,26 +227,26 @@ describe("who sees what over HTTP", () => {
 describe("the old agent surface", () => {
   test("/api/v1 does not grow a project, and its project is still the team", async () => {
     const p = await make();
-    const t = await ticket(teamA, { title: "For the agent", projectId: p.id });
+    const t = await issue(teamA, { title: "For the agent", projectId: p.id });
     const board = await v1ok({ key: apiKey }, "get_board", { project: teamA });
     assert.equal(board.project.key, teamA, "`project` in the old shape is the team");
-    const card = board.columns.flatMap((c: { tickets: Record<string, unknown>[] }) => c.tickets).find((x: { ref: string }) => x.ref === t.ref) as Record<string, unknown>;
-    assert.ok(card, "the ticket is on the agent's board");
+    const card = board.columns.flatMap((c: { issues: Record<string, unknown>[] }) => c.issues).find((x: { ref: string }) => x.ref === t.ref) as Record<string, unknown>;
+    assert.ok(card, "the issue is on the agent's board");
     for (const k of ["projectId", "milestoneId", "cycle", "cycleId"]) assert.equal(k in card, false, k);
-    const got = await v1ok({ key: apiKey }, "get_ticket", { ticket: t.ref });
-    for (const k of ["milestoneId", "cycle", "cycleId"]) assert.equal(k in got.ticket, false, k);
-    assert.equal(got.ticket.projectId, got.project.id, "the old `projectId` is still the team's id");
+    const got = await v1ok({ key: apiKey }, "get_issue", { issue: t.ref });
+    for (const k of ["milestoneId", "cycle", "cycleId"]) assert.equal(k in got.issue, false, k);
+    assert.equal(got.issue.projectId, got.project.id, "the old `projectId` is still the team's id");
   });
 
-  test("a team's agents hear a ticket join a project and a milestone change", async () => {
+  test("a team's agents hear an issue join a project and a milestone change", async () => {
     const p = await make();
     const before = (await v1ok({ key: apiKey }, "get_changes", { project: teamA })).changes.length;
     void before;
-    const t = await ticket(teamA, { projectId: p.id });
+    const t = await issue(teamA, { projectId: p.id });
     await app("POST", `/api/app/projects/${p.id}/milestones`, owner, { body: { name: "Heard" } });
     const changes = (await v1ok({ key: apiKey2 }, "get_changes", { project: teamA })).changes as { type: string; summary: string }[];
     const mine = changes.filter((c) => c.summary.includes(p.name) || c.summary.includes(t.ref)).map((c) => c.type);
-    assert.ok(mine.includes("project.ticket_joined"), mine.join(", "));
+    assert.ok(mine.includes("project.issue_joined"), mine.join(", "));
     assert.ok(mine.includes("project.milestone_changed"), mine.join(", "));
   });
 });

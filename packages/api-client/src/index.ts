@@ -60,8 +60,8 @@ import type {
   InvitePeek,
   KeyView,
   MilestoneInput,
-  MoveTicket,
-  NewTicket,
+  MoveIssue,
+  NewIssue,
   PendingInvite,
   ProjectDetail,
   ProjectInput,
@@ -72,10 +72,10 @@ import type {
   Role,
   WorkspaceMember,
   WorkspaceOverview,
-  TicketComment,
-  TicketDetail,
-  TicketPatch,
-  TicketView,
+  IssueComment,
+  IssueDetail,
+  IssuePatch,
+  IssueView,
 } from "./types";
 
 export type * from "./types";
@@ -245,7 +245,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Team settings: rename it, change its description, icon or icon colour (team admins). `null` clears an icon. */
       update: async (teamKey: string, input: { name?: string; description?: string; icon?: string | null; iconColor?: string | null }) =>
         (await request<{ team: Team }>("PATCH", `/api/app/teams/${encodeURIComponent(teamKey)}`, input)).team,
-      /** The team page in one read: columns, tickets, map nodes, members and the setup checklist. */
+      /** The team page in one read: columns, issues, map nodes, members and the setup checklist. */
       board: (teamKey: string) => request<BoardView>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/board`),
       /** The Bots menu: each agent key with its queue in this team. */
       queue: async (teamKey: string) => (await request<{ bots: Bot[] }>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/queue`)).bots,
@@ -265,18 +265,18 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/sessions/${encodeURIComponent(sessionId)}`),
     },
 
-    tickets: {
-      create: async (teamKey: string, input: NewTicket) =>
-        (await request<{ ticket: TicketView & { column: string | undefined } }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/tickets`, input)).ticket,
-      get: (ref: string) => request<TicketDetail>("GET", `/api/app/tickets/${encodeURIComponent(ref)}`),
-      /** With `version`, a stale edit rejects with an ApiError whose `current` is the ticket as it is now. */
-      update: async (ref: string, patch: TicketPatch) => (await request<{ ticket: TicketView }>("PATCH", `/api/app/tickets/${encodeURIComponent(ref)}`, patch)).ticket,
-      move: async (ref: string, move: MoveTicket) =>
-        (await request<{ ticket: TicketView & { column: string | undefined } }>("POST", `/api/app/tickets/${encodeURIComponent(ref)}/move`, move)).ticket,
-      remove: (ref: string) => request<{ ok: true }>("DELETE", `/api/app/tickets/${encodeURIComponent(ref)}`),
-      comment: async (ref: string, body: string) => (await request<{ comment: TicketComment }>("POST", `/api/app/tickets/${encodeURIComponent(ref)}/comments`, { body })).comment,
-      link: (ref: string, nodeId: string) => request<{ ok: true }>("PUT", `/api/app/tickets/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
-      unlink: (ref: string, nodeId: string) => request<{ ok: true }>("DELETE", `/api/app/tickets/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
+    issues: {
+      create: async (teamKey: string, input: NewIssue) =>
+        (await request<{ issue: IssueView & { column: string | undefined } }>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/issues`, input)).issue,
+      get: (ref: string) => request<IssueDetail>("GET", `/api/app/issues/${encodeURIComponent(ref)}`),
+      /** With `version`, a stale edit rejects with an ApiError whose `current` is the issue as it is now. */
+      update: async (ref: string, patch: IssuePatch) => (await request<{ issue: IssueView }>("PATCH", `/api/app/issues/${encodeURIComponent(ref)}`, patch)).issue,
+      move: async (ref: string, move: MoveIssue) =>
+        (await request<{ issue: IssueView & { column: string | undefined } }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/move`, move)).issue,
+      remove: (ref: string) => request<{ ok: true }>("DELETE", `/api/app/issues/${encodeURIComponent(ref)}`),
+      comment: async (ref: string, body: string) => (await request<{ comment: IssueComment }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/comments`, { body })).comment,
+      link: (ref: string, nodeId: string) => request<{ ok: true }>("PUT", `/api/app/issues/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
+      unlink: (ref: string, nodeId: string) => request<{ ok: true }>("DELETE", `/api/app/issues/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
     },
 
     map: {
@@ -331,17 +331,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
     projects: {
       /** The projects the person can see (through a team of theirs that takes part), active first. */
       list: async () => (await request<{ projects: ProjectSummary[] }>("GET", "/api/app/projects")).projects,
-      /** One project: milestones, the viewer's own teams with their tickets, the other teams as totals. */
+      /** One project: milestones, the viewer's own teams with their issues, the other teams as totals. */
       get: async (id: string) => (await request<{ project: ProjectDetail }>("GET", `/api/app/projects/${encodeURIComponent(id)}`)).project,
       create: async (input: ProjectInput & { name: string; leadTeam: string }) => (await request<{ project: ProjectDetail }>("POST", "/api/app/projects", input)).project,
       /** With `version`, a project changed since rejects with a 409. */
       update: async (id: string, patch: ProjectInput) => (await request<{ project: ProjectDetail }>("PATCH", `/api/app/projects/${encodeURIComponent(id)}`, patch)).project,
-      /** Its tickets stay on their boards, in no project. */
+      /** Its issues stay on their boards, in no project. */
       delete: (id: string) => request<{ ok: true; released: number }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}`),
       addTeam: async (id: string, teamKey: string) => (await request<{ project: ProjectDetail }>("POST", `/api/app/projects/${encodeURIComponent(id)}/teams`, { team: teamKey })).project,
-      /** A team with tickets in the project is refused (409) unless `releaseTickets`; the lead team cannot go. */
-      removeTeam: (id: string, teamKey: string, o: { releaseTickets?: boolean } = {}) =>
-        request<{ ok: true; released: number }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}/teams/${encodeURIComponent(teamKey)}${o.releaseTickets ? "?releaseTickets=1" : ""}`),
+      /** A team with issues in the project is refused (409) unless `releaseIssues`; the lead team cannot go. */
+      removeTeam: (id: string, teamKey: string, o: { releaseIssues?: boolean } = {}) =>
+        request<{ ok: true; released: number }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}/teams/${encodeURIComponent(teamKey)}${o.releaseIssues ? "?releaseIssues=1" : ""}`),
       addMilestone: async (id: string, input: MilestoneInput & { name: string }) => (await request<{ project: ProjectDetail }>("POST", `/api/app/projects/${encodeURIComponent(id)}/milestones`, input)).project,
       updateMilestone: async (id: string, milestoneId: string, patch: MilestoneInput) =>
         (await request<{ project: ProjectDetail }>("PATCH", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, patch)).project,
@@ -364,13 +364,13 @@ export function createApiClient(options: ApiClientOptions = {}) {
     },
 
     cycles: {
-      /** The team's cycles by when they are. An ended cycle has handed its unfinished tickets on before this answers. */
+      /** The team's cycles by when they are. An ended cycle has handed its unfinished issues on before this answers. */
       list: (teamKey: string) => request<CycleList>("GET", `${team(teamKey)}/cycles`),
-      /** One cycle: its tickets and what landed while it ran. */
+      /** One cycle: its issues and what landed while it ran. */
       get: async (teamKey: string, number: number) => (await request<{ cycle: CycleDetail }>("GET", `${team(teamKey)}/cycles/${number}`)).cycle,
       create: async (teamKey: string, input: CycleInput) => (await request<{ cycle: CycleSummary }>("POST", `${team(teamKey)}/cycles`, input)).cycle,
       update: async (teamKey: string, number: number, patch: CycleInput) => (await request<{ cycle: CycleSummary }>("PATCH", `${team(teamKey)}/cycles/${number}`, patch)).cycle,
-      /** Its tickets stay on the board, in no cycle. */
+      /** Its issues stay on the board, in no cycle. */
       delete: (teamKey: string, number: number) => request<{ ok: true; number: number; released: number }>("DELETE", `${team(teamKey)}/cycles/${number}`),
     },
 

@@ -133,17 +133,17 @@ export type DashboardSummary = {
 };
 
 /** The most important things about one team, ranked for a quick look. Only for `?team=KEY`. */
-export type FocusTicket = { ref: string; title: string; column: string; priority: Priority; days: number; byAgent: boolean };
+export type FocusIssue = { ref: string; title: string; column: string; priority: Priority; days: number; byAgent: boolean };
 export type TeamFocus = {
   /** In progress the longest, oldest first. */
-  aging: FocusTicket[];
+  aging: FocusIssue[];
   /** Waiting for review the longest, oldest first. */
-  waitingReview: FocusTicket[];
-  /** Tickets an agent claimed and went quiet on. */
+  waitingReview: FocusIssue[];
+  /** Issues an agent claimed and went quiet on. */
   quiet: { ref: string; title: string; teamKey: string; agent: string; lastAt: string }[];
   proposedDecisions: number;
   members: { count: number; myRole: string | null };
-  tickets: number;
+  issues: number;
 };
 
 export type TeamProgress = {
@@ -172,7 +172,7 @@ export type SessionView = {
   bucket: "h6" | "h12" | "h24" | "d7";
   reading: boolean;
   branch: string | null;
-  ticket: string | null;
+  issue: string | null;
   teamKey?: string;
 };
 
@@ -215,11 +215,11 @@ export type DashboardWidgets = {
   focus: TeamFocus;
 };
 
-// ───────── the board and its tickets ─────────
+// ───────── the board and its issues ─────────
 
 export type Priority = "low" | "medium" | "high" | "urgent";
 
-export type TicketView = {
+export type IssueView = {
   id: string;
   ref: string;
   number: number;
@@ -243,8 +243,8 @@ export type TicketView = {
   updatedAt: string;
 };
 
-/** A ticket on the board also says which map nodes it touches and how many comments it has. */
-export type BoardTicket = TicketView & { nodeIds: string[]; commentCount: number };
+/** An issue on the board also says which map nodes it touches and how many comments it has. */
+export type BoardIssue = IssueView & { nodeIds: string[]; commentCount: number };
 
 export type ChecklistItem = {
   id: "repos" | "machines" | "agents" | "map" | "teammates";
@@ -261,16 +261,16 @@ export type CycleState = "upcoming" | "current" | "past";
 export type CycleOption = { number: number; name: string; startsAt: string; endsAt: string; state: CycleState };
 export type CycleSummary = CycleOption & {
   goal: string;
-  /** Tickets in the cycle now, how many of them are done, and how many are still open. */
+  /** Issues in the cycle now, how many of them are done, and how many are still open. */
   total: number;
   done: number;
   open: number;
 };
 export type CycleList = { current: CycleSummary | null; upcoming: CycleSummary[]; past: CycleSummary[] };
-export type CycleLanded = { ref: string; title: string; ticketId: string; doneAt: string; inCycle: boolean };
+export type CycleLanded = { ref: string; title: string; issueId: string; doneAt: string; inCycle: boolean };
 export type CycleDetail = CycleSummary & {
-  tickets: { ref: string; title: string; priority: Priority; column: string; done: boolean; assigneeId: string | null }[];
-  /** Tickets that reached Done while the cycle ran, and which of them are in it. */
+  issues: { ref: string; title: string; priority: Priority; column: string; done: boolean; assigneeId: string | null }[];
+  /** Issues that reached Done while the cycle ran, and which of them are in it. */
   landed: CycleLanded[];
 };
 /** No dates: from now for two weeks. A cycle lasts one to fourteen days and does not overlap another of the team. */
@@ -280,7 +280,7 @@ export type CycleInput = { name?: string; goal?: string; startsAt?: string; ends
 
 export type ProjectStatus = "planned" | "active" | "paused" | "completed" | "canceled";
 export type ProjectHealthValue = "on_track" | "at_risk" | "off_track";
-/** What the tickets and dates say (`derived`, only for an active project), what someone set (`override`), and the one to show. */
+/** What the issues and dates say (`derived`, only for an active project), what someone set (`override`), and the one to show. */
 export type ProjectHealth = { derived: ProjectHealthValue | null; override: ProjectHealthValue | null; value: ProjectHealthValue | null };
 
 export type ProjectSummary = {
@@ -294,7 +294,7 @@ export type ProjectSummary = {
   leadUser: { id: string; name: string } | null;
   /** Named only to people on the lead team. */
   leadTeam: { key: string; name: string } | null;
-  /** Every ticket in the project, across all its teams, and how many are done. */
+  /** Every issue in the project, across all its teams, and how many are done. */
   total: number;
   done: number;
   teamCount: number;
@@ -303,14 +303,14 @@ export type ProjectSummary = {
   updatedAt: string;
 };
 export type ProjectMilestone = { id: string; name: string; description: string; targetDate: string | null; position: number; total: number; done: number };
-export type ProjectTicket = { ref: string; title: string; priority: Priority; column: string; done: boolean; milestoneId: string | null };
-export type ProjectTeam = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; tickets: ProjectTicket[] };
+export type ProjectIssue = { ref: string; title: string; priority: Priority; column: string; done: boolean; milestoneId: string | null };
+export type ProjectTeam = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; issues: ProjectIssue[] };
 export type ProjectDetail = ProjectSummary & {
   canAdmin: boolean;
   milestones: ProjectMilestone[];
-  /** The teams of the project the viewer is on, with their tickets. */
+  /** The teams of the project the viewer is on, with their issues. */
   teams: ProjectTeam[];
-  /** The teams they are not on: how many and the totals of their tickets, never a name or a title. */
+  /** The teams they are not on: how many and the totals of their issues, never a name or a title. */
   others: { count: number; total: number; done: number };
   /** Teams the viewer could bring in (they edit them) and that do not take part yet. */
   addableTeams: { key: string; name: string }[];
@@ -341,7 +341,7 @@ export type InitiativeSummary = {
   health: ProjectHealth;
   targetDate: string | null;
   owner: { id: string; name: string } | null;
-  /** Rolled up from the tickets of every project below, each ticket once. */
+  /** Rolled up from the issues of every project below, each issue once. */
   total: number;
   done: number;
   /** Projects linked to this initiative itself, and initiatives directly under it. */
@@ -387,19 +387,19 @@ export type BoardMember = { id: string; name: string };
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
   columns: BoardColumn[];
-  tickets: BoardTicket[];
+  issues: BoardIssue[];
   nodes: BoardNode[];
   members: BoardMember[];
   /** The team's cycles, newest first: a card's chip names one, the filter lists them. */
   cycles: CycleOption[];
-  /** The projects this team takes part in, with their milestones: for the card chip and the ticket's Project field. */
+  /** The projects this team takes part in, with their milestones: for the card chip and the issue's Project field. */
   projects: TeamProjectOption[];
   checklist: ChecklistState;
 };
 
-export type TicketComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
-export type TicketHistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: string };
-export type TicketPullRequest = {
+export type IssueComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
+export type IssueHistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: string };
+export type IssuePullRequest = {
   number: number;
   title: string;
   url: string;
@@ -411,33 +411,33 @@ export type TicketPullRequest = {
   updatedAt: string;
 };
 
-export type TicketDetail = {
-  ticket: TicketView & { column: string | undefined };
+export type IssueDetail = {
+  issue: IssueView & { column: string | undefined };
   team: { key: string; name: string };
-  comments: TicketComment[];
+  comments: IssueComment[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
-  history: TicketHistoryItem[];
-  pullRequests: TicketPullRequest[];
+  history: IssueHistoryItem[];
+  pullRequests: IssuePullRequest[];
 };
 
-/** The fields of a ticket a person can change. `version` is what you last read: a change by anyone since is a 409 conflict. */
-export type TicketPatch = {
+/** The fields of an issue a person can change. `version` is what you last read: a change by anyone since is a 409 conflict. */
+export type IssuePatch = {
   title?: string;
   body?: string;
   priority?: Priority;
   assigneeId?: string | null;
   agentClaimable?: boolean;
   labels?: string[];
-  /** A cycle number of this team that has not ended; null takes the ticket out of its cycle. */
+  /** A cycle number of this team that has not ended; null takes the issue out of its cycle. */
   cycle?: number | null;
-  /** A project this team takes part in; null takes the ticket out of it (and its milestone). */
+  /** A project this team takes part in; null takes the issue out of it (and its milestone). */
   projectId?: string | null;
-  /** A milestone of the ticket's project; null clears it. */
+  /** A milestone of the issue's project; null clears it. */
   milestoneId?: string | null;
   version?: number;
 };
-export type NewTicket = Omit<TicketPatch, "version"> & { title: string; column?: string };
-export type MoveTicket = { column: string; index?: number; version?: number };
+export type NewIssue = Omit<IssuePatch, "version"> & { title: string; column?: string };
+export type MoveIssue = { column: string; index?: number; version?: number };
 
 export type BotSession = SessionView;
 /** An agent key and its queue in one team. */
@@ -511,7 +511,7 @@ export type Decision = {
 export type Term = { id: string; term: string; definition: string; nodeId: string | null };
 
 export type FluxEntry = {
-  sessions: { id: string; by: string; ticket: string | null; files: string[] }[];
+  sessions: { id: string; by: string; issue: string | null; files: string[] }[];
   drafts: { id: string; authorKind: "human" | "agent"; authorName: string; confirm: boolean; patch: Record<string, unknown> }[];
 };
 
@@ -519,7 +519,7 @@ export type GraphView = {
   team: { id: string; key: string; name: string; description: string };
   nodes: MapNode[];
   edges: MapEdge[];
-  ticketLinks: { nodeId: string; ticketId: string; number: number; title: string; columnId: string; ref: string }[];
+  issueLinks: { nodeId: string; issueId: string; number: number; title: string; columnId: string; ref: string }[];
   flows: Flow[];
   decisions: Decision[];
   terms: Term[];

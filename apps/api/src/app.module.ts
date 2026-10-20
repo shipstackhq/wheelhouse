@@ -16,7 +16,7 @@ import { DashboardController } from "./web/dashboard.controller";
 import { InvitesController } from "./web/invites.controller";
 import { KeysController } from "./web/keys.controller";
 import { WorkspaceController } from "./web/workspace.controller";
-import { TicketsController } from "./web/tickets.controller";
+import { IssuesController } from "./web/issues.controller";
 import { CsrfGuard, SessionGuard } from "./web/endpoints";
 import { DocsController } from "./web/docs.controller";
 import { MapController } from "./web/map.controller";
@@ -29,7 +29,7 @@ import { TeamMembersController } from "./web/team-members.controller";
 import { TeamsController } from "./web/teams.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, TicketsController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController],
   providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard],
 })
 export class AppModule {}

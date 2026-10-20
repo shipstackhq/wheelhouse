@@ -33,7 +33,7 @@ test("a plain click on a link to another page of the app starts the bar", () => 
   assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/workspace"), here), true);
 });
 
-test("changing only the query counts, because opening a ticket is a navigation", () => {
+test("changing only the query counts, because opening an issue is a navigation", () => {
   assert.equal(startsNavigation(click("https://wheelhouse.shipstack.run/t/WH?t=WH-12"), here), true);
 });
 

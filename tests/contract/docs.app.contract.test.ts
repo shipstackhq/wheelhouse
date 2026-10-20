@@ -187,11 +187,11 @@ describe("docs", () => {
     assert.deepEqual((await app("GET", `/api/app/teams/DOC/docs/${d.id}`, t.s)).json.nodes, []);
   });
 
-  test("an action item becomes a ticket through the ordinary ticket endpoint", async () => {
+  test("an action item becomes an issue through the ordinary issue endpoint", async () => {
     const t = await workspace();
-    const r = await app("POST", "/api/app/teams/DOC/tickets", t.s, { body: { title: "Write the runbook" } });
+    const r = await app("POST", "/api/app/teams/DOC/issues", t.s, { body: { title: "Write the runbook" } });
     assert.equal(r.status, 201);
-    assert.equal(r.json.ticket.title, "Write the runbook");
+    assert.equal(r.json.issue.title, "Write the runbook");
   });
 
   test("another workspace's teams, docs and nodes are a 404 on every route, and change nothing", async () => {

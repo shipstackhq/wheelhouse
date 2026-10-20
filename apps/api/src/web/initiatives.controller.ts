@@ -57,7 +57,7 @@ export class InitiativesController {
     return { initiative: await linkProjectAs(req.human.actor, id, jsonBody(req)) };
   }
 
-  /** The project and its tickets are untouched. */
+  /** The project and its issues are untouched. */
   @Delete(":id/projects/:projectId")
   async unlink(@Req() req: SessionRequest, @Param("id") id: string, @Param("projectId") projectId: string) {
     return { initiative: await unlinkProjectAs(req.human.actor, id, projectId) };

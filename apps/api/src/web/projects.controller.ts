@@ -24,7 +24,7 @@ import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class ProjectsController {
-  /** `{ projects }`: the visible ones, active first, each with its health, lead and how many tickets are done. */
+  /** `{ projects }`: the visible ones, active first, each with its health, lead and how many issues are done. */
   @Get()
   async list(@Req() req: SessionRequest) {
     return { projects: await listProjectsAs(req.human.actor) };
@@ -36,7 +36,7 @@ export class ProjectsController {
     return { project: await createProjectAs(req.human.actor, jsonBody(req)) };
   }
 
-  /** One project: its milestones, the viewer's own teams with their tickets, the totals of the other teams, and the teams they could bring in. */
+  /** One project: its milestones, the viewer's own teams with their issues, the totals of the other teams, and the teams they could bring in. */
   @Get(":id")
   async one(@Req() req: SessionRequest, @Param("id") id: string) {
     return { project: await getProjectAs(req.human.actor, id) };
@@ -48,7 +48,7 @@ export class ProjectsController {
     return { project: await updateProjectAs(req.human.actor, id, jsonBody(req)) };
   }
 
-  /** Soft delete: its tickets stay on their boards, in no project. */
+  /** Soft delete: its issues stay on their boards, in no project. */
   @Delete(":id")
   async remove(@Req() req: SessionRequest, @Param("id") id: string) {
     return deleteProjectAs(req.human.actor, id);
@@ -60,9 +60,9 @@ export class ProjectsController {
     return { project: await addProjectTeamAs(req.human.actor, id, jsonBody(req)) };
   }
 
-  /** Take a team out. A team with tickets in the project is a 409 unless `?releaseTickets=1`; the lead team cannot go. */
+  /** Take a team out. A team with issues in the project is a 409 unless `?releaseIssues=1`; the lead team cannot go. */
   @Delete(":id/teams/:key")
-  async removeTeam(@Req() req: SessionRequest, @Param("id") id: string, @Param("key") key: string, @Query("releaseTickets") release?: string) {
+  async removeTeam(@Req() req: SessionRequest, @Param("id") id: string, @Param("key") key: string, @Query("releaseIssues") release?: string) {
     return removeProjectTeamAs(req.human.actor, id, key, release === "1" || release === "true");
   }
 
@@ -78,7 +78,7 @@ export class ProjectsController {
     return { project: await updateMilestoneAs(req.human.actor, id, milestoneId, jsonBody(req)) };
   }
 
-  /** Its tickets stay in the project, in no milestone. */
+  /** Its issues stay in the project, in no milestone. */
   @Delete(":id/milestones/:milestoneId")
   @HttpCode(200)
   async removeMilestone(@Req() req: SessionRequest, @Param("id") id: string, @Param("milestoneId") milestoneId: string) {

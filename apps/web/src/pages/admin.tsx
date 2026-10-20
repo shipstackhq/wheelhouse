@@ -114,7 +114,7 @@ export function AdminWorkspacePage() {
               ))}
             </div>
 
-            <p className="text-xs text-muted">Tickets, comments and the map of this workspace are not shown here.</p>
+            <p className="text-xs text-muted">Issues, comments and the map of this workspace are not shown here.</p>
 
             {t.suspendedAt ? (
               <div className="card border-danger/40 p-5">

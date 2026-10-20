@@ -37,67 +37,67 @@ describe("POST /api/v1/:tool: errors", () => {
     const unknown = await v1(A, "no_such_tool");
     assert.equal(unknown.status, 404);
     assert.equal(unknown.json.error.code, "not_found");
-    const invalid = await v1(A, "update_ticket", {});
+    const invalid = await v1(A, "update_issue", {});
     assert.equal(invalid.status, 400);
     assert.equal(invalid.json.error.code, "invalid");
     assert.equal(typeof invalid.json.error.message, "string");
     // An unparseable body counts as no arguments.
-    const garbage = await call("/api/v1/update_ticket", { ...A, method: "POST", rawBody: "{not json", headers: { "content-type": "application/json" } });
+    const garbage = await call("/api/v1/update_issue", { ...A, method: "POST", rawBody: "{not json", headers: { "content-type": "application/json" } });
     assert.equal(garbage.status, 400);
     assert.equal(garbage.json.error.code, "invalid");
   });
 
   test("the response envelope is recorded", async () => {
-    const err = await v1(A, "get_ticket", { ticket: "ZZZ-999" });
+    const err = await v1(A, "get_issue", { issue: "ZZZ-999" });
     assert.equal(err.status, 404);
     expectGolden("v1-error-envelope", shape(err.json));
   });
 });
 
-describe("POST /api/v1/:tool: tickets", () => {
+describe("POST /api/v1/:tool: issues", () => {
   test("create, read, edit with optimistic locking, move by name and by role, comment, claim", async () => {
     const title = unique("v1 flow");
-    const made = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title, body: "body", priority: "high", labels: ["contract"] });
+    const made = await v1ok(A, "create_issue", { project: fx.a.teamKey, title, body: "body", priority: "high", labels: ["contract"] });
     assert.match(made.ref, new RegExp(`^${fx.a.teamKey}-\\d+$`));
     assert.equal(made.column, "Backlog");
     assert.equal(made.version, 1);
 
-    const edited = await v1ok(A, "update_ticket", { ticket: made.ref, title: `${title} edited`, expected_version: 1 });
+    const edited = await v1ok(A, "update_issue", { issue: made.ref, title: `${title} edited`, expected_version: 1 });
     assert.equal(edited.version, 2);
-    const stale = await v1(A, "update_ticket", { ticket: made.ref, title: "lost update", expected_version: 1 });
+    const stale = await v1(A, "update_issue", { issue: made.ref, title: "lost update", expected_version: 1 });
     assert.equal(stale.status, 409);
     assert.equal(stale.json.error.code, "conflict");
     assert.equal(stale.json.error.details.current.title, `${title} edited`, "a conflict carries the current state");
 
-    assert.equal((await v1ok(A, "move_ticket", { ticket: made.ref, column: "In Progress" })).column, "In Progress");
-    assert.equal((await v1ok(A, "move_ticket", { ticket: made.ref, column: "review" })).column, "Review", "a role finds the column (ADR-15)");
-    assert.equal((await v1ok(A, "move_ticket", { ticket: made.ref, column: "done" })).column, "Done");
-    const badColumn = await v1(A, "move_ticket", { ticket: made.ref, column: "Nowhere" });
+    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, column: "In Progress" })).column, "In Progress");
+    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, column: "review" })).column, "Review", "a role finds the column (ADR-15)");
+    assert.equal((await v1ok(A, "move_issue", { issue: made.ref, column: "done" })).column, "Done");
+    const badColumn = await v1(A, "move_issue", { issue: made.ref, column: "Nowhere" });
     assert.equal(badColumn.status, 400);
     assert.match(badColumn.json.error.message, /Unknown column/);
 
-    const c = await v1ok(A, "comment", { ticket: made.ref, body: "hello from the contract suite" });
+    const c = await v1ok(A, "comment", { issue: made.ref, body: "hello from the contract suite" });
     assert.equal(c.body, "hello from the contract suite");
-    const got = await v1ok(A, "get_ticket", { ticket: made.ref });
-    assert.equal(got.ticket.column, "Done");
+    const got = await v1ok(A, "get_issue", { issue: made.ref });
+    assert.equal(got.issue.column, "Done");
     assert.equal(got.comments.length, 1);
-    assert.ok(got.history.some((e: { type: string }) => e.type === "ticket.moved"));
+    assert.ok(got.history.some((e: { type: string }) => e.type === "issue.moved"));
 
     // Only one agent can hold a claim.
-    const claimable = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title: unique("claim me") });
-    assert.equal((await v1ok(A, "claim_ticket", { ticket: claimable.ref })).claimedByKeyId.length > 0, true);
-    const second = await v1(A2, "claim_ticket", { ticket: claimable.ref });
+    const claimable = await v1ok(A, "create_issue", { project: fx.a.teamKey, title: unique("claim me") });
+    assert.equal((await v1ok(A, "claim_issue", { issue: claimable.ref })).claimedByKeyId.length > 0, true);
+    const second = await v1(A2, "claim_issue", { issue: claimable.ref });
     assert.equal(second.status, 409);
     assert.equal(second.json.error.code, "conflict");
   });
 
   test("response shapes of the core tools are recorded", async () => {
-    const created = await v1ok(A, "create_ticket", { project: fx.a.teamKey, title: unique("shape"), labels: ["x"] });
+    const created = await v1ok(A, "create_issue", { project: fx.a.teamKey, title: unique("shape"), labels: ["x"] });
     const shapes = {
       list_projects: shape(await v1ok(A, "list_projects")),
       get_board: shape(await v1ok(A, "get_board", { project: fx.a.teamKey })),
-      create_ticket: shape(created),
-      get_ticket: shape(await v1ok(A, "get_ticket", { ticket: created.ref })),
+      create_issue: shape(created),
+      get_issue: shape(await v1ok(A, "get_issue", { issue: created.ref })),
       get_changes: shape(await v1ok(A, "get_changes", { project: fx.a.teamKey })),
       get_activity: shape(await v1ok(A, "get_activity", { project: fx.a.teamKey })),
     };
@@ -128,7 +128,7 @@ describe("POST /api/v1/:tool: sessions (ADR-4, ADR-5)", () => {
     const s1 = unique("ct-s1");
     const s2 = unique("ct-s2");
     // A teammate (a person's session cookie is not needed: a second key stands in) makes a change both sessions have not seen.
-    await v1ok(A2, "create_ticket", { project: fx.a.teamKey, title: unique("queue") });
+    await v1ok(A2, "create_issue", { project: fx.a.teamKey, title: unique("queue") });
     const first = await v1ok(A, "get_changes", { project: fx.a.teamKey, session: s1 });
     const second = await v1ok(A, "get_changes", { project: fx.a.teamKey, session: s2 });
     assert.ok(first.latestSeq >= 1);

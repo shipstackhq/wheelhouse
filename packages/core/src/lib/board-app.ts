@@ -9,12 +9,12 @@ import { ServiceError } from "./service";
 import type { ChecklistState } from "./setup-checklist";
 
 /**
- * What the web app's board and ticket dialog read and write (WH-96), as functions of the signed-in person. The API's controllers
+ * What the web app's board and issue dialog read and write (WH-96), as functions of the signed-in person. The API's controllers
  * call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another workspace's team or
- * ticket is simply "not found". Responses carry only what the screens use, never raw rows.
+ * issue is simply "not found". Responses carry only what the screens use, never raw rows.
  */
 
-export type TicketView = {
+export type IssueView = {
   id: string;
   ref: string;
   number: number;
@@ -38,9 +38,9 @@ export type TicketView = {
   updatedAt: Date;
 };
 
-type TicketRow = typeof schema.tickets.$inferSelect & { ref: string; labels: string[]; cycle: number | null };
+type IssueRow = typeof schema.issues.$inferSelect & { ref: string; labels: string[]; cycle: number | null };
 
-export const ticketView = (t: TicketRow): TicketView => ({
+export const issueView = (t: IssueRow): IssueView => ({
   id: t.id,
   ref: t.ref,
   number: t.number,
@@ -62,24 +62,24 @@ export const ticketView = (t: TicketRow): TicketView => ({
   updatedAt: t.updatedAt,
 });
 
-/** A ticket on the board also says which map nodes it touches and how many comments it has. */
-export type BoardTicket = TicketView & { nodeIds: string[]; commentCount: number };
+/** An issue on the board also says which map nodes it touches and how many comments it has. */
+export type BoardIssue = IssueView & { nodeIds: string[]; commentCount: number };
 
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
   columns: { id: string; name: string; role: string | null; position: number }[];
-  tickets: BoardTicket[];
+  issues: BoardIssue[];
   /** Just enough of the map to show and link nodes. The map itself is another page. */
   nodes: { id: string; name: string; kind: string; parentId: string | null; layer: string }[];
   members: { id: string; name: string }[];
-  /** The team's cycles, newest first: a ticket's chip names one, the board filters by one. */
+  /** The team's cycles, newest first: an issue's chip names one, the board filters by one. */
   cycles: CycleOption[];
-  /** The projects this team takes part in, with their milestones: for the card chip and the ticket's Project field. */
+  /** The projects this team takes part in, with their milestones: for the card chip and the issue's Project field. */
   projects: TeamProjectOption[];
   checklist: ChecklistState;
 };
 
-/** The team page: its columns, every ticket, the map nodes a ticket can link to, the team's members (the people a ticket can be assigned to) and the setup checklist. */
+/** The team page: its columns, every issue, the map nodes an issue can link to, the team's members (the people an issue can be assigned to) and the setup checklist. */
 export async function boardView(actor: Actor, teamKey: string): Promise<BoardView> {
   const [board, checklist] = await Promise.all([svc.getBoard(actor, teamKey), svc.checklistForTeam(actor, teamKey)]);
   const db = await getDb();
@@ -99,7 +99,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
     columns: board.columns.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
-    tickets: board.tickets.map((t) => ({ ...ticketView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
+    issues: board.issues.map((t) => ({ ...issueView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
     nodes,
     members,
     cycles,
@@ -108,20 +108,20 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
   };
 }
 
-export type TicketDetail = {
-  ticket: TicketView & { column: string | undefined };
+export type IssueDetail = {
+  issue: IssueView & { column: string | undefined };
   team: { key: string; name: string };
   comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
-  pullRequests: Awaited<ReturnType<typeof import("./github/service").pullRequestsForTicket>>;
+  pullRequests: Awaited<ReturnType<typeof import("./github/service").pullRequestsForIssue>>;
 };
 
-/** One ticket for the dialog: its fields, discussion, linked map nodes, history and the pull requests GitHub reported against it. */
-export async function ticketDetail(actor: Actor, ref: string): Promise<TicketDetail> {
-  const d = await svc.getTicket(actor, ref);
+/** One issue for the dialog: its fields, discussion, linked map nodes, history and the pull requests GitHub reported against it. */
+export async function issueDetail(actor: Actor, ref: string): Promise<IssueDetail> {
+  const d = await svc.getIssue(actor, ref);
   return {
-    ticket: { ...ticketView(d.ticket), column: d.ticket.column },
+    issue: { ...issueView(d.issue), column: d.issue.column },
     team: { key: d.team.key, name: d.team.name },
     comments: d.comments.map((c) => ({ id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt })),
     nodes: d.nodes,
@@ -145,11 +145,11 @@ export function intField(b: Record<string, unknown>, name: string): number | und
 }
 
 /**
- * The ticket fields a request may carry, checked the way the MCP tools check them (a string, a known priority, a list of strings,
- * true or false) so a wrong type is a 400 naming the field and never reaches the database. For a new ticket the title is required.
+ * The issue fields a request may carry, checked the way the MCP tools check them (a string, a known priority, a list of strings,
+ * true or false) so a wrong type is a 400 naming the field and never reaches the database. For a new issue the title is required.
  */
-export function ticketInput(b: Record<string, unknown>, o: { create: boolean }): svc.TicketInput {
-  const out: svc.TicketInput = {};
+export function issueInput(b: Record<string, unknown>, o: { create: boolean }): svc.IssueInput {
+  const out: svc.IssueInput = {};
   if (b.title !== undefined) {
     if (typeof b.title !== "string") bad("title", "title must be text");
     out.title = (b.title as string).trim();
@@ -188,7 +188,7 @@ export function ticketInput(b: Record<string, unknown>, o: { create: boolean }):
   return out;
 }
 
-/** The column of a move or a new ticket: an id, a name or a role ("review"); the service finds it in this ticket's own team. */
+/** The column of a move or a new issue: an id, a name or a role ("review"); the service finds it in this issue's own team. */
 export function columnField(b: Record<string, unknown>, required: boolean): string | undefined {
   const v = b.column;
   if (v === undefined || v === null) return required ? bad("column", "column is required") : undefined;
@@ -196,39 +196,39 @@ export function columnField(b: Record<string, unknown>, required: boolean): stri
   return v;
 }
 
-// ───────── changing a ticket ─────────
+// ───────── changing an issue ─────────
 
 /**
- * A stale `version` is a 409 whose `details.current` is what the ticket is now. The service attaches the raw row; the web app is
- * given the same trimmed ticket every other answer uses, so the screen can show the conflict and offer the latest text.
+ * A stale `version` is a 409 whose `details.current` is what the issue is now. The service attaches the raw row; the web app is
+ * given the same trimmed issue every other answer uses, so the screen can show the conflict and offer the latest text.
  */
 async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (e) {
     if (e instanceof ServiceError && e.code === "conflict" && (e.details as { current?: unknown } | undefined)?.current) {
-      const now = await svc.resolveTicket(actor, ref);
+      const now = await svc.resolveIssue(actor, ref);
       const db = await getDb();
-      const [withLabel] = await withCycle(db, await withLabels(db, [now.ticket]));
-      throw new ServiceError("conflict", e.message, { current: ticketView({ ...withLabel, ref: now.ref }) });
+      const [withLabel] = await withCycle(db, await withLabels(db, [now.issue]));
+      throw new ServiceError("conflict", e.message, { current: issueView({ ...withLabel, ref: now.ref }) });
     }
     throw e;
   }
 }
 
-export async function createTicketAs(actor: Actor, teamKey: string, input: svc.TicketInput & { title: string }, column?: string) {
-  const t = await svc.createTicket(actor, teamKey, { ...input, column });
-  return { ...ticketView(t), column: t.column };
+export async function createIssueAs(actor: Actor, teamKey: string, input: svc.IssueInput & { title: string }, column?: string) {
+  const t = await svc.createIssue(actor, teamKey, { ...input, column });
+  return { ...issueView(t), column: t.column };
 }
 
 /** Change fields. With `version`, a change made by anyone since is refused (409) and nothing is overwritten. */
-export async function updateTicketAs(actor: Actor, ref: string, patch: svc.TicketInput, version?: number) {
-  const t = await withCurrent(actor, ref, () => svc.updateTicket(actor, ref, patch, version));
-  return ticketView(t);
+export async function updateIssueAs(actor: Actor, ref: string, patch: svc.IssueInput, version?: number) {
+  const t = await withCurrent(actor, ref, () => svc.updateIssue(actor, ref, patch, version));
+  return issueView(t);
 }
 
 /** Move to a column (an id, a name or a role such as "review") at a position (the end when absent). */
-export async function moveTicketAs(actor: Actor, ref: string, column: string, index?: number, version?: number) {
-  const t = await withCurrent(actor, ref, () => svc.moveTicket(actor, ref, column, index, version));
-  return { ...ticketView(t), column: t.column };
+export async function moveIssueAs(actor: Actor, ref: string, column: string, index?: number, version?: number) {
+  const t = await withCurrent(actor, ref, () => svc.moveIssue(actor, ref, column, index, version));
+  return { ...issueView(t), column: t.column };
 }

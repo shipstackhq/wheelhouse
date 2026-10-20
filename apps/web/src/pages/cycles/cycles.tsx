@@ -53,7 +53,7 @@ export function Cycles(props: { teamKey: string; list: CycleList }) {
           <div>
             <h2 className="text-lg font-semibold">Cycles</h2>
             <p className="mt-1 text-sm text-muted">
-              An optional rhythm for this team: one or two weeks with a goal. Tickets join when they are ready, not at the start, and what is
+              An optional rhythm for this team: one or two weeks with a goal. Issues join when they are ready, not at the start, and what is
               not done when a cycle ends moves on to the next one by itself. There are no points and no velocity.
             </p>
           </div>

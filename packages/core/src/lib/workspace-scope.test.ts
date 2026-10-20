@@ -1,6 +1,6 @@
 /**
  * Tenant integrity in the database (WH-113): a team-scoped row cannot name another workspace's team, a team member is a
- * workspace member, and an assignee is a member of the ticket's team. Runs on an in-memory PGlite (`pnpm test`), or a real
+ * workspace member, and an assignee is a member of the issue's team. Runs on an in-memory PGlite (`pnpm test`), or a real
  * Postgres with TEST_DATABASE_URL.
  */
 if (process.env.TEST_DATABASE_URL) {
@@ -71,10 +71,10 @@ describe("a row names its team's own workspace", () => {
 
   const cases: [string, () => Promise<unknown>][] = [
     ["columns", async () => (await getDb()).insert(schema.columns).values({ ...wrong(), name: "x", position: 1 })],
-    ["tickets", async () => {
+    ["issues", async () => {
       const db = await getDb();
       const [col] = await db.select().from(schema.columns).where(eq(schema.columns.teamId, a1.id));
-      return db.insert(schema.tickets).values({ ...wrong(), columnId: col.id, number: 999, title: "x", position: 1, createdByKind: "human" });
+      return db.insert(schema.issues).values({ ...wrong(), columnId: col.id, number: 999, title: "x", position: 1, createdByKind: "human" });
     }],
     ["nodes", async () => (await getDb()).insert(schema.nodes).values({ ...wrong(), layer: "system", kind: "service", name: "x" })],
     ["flows", async () => (await getDb()).insert(schema.flows).values({ ...wrong(), name: "x" })],
@@ -122,48 +122,48 @@ describe("a team member is a workspace member", () => {
   });
 });
 
-describe("an assignee is a member of the ticket's team", () => {
+describe("an assignee is a member of the issue's team", () => {
   test("a team member can be assigned; a workspace member who is not on the team cannot", async () => {
-    const t = await svc.createTicket(ada, a1.key, { title: "Assign me", assigneeId: bob.id });
+    const t = await svc.createIssue(ada, a1.key, { title: "Assign me", assigneeId: bob.id });
     assert.equal(t.assigneeId, bob.id);
-    await assert.rejects(svc.createTicket(ada, a1.key, { title: "Nope", assigneeId: cy.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /member of this team/.test(e.message));
-    await assert.rejects(svc.updateTicket(ada, t.ref, { assigneeId: cy.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.updateTicket(ada, t.ref, { assigneeId: bea.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(svc.createIssue(ada, a1.key, { title: "Nope", assigneeId: cy.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /member of this team/.test(e.message));
+    await assert.rejects(svc.updateIssue(ada, t.ref, { assigneeId: cy.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(svc.updateIssue(ada, t.ref, { assigneeId: bea.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
   });
 
   test("the database refuses a non-member assignee even when the service is bypassed", async () => {
-    const t = await svc.createTicket(ada, a1.key, { title: "Direct" });
+    const t = await svc.createIssue(ada, a1.key, { title: "Direct" });
     const db = await getDb();
-    await assert.rejects(db.update(schema.tickets).set({ assigneeId: cy.id }).where(eq(schema.tickets.id, t.id)), refused("23503"));
+    await assert.rejects(db.update(schema.issues).set({ assigneeId: cy.id }).where(eq(schema.issues.id, t.id)), refused("23503"));
   });
 
-  test("removing someone from a team unassigns their tickets there and nothing else", async () => {
+  test("removing someone from a team unassigns their issues there and nothing else", async () => {
     const eli = await person(wsA.id, "member", "eli");
     await pmem.addTeamMember(ada, a1.key, { userId: eli.id, role: "editor" });
-    const mine = await svc.createTicket(ada, a1.key, { title: "Eli's", assigneeId: eli.id });
-    const other = await svc.createTicket(ada, a1.key, { title: "Bob's", assigneeId: bob.id });
+    const mine = await svc.createIssue(ada, a1.key, { title: "Eli's", assigneeId: eli.id });
+    const other = await svc.createIssue(ada, a1.key, { title: "Bob's", assigneeId: bob.id });
     await pmem.removeTeamMember(ada, a1.key, eli.id);
     const db = await getDb();
-    const [after] = await db.select().from(schema.tickets).where(eq(schema.tickets.id, mine.id));
+    const [after] = await db.select().from(schema.issues).where(eq(schema.issues.id, mine.id));
     assert.equal(after.assigneeId, null);
     assert.equal(after.teamId, a1.id, "team_id is left alone");
-    const [theirs] = await db.select().from(schema.tickets).where(eq(schema.tickets.id, other.id));
+    const [theirs] = await db.select().from(schema.issues).where(eq(schema.issues.id, other.id));
     assert.equal(theirs.assigneeId, bob.id);
   });
 
   test("leaving the workspace unassigns the person too", async () => {
     const fay = await person(wsA.id, "member", "fay");
     await pmem.addTeamMember(ada, a1.key, { userId: fay.id, role: "editor" });
-    const t = await svc.createTicket(ada, a1.key, { title: "Fay's", assigneeId: fay.id });
+    const t = await svc.createIssue(ada, a1.key, { title: "Fay's", assigneeId: fay.id });
     const db = await getDb();
     await db.delete(schema.memberships).where(and(eq(schema.memberships.userId, fay.id), eq(schema.memberships.workspaceId, wsA.id)));
-    const [after] = await db.select().from(schema.tickets).where(eq(schema.tickets.id, t.id));
+    const [after] = await db.select().from(schema.issues).where(eq(schema.issues.id, t.id));
     assert.equal(after.assigneeId, null);
   });
 
   test("the assignee key is in the database as written (drizzle cannot say SET NULL on one column)", async () => {
     const db = await getDb();
-    const r = await db.execute(sql`select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'tickets_assignee_member_fk'`);
+    const r = await db.execute(sql`select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'issues_assignee_member_fk'`);
     const def = String((r as unknown as { rows?: { def: string }[] }).rows?.[0]?.def ?? (r as unknown as { def: string }[])[0]?.def);
     assert.match(def, /FOREIGN KEY \(team_id, assignee_id\) REFERENCES team_members\(team_id, user_id\) ON DELETE SET NULL \(assignee_id\)/);
   });

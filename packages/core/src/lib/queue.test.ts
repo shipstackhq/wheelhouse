@@ -26,7 +26,7 @@ type Changes = Awaited<ReturnType<typeof svc.getChanges>>;
 let human: Actor;
 let key: Actor;
 let otherKey: Actor;
-let ticketRef: string;
+let issueRef: string;
 
 const as = (a: Actor, tool: string, args: Record<string, unknown>) => runTool(a, tool, { project: "QQ", ...args });
 const changes = (a: Actor, session?: string) => as(a, "get_changes", session ? { session } : {}) as Promise<Changes>;
@@ -46,7 +46,7 @@ before(async () => {
   human = { kind: "human", id: user.id, name: "Tess", workspaceId: workspace.id };
   await svc.createTeam(human, { name: "Queue test", key: "QQ" });
   for (const k of [key, otherKey]) await scopeKeyToAllTeams(db, k.id, workspace.id);
-  ticketRef = (await svc.createTicket(human, "QQ", { title: "Shared ticket" })).ref;
+  issueRef = (await svc.createIssue(human, "QQ", { title: "Shared issue" })).ref;
 });
 
 describe("per-session queue cursors", () => {
@@ -63,13 +63,13 @@ describe("per-session queue cursors", () => {
 
   test("a session's own writes are hidden from it but visible to sibling sessions", async () => {
     const before = (await changes(key, "sess-A")).latestSeq;
-    await as(key, "update_ticket", { ticket: ticketRef, priority: "high", session: "sess-A" });
+    await as(key, "update_issue", { issue: issueRef, priority: "high", session: "sess-A" });
 
     const a = await changes(key, "sess-A");
     assert.equal(a.changes.filter((e) => e.seq > before).length, 0, "A doesn't see its own edit");
 
     const b = await changes(key, "sess-B");
-    const edit = b.changes.find((e) => e.type === "ticket.updated");
+    const edit = b.changes.find((e) => e.type === "issue.updated");
     assert.ok(edit, "B sees A's edit");
     assert.equal(edit.sessionId, "sess-A", "the event records which session wrote it");
   });
@@ -88,7 +88,7 @@ describe("per-session queue cursors", () => {
     const fresh = await changes(key, "sess-C");
     assert.equal(fresh.total, 0, "a new session doesn't replay history other sessions handled");
 
-    await svc.addComment(human, ticketRef, "new work for the agents");
+    await svc.addComment(human, issueRef, "new work for the agents");
     const after = await changes(key, "sess-C");
     assert.deepEqual(after.changes.map((e) => e.type), ["comment.created"], "but it gets changes from then on");
   });
@@ -96,13 +96,13 @@ describe("per-session queue cursors", () => {
   test("a session registered by another key is refused", async () => {
     await assert.rejects(changes(otherKey, "sess-A"), (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden");
     await assert.rejects(
-      as(otherKey, "update_ticket", { ticket: ticketRef, title: "hijack", session: "sess-A" }),
+      as(otherKey, "update_issue", { issue: issueRef, title: "hijack", session: "sess-A" }),
       (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden",
     );
   });
 
   test("the Bots menu reports each active session's depth", async () => {
-    await svc.addComment(human, ticketRef, "one more");
+    await svc.addComment(human, issueRef, "one more");
     const [laptop] = (await svc.queueStatus(human, "QQ")).filter((q) => q.id === key.id);
     assert.deepEqual(laptop.sessions.map((s) => s.id).sort(), ["sess-A", "sess-B", "sess-C"]);
     assert.equal(laptop.pending, Math.max(...laptop.sessions.map((s) => s.pending)), "key pending is the furthest-behind session");
@@ -115,18 +115,18 @@ describe("per-session queue cursors", () => {
 });
 
 describe("session breakdown (WH-45)", () => {
-  test("queueStatus and the dashboard feed carry each session's branch, ticket and own queue", async () => {
+  test("queueStatus and the dashboard feed carry each session's branch, issue and own queue", async () => {
     const db = await getDb();
-    const [t] = await db.select().from(schema.tickets).where(eq(schema.tickets.title, "Shared ticket"));
+    const [t] = await db.select().from(schema.issues).where(eq(schema.issues.title, "Shared issue"));
     await as(key, "session_end", { session: "sess-A" }); // a cleanly ended session drops out of the lists
-    await db.update(schema.workSessions).set({ branch: "feature/x", ticketId: t.id }).where(eq(schema.workSessions.id, "sess-B"));
-    await svc.addComment(human, ticketRef, "fresh");
+    await db.update(schema.workSessions).set({ branch: "feature/x", issueId: t.id }).where(eq(schema.workSessions.id, "sess-B"));
+    await svc.addComment(human, issueRef, "fresh");
 
     const status = (await svc.queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
     const b = status.sessions.find((s) => s.id === "sess-B")!;
     assert.equal(b.branch, "feature/x");
-    assert.equal(b.ticket, ticketRef);
-    assert.equal(status.sessions.find((s) => s.id === "sess-C")!.ticket, null, "unknown ticket stays null");
+    assert.equal(b.issue, issueRef);
+    assert.equal(status.sessions.find((s) => s.id === "sess-C")!.issue, null, "unknown issue stays null");
     assert.ok(!status.sessions.some((s) => s.id === "sess-A"), "an ended session is no longer listed");
 
     const row = (await agentQueues(human)).find((a) => a.id === key.id)!;
@@ -155,7 +155,7 @@ describe("session breakdown (WH-45)", () => {
 
 describe("the model is never asked to handle the session id (ADR-5)", () => {
   test("neither the briefing nor the get_changes description mentions passing a session", async () => {
-    await svc.addComment(human, ticketRef, "something to report");
+    await svc.addComment(human, issueRef, "something to report");
     const { markdown } = await briefing({ ...key, sessionId: "sess-C" }, "QQ");
     assert.ok(markdown.includes("Since you last looked"), "the session's queue still shows up");
     assert.ok(!/session/i.test(markdown.split("## Since you last looked")[1] ?? ""), "but without asking the model to pass an id");
@@ -253,8 +253,8 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     const seen = (await changes(key, "s-rm")).latestSeq;
     await as(key, "ack_changes", { session: "s-rm", seq: seen });
     await svc.removeSession(human, "QQ", "s-rm");
-    await svc.addComment(human, ticketRef, "while you were gone 1");
-    await svc.addComment(human, ticketRef, "while you were gone 2");
+    await svc.addComment(human, issueRef, "while you were gone 1");
+    await svc.addComment(human, issueRef, "while you were gone 2");
 
     const first = (await changes(key, "s-rm")) as Resumable;
     assert.equal(first.total, 0, "default: top of the queue, nothing replayed");
@@ -281,7 +281,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     await changes(key, "s-skip");
     await as(key, "ack_changes", { session: "s-skip", seq: (await changes(key, "s-skip")).latestSeq });
     await svc.removeSession(human, "QQ", "s-skip");
-    await svc.addComment(human, ticketRef, "missed on purpose");
+    await svc.addComment(human, issueRef, "missed on purpose");
     assert.equal(((await changes(key, "s-skip")) as Resumable).session_removed?.missedChanges, 1);
     await as(key, "resume_session", { session: "s-skip", mode: "skip" });
     const after = (await changes(key, "s-skip")) as Resumable;

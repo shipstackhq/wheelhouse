@@ -12,7 +12,7 @@ import { draftOf, initiativeStatusChip, InitiativeForm, inputOf, targetOf, type 
 const MAX_DEPTH = 3;
 
 /**
- * One initiative: how far it has got (rolled up from every project below, each ticket once), the initiatives under it, and the
+ * One initiative: how far it has got (rolled up from every project below, each issue once), the initiatives under it, and the
  * projects it groups. Projects of teams the viewer is not on are not listed: they are only counted and added to the totals.
  */
 export function InitiativeView(props: { initiative: InitiativeDetail }) {
@@ -173,7 +173,7 @@ export function InitiativeView(props: { initiative: InitiativeDetail }) {
           </ul>
           {i.hidden.count > 0 && (
             <p className="mt-1.5 rounded-md border border-dashed border-line px-4 py-3 text-sm text-muted" data-hidden>
-              {i.hidden.count} other project{i.hidden.count === 1 ? "" : "s"} of teams you are not in: {i.hidden.done} of {i.hidden.total} ticket{i.hidden.total === 1 ? "" : "s"} done.
+              {i.hidden.count} other project{i.hidden.count === 1 ? "" : "s"} of teams you are not in: {i.hidden.done} of {i.hidden.total} issue{i.hidden.total === 1 ? "" : "s"} done.
             </p>
           )}
           {i.canEdit && i.linkable.length > 0 && (

@@ -474,7 +474,7 @@ describe("the instance admin's workspaces pages", () => {
     assert.equal(detail.json.workspace.memberList.length, 2);
     assert.ok(detail.json.workspace.keys.length >= 3);
     assert.ok(!detail.text.includes(fx.a.apiKey), "no key value");
-    assert.ok(!detail.text.includes("Contract ticket A"), "nothing the workspace wrote");
+    assert.ok(!detail.text.includes("Contract issue A"), "nothing the workspace wrote");
     assert.ok(!/passwordHash|keyHash/.test(detail.text));
     assert.equal((await app("GET", `/api/app/admin/workspaces/00000000-0000-4000-8000-000000000000`, admin)).status, 404);
   });

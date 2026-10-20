@@ -16,7 +16,7 @@ const cycleNumber = (raw: string) => {
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class CyclesController {
-  /** The cycles by when they are: `{ current, upcoming, past }`, each with how many tickets are in it and how many are done. Ended cycles hand their unfinished tickets on first. */
+  /** The cycles by when they are: `{ current, upcoming, past }`, each with how many issues are in it and how many are done. Ended cycles hand their unfinished issues on first. */
   @Get(":key/cycles")
   async list(@Req() req: SessionRequest, @Param("key") key: string) {
     return listCyclesAs(req.human.actor, key);
@@ -28,7 +28,7 @@ export class CyclesController {
     return { cycle: await createCycleAs(req.human.actor, key, jsonBody(req)) };
   }
 
-  /** One cycle: its tickets, and what landed (reached Done) while it ran. */
+  /** One cycle: its issues, and what landed (reached Done) while it ran. */
   @Get(":key/cycles/:number")
   async one(@Req() req: SessionRequest, @Param("key") key: string, @Param("number") number: string) {
     return { cycle: await getCycleAs(req.human.actor, key, cycleNumber(number)) };
@@ -40,7 +40,7 @@ export class CyclesController {
     return { cycle: await updateCycleAs(req.human.actor, key, cycleNumber(number), jsonBody(req)) };
   }
 
-  /** Its tickets stay on the board, in no cycle. */
+  /** Its issues stay on the board, in no cycle. */
   @Delete(":key/cycles/:number")
   async remove(@Req() req: SessionRequest, @Param("key") key: string, @Param("number") number: string) {
     return deleteCycleAs(req.human.actor, key, cycleNumber(number));

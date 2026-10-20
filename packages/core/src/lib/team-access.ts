@@ -7,7 +7,7 @@ import { ServiceError } from "./service-error";
 
 /**
  * Who can open a team (ADR-23). A team is reachable only through a row in `team_members`; the workspace role never
- * opens one by itself, not even an owner's. This file holds the rule and the audit trail; `requireTeam` and `resolveTicket` in
+ * opens one by itself, not even an owner's. This file holds the rule and the audit trail; `requireTeam` and `resolveIssue` in
  * service.ts apply it, which is what puts every read and write path behind it.
  *
  * Agent keys and system actors (a GitHub webhook) are not people and have no row here. A key reaches the teams it is scoped to in `api_key_teams`

@@ -40,9 +40,9 @@ test("the arrays become rows: decision nodes, invite teams and ticket labels (me
     assert.deepEqual(await q(`select role, k.key from invite_teams i join teams k on k.id = i.team_id order by k.key`), [{ role: "editor", key: "AA" }, { role: "viewer", key: "AC" }], "a team listed twice is one row (the first entry)");
     assert.deepEqual(await q(`select count(*)::int as n from invite_teams i join invites v on v.id = i.invite_id where v.kind = 'new_workspace'`), [{ n: 0 }]);
     assert.deepEqual((await q(`select l.name from labels l join teams t on t.id = l.team_id where t.key = 'AA' order by lower(l.name)`)).map((r) => r.name), ["api", "Bug", "UI polish"], "one label per name in any case, first spelling wins, no empty one");
-    assert.deepEqual((await q(`select t.title, l.name from ticket_labels tl join tickets t on t.id = tl.ticket_id join labels l on l.id = tl.label_id order by t.title, lower(l.name)`)).map((r) => `${r.title}:${r.name}`), ["one:api", "one:Bug", "one:UI polish", "other team:bug", "two:Bug"]);
+    assert.deepEqual((await q(`select t.title, l.name from issue_labels tl join issues t on t.id = tl.issue_id join labels l on l.id = tl.label_id order by t.title, lower(l.name)`)).map((r) => `${r.title}:${r.name}`), ["one:api", "one:Bug", "one:UI polish", "other team:bug", "two:Bug"]);
     assert.deepEqual(await q(`select count(*)::int as n from labels`), [{ n: 4 }], "the same name in two teams is two labels");
-    for (const [table, column] of [["decisions", "node_ids"], ["invites", "teams"], ["tickets", "labels"]]) {
+    for (const [table, column] of [["decisions", "node_ids"], ["invites", "teams"], ["issues", "labels"]]) {
       assert.deepEqual(await q(`select 1 from information_schema.columns where table_name = '${table}' and column_name = '${column}'`), [], `${table}.${column} is gone`);
     }
   } finally {

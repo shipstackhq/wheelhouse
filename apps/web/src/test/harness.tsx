@@ -131,7 +131,7 @@ export function renderIn(ui: React.ReactNode, path = "/", server = serverWithDat
   return { ...view, router, services, server };
 }
 
-/** A board that changes: tests move tickets in `state`, and the fake server answers with it (as the real one would after a change). */
+/** A board that changes: tests move issues in `state`, and the fake server answers with it (as the real one would after a change). */
 export function liveBoard(server: FakeServer, key: string, start: BoardView) {
   const state = { board: start };
   server.on(`GET /api/app/teams/${key}/board`, () => state.board);

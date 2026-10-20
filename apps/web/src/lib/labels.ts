@@ -1,5 +1,5 @@
 /**
- * Ticket labels as the UI edits them. Underneath they are still a comma-separated string ("bug, frontend"):
+ * Issue labels as the UI edits them. Underneath they are still a comma-separated string ("bug, frontend"):
  * the pill field takes and gives that string, and these helpers are the only place it is split or joined.
  */
 

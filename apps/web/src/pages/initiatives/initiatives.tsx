@@ -12,7 +12,7 @@ const MAX_DEPTH = 3;
 
 /**
  * Every initiative of the workspace, nested under its parent. An initiative groups projects (and other initiatives) and shows how far
- * the tickets of all of them have got; the projects of teams you are not on count in the totals but are never named.
+ * the issues of all of them have got; the projects of teams you are not on count in the totals but are never named.
  */
 export function Initiatives(props: { initiatives: InitiativeSummary[] }) {
   const { api, queryClient } = useServices();
@@ -42,7 +42,7 @@ export function Initiatives(props: { initiatives: InitiativeSummary[] }) {
           <div>
             <h2 className="text-lg font-semibold">Initiatives</h2>
             <p className="mt-1 text-sm text-muted">
-              A goal that groups projects, and smaller initiatives under it (up to {MAX_DEPTH} levels). Progress rolls up from the tickets of everything
+              A goal that groups projects, and smaller initiatives under it (up to {MAX_DEPTH} levels). Progress rolls up from the issues of everything
               below; you see the projects of your own teams and only totals for the rest.
             </p>
           </div>

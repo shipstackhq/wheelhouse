@@ -22,9 +22,9 @@ export const useAdminWorkspace = (id: string) => useQuery(adminWorkspaceQuery(us
 /** A widget's data, for the workspace or, inside a team's Overview, for that team (see lib/dashboard-scope). */
 export const useWidget = <W extends keyof DashboardWidgets>(widget: W) => useQuery(widgetQuery(useServices().api, widget, useDashboardTeam()));
 
-/** The team page and its ticket dialog. Grouped under "board", "ticket" and "queue" so a change refreshes the right ones. */
+/** The team page and its issue dialog. Grouped under "board", "issue" and "queue" so a change refreshes the right ones. */
 export const boardQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["board", teamKey] as const, queryFn: () => api.teams.board(teamKey) });
-export const ticketQuery = (api: ApiClient, ref: string) => ({ queryKey: ["ticket", ref] as const, queryFn: () => api.tickets.get(ref) });
+export const issueQuery = (api: ApiClient, ref: string) => ({ queryKey: ["issue", ref] as const, queryFn: () => api.issues.get(ref) });
 export const queueQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["queue", teamKey] as const, queryFn: () => api.teams.queue(teamKey) });
 
 export const useBoard = (teamKey: string) => useQuery(boardQuery(useServices().api, teamKey));
@@ -46,7 +46,7 @@ export const onboardingQuery = (api: ApiClient, teamKey: string) => ({ queryKey:
 export const useDocs = (teamKey: string) => useQuery(docsQuery(useServices().api, teamKey));
 export const useRepos = (teamKey: string) => useQuery(reposQuery(useServices().api, teamKey));
 
-/** A team's cycles (WH-117): the list by when they are, and one with its tickets and what landed. */
+/** A team's cycles (WH-117): the list by when they are, and one with its issues and what landed. */
 export const cyclesQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["cycles", teamKey] as const, queryFn: () => api.cycles.list(teamKey) });
 export const cycleQuery = (api: ApiClient, teamKey: string, number: number) => ({ queryKey: ["cycle", teamKey, number] as const, queryFn: () => api.cycles.get(teamKey, number) });
 export const useCycles = (teamKey: string) => useQuery(cyclesQuery(useServices().api, teamKey));

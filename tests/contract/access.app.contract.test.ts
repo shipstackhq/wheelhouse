@@ -98,10 +98,10 @@ describe("roles inside a team", () => {
     assert.equal((await add(owner, key, editor, "editor")).status, 201);
     assert.equal((await add(owner, key, viewer, "viewer")).status, 201);
 
-    const t = await app("POST", `/api/app/teams/${key}/tickets`, editor.sess, { body: { title: "edited by an editor" } });
+    const t = await app("POST", `/api/app/teams/${key}/issues`, editor.sess, { body: { title: "edited by an editor" } });
     assert.equal(t.status, 201, t.text);
     assert.equal((await app("GET", `/api/app/teams/${key}/board`, viewer.sess)).status, 200);
-    const blocked = await app("POST", `/api/app/teams/${key}/tickets`, viewer.sess, { body: { title: "no" } });
+    const blocked = await app("POST", `/api/app/teams/${key}/issues`, viewer.sess, { body: { title: "no" } });
     assert.equal(blocked.status, 403, blocked.text);
     assert.equal(blocked.json.error.code, "forbidden");
     assert.equal((await app("GET", `/api/app/teams/${key}/board`, outsider.sess)).status, 404);
@@ -210,7 +210,7 @@ describe("invites that carry teams", () => {
     const person: Person = { email, sess: sessionFrom(r), id: r.json.user.id, role: "member" };
     assert.deepEqual((await app("GET", "/api/app/teams", person.sess)).json.teams.map((p: { key: string; role: string }) => [p.key, p.role]), [[mine, "viewer"]]);
     assert.equal((await app("GET", `/api/app/teams/${mine}/board`, person.sess)).status, 200);
-    assert.equal((await app("POST", `/api/app/teams/${mine}/tickets`, person.sess, { body: { title: "no" } })).status, 403);
+    assert.equal((await app("POST", `/api/app/teams/${mine}/issues`, person.sess, { body: { title: "no" } })).status, 403);
     assert.equal((await app("GET", `/api/app/teams/${other}/board`, person.sess)).status, 404);
 
     // an admin of the workspace who is in no team cannot give teams away; an unknown team is refused too
@@ -329,8 +329,8 @@ describe("the per-team dashboard", () => {
     const a = await makeTeam(owner, "Alpha");
     const b = await makeTeam(owner, "Beta");
     await add(owner, a, bob, "viewer");
-    for (const title of ["a1", "a2"]) assert.equal((await app("POST", `/api/app/teams/${a}/tickets`, owner.sess, { body: { title } })).status, 201);
-    assert.equal((await app("POST", `/api/app/teams/${b}/tickets`, owner.sess, { body: { title: "b1", priority: "urgent" } })).status, 201);
+    for (const title of ["a1", "a2"]) assert.equal((await app("POST", `/api/app/teams/${a}/issues`, owner.sess, { body: { title } })).status, 201);
+    assert.equal((await app("POST", `/api/app/teams/${b}/issues`, owner.sess, { body: { title: "b1", priority: "urgent" } })).status, 201);
 
     const all = await widget(owner, "kpis");
     assert.equal(all.status, 200, all.text);
@@ -338,12 +338,12 @@ describe("the per-team dashboard", () => {
     const mine = await widget(owner, "kpis", `?team=${a}`);
     assert.deepEqual([mine.json.teams, mine.json.open], [1, 2]);
     assert.deepEqual((await widget(owner, "progress", `?team=${b}`)).json.map((p: { key: string; total: number }) => [p.key, p.total]), [[b, 1]]);
-    assert.deepEqual((await widget(owner, "attention", `?team=${a}`)).json.urgent, []); // the urgent ticket is in Beta
+    assert.deepEqual((await widget(owner, "attention", `?team=${a}`)).json.urgent, []); // the urgent issue is in Beta
     assert.equal((await widget(owner, "attention", `?team=${b}`)).json.urgent[0].title, "b1");
 
     const focus = await widget(owner, "focus", `?team=${a}`);
     assert.equal(focus.status, 200, focus.text);
-    assert.deepEqual([focus.json.tickets, focus.json.members.count, focus.json.members.myRole], [2, 2, "admin"]);
+    assert.deepEqual([focus.json.issues, focus.json.members.count, focus.json.members.myRole], [2, 2, "admin"]);
     assert.equal((await widget(bob, "focus", `?team=${a}`)).json.members.myRole, "viewer");
 
     // bob is only in Alpha: Beta's dashboard is a plain 404, and his workspace dashboard counts one team

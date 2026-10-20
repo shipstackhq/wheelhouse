@@ -7,12 +7,12 @@ contract (`/mcp`, `/api/v1`, webhooks, streams), and the Next app does not have 
 
 Built so far: `GET /api/app/auth/options`, `POST /api/app/auth/login`, `POST /api/app/auth/signup`,
 `POST /api/app/auth/logout`, `GET /api/app/me`, `GET /api/app/teams` (WH-93), and everything under "Built by WH-95" below. The
-other page-port tickets add the rest (inventory below).
+other page-port issues add the rest (inventory below).
 
 ## Conventions
 
-**Paths.** Resource style. Things that belong to a team live under `/api/app/teams/:key/...`; a ticket is addressed by
-its ref (`/api/app/tickets/WH-12`), which already contains its team. Collections are `GET` and return an object with the
+**Paths.** Resource style. Things that belong to a team live under `/api/app/teams/:key/...`; an issue is addressed by
+its ref (`/api/app/issues/WH-12`), which already contains its team. Collections are `GET` and return an object with the
 plural name (`{ "teams": [...] }`), never a bare array, so a field can be added later. Reads are `GET` and never change
 anything.
 
@@ -38,7 +38,7 @@ the request: not from a path, a query or a header. It is the signed-in person's 
 | 429 | `rate_limited` | too many tries; `Retry-After` says how many seconds |
 | 500 | `internal` | a bug; nothing more is said |
 
-**Optimistic locking.** Anything with a `version` (tickets, docs, nodes) takes it in the body of the change. If it is stale the
+**Optimistic locking.** Anything with a `version` (issues, docs, nodes) takes it in the body of the change. If it is stale the
 answer is `409 conflict` with the current copy in `details.current`, and nothing is overwritten.
 
 **Sessions.** The `wh_session` cookie is the same cookie the Next app sets (httpOnly, SameSite=Lax, Secure in production, 30
@@ -75,13 +75,13 @@ token for you and, if the server says it went stale (signed in or out in another
 5. A method on `@wheelhouse/api-client`.
 
 Pages also read data on the server, not only through actions (for example the dashboard, workspace, agents, admin, repositories and
-map pages). Each page-port ticket needs `GET` endpoints for those reads too; they are not in the inventory because they are not
+map pages). Each page-port issue needs `GET` endpoints for those reads too; they are not in the inventory because they are not
 actions.
 
 ## Inventory of the 59 server actions
 
-Every exported action in `src/app/actions.ts` has exactly one row (a test keeps it that way). "Owner" is the ticket that builds
-the endpoint: WH-95 dashboard, workspace, agents, admin, new team, auth and invite pages; WH-96 board and ticket dialog; WH-97
+Every exported action in `src/app/actions.ts` has exactly one row (a test keeps it that way). "Owner" is the issue that builds
+the endpoint: WH-95 dashboard, workspace, agents, admin, new team, auth and invite pages; WH-96 board and issue dialog; WH-97
 map, decisions, glossary and activity; WH-98 docs, repositories and onboarding. "unneeded" means there is nothing to port, with
 the reason.
 
@@ -105,13 +105,13 @@ the reason.
 | `createTeamAction` | `POST /api/app/teams` | WH-95 | extends the GET already built; 201 |
 | `createConceptFromDescriptionAction` | `POST /api/app/teams/:key/onboarding/concept` | WH-98 | onboarding wizard |
 | `latestSeq` | none | unneeded | only fed the polling refresh; replaced by the SSE stream (WH-94) |
-| `moveTicketAction` | `POST /api/app/tickets/:ref/move` | WH-96 | `{ column, index? , version? }`; the column by role or name, as in `move_ticket` |
-| `createTicketAction` | `POST /api/app/teams/:key/tickets` | WH-96 | 201; also serves createTicketFromActionItemAction |
-| `updateTicketAction` | `PATCH /api/app/tickets/:ref` | WH-96 | `version` in the body; a stale one is a 409 `conflict` with `details.current` |
-| `deleteTicketAction` | `DELETE /api/app/tickets/:ref` | WH-96 |  |
-| `getTicketAction` | `GET /api/app/tickets/:ref` | WH-96 | ticket, comments, linked nodes, history, pull requests |
-| `commentAction` | `POST /api/app/tickets/:ref/comments` | WH-96 | 201 |
-| `linkNodeAction` | `PUT /api/app/tickets/:ref/nodes/:nodeId` | WH-96 | DELETE on the same path unlinks (the `unlink` flag) |
+| `moveIssueAction` | `POST /api/app/issues/:ref/move` | WH-96 | `{ column, index? , version? }`; the column by role or name, as in `move_issue` |
+| `createIssueAction` | `POST /api/app/teams/:key/issues` | WH-96 | 201; also serves createIssueFromActionItemAction |
+| `updateIssueAction` | `PATCH /api/app/issues/:ref` | WH-96 | `version` in the body; a stale one is a 409 `conflict` with `details.current` |
+| `deleteIssueAction` | `DELETE /api/app/issues/:ref` | WH-96 |  |
+| `getIssueAction` | `GET /api/app/issues/:ref` | WH-96 | issue, comments, linked nodes, history, pull requests |
+| `commentAction` | `POST /api/app/issues/:ref/comments` | WH-96 | 201 |
+| `linkNodeAction` | `PUT /api/app/issues/:ref/nodes/:nodeId` | WH-96 | DELETE on the same path unlinks (the `unlink` flag) |
 | `getGraphAction` | `GET /api/app/teams/:key/graph` | WH-97 | nodes, edges, flows, decisions, terms |
 | `upsertNodeAction` | `PUT /api/app/teams/:key/nodes` | WH-97 | create or update by id or name; `version` for the optimistic lock |
 | `deleteNodeAction` | `DELETE /api/app/teams/:key/nodes/:id` | WH-97 |  |
@@ -130,7 +130,7 @@ the reason.
 | `getDocAction` | `GET /api/app/teams/:key/docs/:ref` | WH-98 |  |
 | `createDocAction` | `POST /api/app/teams/:key/docs` | WH-98 | `{ title, body?, parent?, template? }`; 201 |
 | `listDocTemplatesAction` | none | unneeded | not called by any page today; the five templates are static data the web app can ship |
-| `createTicketFromActionItemAction` | `POST /api/app/teams/:key/tickets` | WH-98 | the same endpoint as createTicketAction (WH-96); the docs page then ticks the item with an ordinary doc update |
+| `createIssueFromActionItemAction` | `POST /api/app/teams/:key/issues` | WH-98 | the same endpoint as createIssueAction (WH-96); the docs page then ticks the item with an ordinary doc update |
 | `updateDocAction` | `PATCH /api/app/teams/:key/docs/:ref` | WH-98 | `version` in the body; 409 `conflict` with `details.current` |
 | `markDocFreshAction` | `POST /api/app/teams/:key/docs/:ref/fresh` | WH-98 |  |
 | `suggestDocAnchorsAction` | `GET /api/app/teams/:key/docs/:ref/anchor-suggestions` | WH-98 | a read |
@@ -150,7 +150,7 @@ the reason.
 ## Built by WH-95
 
 The reads the pages make (not actions, so not in the inventory), and the endpoints from the inventory above that belong to this
-ticket. Anything not marked public needs a session.
+issue. Anything not marked public needs a session.
 
 | Endpoint | What it is |
 |---|---|
@@ -175,18 +175,18 @@ Rules worth knowing:
 
 ## Built by WH-96
 
-The board and the ticket dialog. Everything needs a session. A ticket is addressed by its ref (`WH-12`, case-insensitive in the key), which already names its team, and a ticket or team of another workspace is a 404.
+The board and the issue dialog. Everything needs a session. An issue is addressed by its ref (`WH-12`, case-insensitive in the key), which already names its team, and an issue or team of another workspace is a 404.
 
 | Endpoint | What it is |
 |---|---|
-| `GET /api/app/teams/:key/board` | the team page in one read: `team`, `columns` (id, name, role, position), `tickets` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
+| `GET /api/app/teams/:key/board` | the team page in one read: `team`, `columns` (id, name, role, position), `issues` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
 | `GET /api/app/teams/:key/queue` | the Bots menu: `{ bots }`, each agent key with its queue depth and live sessions in this team |
-| `PATCH /api/app/tickets/:ref` | see "The version check" below |
-| `POST /api/app/tickets/:ref/move` | `{ column, index?, version? }`: the column by id, name or role; `index` is the place in the column (the end when absent) |
+| `PATCH /api/app/issues/:ref` | see "The version check" below |
+| `POST /api/app/issues/:ref/move` | `{ column, index?, version? }`: the column by id, name or role; `index` is the place in the column (the end when absent) |
 
-A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
+An issue in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `columnId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the column's `name`.
 
-**Claiming.** Only agents claim a ticket (over MCP or `/api/v1`). A person decides whether agents may pick a ticket up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
+**Claiming.** Only agents claim an issue (over MCP or `/api/v1`). A person decides whether agents may pick an issue up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
 
 **Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`column`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's workspace.
 
@@ -194,14 +194,14 @@ A ticket in every answer has the same fields (`id`, `ref`, `number`, `title`, `b
 
 The first real use of the optimistic-lock pattern described under "Optimistic locking" above.
 
-- `PATCH` and `move` take `version`: the version you last read. If anyone (a person or an agent) changed the ticket since, the answer is `409 conflict`, nothing is changed, and `details.current` is the ticket as it is now, in the same trimmed shape (`ApiError.current` in the client).
+- `PATCH` and `move` take `version`: the version you last read. If anyone (a person or an agent) changed the issue since, the answer is `409 conflict`, nothing is changed, and `details.current` is the issue as it is now, in the same trimmed shape (`ApiError.current` in the client).
 - Two edits made from the same version: exactly one is applied and the other is a 409 (tested with two requests at once).
-- Without `version` the change is applied over whatever is there, as the agents' own tools do. The web app always sends it for edits and not for moves made by dragging, because a drag is about position, not about what the ticket says.
+- Without `version` the change is applied over whatever is there, as the agents' own tools do. The web app always sends it for edits and not for moves made by dragging, because a drag is about position, not about what the issue says.
 - A change that alters nothing does not bump the version.
 
 ### Live updates
 
-A change made by an agent over MCP or `/api/v1`, or by anyone through these endpoints, is one write path: it publishes an event on the team's stream (`/api/teams/:key/stream`) after it commits. A test holds a stream open, moves a ticket as an agent, and requires the `change` event within a second.
+A change made by an agent over MCP or `/api/v1`, or by anyone through these endpoints, is one write path: it publishes an event on the team's stream (`/api/teams/:key/stream`) after it commits. A test holds a stream open, moves an issue as an agent, and requires the `change` event within a second.
 
 ## Built by WH-97
 
@@ -209,7 +209,7 @@ The map, decisions, glossary and activity pages. Everything needs a session. A t
 
 | Endpoint | What it is |
 |---|---|
-| `GET /api/app/teams/:key/graph` | the whole map in one read: `nodes`, `edges`, `ticketLinks`, `flows`, `decisions`, `terms`, `flux` (nodes whose code is being changed right now, with the map updates waiting for it) and `askEnabled`. The decisions and glossary pages read the same endpoint |
+| `GET /api/app/teams/:key/graph` | the whole map in one read: `nodes`, `edges`, `issueLinks`, `flows`, `decisions`, `terms`, `flux` (nodes whose code is being changed right now, with the map updates waiting for it) and `askEnabled`. The decisions and glossary pages read the same endpoint |
 | `PUT /api/app/teams/:key/nodes` | create (no `id`) or change (`id`) a node; `{ name, layer, kind, status, parent, summary, purpose, responsibilities, interfaces, gotchas, details, anchors, columns, indexes, version }` |
 | `PUT /api/app/teams/:key/layout` | `{ positions: [{ id, x, y, width?, height? }], placed? }`: a drag, a resize or a Tidy. `placed: false` is a whole-lens Tidy |
 | `POST /api/app/teams/:key/edges` | `{ from, to, label?, kind? }`; `depends` (default) or `implements`. Answers 200 with the edge, new or existing. References between tables are made with a column's `references` |
@@ -221,7 +221,7 @@ The map, decisions, glossary and activity pages. Everything needs a session. A t
 | `POST /api/app/teams/:key/ask` | `{ question, focus? }` → `{ answer, truncated }` |
 | `GET /api/app/teams/:key/activity?who=agent\|human` | the last 200 events, newest first; `data` is only `ref`, `number` and `body` (cut at 500 characters) |
 
-**Locks on nodes, flows and decisions.** These carry a `version` but nothing checked it before: not the old app, and not the agents' MCP tools (only tickets and docs had a lock). The web endpoints take `version` and use the same pattern as tickets: a change made since is a `409 conflict`, nothing is overwritten, and `details.current` is the entity as it is now (`ApiError.current`). The check is an optional `expectedVersion` on the service functions; the MCP tools never pass it, so agents behave exactly as before. Two edits from the same version give exactly one 200 and one 409.
+**Locks on nodes, flows and decisions.** These carry a `version` but nothing checked it before: not the old app, and not the agents' MCP tools (only issues and docs had a lock). The web endpoints take `version` and use the same pattern as issues: a change made since is a `409 conflict`, nothing is overwritten, and `details.current` is the entity as it is now (`ApiError.current`). The check is an optional `expectedVersion` on the service functions; the MCP tools never pass it, so agents behave exactly as before. Two edits from the same version give exactly one 200 and one 409.
 
 **Ask the map spends money and calls out**, so: the team is resolved first (another workspace's is a 404 before anything is counted or called), then at most 20 questions per person per 10 minutes (`429` with `Retry-After`), then the server calls Claude with its own key. The key is read from the server's environment and is in no response, header or cookie (the contract suite checks that, including when Claude fails). Claude's own errors become plain reasons ("Claude is rate limited, try again in a moment", "ANTHROPIC_API_KEY is invalid", "Claude API error (500)"), never the upstream body. The contract suite runs Ask against a fake Claude server (`tests/contract/lib/fake-github.ts`) that answers from what it was sent.
 
@@ -260,7 +260,7 @@ Creating, editing and retiring repositories is open to any teammate, as it was i
 
 **Connecting a repository** used to be a form that redirected to `?github=repo_connected`; it is now a fetch, and the page shows "Repository connected." (or the server's reason) on that installation and reads the list again. The words are the same.
 
-**An action item becomes a ticket** through `POST /api/app/teams/:key/tickets` (WH-96), then the page ticks the box with an ordinary `PATCH` of the doc against the version it read. "Create ADR from this doc" is `PUT /api/app/teams/:key/decisions` (WH-97).
+**An action item becomes an issue** through `POST /api/app/teams/:key/issues` (WH-96), then the page ticks the box with an ordinary `PATCH` of the doc against the version it read. "Create ADR from this doc" is `PUT /api/app/teams/:key/decisions` (WH-97).
 
 ## Built by WH-105: who can open a team (ADR-23)
 
@@ -304,7 +304,7 @@ A person who belongs to several workspaces works in one at a time, chosen per se
 |---|---|
 | `kpis`, `progress`, `throughput`, `activity-split`, `attention`, `recent`, `sync` | the same shapes, for that team only. `kpis` gained `agentsActive7d` (agents that changed something in the team in 7 days) |
 | `agents` | only the agents that do something in that team (pending changes, actions in 7 days or a live session) |
-| `focus` | **team only** (`404` without `?team=`): what has waited longest for review, what has sat longest in progress, agents gone quiet, decisions still proposed, member count and the caller's role. "How long" is time since the ticket last moved into its column |
+| `focus` | **team only** (`404` without `?team=`): what has waited longest for review, what has sat longest in progress, agents gone quiet, decisions still proposed, member count and the caller's role. "How long" is time since the issue last moved into its column |
 
 The page is `/t/:key/overview` ("Overview", first in the team sidebar). It draws the same widget components as the home page, inside a scope that says which team (`lib/dashboard-scope`), so a widget added to `TEAM_WIDGETS` in `pages/dashboard/registry.tsx` appears on every team's Overview. It stays live through the team's own event stream (opened by the team layout) and a 30 s tick. The home page's team rows link to it.
 
@@ -316,55 +316,55 @@ number that is not a whole number is a `404`.
 
 | Endpoint | Notes |
 |---|---|
-| `GET /api/app/teams/:key/cycles` | `{ current, upcoming, past }`: each cycle is `{ number, name, goal, startsAt, endsAt, state, total, done, open }` (`current` is one or null; `past` is newest first). A cycle whose window has ended hands its unfinished tickets on before this answers |
+| `GET /api/app/teams/:key/cycles` | `{ current, upcoming, past }`: each cycle is `{ number, name, goal, startsAt, endsAt, state, total, done, open }` (`current` is one or null; `past` is newest first). A cycle whose window has ended hands its unfinished issues on before this answers |
 | `POST /api/app/teams/:key/cycles` | `{ name?, goal?, startsAt?, endsAt? }`; 201 `{ cycle }`. No dates: from now for two weeks. A window must end after it starts and last one to fourteen days (`400`, naming `endsAt`); one that overlaps another cycle of the team is a `409` naming it |
-| `GET /api/app/teams/:key/cycles/:number` | `{ cycle }` with `tickets` (`ref`, `title`, `priority`, `column`, `done`, `assigneeId`) and `landed` (the team's tickets that reached Done while the window ran: `ref`, `title`, `doneAt`, `inCycle`) |
+| `GET /api/app/teams/:key/cycles/:number` | `{ cycle }` with `issues` (`ref`, `title`, `priority`, `column`, `done`, `assigneeId`) and `landed` (the team's issues that reached Done while the window ran: `ref`, `title`, `doneAt`, `inCycle`) |
 | `PATCH /api/app/teams/:key/cycles/:number` | any of `name`, `goal`, `startsAt`, `endsAt`; a cycle that has ended keeps its dates (`400`) |
-| `DELETE /api/app/teams/:key/cycles/:number` | `{ ok, number, released }`; its tickets stay on the board in no cycle |
+| `DELETE /api/app/teams/:key/cycles/:number` | `{ ok, number, released }`; its issues stay on the board in no cycle |
 
-A ticket joins a cycle with `cycle` (the number) on `POST .../tickets` or `PATCH /api/app/tickets/:ref`; `null` takes it out. The number is looked up in the ticket's own team, a cycle that has
-ended is closed to new tickets, and the database refuses a cycle of another team. Every ticket answer carries `cycle` (a number or null), and the board answer carries `cycles`
+An issue joins a cycle with `cycle` (the number) on `POST .../issues` or `PATCH /api/app/issues/:ref`; `null` takes it out. The number is looked up in the issue's own team, a cycle that has
+ended is closed to new issues, and the database refuses a cycle of another team. Every issue answer carries `cycle` (a number or null), and the board answer carries `cycles`
 (`{ number, name, startsAt, endsAt, state }`, newest first) for the card chip and the filter.
 
-**Rollover.** Once a cycle has ended, every ticket in it that is not in a done column (a custom column counts as open) moves to the team's next cycle, once: `cycles.rolled_over_at` is set whether or not anything
+**Rollover.** Once a cycle has ended, every issue in it that is not in a done column (a custom column counts as open) moves to the team's next cycle, once: `cycles.rolled_over_at` is set whether or not anything
 moved, so a second read, or two at once, changes nothing. With no next cycle, one of the same length is made, starting where the last ended and moved on by whole lengths if the team was away, so it holds today.
 It happens on reads of the cycles and the board, as the claim sweep does, as "Wheelhouse", and is announced as `cycle.rolled_over` (and `cycle.created`). Cycle changes are events (`cycle.created`, `cycle.updated`,
-`cycle.deleted`, `cycle.rolled_over`, entity `cycle`), so agents hear them in their queue. `/api/v1` and the MCP tools never show a ticket's cycle.
+`cycle.deleted`, `cycle.rolled_over`, entity `cycle`), so agents hear them in their queue. `/api/v1` and the MCP tools never show an issue's cycle.
 
 ## Built by WH-118: projects (deliverables that span teams)
 
 A project is an outcome that ends (a launch, a migration). It belongs to the workspace, not to a team, and the teams that take part are
 its `project_teams`. Everything needs a session. **A project is seen through a team of yours that takes part, and never by a guest**: a project you cannot see,
-one that is deleted and one of another workspace are all a `404`, and the list leaves them out. Of the teams you are not on you see **how many and the totals of their tickets**, never a
+one that is deleted and one of another workspace are all a `404`, and the list leaves them out. Of the teams you are not on you see **how many and the totals of their issues**, never a
 name, a key or a title.
 
 | Endpoint | Notes |
 |---|---|
-| `GET /api/app/projects` | `{ projects }`: each `{ id, name, description, status, health, startDate, targetDate, leadUser, leadTeam, total, done, teamCount, version, canEdit, updatedAt }`, active first. `total` and `done` count every team's tickets; `leadTeam` is named only to people on it |
+| `GET /api/app/projects` | `{ projects }`: each `{ id, name, description, status, health, startDate, targetDate, leadUser, leadTeam, total, done, teamCount, version, canEdit, updatedAt }`, active first. `total` and `done` count every team's issues; `leadTeam` is named only to people on it |
 | `POST /api/app/projects` | `{ name, leadTeam, description?, status?, startDate?, targetDate?, leadUser?, healthOverride?, teams? }`; 201 `{ project }`. `leadTeam` and each of `teams` are keys of teams you can edit. Dates are `YYYY-MM-DD`; a bad value is a `400` naming the field |
-| `GET /api/app/projects/:id` | `{ project }` with `milestones` (`id, name, description, targetDate, position, total, done`), `teams` (only yours: `key, name, role, lead, total, done, tickets`), `others` (`{ count, total, done }` for the teams you are not on), `addableTeams`, `canEdit`, `canAdmin` |
+| `GET /api/app/projects/:id` | `{ project }` with `milestones` (`id, name, description, targetDate, position, total, done`), `teams` (only yours: `key, name, role, lead, total, done, issues`), `others` (`{ count, total, done }` for the teams you are not on), `addableTeams`, `canEdit`, `canAdmin` |
 | `PATCH /api/app/projects/:id` | any of the create fields; `healthOverride: null` clears the health set by hand; `version` makes a stale edit a `409`. Needs the project lead or an editor of the lead team; changing `leadUser` or `leadTeam` needs the lead or an admin of the lead team. The lead team must be one that takes part |
-| `DELETE /api/app/projects/:id` | `{ ok, released }`: a soft delete, the tickets stay on their boards in no project. The lead or an admin of the lead team |
+| `DELETE /api/app/projects/:id` | `{ ok, released }`: a soft delete, the issues stay on their boards in no project. The lead or an admin of the lead team |
 | `POST /api/app/projects/:id/teams` | `{ team }`: bring in a team you can edit; `409` if it already takes part |
-| `DELETE /api/app/projects/:id/teams/:key` | take a team out (a project editor, or an admin of that team). `409` if it has tickets in the project, unless `?releaseTickets=1`; never the lead team |
+| `DELETE /api/app/projects/:id/teams/:key` | take a team out (a project editor, or an admin of that team). `409` if it has issues in the project, unless `?releaseIssues=1`; never the lead team |
 | `POST /api/app/projects/:id/milestones` | `{ name, description?, targetDate? }`; 201 `{ project }` |
 | `PATCH /api/app/projects/:id/milestones/:milestoneId` | any of `name`, `description`, `targetDate`, and `index` to move it |
-| `DELETE /api/app/projects/:id/milestones/:milestoneId` | `{ project }`; its tickets stay in the project, in no milestone |
+| `DELETE /api/app/projects/:id/milestones/:milestoneId` | `{ project }`; its issues stay in the project, in no milestone |
 
-A ticket joins with `projectId` and `milestoneId` on `POST .../tickets` or `PATCH /api/app/tickets/:ref` (`null` leaves). The ticket's team must take part in the project (`400`, and the database refuses
+An issue joins with `projectId` and `milestoneId` on `POST .../issues` or `PATCH /api/app/issues/:ref` (`null` leaves). The issue's team must take part in the project (`400`, and the database refuses
 anything else), the milestone must be that project's, changing the project drops the milestone unless a new one is named, and a milestone needs a project. The board answer carries
-`projects` (the ones this team takes part in, each with its milestones) for the card chip and the ticket's fields.
+`projects` (the ones this team takes part in, each with its milestones) for the card chip and the issue's fields.
 
 **Health** is worked out for an `active` project and set by hand when someone says so (`health: { derived, override, value }`). Past the target date with work open is off track; otherwise the share of time gone is
-compared with the share of tickets done (a gap over a quarter is at risk, over a half is off track); a project with no dates and no tickets has none. **Events:** workspace-level changes go to `workspace_events`; what matters to a
-team (a project made or deleted, its status or date changed, a team joining or leaving, a milestone changing, a ticket joining or leaving) is also in that team's `events` (`project.*`, entity `project`), so its agents hear it.
-`/api/v1` and the MCP never show a ticket's project or milestone, and their `project` is still the team.
+compared with the share of issues done (a gap over a quarter is at risk, over a half is off track); a project with no dates and no issues has none. **Events:** workspace-level changes go to `workspace_events`; what matters to a
+team (a project made or deleted, its status or date changed, a team joining or leaving, a milestone changing, an issue joining or leaving) is also in that team's `events` (`project.*`, entity `project`), so its agents hear it.
+`/api/v1` and the MCP never show an issue's project or milestone, and their `project` is still the team.
 
 ## Built by WH-119: initiatives (goals that group projects)
 
-An initiative groups projects, and other initiatives under it, up to **three levels** (a fourth, or a move that would make a cycle or put a branch past three levels, is a `400` naming `parentId`). It belongs to the workspace and holds no tickets
+An initiative groups projects, and other initiatives under it, up to **three levels** (a fourth, or a move that would make a cycle or put a branch past three levels, is a `400` naming `parentId`). It belongs to the workspace and holds no issues
 and no teams. Everything needs a session. **Every member except a guest sees every initiative**; a guest gets an empty list and a `404` for one. What an initiative shows of a project follows the project's own rule: projects of teams you
-are on are listed, and the rest are only **counted and totalled** (`hidden`), never named, and no initiative answer ever contains a ticket title.
+are on are listed, and the rest are only **counted and totalled** (`hidden`), never named, and no initiative answer ever contains an issue title.
 
 | Endpoint | Notes |
 |---|---|
@@ -374,9 +374,9 @@ are on are listed, and the rest are only **counted and totalled** (`hidden`), ne
 | `PATCH /api/app/initiatives/:id` | any create field, `healthOverride: null` to clear it, `parentId` (null for the top) and `index` to move it among its siblings, `version` for the lock (`409` when stale). The owner, or a workspace owner or admin |
 | `DELETE /api/app/initiatives/:id` | `{ ok, moved, unlinked }`: a soft delete. Its sub-initiatives move up to its parent, its links go, the projects are untouched |
 | `POST /api/app/initiatives/:id/projects` | `{ projectId }`: link a project you can see (one you cannot is a `404`); `409` if already linked |
-| `DELETE /api/app/initiatives/:id/projects/:projectId` | unlink; the project and its tickets are untouched |
+| `DELETE /api/app/initiatives/:id/projects/:projectId` | unlink; the project and its issues are untouched |
 
-**Roll-up:** `total` and `done` sum the tickets of every project linked to the initiative or to any initiative under it. A ticket is in one project, so it counts **once** however many links lead to its project. Deleted projects and
+**Roll-up:** `total` and `done` sum the issues of every project linked to the initiative or to any initiative under it. An issue is in one project, so it counts **once** however many links lead to its project. Deleted projects and
 initiatives stop counting. **Health** is the project rule from the initiative's target date (only an `active` initiative has one; a value set by hand wins). **Events:** every change is appended to `workspace_events` (entity `initiative`:
 `initiative.created`, `.updated`, `.deleted`, `.project_linked`, `.project_unlinked`); the table is append-only (a trigger refuses any update or delete, except the cascade of deleting the whole workspace). Initiatives do not appear in a team's
 `events`, `/api/v1` or the MCP. Not OKRs, and no metric correlation (ADR-10).

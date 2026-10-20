@@ -67,9 +67,9 @@ export function RichMarkdownEditor({
   onChange: (markdown: string) => void;
   autoFocus?: boolean;
   className?: string;
-  /** Padding and type size of the editable area (docs use roomier settings than ticket descriptions). */
+  /** Padding and type size of the editable area (docs use roomier settings than issue descriptions). */
   contentClassName?: string;
-  /** Tailwind min-height class for the editable area — widen for long-form content (e.g. docs) vs. the default ticket-description sizing. */
+  /** Tailwind min-height class for the editable area — widen for long-form content (e.g. docs) vs. the default issue-description sizing. */
   minHeight?: string;
   /** Tailwind max-height class for the editable area (controls scroll). */
   maxHeight?: string;

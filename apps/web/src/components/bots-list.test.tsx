@@ -11,7 +11,7 @@ const session = (id: string, over: Partial<SessionView> = {}): SessionView => ({
   reading: true,
   lastSeenAt: new Date().toISOString(),
   branch: "main",
-  ticket: "WH-48",
+  issue: "WH-48",
   ...over,
 });
 const bot = (over: Partial<Bot> = {}): Bot => ({ id: "key-1", name: "Laptop", pending: 0, sessions: [], lastUsedAt: new Date().toISOString(), ...over });

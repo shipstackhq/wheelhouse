@@ -9,13 +9,13 @@ import { isUuid, workspaceRoleOf } from "./team-access";
 
 /**
  * Initiatives (WH-119): a goal that groups projects and other initiatives, up to three levels deep. It belongs to the workspace and
- * every member except a guest sees it. Its progress is rolled up from the tickets of the projects linked to it and to the
- * initiatives under it, a ticket once however many links reach it. What an initiative shows of a project follows the project's own
+ * every member except a guest sees it. Its progress is rolled up from the issues of the projects linked to it and to the
+ * initiatives under it, an issue once however many links reach it. What an initiative shows of a project follows the project's own
  * rule (ADR-23): a project of one of the viewer's teams is shown in full, any other only adds to the counts and the totals, with no
- * name and no ticket. No initiative page ever lists a ticket.
+ * name and no issue. No initiative page ever lists an issue.
  */
 
-const { initiatives, initiativeProjects, projects, tickets, columns, users, memberships } = schema;
+const { initiatives, initiativeProjects, projects, issues, columns, users, memberships } = schema;
 export type InitiativeRow = typeof initiatives.$inferSelect;
 const MAX_DEPTH = schema.INITIATIVE_MAX_DEPTH;
 
@@ -112,18 +112,18 @@ async function projectProgress(q: Q, projectIds: string[]): Promise<Map<string, 
   const out = new Map<string, ProgressCounts>(projectIds.map((id) => [id, { total: 0, done: 0 }]));
   if (!projectIds.length) return out;
   const rows = await q
-    .select({ projectId: tickets.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(inArray(tickets.projectId, projectIds))
-    .groupBy(tickets.projectId);
+    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(inArray(issues.projectId, projectIds))
+    .groupBy(issues.projectId);
   for (const r of rows) out.set(r.projectId!, { total: Number(r.total), done: Number(r.done) });
   return out;
 }
 
 /**
- * The projects an initiative reaches: its own links and those of every initiative under it, each project once. A ticket is in one
- * project, so summing over this set counts a ticket once however many links lead to its project.
+ * The projects an initiative reaches: its own links and those of every initiative under it, each project once. An issue is in one
+ * project, so summing over this set counts an issue once however many links lead to its project.
  */
 export function reachableProjects(t: Tree, linked: Linked, id: string): string[] {
   return [...new Set(subtree(t, id).flatMap((i) => linked.get(i.id) ?? []))];
@@ -149,7 +149,7 @@ export type InitiativeSummary = {
   health: HealthView;
   targetDate: string | null;
   owner: { id: string; name: string } | null;
-  /** Rolled up from the tickets of every project below, each ticket once. */
+  /** Rolled up from the issues of every project below, each issue once. */
   total: number;
   done: number;
   /** Projects linked to this initiative itself, and how many initiatives sit directly under it. */
@@ -221,7 +221,7 @@ export type InitiativeDetail = InitiativeSummary & {
   children: InitiativeSummary[];
   /** Projects of the viewer's teams that the initiative reaches. `direct`: linked here, not only through a sub-initiative. */
   projects: InitiativeProjectView[];
-  /** The rest of the projects it reaches: how many, and their ticket totals. Never a name. */
+  /** The rest of the projects it reaches: how many, and their issue totals. Never a name. */
   hidden: { count: number; total: number; done: number };
   /** Projects the viewer sees that are not linked here yet, if they can edit. */
   linkable: { id: string; name: string }[];
@@ -472,7 +472,7 @@ export async function linkProject(actor: Actor, id: string, projectId: unknown, 
   return getInitiative(actor, id, now);
 }
 
-/** Unlink a project. The project and its tickets are untouched. */
+/** Unlink a project. The project and its issues are untouched. */
 export async function unlinkProject(actor: Actor, id: string, projectId: string, now = new Date()) {
   const db = await getDb();
   await editable(db, actor, id);

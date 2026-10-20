@@ -25,15 +25,15 @@ export function cycleTiming(c: Pick<CycleOption, "startsAt" | "endsAt" | "state"
   return `ended ${fmt(c.endsAt)}`;
 }
 
-/** Done tickets as a share of the cycle's tickets. */
+/** Done issues as a share of the cycle's issues. */
 export function Progress({ done, total }: { done: number; total: number }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
   return (
-    <div className="flex items-center gap-2" aria-label={`${done} of ${total} tickets done`}>
+    <div className="flex items-center gap-2" aria-label={`${done} of ${total} issues done`}>
       <div className="h-1.5 w-28 overflow-hidden rounded-full bg-panel-2">
         <div className="h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs tabular-nums text-muted">{total ? `${done} of ${total} done` : "no tickets yet"}</span>
+      <span className="text-xs tabular-nums text-muted">{total ? `${done} of ${total} done` : "no issues yet"}</span>
     </div>
   );
 }

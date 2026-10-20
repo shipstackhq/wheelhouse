@@ -6,10 +6,10 @@ export type WorkspaceFixture = {
   email: string;
   memberEmail: string;
   teamKey: string;
-  /** A ticket tests may freely edit and move. */
-  ticketRef: string;
-  /** A ticket only the webhook tests touch (PR moves are blocked for ten minutes after someone else moves a ticket). */
-  webhookTicketRef: string;
+  /** An issue tests may freely edit and move. */
+  issueRef: string;
+  /** An issue only the webhook tests touch (PR moves are blocked for ten minutes after someone else moves an issue). */
+  webhookIssueRef: string;
   apiKey: string;
   apiKey2: string;
   revokedKey: string;

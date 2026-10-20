@@ -52,7 +52,7 @@ describe("the Bots menu in the team header", () => {
   });
 
   test("a session can be removed from the menu, for its own team", async () => {
-    const session = { id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", ticket: null };
+    const session = { id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", issue: null };
     const { server } = renderApp("/t/AA", (s) => {
       queue([bot({ pending: 0, sessions: [session] })])(s);
       s.on("DELETE /api/app/teams/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd", { ok: true });

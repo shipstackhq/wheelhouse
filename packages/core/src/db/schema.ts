@@ -244,17 +244,17 @@ export type KeyCapability = (typeof KEY_CAPABILITIES)[number];
 export const teams = table("teams", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-  key: text("key").notNull(), // short prefix like "WH" for ticket refs
+  key: text("key").notNull(), // short prefix like "WH" for issue refs
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
   // The team's icon in the sidebar: `ri:<name>` (a Remix icon, in `icon_color`) or one emoji; null is the default glyph.
   icon: text("icon"),
   iconColor: text("icon_color", { enum: TEAM_ICON_COLORS }),
-  ticketCounter: integer("ticket_counter").notNull().default(0),
+  issueCounter: integer("issue_counter").notNull().default(0),
   createdAt: createdAt(),
 }, (t) => [
   unique("teams_id_workspace_id_unique").on(t.id, t.workspaceId),
-  // A team key ("WH") is what a ticket ref starts with: one per workspace, whatever its case.
+  // A team key ("WH") is what an issue ref starts with: one per workspace, whatever its case.
   uniqueIndex("teams_workspace_key_idx").on(t.workspaceId, sql`lower(${t.key})`),
 ]);
 
@@ -274,8 +274,8 @@ export const columns = table("columns", {
 
 export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 
-export const tickets = table(
-  "tickets",
+export const issues = table(
+  "issues",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     teamId: uuid("team_id").notNull(),
@@ -285,16 +285,16 @@ export const tickets = table(
     title: text("title").notNull(),
     body: text("body").notNull().default(""),
     priority: text("priority", { enum: PRIORITIES }).notNull().default("medium"),
-    // Only a member of the ticket's team can be assigned. The foreign key `(team_id, assignee_id)` to team_members
+    // Only a member of the issue's team can be assigned. The foreign key `(team_id, assignee_id)` to team_members
     // is `ON DELETE SET NULL (assignee_id)` (migration 0020; drizzle cannot express the column list), so leaving the
-    // team unassigns the person's tickets without touching team_id.
+    // team unassigns the person's issues without touching team_id.
     assigneeId: uuid("assignee_id"),
-    // The cycle the ticket is in, of its own team: the foreign key `(cycle_id, team_id)` to cycles is `ON DELETE SET NULL (cycle_id)`
-    // (migration 0023; drizzle cannot express the column list), so deleting a cycle takes its tickets out without touching team_id.
+    // The cycle the issue is in, of its own team: the foreign key `(cycle_id, team_id)` to cycles is `ON DELETE SET NULL (cycle_id)`
+    // (migration 0023; drizzle cannot express the column list), so deleting a cycle takes its issues out without touching team_id.
     cycleId: uuid("cycle_id"),
     // The project (a deliverable that can span teams) and its milestone. Keys in migration 0024, written there because drizzle
     // cannot say SET NULL on named columns: `(project_id, team_id)` to project_teams, so only a team that takes part may put a
-    // ticket in the project (removing the team takes both columns out), and `(milestone_id, project_id)` to its milestones.
+    // issue in the project (removing the team takes both columns out), and `(milestone_id, project_id)` to its milestones.
     projectId: uuid("project_id"),
     milestoneId: uuid("milestone_id"),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
@@ -307,21 +307,21 @@ export const tickets = table(
     updatedAt: updatedAt(),
   },
   (t) => [
-    teamScope("tickets", t),
-    unique("tickets_id_team_unique").on(t.id, t.teamId),
-    index("tickets_team_idx").on(t.teamId),
-    index("tickets_cycle_idx").on(t.cycleId),
-    index("tickets_project_idx").on(t.projectId),
-    index("tickets_milestone_idx").on(t.milestoneId),
-    check("tickets_milestone_needs_project_check", sql`"milestone_id" is null or "project_id" is not null`),
-    uniqueIndex("tickets_team_number_idx").on(t.teamId, t.number),
+    teamScope("issues", t),
+    unique("issues_id_team_unique").on(t.id, t.teamId),
+    index("issues_team_idx").on(t.teamId),
+    index("issues_cycle_idx").on(t.cycleId),
+    index("issues_project_idx").on(t.projectId),
+    index("issues_milestone_idx").on(t.milestoneId),
+    check("issues_milestone_needs_project_check", sql`"milestone_id" is null or "project_id" is not null`),
+    uniqueIndex("issues_team_number_idx").on(t.teamId, t.number),
   ],
 );
 
 /**
  * A team's cycles (WH-117, ADR-11 revised: cycles belong to a team): an optional 1 to 14 day window with a goal. Numbered
  * per team, never overlapping inside a team (the service checks that, under a lock on the team: an exclusion constraint needs an
- * extension that PGlite does not load). Unfinished tickets move to the next cycle once the window has ended; `rolled_over_at` is
+ * extension that PGlite does not load). Unfinished issues move to the next cycle once the window has ended; `rolled_over_at` is
  * what makes that happen exactly once.
  */
 export const cycles = table(
@@ -354,7 +354,7 @@ export type ProjectHealth = (typeof PROJECT_HEALTH)[number];
 
 /**
  * A project (WH-118): an outcome that ends and can span teams, with a lead, dates, milestones and a health that is worked out from
- * its tickets and dates unless someone sets it. It belongs to the workspace; the teams that take part are in `project_teams`, and
+ * its issues and dates unless someone sets it. It belongs to the workspace; the teams that take part are in `project_teams`, and
  * its lead team is one of them: the key `(lead_team_id, id)` into project_teams is deferrable (migration 0024), so a project and its
  * first team are made in one transaction. Deleting is soft (`deleted_at`).
  */
@@ -384,7 +384,7 @@ export const projects = table(
   ],
 );
 
-/** The teams that take part in a project. A ticket can be in the project only through its own team's row here. */
+/** The teams that take part in a project. An issue can be in the project only through its own team's row here. */
 export const projectTeams = table(
   "project_teams",
   {
@@ -400,7 +400,7 @@ export const projectTeams = table(
   ],
 );
 
-/** Ordered stages of a project, each with an optional target date. A ticket may be in one. */
+/** Ordered stages of a project, each with an optional target date. An issue may be in one. */
 export const projectMilestones = table(
   "project_milestones",
   {
@@ -431,7 +431,7 @@ export const projectVisibility = pgView("project_visibility", {
 
 export const comments = table("comments", {
   id: uuid("id").primaryKey().defaultRandom(),
-  ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  issueId: uuid("issue_id").notNull().references(() => issues.id, { onDelete: "cascade" }),
   authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
   authorId: uuid("author_id"),
   authorName: text("author_name").notNull(),
@@ -608,21 +608,21 @@ export const labels = table(
   ],
 );
 
-/** The labels on a ticket (the ticket and the label are of the same team). Deleting either removes the row. */
-export const ticketLabels = table(
-  "ticket_labels",
+/** The labels on an issue (the issue and the label are of the same team). Deleting either removes the row. */
+export const issueLabels = table(
+  "issue_labels",
   {
-    ticketId: uuid("ticket_id").notNull(),
+    issueId: uuid("issue_id").notNull(),
     labelId: uuid("label_id").notNull(),
     teamId: uuid("team_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.ticketId, t.labelId] }),
-    teamScope("ticket_labels", t),
-    foreignKey({ name: "ticket_labels_ticket_fk", columns: [t.ticketId, t.teamId], foreignColumns: [tickets.id, tickets.teamId] }).onDelete("cascade"),
-    foreignKey({ name: "ticket_labels_label_fk", columns: [t.labelId, t.teamId], foreignColumns: [labels.id, labels.teamId] }).onDelete("cascade"),
-    index("ticket_labels_label_idx").on(t.labelId),
+    primaryKey({ columns: [t.issueId, t.labelId] }),
+    teamScope("issue_labels", t),
+    foreignKey({ name: "issue_labels_issue_fk", columns: [t.issueId, t.teamId], foreignColumns: [issues.id, issues.teamId] }).onDelete("cascade"),
+    foreignKey({ name: "issue_labels_label_fk", columns: [t.labelId, t.teamId], foreignColumns: [labels.id, labels.teamId] }).onDelete("cascade"),
+    index("issue_labels_label_idx").on(t.labelId),
   ],
 );
 
@@ -641,13 +641,13 @@ export const terms = table(
   (t) => [teamScope("terms", t), uniqueIndex("terms_team_term_idx").on(t.teamId, t.term)],
 );
 
-export const ticketNodes = table(
-  "ticket_nodes",
+export const issueNodes = table(
+  "issue_nodes",
   {
-    ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+    issueId: uuid("issue_id").notNull().references(() => issues.id, { onDelete: "cascade" }),
     nodeId: uuid("node_id").notNull().references(() => nodes.id, { onDelete: "cascade" }),
   },
-  (t) => [primaryKey({ columns: [t.ticketId, t.nodeId] })],
+  (t) => [primaryKey({ columns: [t.issueId, t.nodeId] })],
 );
 
 // Append-only change log. Powers the activity feed and the AI queue.
@@ -660,8 +660,8 @@ export const events = table(
     actorKind: text("actor_kind", { enum: ["human", "agent"] }).notNull(),
     actorId: uuid("actor_id"),
     actorName: text("actor_name").notNull(),
-    type: text("type").notNull(), // e.g. ticket.created, ticket.moved, comment.created
-    entity: text("entity", { enum: ["ticket", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc", "cycle", "project"] }).notNull(),
+    type: text("type").notNull(), // e.g. issue.created, issue.moved, comment.created
+    entity: text("entity", { enum: ["issue", "comment", "node", "edge", "column", "team", "flow", "decision", "term", "doc", "cycle", "project"] }).notNull(),
     entityId: uuid("entity_id").notNull(),
     summary: text("summary").notNull(),
     data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
@@ -683,7 +683,7 @@ export const INITIATIVE_MAX_DEPTH = 3;
 
 /**
  * Initiatives (WH-119): a goal that groups projects, and other initiatives under it up to three levels. An initiative belongs to
- * the workspace, not to a team. It holds no tickets and no teams: its progress is rolled up from the tickets of its projects and
+ * the workspace, not to a team. It holds no issues and no teams: its progress is rolled up from the issues of its projects and
  * of its sub-initiatives. Deleting is soft (`deleted_at`) and never touches the projects.
  */
 export const initiatives = table(
@@ -713,7 +713,7 @@ export const initiatives = table(
   ],
 );
 
-/** The projects an initiative groups. A project can be in several initiatives; a ticket is still counted once in a roll-up. */
+/** The projects an initiative groups. A project can be in several initiatives; an issue is still counted once in a roll-up. */
 export const initiativeProjects = table(
   "initiative_projects",
   {
@@ -731,7 +731,7 @@ export const initiativeProjects = table(
 
 /**
  * The append-only change log of what belongs to the workspace and not to one team: projects and, with WH-119, initiatives. Same
- * shape as `events` without a team. A change that matters to a team (a ticket joins a project, a milestone moves) is also written to
+ * shape as `events` without a team. A change that matters to a team (an issue joins a project, a milestone moves) is also written to
  * that team's `events`, which is what the team's agents read. Never updated or deleted.
  */
 export const workspaceEvents = table(
@@ -773,7 +773,7 @@ export const REPO_LIFECYCLES = ["live", "being_replaced", "planned", "retired"] 
  * teams. Each team<->repo link is its own row (so the same physical repo
  * connected to two teams is two rows, each with its own `pathLimit`), which
  * avoids a many-to-many join table and matches "each team's link to it
- * carries its own path limit" in the ticket. `slug` is the natural
+ * carries its own path limit" in the issue. `slug` is the natural
  * identifying key the CLI/wheelhouse.json reports for `provider: "local"`
  * (or the GitHub repo id once connected), used to find-or-create the right
  * row per team on each report.
@@ -825,7 +825,7 @@ export type SessionFile = { hash: string | null; at: string; external?: boolean;
 
 /**
  * A client session (e.g. one Claude Code session) working in a team: which
- * files it has changed but not landed, which ticket it's on, when it last
+ * files it has changed but not landed, which issue it's on, when it last
  * checked in. Drives "in flux" on the map and the reconciliation check.
  */
 export const workSessions = table(
@@ -838,7 +838,7 @@ export const workSessions = table(
     actorName: text("actor_name").notNull(),
     client: text("client").notNull().default("unknown"),
     branch: text("branch"),
-    ticketId: uuid("ticket_id").references(() => tickets.id, { onDelete: "set null" }),
+    issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
     files: jsonb("files").$type<Record<string, SessionFile>>().notNull().default({}),
     // This session's own read pointer into `events` (its AI queue). Null until the session first reads it.
     lastSeq: bigint("last_seq", { mode: "number" }),
@@ -922,20 +922,20 @@ export const pullRequests = table(
   (t) => [uniqueIndex("pull_requests_repo_number_idx").on(t.repositoryId, t.number)],
 );
 
-export const pullRequestTickets = table(
-  "pull_request_tickets",
+export const pullRequestIssues = table(
+  "pull_request_issues",
   {
     pullRequestId: uuid("pull_request_id").notNull().references(() => pullRequests.id, { onDelete: "cascade" }),
-    ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+    issueId: uuid("issue_id").notNull().references(() => issues.id, { onDelete: "cascade" }),
   },
-  (t) => [primaryKey({ columns: [t.pullRequestId, t.ticketId] }), index("pull_request_tickets_ticket_idx").on(t.ticketId)],
+  (t) => [primaryKey({ columns: [t.pullRequestId, t.issueId] }), index("pull_request_issues_issue_idx").on(t.issueId)],
 );
 
 // ───────── workspace documentation (WH-51) ─────────
 //
 // Markdown docs that live in Wheelhouse next to the board and map: runbooks,
 // product notes, conventions, decisions in prose. A tree (parentId), optimistic
-// locking like tickets, soft delete with a 30-day purge. Agents read them over
+// locking like issues, soft delete with a 30-day purge. Agents read them over
 // MCP/REST; writing requires a key with the "docs:write" capability or a human.
 
 export const docs = table(
@@ -971,7 +971,7 @@ export const docs = table(
     // Content hashes of anchored files when the doc was last confirmed accurate, and landed paths that now differ.
     describedHashes: jsonb("described_hashes").$type<Record<string, string>>().notNull().default({}),
     driftPaths: jsonb("drift_paths").$type<string[]>().notNull().default([]),
-    // Free-text tags (WH-103), like tickets.labels. Not part of the freshness rules: tagging a doc never marks it fresh.
+    // Free-text tags (WH-103), like issues.labels. Not part of the freshness rules: tagging a doc never marks it fresh.
     labels: jsonb("labels").$type<string[]>().notNull().default([]),
   },
   (t) => [
@@ -1014,7 +1014,7 @@ export const docDrafts = table(
   (t) => [teamScope("doc_drafts", t), index("doc_drafts_doc_idx").on(t.docId)],
 );
 
-/** Links a doc to a map node, mirroring ticket_nodes, so a node's page can list "read these docs". */
+/** Links a doc to a map node, mirroring issue_nodes, so a node's page can list "read these docs". */
 export const docNodes = table(
   "doc_nodes",
   {

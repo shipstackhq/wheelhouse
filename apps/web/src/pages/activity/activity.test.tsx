@@ -31,7 +31,7 @@ describe("the activity page", () => {
     open((s) =>
       s.on("GET /api/app/teams/AA/activity", {
         events: [
-          activityEvent({ seq: 7, summary: "ticket event", data: { ref: "AA-5" } }),
+          activityEvent({ seq: 7, summary: "issue event", data: { ref: "AA-5" } }),
           activityEvent({ seq: 6, summary: "node event", entity: "node", entityId: "n-1", data: {} }),
           activityEvent({ seq: 5, summary: "edge event", entity: "edge", entityId: "e-1", data: {} }),
           activityEvent({ seq: 4, summary: "flow event", entity: "flow", entityId: "f-1", data: {} }),
@@ -42,7 +42,7 @@ describe("the activity page", () => {
       }),
     );
     const href = async (text: string) => (await screen.findByRole("link", { name: text })).getAttribute("href");
-    expect(await href("ticket event")).toBe("/t/AA?t=AA-5");
+    expect(await href("issue event")).toBe("/t/AA?t=AA-5");
     expect(await href("node event")).toBe("/t/AA/map?node=n-1");
     expect(await href("edge event")).toBe("/t/AA/map");
     expect(await href("flow event")).toBe("/t/AA/map?flow=f-1");

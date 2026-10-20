@@ -40,7 +40,7 @@ before(async () => {
   await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
   const actor: Actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
   await svc.createTeam(actor, { name: "Move", key: "MV", description: TRICKY });
-  const t = await svc.createTicket(actor, "MV", { title: TRICKY, body: "body" });
+  const t = await svc.createIssue(actor, "MV", { title: TRICKY, body: "body" });
   await svc.addComment(actor, t.id, "a comment");
   const a = await svc.upsertNode(actor, "MV", { name: "API", layer: "system", summary: TRICKY, anchors: ["src/a.ts"] });
   const b = await svc.upsertNode(actor, "MV", { name: "DB", layer: "data", summary: "s" });
@@ -49,10 +49,10 @@ before(async () => {
   await svc.upsertDecision(actor, "MV", { title: "Use it", context: TRICKY });
   await svc.upsertTerm(actor, "MV", { term: "Thing", definition: "a thing" });
   await svc.upsertFlow(actor, "MV", { name: "Go", steps: [{ node: a.id, title: "start" }] });
-  // A project with its milestone and a ticket in it: projects and project_teams point at each other (the lead team), so the order of the load matters.
+  // A project with its milestone and an issue in it: projects and project_teams point at each other (the lead team), so the order of the load matters.
   const prj = await createProject(actor, { name: TRICKY, leadTeam: "MV", status: "active", targetDate: "2026-12-31" });
   const ms = (await createMilestone(actor, prj.id, { name: "First" })).milestones[0];
-  await svc.updateTicket(actor, t.id, { projectId: prj.id, milestoneId: ms.id });
+  await svc.updateIssue(actor, t.id, { projectId: prj.id, milestoneId: ms.id });
   const [key] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
   const [team] = await db.select().from(schema.teams);
   await db.insert(schema.agentCursors).values({ apiKeyId: key.id, teamId: team.id, workspaceId: workspace.id, lastSeq: 3 });
@@ -64,7 +64,7 @@ before(async () => {
   await db.execute(sql`update work_sessions set resume_from_seq = 2, resume_removed_at = '2026-10-17T12:34:56.789123+00:00' where id = 'sess-1'`);
   await db.execute(sql`update events set seq = ${BIG}::bigint where seq = (select max(seq) from events)`); // the newest event's number is past 2^53
   await db.execute(sql`update docs set position = 0.1 + 0.2`);
-  await db.execute(sql`update tickets set body = ''`);
+  await db.execute(sql`update issues set body = ''`);
   await db.execute(sql`select setval('events_seq_seq', ${BIG}::bigint + 10, true)`); // a sequence ahead of the newest event, as after rolled-back inserts
   await closeDb();
   exportDir = path.join(work, "export");
@@ -84,7 +84,7 @@ describe("export and import between PGlite directories", () => {
   test("the target ends up identical: every table's rows and checksum, the sequence, the migrations", async () => {
     const dst = await fresh("dst-1");
     const r = await importData(dst, exportDir);
-    assert.ok(r.tables.find((t) => t.name === "tickets")!.rows === 1);
+    assert.ok(r.tables.find((t) => t.name === "issues")!.rows === 1);
     const manifest = JSON.parse(fs.readFileSync(path.join(exportDir, "manifest.json"), "utf8"));
     const findings = compare(manifest.snapshot, await snapshot(dst.query));
     assert.deepEqual(findings.filter((f) => f.level === "error"), []);
@@ -98,8 +98,8 @@ describe("export and import between PGlite directories", () => {
     assert.equal(s.seq, BIG);
     assert.equal(s.at, "2026-10-17 12:34:56.789123+00");
     assert.equal((await dst.query(`select position = 0.1 + 0.2 as same from docs`))[0].same, true);
-    assert.equal((await dst.query(`select title from tickets`))[0].title, TRICKY);
-    assert.equal((await dst.query(`select body from tickets`))[0].body, "");
+    assert.equal((await dst.query(`select title from issues`))[0].title, TRICKY);
+    assert.equal((await dst.query(`select body from issues`))[0].body, "");
     assert.equal((await dst.query(`select count(*)::int as n from work_sessions where branch is null`))[0].n, 1);
     assert.deepEqual((await dst.query(`select files from work_sessions`))[0].files, { "a.ts": { hash: "h" } });
   });
@@ -136,7 +136,7 @@ describe("export and import between PGlite directories", () => {
   test("a failure part-way leaves the target empty, so the import can simply be run again", async () => {
     const broken = path.join(work, "export-broken");
     fs.cpSync(exportDir, broken, { recursive: true });
-    fs.appendFileSync(path.join(broken, "tickets.ndjson"), '{"id":"not-a-uuid"}\n'); // users, workspaces, teams… load first; this fails later
+    fs.appendFileSync(path.join(broken, "issues.ndjson"), '{"id":"not-a-uuid"}\n'); // users, workspaces, teams… load first; this fails later
     const dst = await fresh("dst-7");
     await assert.rejects(importData(dst, broken));
     assert.equal((await snapshot(dst.query)).tables.every((t) => t.rows === 0), true);
@@ -166,11 +166,11 @@ describe("verification notices a mistake", () => {
   };
   const errors = async (dst: Conn) => compare(manifest().snapshot, await snapshot(dst.query)).filter((f) => f.level === "error");
 
-  test("an edited ticket, a deleted API key, a changed hash, an extra row and a moved sequence are each found, by table", async () => {
+  test("an edited issue, a deleted API key, a changed hash, an extra row and a moved sequence are each found, by table", async () => {
     const dst = await imported("v-1");
     assert.deepEqual(await errors(dst), []);
-    await dst.query(`update tickets set title = title || ' (edited)'`);
-    assert.match((await errors(dst)).map((e) => `${e.check}: ${e.detail}`).join("\n"), /table tickets: same row count \(1\) but the content differs/);
+    await dst.query(`update issues set title = title || ' (edited)'`);
+    assert.match((await errors(dst)).map((e) => `${e.check}: ${e.detail}`).join("\n"), /table issues: same row count \(1\) but the content differs/);
     await dst.query(`update api_keys set key_hash = repeat('c', 64)`);
     assert.ok((await errors(dst)).some((e) => e.check === "table api_keys"));
     await dst.query(`delete from agent_cursors`);
@@ -185,7 +185,7 @@ describe("verification notices a mistake", () => {
     const dst = await imported("v-2");
     assert.deepEqual((await integrity(dst.query)).filter((f) => f.level === "error"), []);
     await dst.query(`set session_replication_role = replica`); // switches the foreign key triggers off, so a row can be written that the constraint would refuse
-    await dst.query(`insert into comments (ticket_id, author_kind, author_name, body) values (gen_random_uuid(), 'human', 'x', 'orphan')`);
+    await dst.query(`insert into comments (issue_id, author_kind, author_name, body) values (gen_random_uuid(), 'human', 'x', 'orphan')`);
     await dst.query(`set session_replication_role = origin`);
     await dst.query(`update agent_cursors set last_seq = (select max(seq) + 10 from events)`);
     await dst.query(`update api_keys set key_hash = 'plaintext-secret'`);
@@ -227,11 +227,11 @@ describe("the command line", () => {
     assert.match(again.stderr, /target is not empty/);
     fs.appendFileSync(path.join(out, "manifest.json"), "");
     const m = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
-    m.snapshot.tables.find((t: { name: string }) => t.name === "tickets").md5 = "0".repeat(32);
+    m.snapshot.tables.find((t: { name: string }) => t.name === "issues").md5 = "0".repeat(32);
     fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(m));
     const v = cli("verify", "--in", out, "--to", target);
     assert.equal(v.status, 1);
-    assert.match(v.stdout, /FAIL table tickets/);
+    assert.match(v.stdout, /FAIL table issues/);
     assert.match(v.stdout, /DISCREPANCIES FOUND/);
   });
 

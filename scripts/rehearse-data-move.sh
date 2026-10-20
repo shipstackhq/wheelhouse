@@ -119,7 +119,7 @@ pnpm --silent map:after-migration --db "$W/pglite-app" > "$W/after-migration.log
 pnpm --silent map:after-migration --db "$W/pglite-app" 2>&1 | grep -q "nothing to change" && ok "and a second run changes nothing" || bad "map:after-migration is not idempotent"
 db verify --to "$W/pglite-app" --integrity-only | tail -1 | grep -q "integrity holds" && ok "integrity still holds after the map was updated" || bad "integrity after the map update"
 cp -R "$W/pglite-app" "$W/pglite-mapped"
-# What the data says before the app touches it: the real key's cursor, the newest event, a connected repository, an open ticket.
+# What the data says before the app touches it: the real key's cursor, the newest event, a connected repository, an open issue.
 FACTS="$(node scripts/rehearsal/facts.mjs "$W/pglite-app")"
 echo "    data: $FACTS"
 [ -f apps/web/dist/index.html ] || pnpm --silent --filter @wheelhouse/web build >/dev/null 2>&1
@@ -141,7 +141,7 @@ node --input-type=module -e '
     console.log(`  ${same ? "ok  " : "FAIL"} ${p.team}: the key resumes at its ${p.has_cursor ? "cursor" : "starting point (no cursor row yet)"} ${p.cursor} (the server says ${c.cursor}) with ${p.waiting} change(s) waiting (the server says ${c.total}); newest event ${f.maxSeq}`);
   }
   process.exit(bad ? 1 : 0)' "$FACTS" "$BASE" "$KEY" || fail=1
-# The next webhook lands on the right team: a pull request naming an open ticket, from the connected repository, signed with the real secret.
+# The next webhook lands on the right team: a pull request naming an open issue, from the connected repository, signed with the real secret.
 ( set -a; [ -f .env.local ] && . ./.env.local; set +a; node scripts/rehearsal/webhook.mjs "$FACTS" "$BASE" ) || fail=1
 stop_app
 done_step

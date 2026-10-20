@@ -39,7 +39,7 @@ test("the MCP and REST commands point at this server and use the variable, not a
   const o = onboarding({ origin: "http://localhost:3456/", teamKey: "WH" });
   assert.match(o.mcp, /claude mcp add --transport http wheelhouse http:\/\/localhost:3456\/mcp/);
   assert.match(o.mcp, /read -rs WHEELHOUSE_KEY/);
-  assert.match(o.rest, /http:\/\/localhost:3456\/api\/v1\/create_ticket/);
+  assert.match(o.rest, /http:\/\/localhost:3456\/api\/v1\/create_issue/);
   assert.match(o.rest, /"project":"WH"/);
   assert.ok(o.rest.includes('Bearer $WHEELHOUSE_KEY'));
 });

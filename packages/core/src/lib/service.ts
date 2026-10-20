@@ -8,7 +8,7 @@ import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
 import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
 import { ServiceError } from "./service-error";
-import { cleanLabels, labelsOf, setDecisionNodes, setTicketLabels, withCycle, withLabels, withNodeIds } from "./links";
+import { cleanLabels, labelsOf, setDecisionNodes, setIssueLabels, withCycle, withLabels, withNodeIds } from "./links";
 import { audit, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
 
 export { ServiceError };
@@ -19,7 +19,7 @@ export { ServiceError };
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { teams, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users, projects } = schema;
+const { teams, columns, issues, comments, nodes, edges, issueNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users, projects } = schema;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
@@ -34,7 +34,7 @@ export type Q = DB | Tx;
  * safe if two edits from the same version cannot both read it before either writes; on Postgres (not on the single-connection
  * embedded database the tests use) they can. The second one waits here for the first to commit, then sees its version.
  */
-async function lockRow<T extends { id: string }>(tx: Tx, table: typeof tickets | typeof nodes | typeof docs, row: T): Promise<T> {
+async function lockRow<T extends { id: string }>(tx: Tx, table: typeof issues | typeof nodes | typeof docs, row: T): Promise<T> {
   const [fresh] = await tx.select().from(table).where(eq(table.id, row.id)).for("update");
   return (fresh as unknown as T | undefined) ?? row;
 }
@@ -128,7 +128,7 @@ export async function requireTeam(actor: Actor, ref: string, need: Need = "read"
   return p;
 }
 
-/** Rename a team and/or change its description. Team admins only; the key never changes (tickets are named after it). */
+/** Rename a team and/or change its description. Team admins only; the key never changes (issues are named after it). */
 export async function updateTeam(actor: Actor, ref: string, input: { name?: string; description?: string; icon?: unknown; iconColor?: unknown }) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit a team's settings");
   const db = await getDb();
@@ -148,7 +148,7 @@ export async function updateTeam(actor: Actor, ref: string, input: { name?: stri
   });
 }
 
-/** Delete a team and everything in it (tickets, map, flows, drafts, sessions, activity). Teammates only. */
+/** Delete a team and everything in it (issues, map, flows, drafts, sessions, activity). Teammates only. */
 export async function deleteTeam(actor: Actor, ref: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a team");
   const db = await getDb();
@@ -201,9 +201,9 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
   });
 }
 
-// ───────────────────────── board / tickets ─────────────────────────
+// ───────────────────────── board / issues ─────────────────────────
 
-export type TicketWithLinks = typeof tickets.$inferSelect & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
+export type IssueWithLinks = typeof issues.$inferSelect & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
 
 const CLAIM_TTL_MS = 24 * 3600e3;
 
@@ -215,8 +215,8 @@ export async function expireStaleClaims(teamId: string) {
   const db = await getDb();
   const claimed = await db
     .select()
-    .from(tickets)
-    .where(and(eq(tickets.teamId, teamId), sql`${tickets.claimedByKeyId} is not null`));
+    .from(issues)
+    .where(and(eq(issues.teamId, teamId), sql`${issues.claimedByKeyId} is not null`));
   for (const t of claimed) {
     const [last] = await db
       .select({ at: events.createdAt })
@@ -228,15 +228,15 @@ export async function expireStaleClaims(teamId: string) {
     if (Date.now() - lastAt < CLAIM_TTL_MS) continue;
     const [p] = await db.select().from(teams).where(eq(teams.id, teamId));
     await db.transaction(async (tx) => {
-      await tx.update(tickets).set({ claimedByKeyId: null, version: t.version + 1, updatedAt: new Date() }).where(eq(tickets.id, t.id));
+      await tx.update(issues).set({ claimedByKeyId: null, version: t.version + 1, updatedAt: new Date() }).where(eq(issues.id, t.id));
       await tx.insert(events).values({
         workspaceId: p.workspaceId,
         teamId,
         actorKind: "human",
         actorId: null,
         actorName: "Wheelhouse",
-        type: "ticket.claim_expired",
-        entity: "ticket",
+        type: "issue.claim_expired",
+        entity: "issue",
         entityId: t.id,
         summary: `released ${p.key}-${t.number}: no activity from the claiming agent for 24h`,
         data: { ref: `${p.key}-${t.number}` },
@@ -251,31 +251,31 @@ export async function getBoard(actor: Actor, teamRef: string) {
   await expireStaleClaims(team.id);
   await (await import("./cycles")).rolloverCycles(team.id);
   const cols = await db.select().from(columns).where(eq(columns.teamId, team.id)).orderBy(asc(columns.position));
-  const ts = await db.select().from(tickets).where(eq(tickets.teamId, team.id)).orderBy(asc(tickets.position));
+  const ts = await db.select().from(issues).where(eq(issues.teamId, team.id)).orderBy(asc(issues.position));
   const ids = ts.map((t) => t.id);
-  const links = ids.length ? await db.select().from(ticketNodes).where(inArray(ticketNodes.ticketId, ids)) : [];
+  const links = ids.length ? await db.select().from(issueNodes).where(inArray(issueNodes.issueId, ids)) : [];
   const labelMap = await labelsOf(db, ids);
   const cycleOf = new Map((await withCycle(db, ts)).map((t) => [t.id, t.cycle]));
   const counts = ids.length
     ? await db
-        .select({ ticketId: comments.ticketId, n: sql<number>`count(*)::int` })
+        .select({ issueId: comments.issueId, n: sql<number>`count(*)::int` })
         .from(comments)
-        .where(inArray(comments.ticketId, ids))
-        .groupBy(comments.ticketId)
+        .where(inArray(comments.issueId, ids))
+        .groupBy(comments.issueId)
     : [];
-  const countMap = new Map(counts.map((c) => [c.ticketId, Number(c.n)]));
-  const withLinks: TicketWithLinks[] = ts.map((t) => ({
+  const countMap = new Map(counts.map((c) => [c.issueId, Number(c.n)]));
+  const withLinks: IssueWithLinks[] = ts.map((t) => ({
     ...t,
     ref: `${team.key}-${t.number}`,
     labels: labelMap.get(t.id) ?? [],
     cycle: cycleOf.get(t.id) ?? null,
-    nodeIds: links.filter((l) => l.ticketId === t.id).map((l) => l.nodeId),
+    nodeIds: links.filter((l) => l.issueId === t.id).map((l) => l.nodeId),
     commentCount: countMap.get(t.id) ?? 0,
   }));
-  return { team, columns: cols, tickets: withLinks };
+  return { team, columns: cols, issues: withLinks };
 }
 
-/** An assignee must be a member of the ticket's team: a user from another workspace, a workspace member who is not on the team, or a made-up id is refused. */
+/** An assignee must be a member of the issue's team: a user from another workspace, a workspace member who is not on the team, or a made-up id is refused. */
 async function assertAssignee(q: Q, teamId: string, userId: string | null | undefined) {
   if (!userId) return;
   const [m] = isUuid(userId)
@@ -296,62 +296,62 @@ async function resolveColumn(q: Q, teamId: string, ref: string) {
   return c;
 }
 
-/** Accepts a ticket uuid or a ref like "WH-12". A ticket of a team the actor cannot open is not_found; `need` says what the caller will do with it. */
-export async function resolveTicket(actor: Actor, ref: string, q?: Q, need: Need = "read") {
+/** Accepts an issue uuid or a ref like "WH-12". An issue of a team the actor cannot open is not_found; `need` says what the caller will do with it. */
+export async function resolveIssue(actor: Actor, ref: string, q?: Q, need: Need = "read") {
   const db = q ?? (await getDb());
-  let row: { t: typeof tickets.$inferSelect; p: typeof teams.$inferSelect } | undefined;
+  let row: { t: typeof issues.$inferSelect; p: typeof teams.$inferSelect } | undefined;
   if (isUuid(ref)) {
     [row] = await db
-      .select({ t: tickets, p: teams })
-      .from(tickets)
-      .innerJoin(teams, eq(teams.id, tickets.teamId))
-      .where(and(eq(tickets.id, ref), eq(teams.workspaceId, actor.workspaceId)));
+      .select({ t: issues, p: teams })
+      .from(issues)
+      .innerJoin(teams, eq(teams.id, issues.teamId))
+      .where(and(eq(issues.id, ref), eq(teams.workspaceId, actor.workspaceId)));
   } else {
     const m = /^([A-Za-z]+)-(\d+)$/.exec(ref.trim());
-    if (!m) throw new ServiceError("invalid", `Bad ticket ref "${ref}" (use uuid or KEY-123)`);
+    if (!m) throw new ServiceError("invalid", `Bad issue ref "${ref}" (use uuid or KEY-123)`);
     [row] = await db
-      .select({ t: tickets, p: teams })
-      .from(tickets)
-      .innerJoin(teams, eq(teams.id, tickets.teamId))
+      .select({ t: issues, p: teams })
+      .from(issues)
+      .innerJoin(teams, eq(teams.id, issues.teamId))
       .where(
-        and(eq(teams.workspaceId, actor.workspaceId), eq(teams.key, m[1].toUpperCase()), eq(tickets.number, Number(m[2]))),
+        and(eq(teams.workspaceId, actor.workspaceId), eq(teams.key, m[1].toUpperCase()), eq(issues.number, Number(m[2]))),
       );
   }
   const role = row ? await roleOnTeam(db, actor, row.p.id) : null;
-  if (!row || !role) throw new ServiceError("not_found", `Ticket ${ref} not found`);
+  if (!row || !role) throw new ServiceError("not_found", `Issue ${ref} not found`);
   if (!roleAllows(role, need)) throw new ServiceError("forbidden", "Your role on this team is read only");
-  return { ticket: row.t, team: row.p, ref: `${row.p.key}-${row.t.number}` };
+  return { issue: row.t, team: row.p, ref: `${row.p.key}-${row.t.number}` };
 }
 
-export async function getTicket(actor: Actor, ref: string) {
+export async function getIssue(actor: Actor, ref: string) {
   const db = await getDb();
-  const { ticket, team, ref: r } = await resolveTicket(actor, ref);
-  const [col] = await db.select().from(columns).where(eq(columns.id, ticket.columnId));
-  const cs = await db.select().from(comments).where(eq(comments.ticketId, ticket.id)).orderBy(asc(comments.createdAt));
+  const { issue, team, ref: r } = await resolveIssue(actor, ref);
+  const [col] = await db.select().from(columns).where(eq(columns.id, issue.columnId));
+  const cs = await db.select().from(comments).where(eq(comments.issueId, issue.id)).orderBy(asc(comments.createdAt));
   const linked = await db
     .select({ id: nodes.id, name: nodes.name, kind: nodes.kind, parentId: nodes.parentId })
-    .from(ticketNodes)
-    .innerJoin(nodes, eq(nodes.id, ticketNodes.nodeId))
-    .where(eq(ticketNodes.ticketId, ticket.id));
+    .from(issueNodes)
+    .innerJoin(nodes, eq(nodes.id, issueNodes.nodeId))
+    .where(eq(issueNodes.issueId, issue.id));
   const history = await db
     .select()
     .from(events)
-    .where(and(eq(events.teamId, team.id), eq(events.entityId, ticket.id)))
+    .where(and(eq(events.teamId, team.id), eq(events.entityId, issue.id)))
     .orderBy(desc(events.seq))
     .limit(50);
-  // Pull requests GitHub reported against this ticket (WH-20). Loaded lazily: that module imports this one.
-  const { pullRequestsForTicket } = await import("./github/service");
-  const pullRequests = await pullRequestsForTicket(ticket.id);
-  const [withLabel] = await withCycle(db, await withLabels(db, [ticket]));
-  return { ticket: { ...withLabel, ref: r, column: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
+  // Pull requests GitHub reported against this issue (WH-20). Loaded lazily: that module imports this one.
+  const { pullRequestsForIssue } = await import("./github/service");
+  const pullRequests = await pullRequestsForIssue(issue.id);
+  const [withLabel] = await withCycle(db, await withLabels(db, [issue]));
+  return { issue: { ...withLabel, ref: r, column: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
 }
 
 async function positionAt(q: Q, columnId: string, index: number | undefined, excludeId?: string) {
   const siblings = await q
-    .select({ id: tickets.id, position: tickets.position })
-    .from(tickets)
-    .where(and(eq(tickets.columnId, columnId), excludeId ? ne(tickets.id, excludeId) : undefined))
-    .orderBy(asc(tickets.position));
+    .select({ id: issues.id, position: issues.position })
+    .from(issues)
+    .where(and(eq(issues.columnId, columnId), excludeId ? ne(issues.id, excludeId) : undefined))
+    .orderBy(asc(issues.position));
   const i = index === undefined || index < 0 || index > siblings.length ? siblings.length : index;
   const before = siblings[i - 1]?.position;
   const after = siblings[i]?.position;
@@ -361,58 +361,58 @@ async function positionAt(q: Q, columnId: string, index: number | undefined, exc
   return (before + after) / 2;
 }
 
-export type TicketInput = {
+export type IssueInput = {
   title?: string;
   body?: string;
   priority?: (typeof schema.PRIORITIES)[number];
   assigneeId?: string | null;
   agentClaimable?: boolean;
   labels?: string[];
-  /** The number of one of the ticket's own team's cycles that has not ended; null takes it out of its cycle. */
+  /** The number of one of the issue's own team's cycles that has not ended; null takes it out of its cycle. */
   cycle?: number | null;
   /**
-   * The id of a project the ticket's team takes part in; null takes the ticket out of its project (and its milestone). Named
+   * The id of a project the issue's team takes part in; null takes the issue out of its project (and its milestone). Named
    * `projectId`, not `project`: the tools pass their own `project` argument (the team) through this same object.
    */
   projectId?: string | null;
-  /** The id of a milestone of the ticket's project; null clears it. Changing the project clears it unless a new one is named. */
+  /** The id of a milestone of the issue's project; null clears it. Changing the project clears it unless a new one is named. */
   milestoneId?: string | null;
 };
 
-/** The ticket joined or left a project: said to the ticket's team, whose agents read that log. */
+/** The issue joined or left a project: said to the issue's team, whose agents read that log. */
 async function emitProjectMove(tx: Tx, actor: Actor, teamId: string, ref: string, from: string | null, to: string | null) {
   if (from === to) return;
   const ids = [from, to].filter((x): x is string => !!x);
   const names = new Map((await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, ids))).map((p) => [p.id, p.name]));
-  if (from) await emit(tx, actor, teamId, { type: "project.ticket_left", entity: "project", entityId: from, summary: `${ref} left project "${names.get(from) ?? ""}"`, data: { ref, project: names.get(from) ?? null } });
-  if (to) await emit(tx, actor, teamId, { type: "project.ticket_joined", entity: "project", entityId: to, summary: `${ref} joined project "${names.get(to) ?? ""}"`, data: { ref, project: names.get(to) ?? null } });
+  if (from) await emit(tx, actor, teamId, { type: "project.issue_left", entity: "project", entityId: from, summary: `${ref} left project "${names.get(from) ?? ""}"`, data: { ref, project: names.get(from) ?? null } });
+  if (to) await emit(tx, actor, teamId, { type: "project.issue_joined", entity: "project", entityId: to, summary: `${ref} joined project "${names.get(to) ?? ""}"`, data: { ref, project: names.get(to) ?? null } });
 }
 
-export async function createTicket(actor: Actor, teamRef: string, input: TicketInput & { title: string; column?: string }) {
+export async function createIssue(actor: Actor, teamRef: string, input: IssueInput & { title: string; column?: string }) {
   const db = await getDb();
   const team = await requireTeam(actor, teamRef, "edit");
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
     await assertAssignee(tx, team.id, input.assigneeId);
-    const cycle = input.cycle == null ? null : await (await import("./cycles")).cycleForTicket(tx, team.id, input.cycle);
+    const cycle = input.cycle == null ? null : await (await import("./cycles")).cycleForIssue(tx, team.id, input.cycle);
     const inProject =
       input.projectId === undefined && input.milestoneId === undefined
         ? { projectId: null, milestoneId: null }
-        : await (await import("./projects")).resolveTicketProject(tx, team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
+        : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
     const col = await resolveColumn(tx, team.id, input.column ?? DEFAULT_COLUMNS[0]);
-    const [{ ticketCounter }] = await tx
+    const [{ issueCounter }] = await tx
       .update(teams)
-      .set({ ticketCounter: sql`${teams.ticketCounter} + 1` })
+      .set({ issueCounter: sql`${teams.issueCounter} + 1` })
       .where(eq(teams.id, team.id))
-      .returning({ ticketCounter: teams.ticketCounter });
+      .returning({ issueCounter: teams.issueCounter });
     const position = await positionAt(tx, col.id, undefined);
     const [t] = await tx
-      .insert(tickets)
+      .insert(issues)
       .values({
         teamId: team.id,
         workspaceId: team.workspaceId,
         columnId: col.id,
-        number: ticketCounter,
+        number: issueCounter,
         title: input.title.trim(),
         body: input.body ?? "",
         priority: input.priority ?? "medium",
@@ -426,12 +426,12 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
         createdById: actor.id,
       })
       .returning();
-    await setTicketLabels(tx, team, t.id, input.labels ?? []);
+    await setIssueLabels(tx, team, t.id, input.labels ?? []);
     const ref = `${team.key}-${t.number}`;
     await emitProjectMove(tx, actor, team.id, ref, null, t.projectId);
     await emit(tx, actor, team.id, {
-      type: "ticket.created",
-      entity: "ticket",
+      type: "issue.created",
+      entity: "issue",
       entityId: t.id,
       summary: `created ${ref} "${t.title}" in ${col.name}`,
       data: { ref, column: col.name, title: t.title },
@@ -442,33 +442,33 @@ export async function createTicket(actor: Actor, teamRef: string, input: TicketI
 }
 
 /**
- * Patch a ticket. Pass `expectedVersion` for optimistic locking: if someone
- * (human or agent) changed the ticket since you read it, you get a 409 with
+ * Patch an issue. Pass `expectedVersion` for optimistic locking: if someone
+ * (human or agent) changed the issue since you read it, you get a 409 with
  * the current state instead of silently overwriting their change.
  */
-export async function updateTicket(actor: Actor, ref: string, patch: TicketInput, expectedVersion?: number) {
-  return bindSession(actor, await updateTicketTx(actor, ref, patch, expectedVersion));
+export async function updateIssue(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
+  return bindSession(actor, await updateIssueTx(actor, ref, patch, expectedVersion));
 }
 
-async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, expectedVersion?: number) {
+async function updateIssueTx(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const resolved = await resolveTicket(actor, ref, tx, "edit");
+    const resolved = await resolveIssue(actor, ref, tx, "edit");
     const { team, ref: r } = resolved;
-    const locked = await lockRow(tx, tickets, resolved.ticket);
-    const [ticket] = await withCycle(tx, await withLabels(tx, [locked]));
-    if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
-      throw new ServiceError("conflict", `${r} was changed (version ${ticket.version}, you had ${expectedVersion}). Re-read and retry.`, {
-        current: ticket,
+    const locked = await lockRow(tx, issues, resolved.issue);
+    const [issue] = await withCycle(tx, await withLabels(tx, [locked]));
+    if (expectedVersion !== undefined && expectedVersion !== issue.version) {
+      throw new ServiceError("conflict", `${r} was changed (version ${issue.version}, you had ${expectedVersion}). Re-read and retry.`, {
+        current: issue,
       });
     }
-    const clean: TicketInput = {};
+    const clean: IssueInput = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
     if (clean.labels) {
       // Labels are stored once per name in any case and read back alphabetically, so a different order or case is no change.
       const want = cleanLabels(clean.labels);
       const key = (xs: string[]) => xs.map((x) => x.toLowerCase()).sort().join("\u0000");
-      if (key(want) === key(ticket.labels)) delete clean.labels;
+      if (key(want) === key(issue.labels)) delete clean.labels;
       else clean.labels = want;
     }
     await assertAssignee(tx, team.id, clean.assigneeId);
@@ -476,22 +476,22 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
     const projectChoice =
       wantProject === undefined && wantMilestone === undefined
         ? undefined
-        : await (await import("./projects")).resolveTicketProject(tx, team, { projectId: ticket.projectId, milestoneId: ticket.milestoneId }, { project: wantProject, milestone: wantMilestone });
-    const changes = diff(ticket as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}) } as Record<string, unknown>);
-    if (!Object.keys(changes).length) return { ...ticket, ref: r };
+        : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
+    const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}) } as Record<string, unknown>);
+    if (!Object.keys(changes).length) return { ...issue, ref: r };
     const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
-    const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await (await import("./cycles")).cycleForTicket(tx, team.id, newCycle)).id };
+    const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await (await import("./cycles")).cycleForIssue(tx, team.id, newCycle)).id };
     const [row] = await tx
-      .update(tickets)
-      .set({ ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), version: ticket.version + 1, updatedAt: new Date() })
-      .where(eq(tickets.id, ticket.id))
+      .update(issues)
+      .set({ ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), version: issue.version + 1, updatedAt: new Date() })
+      .where(eq(issues.id, issue.id))
       .returning();
-    if (newLabels) await setTicketLabels(tx, team, row.id, newLabels);
-    const t = { ...row, labels: newLabels ?? ticket.labels, cycle: newCycle === undefined ? ticket.cycle : newCycle };
-    await emitProjectMove(tx, actor, team.id, r, ticket.projectId, row.projectId);
+    if (newLabels) await setIssueLabels(tx, team, row.id, newLabels);
+    const t = { ...row, labels: newLabels ?? issue.labels, cycle: newCycle === undefined ? issue.cycle : newCycle };
+    await emitProjectMove(tx, actor, team.id, r, issue.projectId, row.projectId);
     await emit(tx, actor, team.id, {
-      type: "ticket.updated",
-      entity: "ticket",
+      type: "issue.updated",
+      entity: "issue",
       entityId: t.id,
       summary: `updated ${r}: ${Object.keys(changes).join(", ")}`,
       data: { ref: r, changes },
@@ -500,33 +500,33 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
   });
 }
 
-export async function moveTicket(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
-  return bindSession(actor, await moveTicketTx(actor, ref, column, index, expectedVersion));
+export async function moveIssue(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
+  return bindSession(actor, await moveIssueTx(actor, ref, column, index, expectedVersion));
 }
 
-async function moveTicketTx(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
+async function moveIssueTx(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const resolved = await resolveTicket(actor, ref, tx, "edit");
+    const resolved = await resolveIssue(actor, ref, tx, "edit");
     const { team, ref: r } = resolved;
-    const locked = await lockRow(tx, tickets, resolved.ticket);
-    const [ticket] = await withCycle(tx, await withLabels(tx, [locked]));
-    if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
-      throw new ServiceError("conflict", `${r} was changed since you read it`, { current: ticket });
+    const locked = await lockRow(tx, issues, resolved.issue);
+    const [issue] = await withCycle(tx, await withLabels(tx, [locked]));
+    if (expectedVersion !== undefined && expectedVersion !== issue.version) {
+      throw new ServiceError("conflict", `${r} was changed since you read it`, { current: issue });
     }
     const to = await resolveColumn(tx, team.id, column);
-    const [from] = await tx.select().from(columns).where(eq(columns.id, ticket.columnId));
-    const position = await positionAt(tx, to.id, index, ticket.id);
+    const [from] = await tx.select().from(columns).where(eq(columns.id, issue.columnId));
+    const position = await positionAt(tx, to.id, index, issue.id);
     const [moved] = await tx
-      .update(tickets)
-      .set({ columnId: to.id, position, version: ticket.version + 1, updatedAt: new Date() })
-      .where(eq(tickets.id, ticket.id))
+      .update(issues)
+      .set({ columnId: to.id, position, version: issue.version + 1, updatedAt: new Date() })
+      .where(eq(issues.id, issue.id))
       .returning();
-    const t = { ...moved, labels: ticket.labels, cycle: ticket.cycle };
+    const t = { ...moved, labels: issue.labels, cycle: issue.cycle };
     if (from.id !== to.id) {
       await emit(tx, actor, team.id, {
-        type: "ticket.moved",
-        entity: "ticket",
+        type: "issue.moved",
+        entity: "issue",
         entityId: t.id,
         summary: `moved ${r} from ${from.name} → ${to.name}`,
         data: { ref: r, from: from.name, to: to.name, fromRole: from.role, toRole: to.role },
@@ -536,48 +536,48 @@ async function moveTicketTx(actor: Actor, ref: string, column: string, index?: n
   });
 }
 
-export async function deleteTicket(actor: Actor, ref: string) {
+export async function deleteIssue(actor: Actor, ref: string) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, team, ref: r } = await resolveTicket(actor, ref, tx, "edit");
-    await tx.delete(tickets).where(eq(tickets.id, ticket.id));
+    const { issue, team, ref: r } = await resolveIssue(actor, ref, tx, "edit");
+    await tx.delete(issues).where(eq(issues.id, issue.id));
     await emit(tx, actor, team.id, {
-      type: "ticket.deleted",
-      entity: "ticket",
-      entityId: ticket.id,
-      summary: `deleted ${r} "${ticket.title}"`,
-      data: { ref: r, title: ticket.title },
+      type: "issue.deleted",
+      entity: "issue",
+      entityId: issue.id,
+      summary: `deleted ${r} "${issue.title}"`,
+      data: { ref: r, title: issue.title },
     });
     return { ok: true };
   });
 }
 
-/** Agent claims a ticket it's about to work on (only if humans marked it claimable). */
-export async function claimTicket(actor: Actor, ref: string) {
-  if (actor.kind !== "agent") throw new ServiceError("forbidden", "Only agents claim tickets");
+/** Agent claims an issue it's about to work on (only if humans marked it claimable). */
+export async function claimIssue(actor: Actor, ref: string) {
+  if (actor.kind !== "agent") throw new ServiceError("forbidden", "Only agents claim issues");
   const db = await getDb();
   const t = await db.transaction(async (tx) => {
-    const { ticket, team, ref: r } = await resolveTicket(actor, ref, tx, "edit");
-    if (!ticket.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the workspace`);
-    if (ticket.claimedByKeyId && ticket.claimedByKeyId !== actor.id)
+    const { issue, team, ref: r } = await resolveIssue(actor, ref, tx, "edit");
+    if (!issue.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the workspace`);
+    if (issue.claimedByKeyId && issue.claimedByKeyId !== actor.id)
       throw new ServiceError("conflict", `${r} is already claimed by another agent`);
     const [claimed] = await tx
-      .update(tickets)
-      .set({ claimedByKeyId: actor.id, version: ticket.version + 1, updatedAt: new Date() })
-      .where(eq(tickets.id, ticket.id))
+      .update(issues)
+      .set({ claimedByKeyId: actor.id, version: issue.version + 1, updatedAt: new Date() })
+      .where(eq(issues.id, issue.id))
       .returning();
     const [t] = await withCycle(tx, await withLabels(tx, [claimed]));
-    await emit(tx, actor, team.id, { type: "ticket.claimed", entity: "ticket", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
+    await emit(tx, actor, team.id, { type: "issue.claimed", entity: "issue", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
     return { ...t, ref: r };
   });
   return bindSession(actor, t);
 }
 
-/** An agent working a ticket binds it to its active session (for the reconciliation check). */
+/** An agent working an issue binds it to its active session (for the reconciliation check). */
 async function bindSession<T extends { id: string; teamId: string }>(actor: Actor, t: T): Promise<T> {
   if (actor.kind === "agent") {
-    const { noteTicketActivity } = await import("./sync");
-    await noteTicketActivity(actor, t.teamId, t.id);
+    const { noteIssueActivity } = await import("./sync");
+    await noteIssueActivity(actor, t.teamId, t.id);
   }
   return t;
 }
@@ -585,22 +585,22 @@ async function bindSession<T extends { id: string; teamId: string }>(actor: Acto
 export async function addComment(actor: Actor, ref: string, body: string) {
   if (!body?.trim()) throw new ServiceError("invalid", "Comment body is required");
   const db = await getDb();
-  const { c, ticket } = await db.transaction(async (tx) => {
-    const { ticket, team, ref: r } = await resolveTicket(actor, ref, tx, "edit");
+  const { c, issue } = await db.transaction(async (tx) => {
+    const { issue, team, ref: r } = await resolveIssue(actor, ref, tx, "edit");
     const [c] = await tx
       .insert(comments)
-      .values({ ticketId: ticket.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() })
+      .values({ issueId: issue.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() })
       .returning();
     await emit(tx, actor, team.id, {
       type: "comment.created",
-      entity: "ticket",
-      entityId: ticket.id,
+      entity: "issue",
+      entityId: issue.id,
       summary: `commented on ${r}`,
       data: { ref: r, commentId: c.id, body: c.body },
     });
-    return { c, ticket };
+    return { c, issue };
   });
-  await bindSession(actor, ticket);
+  await bindSession(actor, issue);
   return c;
 }
 
@@ -624,10 +624,10 @@ export async function getGraph(actor: Actor, teamRef: string) {
   const nodeIds = ns.map((n) => n.id);
   const links = nodeIds.length
     ? await db
-        .select({ nodeId: ticketNodes.nodeId, ticketId: tickets.id, number: tickets.number, title: tickets.title, columnId: tickets.columnId })
-        .from(ticketNodes)
-        .innerJoin(tickets, eq(tickets.id, ticketNodes.ticketId))
-        .where(inArray(ticketNodes.nodeId, nodeIds))
+        .select({ nodeId: issueNodes.nodeId, issueId: issues.id, number: issues.number, title: issues.title, columnId: issues.columnId })
+        .from(issueNodes)
+        .innerJoin(issues, eq(issues.id, issueNodes.issueId))
+        .where(inArray(issueNodes.nodeId, nodeIds))
     : [];
   const fl = await db.select().from(flows).where(eq(flows.teamId, team.id)).orderBy(asc(flows.name));
   const ds = await db.select().from(decisions).where(eq(decisions.teamId, team.id)).orderBy(asc(decisions.number));
@@ -637,7 +637,7 @@ export async function getGraph(actor: Actor, teamRef: string) {
     team,
     nodes: ns,
     edges: es,
-    ticketLinks: links.map((l) => ({ ...l, ref: `${team.key}-${l.number}` })),
+    issueLinks: links.map((l) => ({ ...l, ref: `${team.key}-${l.number}` })),
     flows: fl.map((f) => ({ ...f, steps: f.steps.filter((s) => alive.has(s.nodeId)) })),
     decisions: (await withNodeIds(db, ds)).map((d) => ({ ...d, nodeIds: d.nodeIds.filter((id) => alive.has(id)) })),
     terms: ts,
@@ -677,7 +677,7 @@ export async function resolveNode(q: Q, teamId: string, ref: string, layer?: Lay
   return rows[0];
 }
 
-/** Everything about one node: explainer, neighbours on every layer, flows, decisions, tickets. */
+/** Everything about one node: explainer, neighbours on every layer, flows, decisions, issues. */
 export async function getNode(actor: Actor, teamRef: string, ref: string) {
   const g = await getGraph(actor, teamRef);
   const db = await getDb();
@@ -700,7 +700,7 @@ export async function getNode(actor: Actor, teamRef: string, ref: string) {
     decisions: g.decisions
       .filter((d) => d.nodeIds.includes(n.id))
       .map((d) => ({ number: d.number, title: d.title, status: d.status })),
-    tickets: g.ticketLinks.filter((l) => l.nodeId === n.id).map((l) => ({ ref: l.ref, title: l.title })),
+    issues: g.issueLinks.filter((l) => l.nodeId === n.id).map((l) => ({ ref: l.ref, title: l.title })),
   };
 }
 
@@ -1213,20 +1213,20 @@ export async function unlinkNodes(actor: Actor, teamRef: string, input: { from: 
   return { ok: true, removed: found.length };
 }
 
-export async function linkTicketNode(actor: Actor, ticketRef: string, nodeRef: string, unlink = false) {
+export async function linkIssueNode(actor: Actor, issueRef: string, nodeRef: string, unlink = false) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, team, ref } = await resolveTicket(actor, ticketRef, tx, "edit");
+    const { issue, team, ref } = await resolveIssue(actor, issueRef, tx, "edit");
     const n = await resolveNode(tx, team.id, nodeRef);
     if (unlink) {
-      await tx.delete(ticketNodes).where(and(eq(ticketNodes.ticketId, ticket.id), eq(ticketNodes.nodeId, n.id)));
+      await tx.delete(issueNodes).where(and(eq(issueNodes.issueId, issue.id), eq(issueNodes.nodeId, n.id)));
     } else {
-      await tx.insert(ticketNodes).values({ ticketId: ticket.id, nodeId: n.id }).onConflictDoNothing();
+      await tx.insert(issueNodes).values({ issueId: issue.id, nodeId: n.id }).onConflictDoNothing();
     }
     await emit(tx, actor, team.id, {
-      type: unlink ? "ticket.unlinked" : "ticket.linked",
-      entity: "ticket",
-      entityId: ticket.id,
+      type: unlink ? "issue.unlinked" : "issue.linked",
+      entity: "issue",
+      entityId: issue.id,
       summary: `${unlink ? "unlinked" : "linked"} ${ref} ${unlink ? "from" : "to"} "${n.name}"`,
       data: { ref, node: n.name },
     });
@@ -1359,7 +1359,7 @@ async function resolveRepository(q: Q, teamId: string, ref: string) {
   return r;
 }
 
-/** Owner-only create/update of a repository's management fields. Owners manage repos; see createTicket for the human/agent split used elsewhere. */
+/** Owner-only create/update of a repository's management fields. Owners manage repos; see createIssue for the human/agent split used elsewhere. */
 export async function createRepository(actor: Actor, teamRef: string, input: RepositoryInput) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can add repositories");
   const db = await getDb();
@@ -1943,7 +1943,7 @@ async function sessionCursor(q: Q, actor: Actor, teamId: string) {
 
 /**
  * The AI queue: changes since this agent's cursor, excluding the agent's own
- * writes. Humans rearranging the board, editing tickets, or commenting show up
+ * writes. Humans rearranging the board, editing issues, or commenting show up
  * here. Call `ackChanges` with the last seq you processed.
  *
  * Large backlogs come back as a summary (counts by type and by who) plus the
@@ -2103,10 +2103,10 @@ export async function queueStatus(actor: Actor, teamRef: string) {
         lastSeq: workSessions.lastSeq,
         lastSeenAt: workSessions.lastSeenAt,
         branch: workSessions.branch,
-        ticketNumber: tickets.number,
+        issueNumber: issues.number,
       })
       .from(workSessions)
-      .leftJoin(tickets, eq(tickets.id, workSessions.ticketId))
+      .leftJoin(issues, eq(issues.id, workSessions.issueId))
       .where(
         and(
           eq(workSessions.apiKeyId, k.id),
@@ -2126,7 +2126,7 @@ export async function queueStatus(actor: Actor, teamRef: string) {
         // A session that never read its queue has no cursor of its own; don't pass it off as caught up.
         reading: s.lastSeq != null,
         branch: s.branch,
-        ticket: s.ticketNumber == null ? null : `${team.key}-${s.ticketNumber}`,
+        issue: s.issueNumber == null ? null : `${team.key}-${s.issueNumber}`,
         pending: s.lastSeq == null ? 0 : await depth(s.lastSeq, { id: k.id, sessionId: s.id }),
       });
     sessions.sort((x, y) => y.lastSeenAt.getTime() - x.lastSeenAt.getTime());
@@ -2188,7 +2188,7 @@ export async function checklistForTeam(actor: Actor, teamRef: string): Promise<C
 //
 // Markdown docs stored in Wheelhouse, next to the board and map: runbooks, product
 // notes, conventions, onboarding, decisions in prose. A tree via parentId, optimistic
-// locking like tickets, soft delete (30-day purge; history lives in `events`). Reading
+// locking like issues, soft delete (30-day purge; history lives in `events`). Reading
 // is open to any key; writing (upsertDoc/deleteDoc/moveDoc) requires a human actor or
 // a key with the "docs:write" capability — enforced here, and again at the tool layer
 // so a future caller of these functions can't skip the check by mistake.
@@ -2298,7 +2298,7 @@ export type DocInput = {
  * Markdown — inline code spans (`` `src/lib/x.ts` ``) and bare tokens that look like a
  * repo-relative path (contain a "/" and end in a plausible extension, or end in "/" for
  * a directory). Not an NLP system — a few false negatives/positives are fine, since the
- * ticket says these are SUGGESTIONS the author confirms, never auto-applied.
+ * issue says these are SUGGESTIONS the author confirms, never auto-applied.
  */
 const PATH_TOKEN_RE = /[A-Za-z0-9_.*-]+(?:\/[A-Za-z0-9_.*-]+)+\/?/g;
 const LIKELY_PATH_RE = /^(?:[A-Za-z0-9_.-]+\/)+(?:[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}|\*\*?|[A-Za-z0-9_.*-]+)\/?$/;
@@ -2456,7 +2456,7 @@ export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "desc
 
 /**
  * Patch a doc's title/body/anchors, or just confirm it's still accurate (markFresh).
- * Pass `expectedVersion` for optimistic locking, same pattern as updateTicket.
+ * Pass `expectedVersion` for optimistic locking, same pattern as updateIssue.
  *
  * Mirrors upsertNode: an agent session editing a doc whose anchored files are still
  * in flux (changed in that same session, not landed) gets the edit stored as a

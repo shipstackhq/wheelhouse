@@ -1,5 +1,5 @@
 import type { Actor } from "./access";
-import { getBoard, getChanges, getGraph, listRepositories, resolveTicket, getTicket, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
+import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
 import { timeAgo } from "./time";
 import { checklistBriefingLine } from "./setup-checklist";
 
@@ -76,7 +76,7 @@ export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?:
       : null;
 
   // Your work + board state
-  const open = board.tickets.filter((t) => colRole.get(t.columnId) !== "done");
+  const open = board.issues.filter((t) => colRole.get(t.columnId) !== "done");
   const mine = actor.kind === "agent" ? open.filter((t) => t.claimedByKeyId === actor.id) : open.filter((t) => t.assigneeId === actor.id);
   const inProgress = open.filter((t) => colRole.get(t.columnId) === "in_progress");
   const review = open.filter((t) => colRole.get(t.columnId) === "review");
@@ -124,7 +124,7 @@ export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?:
     staleDocs.length ? `Docs possibly out of date: ${staleDocs.map((d) => d.slug).join(", ")}` : null,
     flux.length
       ? `In flux (unlanded changes): ${flux
-          .map(([id, f]) => `${byId.get(id)?.name} by ${f.sessions[0]?.by ?? f.drafts[0]?.authorName}${f.sessions[0]?.ticket ? ` (${f.sessions[0].ticket})` : ""}`)
+          .map(([id, f]) => `${byId.get(id)?.name} by ${f.sessions[0]?.by ?? f.drafts[0]?.authorName}${f.sessions[0]?.issue ? ` (${f.sessions[0].issue})` : ""}`)
           .join("; ")}`
       : null,
   ]
@@ -139,7 +139,7 @@ export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?:
   const flows = g.flows.length ? `## Flows\n${g.flows.map((f) => `- ${f.name} (${f.steps.length} steps)`).join("\n")}\nUse get_flows for steps.\n` : null;
   const terms = g.terms.length ? `## Glossary\n${g.terms.slice(0, 15).map((t) => `- **${t.term}**: ${clip(t.definition, 120)}`).join("\n")}\n` : null;
   const deeper =
-    "## Go deeper\nget_ticket_context(ticket) for everything about one ticket, including which files to read first. get_node(node) for one part. get_schema for the data model.\n";
+    "## Go deeper\nget_issue_context(issue) for everything about one issue, including which files to read first. get_node(node) for one part. get_schema for the data model.\n";
 
   // Where the code comes from and how much to trust "what landed" (ADR-7): said plainly, never left to be guessed.
   const live = repos.filter((r) => r.lifecycle !== "retired");
@@ -159,23 +159,23 @@ export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?:
   const markdown = budgeted([header, work + "\n", since, what, built, repoSection, setupLine, watch ? watch + "\n" : null, flows, docsSection, deeper, terms], max);
   return {
     markdown,
-    stats: { nodes: g.nodes.length, openTickets: open.length, stale: g.nodes.filter((n) => n.stale).length, staleDocs: staleDocs.length, inFlux: Object.keys(g.flux).length },
+    stats: { nodes: g.nodes.length, openIssues: open.length, stale: g.nodes.filter((n) => n.stale).length, staleDocs: staleDocs.length, inFlux: Object.keys(g.flux).length },
   };
 }
 
-// ───────── ticket context pack ─────────
+// ───────── issue context pack ─────────
 
-export async function ticketContext(actor: Actor, ticketRef: string, opts: { maxChars?: number } = {}) {
+export async function issueContext(actor: Actor, issueRef: string, opts: { maxChars?: number } = {}) {
   const max = Math.min(Math.max(opts.maxChars ?? 8000, 1500), 30000);
-  const { team } = await resolveTicket(actor, ticketRef);
-  const [t, g] = await Promise.all([getTicket(actor, ticketRef), getGraph(actor, team.id)]);
+  const { team } = await resolveIssue(actor, issueRef);
+  const [t, g] = await Promise.all([getIssue(actor, issueRef), getGraph(actor, team.id)]);
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
 
-  // Linked nodes, or a keyword guess when the ticket isn't linked yet.
+  // Linked nodes, or a keyword guess when the issue isn't linked yet.
   let linked: NodeRow[] = t.nodes.map((n) => byId.get(n.id)!).filter(Boolean);
   let guessed = false;
   if (!linked.length) {
-    const words = `${t.ticket.title} ${t.ticket.body}`
+    const words = `${t.issue.title} ${t.issue.body}`
       .toLowerCase()
       .split(/[^a-z0-9_]+/)
       .filter((w) => w.length > 3);
@@ -223,7 +223,7 @@ export async function ticketContext(actor: Actor, ticketRef: string, opts: { max
       .filter(Boolean)
       .join("\n");
 
-  const tk = t.ticket;
+  const tk = t.issue;
   const head = `# ${tk.ref}: ${tk.title}\nStatus: ${tk.column} · priority ${tk.priority} · version ${tk.version}${tk.labels.length ? ` · labels ${tk.labels.join(", ")}` : ""}\n\n${tk.body || "_No description._"}\n`;
   const thread = t.comments.length
     ? `## Discussion (latest ${Math.min(5, t.comments.length)} of ${t.comments.length})\n${t.comments
@@ -236,8 +236,8 @@ export async function ticketContext(actor: Actor, ticketRef: string, opts: { max
     : null;
   const read = files.length ? `## Read these files first\n${files.map((f) => `- ${f}`).join("\n")}\n` : null;
   const parts = linked.length
-    ? `## ${guessed ? "Possibly related parts of the system (ticket isn't linked to the map yet; link with link_ticket_node)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
-    : `## Map\nNothing on the map matches this ticket yet. After the work, add or link nodes (upsert_node, link_ticket_node).\n`;
+    ? `## ${guessed ? "Possibly related parts of the system (issue isn't linked to the map yet; link with link_issue_node)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
+    : `## Map\nNothing on the map matches this issue yet. After the work, add or link nodes (upsert_node, link_issue_node).\n`;
   const near = neighbours.length
     ? `## Connected across layers\n${neighbours.map((n) => `- ${n.layer}:${n.name}${n.summary ? `: ${n.summary}` : ""}`).join("\n")}\n`
     : null;

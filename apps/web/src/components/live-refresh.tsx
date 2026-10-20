@@ -4,7 +4,7 @@ import { useLiveStream } from "./use-live-stream";
 
 /**
  * Keeps what is on screen fresh when anyone (a person or an agent) changes something. When the server's event stream (WH-1)
- * reports a change, every query on screen is read again, and the panels that keep their own copy of some data (the ticket
+ * reports a change, every query on screen is read again, and the panels that keep their own copy of some data (the issue
  * dialog, the map, the glossary...) are told with a `wheelhouse:changed` browser event. If the stream is not getting through
  * it falls back to reading again every few seconds.
  */

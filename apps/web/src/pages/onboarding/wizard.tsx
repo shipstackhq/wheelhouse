@@ -16,11 +16,11 @@ type CodeLocation = "github" | "local" | "none" | "skip" | null;
 const STEPS = ["Code location", "Connect agents", "First map", "Invite teammates"] as const;
 
 /**
- * The onboarding wizard (WH-69). Step 1 of the ticket (name/description) is covered by the new-team form
+ * The onboarding wizard (WH-69). Step 1 of the issue (name/description) is covered by the new-team form
  * before this page is reached, so the wizard itself starts at "where does your code live" and runs through to
  * inviting teammates. Steps 3 ("first map") and 2 ("code location") are merged for the no-code path, since the
  * no-code placeholder (a short description -> one concept node) covers both at once; every other path keeps them
- * separate as the ticket lays out. Every step can be skipped — "Skip to board" always escapes the wizard.
+ * separate as the issue lays out. Every step can be skipped — "Skip to board" always escapes the wizard.
  */
 export function OnboardingWizard({
   teamKey,

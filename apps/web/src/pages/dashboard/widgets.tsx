@@ -48,7 +48,7 @@ export function KpiRow() {
   const s = q.data;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
-      <StatTile label="Open tickets" value={s.open} hint={team ? "in this team" : `across ${s.teams} team${s.teams === 1 ? "" : "s"}`} />
+      <StatTile label="Open issues" value={s.open} hint={team ? "in this team" : `across ${s.teams} team${s.teams === 1 ? "" : "s"}`} />
       <StatTile label="In progress" value={s.inProgress} hint={`${s.inReview} waiting for review`} />
       <StatTile
         label="Completed, last 7 days"
@@ -79,7 +79,7 @@ export function TeamProgress() {
   const ps = q.data;
   const names = ps.find((p) => p.stages.length)?.stages.map((s) => s.name) ?? [];
   return (
-    <Widget title="Team progress" subtitle="Tickets per column; done = the last column" action={names.length ? <StageLegend names={names} /> : undefined}>
+    <Widget title="Team progress" subtitle="Issues per column; done = the last column" action={names.length ? <StageLegend names={names} /> : undefined}>
       {ps.length === 0 ? (
         <Empty>
           You are not in any team yet. <Link className="text-accent" to="/teams/new">Create one</Link>, or ask a team admin to add you.
@@ -127,9 +127,9 @@ export function Throughput() {
   if (q.isPending) return <WidgetSkeleton title="Throughput" height={200} />;
   if (q.isError) return <Failed title="Throughput" query={q} />;
   return (
-    <Widget title="Throughput" subtitle="Tickets created vs completed per day, last 14 days">
+    <Widget title="Throughput" subtitle="Issues created vs completed per day, last 14 days">
       <ColumnChart
-        label="Tickets created and completed per day"
+        label="Issues created and completed per day"
         data={q.data}
         series={[
           { key: "created", label: "Created", color: "var(--series-1)" },
@@ -384,7 +384,7 @@ export function SyncHealth() {
       ) : (
         <div className="space-y-6">
           <LimitedSection
-            title="Work not linked to a ticket"
+            title="Work not linked to an issue"
             items={h.untracked}
             row={(u) => (
               <TwoLineRow
@@ -395,7 +395,7 @@ export function SyncHealth() {
                 tip={
                   <div className="space-y-0.5">
                     <div>
-                      {u.by} changed {u.files.length} file{u.files.length === 1 ? "" : "s"} {timeAgo(u.since)}, with no ticket on the session
+                      {u.by} changed {u.files.length} file{u.files.length === 1 ? "" : "s"} {timeAgo(u.since)}, with no issue on the session
                     </div>
                     <div className="font-mono text-[11px] text-muted">
                       {u.files.slice(0, 8).map((f) => (
@@ -487,9 +487,9 @@ export function TeamFocus() {
   );
   return (
     <Widget title="Focus" subtitle="What to look at first in this team">
-      {f.tickets === 0 ? (
+      {f.issues === 0 ? (
         <Empty>
-          No tickets yet. <Link className="text-accent" to={`/t/${team}`}>Add the first one on the board</Link>, and what needs attention will appear here.
+          No issues yet. <Link className="text-accent" to={`/t/${team}`}>Add the first one on the board</Link>, and what needs attention will appear here.
         </Empty>
       ) : stuck === 0 ? (
         <Empty>Nothing is stuck: no work waiting on review, nothing in progress for long, no agent gone quiet.</Empty>

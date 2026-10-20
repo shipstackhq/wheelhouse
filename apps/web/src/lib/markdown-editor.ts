@@ -1,10 +1,10 @@
 /**
- * The Lexical side of rich-text editing for Markdown fields (ticket descriptions).
+ * The Lexical side of rich-text editing for Markdown fields (issue descriptions).
  *
  * Markdown stays the stored format: agents read and write it over MCP, so the editor
  * must hand back text that means the same thing. Lexical's Markdown export is close,
  * but it backslash-escapes `_`, `~` and `*` wherever they appear in plain text, which
- * would turn `get_ticket_context` into `get\_ticket\_context` in every ticket someone
+ * would turn `get_issue_context` into `get\_issue\_context` in every issue someone
  * edits. `unescapeHarmless` undoes only the escapes that can't change the meaning.
  */
 import { $convertFromMarkdownString, $convertToMarkdownString, TRANSFORMERS } from "@lexical/markdown";

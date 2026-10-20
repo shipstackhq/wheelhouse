@@ -26,13 +26,13 @@ describe("the cycles page", () => {
     expect(within(current).getByText("current", { selector: ".chip" })).toBeTruthy();
     expect(within(current).getByText("Ship billing")).toBeTruthy();
     expect(current.textContent).toMatch(/ends in \d+ days?/);
-    expect(within(current).getByLabelText("1 of 4 tickets done")).toBeTruthy();
+    expect(within(current).getByLabelText("1 of 4 issues done")).toBeTruthy();
     const upcoming = screen.getByRole("region", { name: "Upcoming cycles" });
     expect(within(upcoming).getByText("Cycle 4")).toBeTruthy();
     expect(upcoming.textContent).toMatch(/starts in \d+ days?/);
     const past = screen.getByRole("region", { name: "Past cycles" });
     expect(within(past).getAllByRole("link").map((a) => a.textContent?.split("past")[0])).toEqual(["Cycle 2", "Cycle 1: Kick-off"]);
-    expect(within(past).getByLabelText("3 of 3 tickets done")).toBeTruthy();
+    expect(within(past).getByLabelText("3 of 3 issues done")).toBeTruthy();
     expect(within(current).getByRole("link").getAttribute("href")).toBe("/t/AA/cycles/3");
   });
 
@@ -119,36 +119,36 @@ describe("one cycle", () => {
       total: 2,
       done: 1,
       open: 1,
-      tickets: [
+      issues: [
         { ref: "AA-1", title: "Take the money", priority: "high", column: "Done", done: true, assigneeId: null },
         { ref: "AA-2", title: "Send the receipt", priority: "medium", column: "Todo", done: false, assigneeId: null },
       ],
       landed: [
-        { ref: "AA-1", title: "Take the money", ticketId: "t1", doneAt: days(-1), inCycle: true },
-        { ref: "AA-9", title: "A fix from another corner", ticketId: "t9", doneAt: days(-1), inCycle: false },
+        { ref: "AA-1", title: "Take the money", issueId: "t1", doneAt: days(-1), inCycle: true },
+        { ref: "AA-9", title: "A fix from another corner", issueId: "t9", doneAt: days(-1), inCycle: false },
       ],
       ...over,
     });
   const page = (d = detail(), setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp("/t/AA/cycles/3", (s) => (s.on("GET /api/app/teams/AA/cycles/3", { cycle: d }), setup(s)));
 
-  test("its tickets with done and open marks, and what landed with the ones that were not in the cycle called out", async () => {
+  test("its issues with done and open marks, and what landed with the ones that were not in the cycle called out", async () => {
     page();
     await screen.findByRole("heading", { level: 2, name: "Cycle 3: Spring" });
-    const tickets = screen.getByRole("region", { name: "Tickets in this cycle" });
-    expect(within(tickets).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["AA-1 Take the moneyDone", "AA-2 Send the receiptTodo"]);
-    expect(within(tickets).getByRole("img", { name: "done" })).toBeTruthy();
-    expect(within(tickets).getByRole("img", { name: "open" })).toBeTruthy();
+    const issues = screen.getByRole("region", { name: "Issues in this cycle" });
+    expect(within(issues).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["AA-1 Take the moneyDone", "AA-2 Send the receiptTodo"]);
+    expect(within(issues).getByRole("img", { name: "done" })).toBeTruthy();
+    expect(within(issues).getByRole("img", { name: "open" })).toBeTruthy();
     const landed = screen.getByRole("region", { name: "What landed" });
     expect(within(landed).getAllByRole("listitem")).toHaveLength(2);
     expect(within(landed).getAllByText("outside the cycle")).toHaveLength(1);
     expect(within(landed).getByText("A fix from another corner").closest("li")!.textContent).toContain("outside the cycle");
-    expect(within(tickets).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/t/AA?t=AA-2");
+    expect(within(issues).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/t/AA?t=AA-2");
   });
 
   test("an upcoming cycle says it has not started; a cycle with nothing done says so", async () => {
-    const { unmount } = page(detail({ state: "upcoming", landed: [], tickets: [], total: 0, done: 0, open: 0 }));
+    const { unmount } = page(detail({ state: "upcoming", landed: [], issues: [], total: 0, done: 0, open: 0 }));
     await screen.findByText("The cycle has not started.");
-    expect(screen.getByText(/No tickets yet/)).toBeTruthy();
+    expect(screen.getByText(/No issues yet/)).toBeTruthy();
     unmount();
     page(detail({ landed: [] }));
     await screen.findByText("Nothing has reached Done in this window.");
@@ -175,7 +175,7 @@ describe("one cycle", () => {
     expect(Object.keys(past.server.sent("PATCH /api/app/teams/AA/cycles/3")[0].body as object).sort()).toEqual(["goal", "name"]);
   });
 
-  test("deleting asks first, says its tickets stay on the board, deletes and goes back to the list", async () => {
+  test("deleting asks first, says its issues stay on the board, deletes and goes back to the list", async () => {
     const { server, router } = page(detail(), (s) => {
       s.on("DELETE /api/app/teams/AA/cycles/3", { ok: true, number: 3, released: 2 });
       s.on("GET /api/app/teams/AA/cycles", LIST());
@@ -183,7 +183,7 @@ describe("one cycle", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Delete" }));
     const confirm = await screen.findByRole("alertdialog");
-    expect(confirm.textContent).toContain("Its 2 tickets stay on the board, in no cycle.");
+    expect(confirm.textContent).toContain("Its 2 issues stay on the board, in no cycle.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/cycles/3")).toHaveLength(1));
     await waitFor(() => expect(router.state.location.pathname).toBe("/t/AA/cycles"));

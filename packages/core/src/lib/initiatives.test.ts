@@ -1,6 +1,6 @@
 /**
- * Initiatives (WH-119) against a real database: nesting to three levels with no cycle, the roll-up counting a ticket once, what an
- * initiative shows of a project (full for the viewer's teams, totals for the rest, never a ticket), guests, and the append-only
+ * Initiatives (WH-119) against a real database: nesting to three levels with no cycle, the roll-up counting an issue once, what an
+ * initiative shows of a project (full for the viewer's teams, totals for the rest, never an issue), guests, and the append-only
  * workspace_events. Runs on an in-memory PGlite (`pnpm test`), or a real Postgres with TEST_DATABASE_URL.
  */
 if (process.env.TEST_DATABASE_URL) {
@@ -75,7 +75,7 @@ before(async () => {
 });
 
 const project = (over: Record<string, unknown> = {}, as: Actor = ada) => pr.createProject(as, { name: `P ${++n}`, leadTeam: ta.key, ...over });
-const ticketIn = (team: { key: string }, projectId: string | null, over: Partial<svc.TicketInput> & { column?: string } = {}) => svc.createTicket(ada, team.key, { title: `t ${++n}`, projectId, ...over });
+const issueIn = (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { column?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
 const make = (over: Record<string, unknown> = {}, as: Actor = ada) => ini.createInitiative(as, { name: `I ${++n}`, ...over });
 const events = (entityId: string) => db.select().from(schema.workspaceEvents).where(eq(schema.workspaceEvents.entityId, entityId)).orderBy(schema.workspaceEvents.seq);
 
@@ -144,21 +144,21 @@ describe("nesting", () => {
 });
 
 describe("roll-up", () => {
-  test("progress comes from the projects below, and a ticket counts once when two links reach its project", async () => {
+  test("progress comes from the projects below, and an issue counts once when two links reach its project", async () => {
     const top = await make({ status: "active" });
     const left = await make({ parentId: top.id });
     const right = await make({ parentId: top.id });
     const shared = await project();
     const only = await project();
-    await ticketIn(ta, shared.id, { column: "Done" });
-    await ticketIn(ta, shared.id);
-    await ticketIn(ta, only.id, { column: "Done" });
+    await issueIn(ta, shared.id, { column: "Done" });
+    await issueIn(ta, shared.id);
+    await issueIn(ta, only.id, { column: "Done" });
     await ini.linkProject(ada, left.id, shared.id);
     await ini.linkProject(ada, right.id, shared.id);
     await ini.linkProject(ada, top.id, shared.id);
     await ini.linkProject(ada, right.id, only.id);
     const t = await ini.getInitiative(ada, top.id);
-    assert.deepEqual([t.total, t.done], [3, 2], "three tickets, however many links lead to them");
+    assert.deepEqual([t.total, t.done], [3, 2], "three issues, however many links lead to them");
     assert.deepEqual([t.projects.length, t.hidden.count], [2, 0]);
     const l = await ini.getInitiative(ada, left.id);
     assert.deepEqual([l.total, l.done], [2, 1]);
@@ -173,13 +173,13 @@ describe("roll-up", () => {
     const top = await make();
     const sub = await make({ parentId: top.id });
     const p = await project();
-    await ticketIn(ta, p.id);
+    await issueIn(ta, p.id);
     await ini.linkProject(ada, sub.id, p.id);
     assert.equal((await ini.getInitiative(ada, top.id)).total, 1);
     await pr.deleteProject(ada, p.id);
     assert.equal((await ini.getInitiative(ada, top.id)).total, 0);
     const q = await project();
-    await ticketIn(ta, q.id);
+    await issueIn(ta, q.id);
     await ini.linkProject(ada, sub.id, q.id);
     assert.equal((await ini.getInitiative(ada, top.id)).total, 1);
     await ini.deleteInitiative(ada, sub.id);
@@ -189,8 +189,8 @@ describe("roll-up", () => {
   test("health is worked out from the target date on a fixed clock, and a hand-set one wins", async () => {
     const top = await make({ status: "active", targetDate: "2026-11-30" });
     const p = await project();
-    await ticketIn(ta, p.id);
-    await ticketIn(ta, p.id, { column: "Done" });
+    await issueIn(ta, p.id);
+    await issueIn(ta, p.id, { column: "Done" });
     await ini.linkProject(ada, top.id, p.id);
     const before = await ini.getInitiative(ada, top.id, D("2026-11-10"));
     assert.equal(before.health.derived, "on_track");
@@ -206,13 +206,13 @@ describe("roll-up", () => {
 });
 
 describe("who sees what", () => {
-  test("a person on no team of a project sees only its totals inside an initiative, never a name or a ticket", async () => {
+  test("a person on no team of a project sees only its totals inside an initiative, never a name or an issue", async () => {
     const top = await make({ status: "active" });
     const secret = await project({ name: "SECRET-PROJECT", leadTeam: tb.key });
     const open = await project({ name: "open-project", leadTeam: ta.key });
-    await ticketIn(tb, secret.id, { title: "SECRET-TICKET", column: "Done" });
-    await ticketIn(tb, secret.id, { title: "SECRET-TICKET-2" });
-    await ticketIn(ta, open.id, { title: "open-ticket" });
+    await issueIn(tb, secret.id, { title: "SECRET-ISSUE", column: "Done" });
+    await issueIn(tb, secret.id, { title: "SECRET-ISSUE-2" });
+    await issueIn(ta, open.id, { title: "open-issue" });
     await ini.linkProject(ada, top.id, secret.id);
     await ini.linkProject(ada, top.id, open.id);
     const forBob = await ini.getInitiative(bob, top.id); // bob is on A only
@@ -220,11 +220,11 @@ describe("who sees what", () => {
     assert.deepEqual(forBob.hidden, { count: 1, total: 2, done: 1 });
     assert.deepEqual([forBob.total, forBob.done], [3, 1], "the roll-up still counts every project");
     const text = JSON.stringify([forBob, await ini.listInitiatives(bob)]);
-    for (const leak of ["SECRET-PROJECT", "SECRET-TICKET", "open-ticket"]) assert.ok(!text.includes(leak), `${leak} must not appear`);
+    for (const leak of ["SECRET-PROJECT", "SECRET-ISSUE", "open-issue"]) assert.ok(!text.includes(leak), `${leak} must not appear`);
     const forAda = await ini.getInitiative(ada, top.id);
     assert.deepEqual(forAda.projects.map((p) => p.name).sort(), ["SECRET-PROJECT", "open-project"]);
     assert.equal(forAda.hidden.count, 0);
-    assert.ok(!JSON.stringify(forAda).includes("SECRET-TICKET"), "no initiative page ever lists a ticket");
+    assert.ok(!JSON.stringify(forAda).includes("SECRET-ISSUE"), "no initiative page ever lists an issue");
     const forDee = await ini.getInitiative(dee, top.id); // on no team at all: sees the initiative, only totals
     assert.deepEqual([forDee.projects.length, forDee.hidden.count], [0, 2]);
   });

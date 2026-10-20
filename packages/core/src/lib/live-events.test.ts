@@ -72,35 +72,35 @@ describe("who may watch what", () => {
 describe("live events from the service layer", () => {
   test("a write is announced once, with the position the log gave it, by the time the write returns", async () => {
     const db = await getDb();
-    let ticket: { ref: string } | undefined;
+    let issue: { ref: string } | undefined;
     const got = await heard(async () => {
-      ticket = await svc.createTicket(human, "LV", { title: "Announce me" });
+      issue = await svc.createIssue(human, "LV", { title: "Announce me" });
     });
-    const created = got.filter((e) => e.type === "ticket.created");
+    const created = got.filter((e) => e.type === "issue.created");
     assert.equal(created.length, 1, "exactly one announcement");
     const [row] = await db.select().from(schema.events).where(eq(schema.events.seq, created[0].seq!));
     assert.equal(row.summary, created[0].summary, "its seq points at the committed row");
-    assert.match(created[0].summary!, new RegExp(ticket!.ref));
+    assert.match(created[0].summary!, new RegExp(issue!.ref));
     assert.equal(created[0].actorName, "Lia");
     assert.equal(created[0].teamId, teamId);
   });
 
   test("every kind of write announces itself: move, comment, edit", async () => {
-    const t = await svc.createTicket(human, "LV", { title: "Moves around" });
+    const t = await svc.createIssue(human, "LV", { title: "Moves around" });
     const got = await heard(async () => {
-      await svc.moveTicket(human, t.ref, "Todo");
+      await svc.moveIssue(human, t.ref, "Todo");
       await svc.addComment(human, t.ref, "hello");
-      await svc.updateTicket(human, t.ref, { title: "Moved and renamed" });
+      await svc.updateIssue(human, t.ref, { title: "Moved and renamed" });
     });
     const types = got.map((e) => e.type);
-    for (const want of ["ticket.moved", "comment.created", "ticket.updated"]) assert.ok(types.includes(want), `${want} was announced`);
+    for (const want of ["issue.moved", "comment.created", "issue.updated"]) assert.ok(types.includes(want), `${want} was announced`);
     const seqs = got.map((e) => e.seq!);
     assert.deepEqual([...seqs].sort((a, b) => a - b), seqs, "in log order");
   });
 
   test("an agent's write through the tool layer is announced the same way", async () => {
-    const got = await heard(() => runTool(agent, "create_ticket", { project: "LV", title: "From an agent" }));
-    assert.ok(got.some((e) => e.type === "ticket.created" && e.actorKind === "agent"));
+    const got = await heard(() => runTool(agent, "create_issue", { project: "LV", title: "From an agent" }));
+    assert.ok(got.some((e) => e.type === "issue.created" && e.actorKind === "agent"));
   });
 
   test("a transaction that rolls back announces nothing and writes nothing", async () => {
@@ -109,7 +109,7 @@ describe("live events from the service layer", () => {
     const got = await heard(async () => {
       await assert.rejects(
         db.transaction(async (tx) => {
-          await svc.emit(tx, human, teamId, { type: "ticket.created", entity: "ticket", entityId: teamId, summary: "never happened" });
+          await svc.emit(tx, human, teamId, { type: "issue.created", entity: "issue", entityId: teamId, summary: "never happened" });
           throw new Error("boom");
         }),
         /boom/,
@@ -124,7 +124,7 @@ describe("live events from the service layer", () => {
     const theirs: StreamEvent[] = [];
     const a = bus.subscribe({ workspace: workspaceId }, (e) => mine.push(e));
     const b = bus.subscribe({ workspace: otherWorkspaceId }, (e) => theirs.push(e));
-    await svc.createTicket(human, "LV", { title: "Private to the workspace" });
+    await svc.createIssue(human, "LV", { title: "Private to the workspace" });
     a();
     b();
     assert.ok(mine.length > 0);
@@ -139,7 +139,7 @@ describe("live events from the service layer", () => {
   });
 
   test("subscribers do not pile up: after the watchers leave, the bus is empty", async () => {
-    await heard(() => svc.createTicket(human, "LV", { title: "Nobody watching after this" }));
+    await heard(() => svc.createIssue(human, "LV", { title: "Nobody watching after this" }));
     assert.equal(bus.size(), 0);
   });
 });

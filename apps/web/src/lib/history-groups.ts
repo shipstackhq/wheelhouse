@@ -1,5 +1,5 @@
 /**
- * Group a ticket's history so the same doer isn't repeated on every line.
+ * Group an issue's history so the same doer isn't repeated on every line.
  * `items` are newest first. Consecutive events by the same actor join one group, unless
  * more than `gapMs` passed between them (so an agent returning the next day starts a new group).
  */

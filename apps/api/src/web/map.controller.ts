@@ -11,7 +11,7 @@ import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class MapController {
-  /** The whole map in one read: nodes, edges, ticket links, flows, decisions, terms, what is in flux, and whether Ask is on. */
+  /** The whole map in one read: nodes, edges, issue links, flows, decisions, terms, what is in flux, and whether Ask is on. */
   @Get(":key/graph")
   graph(@Req() req: SessionRequest, @Param("key") key: string) {
     return graphView(req.human.actor, key);

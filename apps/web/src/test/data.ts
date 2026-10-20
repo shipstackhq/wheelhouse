@@ -17,7 +17,7 @@ export const SETUP: SetupCommands = {
   mcpRefreshMap: "/mcp__wheelhouse__refresh_map KEY",
   cli: "npm install -g @shipstack/wheelhouse-cli\nwheelhouse login --url https://wh.example.test\nwheelhouse init --team KEY --url https://wh.example.test",
   mcp: "read -rs WHEELHOUSE_KEY; export WHEELHOUSE_KEY\nclaude mcp add --transport http wheelhouse https://wh.example.test/mcp --header \"Authorization: Bearer $WHEELHOUSE_KEY\"",
-  rest: "curl -X POST https://wh.example.test/api/v1/create_ticket \\\n  -H \"Authorization: Bearer $WHEELHOUSE_KEY\"",
+  rest: "curl -X POST https://wh.example.test/api/v1/create_issue \\\n  -H \"Authorization: Bearer $WHEELHOUSE_KEY\"",
 };
 
 export const key = (over: Partial<KeyView> = {}): KeyView => ({
@@ -135,7 +135,7 @@ export const widgets = (): DashboardWidgets => ({
     quiet: [{ ref: "AA-4", title: "Refactor auth", teamKey: "AA", agent: "CI bot", lastAt: new Date(Date.now() - 3 * 3600e3).toISOString() }],
     proposedDecisions: 2,
     members: { count: 3, myRole: "admin" },
-    tickets: 12,
+    issues: 12,
   },
 });
 
@@ -146,7 +146,7 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 
 // ───────── the board ─────────
 
-import type { BoardTicket, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, TicketDetail } from "@wheelhouse/api-client";
+import type { BoardIssue, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, IssueDetail } from "@wheelhouse/api-client";
 
 export const COLUMNS = [
   { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
@@ -157,13 +157,13 @@ export const COLUMNS = [
 ];
 
 let seq = 0;
-export const ticket = (over: Partial<BoardTicket> = {}): BoardTicket => {
+export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
   const n = over.number ?? ++seq + 100;
   return {
     id: `t-${n}`,
     ref: `AA-${n}`,
     number: n,
-    title: `Ticket ${n}`,
+    title: `Issue ${n}`,
     body: "",
     columnId: "c-backlog",
     priority: "medium",
@@ -188,11 +188,11 @@ export const ticket = (over: Partial<BoardTicket> = {}): BoardTicket => {
 export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => ({
   team: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
   columns: COLUMNS,
-  tickets: [
-    ticket({ number: 1, title: "Write the plan", columnId: "c-backlog", priority: "high", labels: ["docs"] }),
-    ticket({ number: 2, title: "Build the board", columnId: "c-todo", agentClaimable: true }),
-    ticket({ number: 3, title: "Fix the crash", columnId: "c-todo", createdByKind: "agent", commentCount: 2 }),
-    ticket({ number: 4, title: "Ship it", columnId: "c-done" }),
+  issues: [
+    issue({ number: 1, title: "Write the plan", columnId: "c-backlog", priority: "high", labels: ["docs"] }),
+    issue({ number: 2, title: "Build the board", columnId: "c-todo", agentClaimable: true }),
+    issue({ number: 3, title: "Fix the crash", columnId: "c-todo", createdByKind: "agent", commentCount: 2 }),
+    issue({ number: 4, title: "Ship it", columnId: "c-done" }),
   ],
   nodes: [
     { id: "n-api", name: "API", kind: "service", parentId: null, layer: "system" },
@@ -219,8 +219,8 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
   ...over,
 });
 
-export const detail = (t: BoardTicket, over: Partial<TicketDetail> = {}): TicketDetail => ({
-  ticket: { ...t, column: COLUMNS.find((c) => c.id === t.columnId)?.name },
+export const detail = (t: BoardIssue, over: Partial<IssueDetail> = {}): IssueDetail => ({
+  issue: { ...t, column: COLUMNS.find((c) => c.id === t.columnId)?.name },
   team: { key: "AA", name: "Alpha" },
   comments: [],
   nodes: [],
@@ -320,13 +320,13 @@ export const graph = (key = "AA", over: Partial<GraphView> = {}): GraphView => (
   team: { id: `id-${key}`, key, name: key === "AA" ? "Alpha" : "Beta", description: "" },
   nodes: MAP_NODES,
   edges: MAP_EDGES,
-  ticketLinks: [{ nodeId: "s-api", ticketId: "t-1", number: 1, title: "Write the plan", columnId: "c-backlog", ref: `${key}-1` }],
+  issueLinks: [{ nodeId: "s-api", issueId: "t-1", number: 1, title: "Write the plan", columnId: "c-backlog", ref: `${key}-1` }],
   flows: MAP_FLOWS,
   decisions: MAP_DECISIONS,
   terms: MAP_TERMS,
   flux: {
     "s-auth": {
-      sessions: [{ id: "sess-1", by: "Claude — Ada's laptop", ticket: `${key}-9`, files: ["apps/api/src/auth.ts", "apps/api/src/session.ts"] }],
+      sessions: [{ id: "sess-1", by: "Claude — Ada's laptop", issue: `${key}-9`, files: ["apps/api/src/auth.ts", "apps/api/src/session.ts"] }],
       drafts: [{ id: "draft-1", authorKind: "agent", authorName: "Claude — Ada's laptop", confirm: false, patch: { purpose: "Checks passwords and sessions" } }],
     },
   },
@@ -338,8 +338,8 @@ export const activityEvent = (over: Partial<import("@wheelhouse/api-client").Act
   seq: 1,
   actorKind: "human",
   actorName: "Ada Lovelace",
-  type: "ticket.created",
-  entity: "ticket",
+  type: "issue.created",
+  entity: "issue",
   entityId: "t-1",
   summary: 'created AA-1 "Write the plan" in Backlog',
   data: { ref: "AA-1" },
@@ -455,7 +455,7 @@ export const cycleSummary = (over: Partial<CycleSummary> = {}): CycleSummary => 
   ...over,
 });
 
-export const cycleDetail = (over: Partial<CycleDetail> = {}): CycleDetail => ({ ...cycleSummary(), tickets: [], landed: [], ...over });
+export const cycleDetail = (over: Partial<CycleDetail> = {}): CycleDetail => ({ ...cycleSummary(), issues: [], landed: [], ...over });
 
 // ───────── projects ─────────
 
@@ -482,7 +482,7 @@ export const projectDetail = (over: Partial<ProjectDetail> = {}): ProjectDetail 
   ...projectSummary(),
   canAdmin: true,
   milestones: [],
-  teams: [{ key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, tickets: [] }],
+  teams: [{ key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, issues: [] }],
   others: { count: 0, total: 0, done: 0 },
   addableTeams: [],
   ...over,

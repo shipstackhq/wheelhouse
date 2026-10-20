@@ -112,11 +112,11 @@ describe("the workspaces list", () => {
     assert.equal(t.name, `Founded ${RUN}`);
   });
 
-  test("shows no workspace content: a ticket's title and a comment never appear on the admin pages", async () => {
+  test("shows no workspace content: an issue's title and a comment never appear on the admin pages", async () => {
     const human = { kind: "human" as const, id: X.owner.userId, name: "o", workspaceId: X.workspaceId };
     await svc.createTeam(human, { name: "Secret team", key: "SEC" });
-    const ticket = await svc.createTicket(human, "SEC", { title: `TOP-SECRET-TITLE-${RUN}`, body: `TOP-SECRET-BODY-${RUN}` });
-    await svc.addComment(human, ticket.ref, `TOP-SECRET-COMMENT-${RUN}`);
+    const issue = await svc.createIssue(human, "SEC", { title: `TOP-SECRET-TITLE-${RUN}`, body: `TOP-SECRET-BODY-${RUN}` });
+    await svc.addComment(human, issue.ref, `TOP-SECRET-COMMENT-${RUN}`);
     const everything = JSON.stringify([await listWorkspaces(admin), await getWorkspaceDetail(admin, X.workspaceId)]);
     assert.ok(!everything.includes("TOP-SECRET"), "metadata only");
     assert.ok(!everything.includes("Secret team"), "not even team names");

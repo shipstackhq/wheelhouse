@@ -2,7 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { deferPublish, MemoryBus, publishAfterCommit, type StreamEvent } from "./event-bus";
 
-const ev = (over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T1", teamId: "P1", seq: 1, type: "ticket.created", ...over });
+const ev = (over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T1", teamId: "P1", seq: 1, type: "issue.created", ...over });
 
 describe("the in-process bus", () => {
   test("a team subscriber hears that team, a workspace subscriber hears every team of the workspace, and nobody hears anyone else's", () => {

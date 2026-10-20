@@ -11,7 +11,7 @@ import { useTeams } from "../lib/session";
 
 /**
  * `/t/:key/settings`: the team's name and description (agents read the description). Any member reads them; only team
- * admins change them. The key is fixed once the team exists, because every ticket is named after it.
+ * admins change them. The key is fixed once the team exists, because every issue is named after it.
  */
 export function TeamSettingsPage() {
   const { key = "" } = useParams();
@@ -87,7 +87,7 @@ function SettingsForm(props: { teamKey: string; name: string; description: strin
         <label className="label" htmlFor="key">Key</label>
         <input className="input font-mono uppercase" id="key" value={props.teamKey} readOnly aria-describedby="key-help" />
       </div>
-      <p id="key-help" className="-mt-1 text-xs text-muted sm:col-span-2">The key names every ticket ({props.teamKey}-1, {props.teamKey}-2…) and cannot be changed.</p>
+      <p id="key-help" className="-mt-1 text-xs text-muted sm:col-span-2">The key names every issue ({props.teamKey}-1, {props.teamKey}-2…) and cannot be changed.</p>
       <div className="sm:col-span-2">
         <label className="label" htmlFor="description">Description</label>
         <textarea

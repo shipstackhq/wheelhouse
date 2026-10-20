@@ -27,7 +27,7 @@ const rename = async (from: string, to: string) => {
   const db = await getDb();
   await db.update(schema.columns).set({ name: to }).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, from)));
 };
-const columnOf = async (ref: string) => (await svc.getTicket(human, ref)).ticket.column;
+const columnOf = async (ref: string) => (await svc.getIssue(human, ref)).issue.column;
 
 before(async () => {
   const db = await getDb();
@@ -50,49 +50,49 @@ describe("column roles", () => {
   test("a renamed column is still found by its role, and an exact name still wins", async () => {
     await rename("Review", "QA");
     await rename("Done", "Shipped");
-    const t = await svc.createTicket(human, "RR", { title: "Move me" });
-    assert.equal((await svc.moveTicket(human, t.ref, "review")).column, "QA", "role finds the renamed review column");
-    assert.equal((await svc.moveTicket(human, t.ref, "In progress")).column, "In Progress", "case-insensitive name");
-    assert.equal((await svc.moveTicket(human, t.ref, "qa")).column, "QA", "the new name works");
-    assert.equal((await svc.moveTicket(human, t.ref, "done")).column, "Shipped", "role finds the renamed done column");
-    await assert.rejects(svc.moveTicket(human, t.ref, "nonsense"), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    const t = await svc.createIssue(human, "RR", { title: "Move me" });
+    assert.equal((await svc.moveIssue(human, t.ref, "review")).column, "QA", "role finds the renamed review column");
+    assert.equal((await svc.moveIssue(human, t.ref, "In progress")).column, "In Progress", "case-insensitive name");
+    assert.equal((await svc.moveIssue(human, t.ref, "qa")).column, "QA", "the new name works");
+    assert.equal((await svc.moveIssue(human, t.ref, "done")).column, "Shipped", "role finds the renamed done column");
+    await assert.rejects(svc.moveIssue(human, t.ref, "nonsense"), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
 
     // A column that is literally called "review" but has no role beats the role alias on an exact name match.
     const db = await getDb();
     await db.insert(schema.columns).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: null });
-    assert.equal((await svc.moveTicket(human, t.ref, "review")).column, "review");
+    assert.equal((await svc.moveIssue(human, t.ref, "review")).column, "review");
     await db.delete(schema.columns).where(and(eq(schema.columns.teamId, teamId), eq(schema.columns.name, "review")));
   });
 
   test("moves record the roles, so history survives a later rename", async () => {
-    const t = await svc.createTicket(human, "RR", { title: "History" });
-    await svc.moveTicket(human, t.ref, "review");
-    const moved = (await svc.getTicket(human, t.ref)).history.find((e) => e.type === "ticket.moved");
+    const t = await svc.createIssue(human, "RR", { title: "History" });
+    await svc.moveIssue(human, t.ref, "review");
+    const moved = (await svc.getIssue(human, t.ref)).history.find((e) => e.type === "issue.moved");
     assert.equal(moved?.data?.toRole, "review");
     assert.equal(moved?.data?.fromRole, "backlog");
   });
 
   test("the dashboard counts review and done by role after both were renamed", async () => {
     const before = await summary(human);
-    const t = await svc.createTicket(human, "RR", { title: "Counted" });
-    await svc.moveTicket(human, t.ref, "review");
+    const t = await svc.createIssue(human, "RR", { title: "Counted" });
+    await svc.moveIssue(human, t.ref, "review");
     const mid = await summary(human);
     assert.equal(mid.inReview, before.inReview + 1, "waiting for review counts the QA column");
-    await svc.moveTicket(human, t.ref, "done");
+    await svc.moveIssue(human, t.ref, "done");
     const end = await summary(human);
     assert.equal(end.inReview, before.inReview, "no longer waiting");
-    assert.equal(end.open, before.open, "a ticket in the renamed done column is not open");
+    assert.equal(end.open, before.open, "an issue in the renamed done column is not open");
     assert.equal(end.completed7d, before.completed7d + 1, "the move into the renamed done column is a completion");
   });
 
   test("the briefing reports review and in progress by role", async () => {
-    const t = await svc.createTicket(human, "RR", { title: "Reviewable" });
-    await svc.moveTicket(human, t.ref, "review");
+    const t = await svc.createIssue(human, "RR", { title: "Reviewable" });
+    await svc.moveIssue(human, t.ref, "review");
     const { markdown } = await briefing(agent, "RR");
     assert.match(markdown, /Waiting for review: \d+/);
-    const d = await svc.createTicket(human, "RR", { title: "Finished" });
-    await svc.moveTicket(human, d.ref, "done");
-    assert.ok(!markdown.includes("Finished"), "a ticket in the renamed done column is not listed as open work");
+    const d = await svc.createIssue(human, "RR", { title: "Finished" });
+    await svc.moveIssue(human, d.ref, "done");
+    assert.ok(!markdown.includes("Finished"), "an issue in the renamed done column is not listed as open work");
     assert.equal(await columnOf(d.ref), "Shipped");
   });
 });

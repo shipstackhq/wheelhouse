@@ -22,7 +22,7 @@ export const statusChip = (s: ProjectStatus) => <span className={clsx("chip", ST
 export function HealthChip({ health }: { health: ProjectHealth }) {
   if (!health.value) return null;
   return (
-    <span className={clsx("chip", HEALTH_STYLE[health.value])} title={health.override ? "Set by hand" : "Worked out from the tickets and dates"}>
+    <span className={clsx("chip", HEALTH_STYLE[health.value])} title={health.override ? "Set by hand" : "Worked out from the issues and dates"}>
       {healthLabel(health.value)}
       {health.override && <span className="opacity-70"> (set)</span>}
     </span>

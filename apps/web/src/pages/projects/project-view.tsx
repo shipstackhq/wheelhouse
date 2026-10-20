@@ -10,7 +10,7 @@ import { useServices } from "../../lib/services";
 import { Progress } from "../cycles/cycle-bits";
 import { day, dateRange, draftOf, HEALTHS, healthLabel, HealthChip, inputOf, ProjectForm, statusChip, type ProjectDraft } from "./project-bits";
 
-/** One project: what it is for, how it is going, its milestones, and the teams taking part (the viewer's own with their tickets, the others as totals). */
+/** One project: what it is for, how it is going, its milestones, and the teams taking part (the viewer's own with their issues, the others as totals). */
 export function ProjectView(props: { project: ProjectDetail }) {
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
@@ -40,8 +40,8 @@ export function ProjectView(props: { project: ProjectDetail }) {
   const save = () => run(() => api.projects.update(p.id, inputOf(draft, { create: false, version: p.version })), () => setEditing(false));
 
   const remove = async () => {
-    const tickets = p.total;
-    if (!(await confirm({ title: `Delete "${p.name}"?`, description: tickets ? `Its ${tickets} ticket${tickets === 1 ? "" : "s"} stay on their boards, in no project.` : undefined, confirmLabel: "Delete", danger: true }))) return;
+    const issues = p.total;
+    if (!(await confirm({ title: `Delete "${p.name}"?`, description: issues ? `Its ${issues} issue${issues === 1 ? "" : "s"} stay on their boards, in no project.` : undefined, confirmLabel: "Delete", danger: true }))) return;
     run(() => api.projects.delete(p.id), () => navigate("/projects"));
   };
 
@@ -50,10 +50,10 @@ export function ProjectView(props: { project: ProjectDetail }) {
       try {
         await api.projects.removeTeam(p.id, teamKey);
       } catch (e) {
-        if (e instanceof ApiError && e.status === 409 && /ticket/.test(e.message)) {
+        if (e instanceof ApiError && e.status === 409 && /issue/.test(e.message)) {
           if (!(await confirm({ title: `Take ${name} out?`, description: `${e.message} Taking the team out releases them: they stay on the team's board, in no project.`, confirmLabel: "Release and take out", danger: true }))) return;
           try {
-            await api.projects.removeTeam(p.id, teamKey, { releaseTickets: true });
+            await api.projects.removeTeam(p.id, teamKey, { releaseIssues: true });
           } catch (e2) {
             return setError(describeFailure(e2));
           }
@@ -154,7 +154,7 @@ export function ProjectView(props: { project: ProjectDetail }) {
                       className="hover:text-danger"
                       aria-label={`Delete ${m.name}`}
                       onClick={async () => {
-                        if (await confirm({ title: `Delete "${m.name}"?`, description: m.total ? `Its ${m.total} ticket${m.total === 1 ? "" : "s"} stay in the project, in no milestone.` : undefined, confirmLabel: "Delete", danger: true })) run(() => api.projects.deleteMilestone(p.id, m.id));
+                        if (await confirm({ title: `Delete "${m.name}"?`, description: m.total ? `Its ${m.total} issue${m.total === 1 ? "" : "s"} stay in the project, in no milestone.` : undefined, confirmLabel: "Delete", danger: true })) run(() => api.projects.deleteMilestone(p.id, m.id));
                       }}
                     >
                       Delete
@@ -203,9 +203,9 @@ export function ProjectView(props: { project: ProjectDetail }) {
                 <div className="mt-1">
                   <Progress done={t.done} total={t.total} />
                 </div>
-                {t.tickets.length > 0 && (
+                {t.issues.length > 0 && (
                   <ul className="mt-2 divide-y divide-line text-sm">
-                    {t.tickets.map((x) => (
+                    {t.issues.map((x) => (
                       <li key={x.ref} className="flex items-center gap-2 py-1.5">
                         <span className={clsx("flex w-4 justify-center", x.done ? "text-ok" : "text-muted")} role="img" aria-label={x.done ? "done" : "open"}>
                           {x.done ? <CheckIcon /> : <span className="inline-block size-2.5 rounded-full border border-muted" />}
@@ -223,7 +223,7 @@ export function ProjectView(props: { project: ProjectDetail }) {
             ))}
             {p.others.count > 0 && (
               <p className="rounded-md border border-dashed border-line px-4 py-3 text-sm text-muted" data-others>
-                {p.others.count} team{p.others.count === 1 ? "" : "s"} you are not in: {p.others.done} of {p.others.total} ticket{p.others.total === 1 ? "" : "s"} done.
+                {p.others.count} team{p.others.count === 1 ? "" : "s"} you are not in: {p.others.done} of {p.others.total} issue{p.others.total === 1 ? "" : "s"} done.
               </p>
             )}
           </div>

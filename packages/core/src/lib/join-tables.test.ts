@@ -50,19 +50,19 @@ before(async () => {
   tB = await svc.createTeam(bea, { name: "Bee", key: `${L}B` });
 });
 
-describe("ticket labels", () => {
+describe("issue labels", () => {
   test("labels go in and come out as the same list of names, alphabetical, whatever their case or spacing", async () => {
-    const t = await svc.createTicket(ada, t1.key, { title: "labelled", labels: ["Bug", " bug ", "UI  polish", "", "api"] });
+    const t = await svc.createIssue(ada, t1.key, { title: "labelled", labels: ["Bug", " bug ", "UI  polish", "", "api"] });
     assert.deepEqual(t.labels, ["api", "Bug", "UI polish"]);
-    assert.deepEqual((await svc.getTicket(ada, t.ref)).ticket.labels, ["api", "Bug", "UI polish"]);
+    assert.deepEqual((await svc.getIssue(ada, t.ref)).issue.labels, ["api", "Bug", "UI polish"]);
     const board = await svc.getBoard(ada, t1.key);
-    assert.deepEqual(board.tickets.find((x) => x.id === t.id)!.labels, ["api", "Bug", "UI polish"]);
+    assert.deepEqual(board.issues.find((x) => x.id === t.id)!.labels, ["api", "Bug", "UI polish"]);
   });
 
   test("a label is one row per team and name (any case); the same name in another team is another label", async () => {
-    const a = await svc.createTicket(ada, t1.key, { title: "a", labels: ["shared"] });
-    const b = await svc.createTicket(ada, t1.key, { title: "b", labels: ["SHARED"] });
-    const c = await svc.createTicket(ada, t2.key, { title: "c", labels: ["shared"] });
+    const a = await svc.createIssue(ada, t1.key, { title: "a", labels: ["shared"] });
+    const b = await svc.createIssue(ada, t1.key, { title: "b", labels: ["SHARED"] });
+    const c = await svc.createIssue(ada, t2.key, { title: "c", labels: ["shared"] });
     const rows = await db.select().from(schema.labels).where(eq(schema.labels.name, "shared"));
     assert.equal(rows.filter((r) => r.teamId === t1.id).length, 1);
     assert.equal(rows.filter((r) => r.teamId === t2.id).length, 1);
@@ -71,48 +71,48 @@ describe("ticket labels", () => {
   });
 
   test("updating replaces the labels, records the change and bumps the version; the same labels change nothing", async () => {
-    const t = await svc.createTicket(ada, t1.key, { title: "edit", labels: ["x", "y"] });
-    const same = await svc.updateTicket(ada, t.ref, { labels: ["y", "x"] });
+    const t = await svc.createIssue(ada, t1.key, { title: "edit", labels: ["x", "y"] });
+    const same = await svc.updateIssue(ada, t.ref, { labels: ["y", "x"] });
     assert.equal(same.version, t.version, "the same labels in another order is no change");
-    const u = await svc.updateTicket(ada, t.ref, { labels: ["y", "z"] }, t.version);
+    const u = await svc.updateIssue(ada, t.ref, { labels: ["y", "z"] }, t.version);
     assert.deepEqual(u.labels, ["y", "z"]);
     assert.equal(u.version, t.version + 1);
-    const [ev] = await db.select().from(schema.events).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "ticket.updated")));
+    const [ev] = await db.select().from(schema.events).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "issue.updated")));
     assert.ok(ev.summary.includes("labels"));
-    const cleared = await svc.updateTicket(ada, t.ref, { labels: [] });
+    const cleared = await svc.updateIssue(ada, t.ref, { labels: [] });
     assert.deepEqual(cleared.labels, []);
   });
 
   test("move, claim and a version conflict still carry the labels", async () => {
-    const t = await svc.createTicket(ada, t1.key, { title: "carry", labels: ["keep"] });
-    assert.deepEqual((await svc.moveTicket(ada, t.ref, "Todo")).labels, ["keep"]);
+    const t = await svc.createIssue(ada, t1.key, { title: "carry", labels: ["keep"] });
+    assert.deepEqual((await svc.moveIssue(ada, t.ref, "Todo")).labels, ["keep"]);
     await assert.rejects(
-      svc.updateTicket(ada, t.ref, { title: "late" }, 1),
+      svc.updateIssue(ada, t.ref, { title: "late" }, 1),
       (e: unknown) => e instanceof svc.ServiceError && e.code === "conflict" && JSON.stringify((e.details as { current: { labels: string[] } }).current.labels) === '["keep"]',
     );
   });
 
-  test("a label has at most 40 characters and a ticket at most 20 labels", async () => {
-    await assert.rejects(svc.createTicket(ada, t1.key, { title: "long", labels: ["x".repeat(41)] }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.createTicket(ada, t1.key, { title: "many", labels: Array.from({ length: 21 }, (_, i) => `l${i}`) }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+  test("a label has at most 40 characters and an issue at most 20 labels", async () => {
+    await assert.rejects(svc.createIssue(ada, t1.key, { title: "long", labels: ["x".repeat(41)] }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(svc.createIssue(ada, t1.key, { title: "many", labels: Array.from({ length: 21 }, (_, i) => `l${i}`) }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
   });
 
-  test("deleting a label removes it from its tickets; deleting a ticket leaves the label", async () => {
-    const t = await svc.createTicket(ada, t1.key, { title: "lose a label", labels: ["doomed", "stays"] });
+  test("deleting a label removes it from its issues; deleting an issue leaves the label", async () => {
+    const t = await svc.createIssue(ada, t1.key, { title: "lose a label", labels: ["doomed", "stays"] });
     const [doomed] = await db.select().from(schema.labels).where(and(eq(schema.labels.teamId, t1.id), eq(schema.labels.name, "doomed")));
     await db.delete(schema.labels).where(eq(schema.labels.id, doomed.id));
-    assert.deepEqual((await svc.getTicket(ada, t.ref)).ticket.labels, ["stays"]);
-    await svc.deleteTicket(ada, t.ref);
-    assert.equal((await db.select().from(schema.ticketLabels).where(eq(schema.ticketLabels.ticketId, t.id))).length, 0);
+    assert.deepEqual((await svc.getIssue(ada, t.ref)).issue.labels, ["stays"]);
+    await svc.deleteIssue(ada, t.ref);
+    assert.equal((await db.select().from(schema.issueLabels).where(eq(schema.issueLabels.issueId, t.id))).length, 0);
     assert.equal((await db.select().from(schema.labels).where(and(eq(schema.labels.teamId, t1.id), eq(schema.labels.name, "stays")))).length, 1);
   });
 
-  test("a ticket cannot carry another team's label, and a label cannot name another workspace", async () => {
-    const t = await svc.createTicket(ada, t1.key, { title: "t" });
-    const other = await svc.createTicket(ada, t2.key, { title: "o", labels: ["theirs"] });
+  test("an issue cannot carry another team's label, and a label cannot name another workspace", async () => {
+    const t = await svc.createIssue(ada, t1.key, { title: "t" });
+    const other = await svc.createIssue(ada, t2.key, { title: "o", labels: ["theirs"] });
     const [theirs] = await db.select().from(schema.labels).where(and(eq(schema.labels.teamId, t2.id), eq(schema.labels.name, "theirs")));
-    await assert.rejects(db.insert(schema.ticketLabels).values({ ticketId: t.id, labelId: theirs.id, teamId: t1.id, workspaceId: wsA }), foreign);
-    await assert.rejects(db.insert(schema.ticketLabels).values({ ticketId: t.id, labelId: theirs.id, teamId: t2.id, workspaceId: wsA }), foreign);
+    await assert.rejects(db.insert(schema.issueLabels).values({ issueId: t.id, labelId: theirs.id, teamId: t1.id, workspaceId: wsA }), foreign);
+    await assert.rejects(db.insert(schema.issueLabels).values({ issueId: t.id, labelId: theirs.id, teamId: t2.id, workspaceId: wsA }), foreign);
     await assert.rejects(db.insert(schema.labels).values({ teamId: t1.id, workspaceId: tB.workspaceId, name: "planted" }), foreign);
     assert.equal(other.labels.length, 1);
   });

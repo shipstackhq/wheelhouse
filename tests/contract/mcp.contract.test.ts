@@ -113,7 +113,7 @@ describe("POST /mcp: tools and prompts", () => {
     assert.equal(unknown.status, 200);
     assert.equal(unknown.json.result.isError, true);
     assert.match(unknown.json.result.content[0].text, /^not_found: Unknown tool no_such_tool/);
-    const invalid = await mcp(A, "tools/call", { name: "get_ticket", arguments: {} });
+    const invalid = await mcp(A, "tools/call", { name: "get_issue", arguments: {} });
     assert.equal(invalid.json.result.isError, true);
     assert.match(invalid.json.result.content[0].text, /^invalid: /);
     const other = await mcp(A, "tools/call", { name: "get_board", arguments: { project: fx.b.teamKey } });
@@ -122,10 +122,10 @@ describe("POST /mcp: tools and prompts", () => {
 
   test("a write through MCP is visible through the REST API", async () => {
     const title = `via mcp ${Date.now()}`;
-    const made = mcpToolResult(await mcp(A, "tools/call", { name: "create_ticket", arguments: { project: fx.a.teamKey, title } }));
+    const made = mcpToolResult(await mcp(A, "tools/call", { name: "create_issue", arguments: { project: fx.a.teamKey, title } }));
     assert.match(made.ref, new RegExp(`^${fx.a.teamKey}-\\d+$`));
-    const got = (await call("/api/v1/get_ticket", { ...A, body: { ticket: made.ref } })).json.data;
-    assert.equal(got.ticket.title, title);
+    const got = (await call("/api/v1/get_issue", { ...A, body: { issue: made.ref } })).json.data;
+    assert.equal(got.issue.title, title);
   });
 
   test("prompts: the list is recorded, and a prompt renders messages", async () => {

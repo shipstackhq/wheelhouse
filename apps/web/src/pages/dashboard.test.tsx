@@ -29,7 +29,7 @@ describe("the dashboard", () => {
   test("every widget is drawn from its own endpoint", async () => {
     const { server } = renderApp("/");
     for (const title of ["Team progress", "Needs attention", "Throughput", "Who's doing the work", "Agents", "Sync health", "Recent activity"]) await widget(title);
-    await screen.findByText("Open tickets");
+    await screen.findByText("Open issues");
     for (const name of ["kpis", "progress", "attention", "throughput", "activity-split", "agents", "sync", "recent"]) {
       expect(server.sent(`GET /api/app/dashboard/${name}`).length, name).toBe(1);
     }
@@ -38,8 +38,8 @@ describe("the dashboard", () => {
   test("the numbers: counts, the change against the prior week, and the agent share", async () => {
     renderApp("/");
     const tile = async (label: string) => (await screen.findByText(label)).closest(".card") as HTMLElement;
-    expect(within(await tile("Open tickets")).getByText("14")).toBeTruthy();
-    expect(within(await tile("Open tickets")).getByText("across 2 teams")).toBeTruthy();
+    expect(within(await tile("Open issues")).getByText("14")).toBeTruthy();
+    expect(within(await tile("Open issues")).getByText("across 2 teams")).toBeTruthy();
     expect(within(await tile("In progress")).getByText("2 waiting for review")).toBeTruthy();
     const completed = await tile("Completed, last 7 days");
     expect(within(completed).getByText("5")).toBeTruthy();
@@ -127,7 +127,7 @@ describe("the dashboard", () => {
   });
 
   test("a session can be removed after confirming, and not if the person cancels", async () => {
-    const sessions = [{ id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", ticket: null, teamKey: "AA" }];
+    const sessions = [{ id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", issue: null, teamKey: "AA" }];
     const data = widgets();
     data.agents = [{ ...data.agents[0], sessions }];
     const { server } = renderApp("/", (s) => {
@@ -145,7 +145,7 @@ describe("the dashboard", () => {
     await waitFor(() => expect(server.sent("GET /api/app/dashboard/agents").length).toBeGreaterThan(1));
   });
 
-  test("sync health: quiet agents link to their ticket; with nothing drifting it says so", async () => {
+  test("sync health: quiet agents link to their issue; with nothing drifting it says so", async () => {
     renderApp("/");
     const card = await widget("Sync health");
     expect((await within(card).findByRole("link", { name: /AA-4/ })).getAttribute("href")).toBe("/t/AA?t=AA-4");
@@ -207,7 +207,7 @@ describe("widgets load and fail on their own", () => {
 describe("staying fresh", () => {
   test("the workspace's event stream refreshes every widget, and the person's own identity is not re-read", async () => {
     const { server } = renderApp("/");
-    await screen.findByText("Open tickets");
+    await screen.findByText("Open issues");
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));
     const meBefore = server.sent("GET /api/app/me").length;
     act(() => FakeEventSource.open[0].emit("change", { seq: 7 }));

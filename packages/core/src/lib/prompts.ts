@@ -14,7 +14,7 @@ export const prompts: Record<string, Prompt> = {
   brief: {
     description: "Load the Wheelhouse briefing for this project (what it is, how it's built, work in flight, what changed).",
     arguments: [{ name: "project", description: 'Wheelhouse project key, e.g. "WH"', required: true }],
-    render: ({ project }) => `Call get_briefing for Wheelhouse project ${project} and read it carefully: it is the current state of the project and replaces exploring the codebase from scratch. Then call get_changes and handle anything addressed to you. If you're about to work a ticket, call get_ticket_context for it and start with the files it lists. Summarise in 3–5 lines what you now know and what you'll do next.`,
+    render: ({ project }) => `Call get_briefing for Wheelhouse project ${project} and read it carefully: it is the current state of the project and replaces exploring the codebase from scratch. Then call get_changes and handle anything addressed to you. If you're about to work an issue, call get_issue_context for it and start with the files it lists. Summarise in 3–5 lines what you now know and what you'll do next.`,
   },
 
   map_codebase: {

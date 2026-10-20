@@ -1,9 +1,9 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { columnField, intField, ticketInput } from "./board-app";
+import { columnField, intField, issueInput } from "./board-app";
 import { ServiceError } from "./service";
 
-/** Reading a request body for the board and ticket endpoints: nothing wrong-typed gets past here to the database. */
+/** Reading a request body for the board and issue endpoints: nothing wrong-typed gets past here to the database. */
 const fieldsOf = (fn: () => unknown) => {
   try {
     fn();
@@ -14,23 +14,23 @@ const fieldsOf = (fn: () => unknown) => {
   return assert.fail("expected an error");
 };
 
-describe("ticketInput", () => {
-  test("a new ticket needs a title; the title is trimmed", () => {
-    assert.deepEqual(ticketInput({ title: "  Hello  " }, { create: true }), { title: "Hello" });
-    assert.deepEqual(fieldsOf(() => ticketInput({}, { create: true })), ["title"]);
-    assert.deepEqual(fieldsOf(() => ticketInput({ title: "   " }, { create: true })), ["title"]);
+describe("issueInput", () => {
+  test("a new issue needs a title; the title is trimmed", () => {
+    assert.deepEqual(issueInput({ title: "  Hello  " }, { create: true }), { title: "Hello" });
+    assert.deepEqual(fieldsOf(() => issueInput({}, { create: true })), ["title"]);
+    assert.deepEqual(fieldsOf(() => issueInput({ title: "   " }, { create: true })), ["title"]);
   });
 
   test("an edit carries only what was sent", () => {
-    assert.deepEqual(ticketInput({}, { create: false }), {});
-    assert.deepEqual(ticketInput({ priority: "high", labels: [] }, { create: false }), { priority: "high", labels: [] });
-    assert.deepEqual(ticketInput({ body: "" }, { create: false }), { body: "" }, "an empty body is a real change");
+    assert.deepEqual(issueInput({}, { create: false }), {});
+    assert.deepEqual(issueInput({ priority: "high", labels: [] }, { create: false }), { priority: "high", labels: [] });
+    assert.deepEqual(issueInput({ body: "" }, { create: false }), { body: "" }, "an empty body is a real change");
   });
 
   test("an assignee can be cleared with null or an empty string, and set with an id", () => {
-    assert.deepEqual(ticketInput({ assigneeId: null }, { create: false }), { assigneeId: null });
-    assert.deepEqual(ticketInput({ assigneeId: "" }, { create: false }), { assigneeId: null });
-    assert.deepEqual(ticketInput({ assigneeId: "abc" }, { create: false }), { assigneeId: "abc" });
+    assert.deepEqual(issueInput({ assigneeId: null }, { create: false }), { assigneeId: null });
+    assert.deepEqual(issueInput({ assigneeId: "" }, { create: false }), { assigneeId: null });
+    assert.deepEqual(issueInput({ assigneeId: "abc" }, { create: false }), { assigneeId: "abc" });
   });
 
   test("every wrong type is a field error naming it", () => {
@@ -48,11 +48,11 @@ describe("ticketInput", () => {
       [{ labels: ["ok", 2] }, "labels"],
       [{ labels: [null] }, "labels"],
     ];
-    for (const [body, field] of cases) assert.deepEqual(fieldsOf(() => ticketInput(body, { create: false })), [field], JSON.stringify(body));
+    for (const [body, field] of cases) assert.deepEqual(fieldsOf(() => issueInput(body, { create: false })), [field], JSON.stringify(body));
   });
 
   test("unknown fields are ignored, not passed on", () => {
-    assert.deepEqual(ticketInput({ title: "x", teamId: "other", version: 3, createdById: "z" }, { create: true }), { title: "x" });
+    assert.deepEqual(issueInput({ title: "x", teamId: "other", version: 3, createdById: "z" }, { create: true }), { title: "x" });
   });
 });
 

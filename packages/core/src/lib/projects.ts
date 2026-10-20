@@ -8,13 +8,13 @@ import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "./team-access"
 
 /**
  * Projects (WH-118): an outcome that ends and can span teams, with a lead, dates, milestones and a health worked out from its
- * tickets and dates unless someone sets it. A project belongs to the workspace and is seen only by people on a team that takes part
- * (plan section 5): ticket detail only for the viewer's own teams, and for the other teams just totals, never names or titles.
- * Guests see no projects. The database holds the other rules: a ticket reaches a project only through its own team's row in
+ * issues and dates unless someone sets it. A project belongs to the workspace and is seen only by people on a team that takes part
+ * (plan section 5): issue detail only for the viewer's own teams, and for the other teams just totals, never names or titles.
+ * Guests see no projects. The database holds the other rules: an issue reaches a project only through its own team's row in
  * project_teams, a milestone belongs to that project, and the lead team takes part.
  */
 
-const { projects, projectTeams, projectMilestones, projectVisibility, tickets, columns, teams, workspaceEvents, memberships, users } = schema;
+const { projects, projectTeams, projectMilestones, projectVisibility, issues, columns, teams, workspaceEvents, memberships, users } = schema;
 export type ProjectRow = typeof projects.$inferSelect;
 
 const DAY = 86_400_000;
@@ -28,9 +28,9 @@ export type HealthView = { derived: ProjectHealth | null; override: ProjectHealt
 const dayStart = (d: string) => Date.parse(`${d}T00:00:00.000Z`);
 
 /**
- * How a project is going, from its tickets and dates. Only an active project has a health; the one the people set (the override)
+ * How a project is going, from its issues and dates. Only an active project has a health; the one the people set (the override)
  * wins over it. Past its target date with work still open is off track; otherwise the share of time gone is compared with the
- * share of tickets done (a gap over a quarter is at risk, over a half is off track). A project with no dates and no tickets has
+ * share of issues done (a gap over a quarter is at risk, over a half is off track). A project with no dates and no issues has
  * nothing to judge.
  */
 export function deriveHealth(p: Pick<ProjectRow, "status" | "startDate" | "targetDate">, progress: ProgressCounts, now: Date): ProjectHealth | null {
@@ -139,7 +139,7 @@ export type ProjectSummary = {
   leadUser: { id: string; name: string } | null;
   /** Named only for someone on the lead team: others are told nothing about teams they are not on. */
   leadTeam: { key: string; name: string } | null;
-  /** Every ticket in the project, across all the teams, and how many are done. */
+  /** Every issue in the project, across all the teams, and how many are done. */
   total: number;
   done: number;
   teamCount: number;
@@ -154,11 +154,11 @@ async function progressOf(q: Q, projectIds: string[]): Promise<Counts> {
   const out: Counts = new Map(projectIds.map((id) => [id, { total: 0, done: 0 }]));
   if (!projectIds.length) return out;
   const rows = await q
-    .select({ projectId: tickets.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(inArray(tickets.projectId, projectIds))
-    .groupBy(tickets.projectId);
+    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(inArray(issues.projectId, projectIds))
+    .groupBy(issues.projectId);
   for (const r of rows) out.set(r.projectId!, { total: Number(r.total), done: Number(r.done) });
   return out;
 }
@@ -216,14 +216,14 @@ export async function listProjects(actor: Actor, now = new Date()): Promise<Proj
 }
 
 export type ProjectMilestoneView = { id: string; name: string; description: string; targetDate: string | null; position: number; total: number; done: number };
-export type ProjectTicketView = { ref: string; title: string; priority: string; column: string; done: boolean; milestoneId: string | null };
-export type ProjectTeamView = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; tickets: ProjectTicketView[] };
+export type ProjectIssueView = { ref: string; title: string; priority: string; column: string; done: boolean; milestoneId: string | null };
+export type ProjectTeamView = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; issues: ProjectIssueView[] };
 export type ProjectDetail = ProjectSummary & {
   canAdmin: boolean;
   milestones: ProjectMilestoneView[];
-  /** The teams of the project the viewer is on, with their tickets. */
+  /** The teams of the project the viewer is on, with their issues. */
   teams: ProjectTeamView[];
-  /** The teams they are not on: how many, and the totals of their tickets. Never a name or a title. */
+  /** The teams they are not on: how many, and the totals of their issues. Never a name or a title. */
   others: { count: number; total: number; done: number };
   /** Teams the viewer could bring in (they edit them) and that do not take part yet. */
   addableTeams: { key: string; name: string }[];
@@ -234,22 +234,22 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
   const a = await openProject(db, actor, id);
   const [summary] = await summarise(db, actor, [a.project], now);
   const perTeam = await db
-    .select({ teamId: tickets.teamId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(eq(tickets.projectId, id))
-    .groupBy(tickets.teamId);
+    .select({ teamId: issues.teamId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(eq(issues.projectId, id))
+    .groupBy(issues.teamId);
   const counts = new Map(perTeam.map((r) => [r.teamId, { total: Number(r.total), done: Number(r.done) }]));
   const teamRows = await db.select({ id: teams.id, key: teams.key, name: teams.name }).from(teams).where(inArray(teams.id, a.teamIds));
   const mineRows = teamRows.filter((t) => a.mine.has(t.id)).sort((x, y) => x.key.localeCompare(y.key));
   const mineIds = mineRows.map((t) => t.id);
-  const mineTickets = mineIds.length
+  const mineIssues = mineIds.length
     ? await db
-        .select({ teamId: tickets.teamId, number: tickets.number, title: tickets.title, priority: tickets.priority, column: columns.name, role: columns.role, milestoneId: tickets.milestoneId })
-        .from(tickets)
-        .innerJoin(columns, eq(columns.id, tickets.columnId))
-        .where(and(eq(tickets.projectId, id), inArray(tickets.teamId, mineIds)))
-        .orderBy(asc(tickets.number))
+        .select({ teamId: issues.teamId, number: issues.number, title: issues.title, priority: issues.priority, column: columns.name, role: columns.role, milestoneId: issues.milestoneId })
+        .from(issues)
+        .innerJoin(columns, eq(columns.id, issues.columnId))
+        .where(and(eq(issues.projectId, id), inArray(issues.teamId, mineIds)))
+        .orderBy(asc(issues.number))
     : [];
   const teamViews: ProjectTeamView[] = mineRows.map((t) => ({
     key: t.key,
@@ -258,16 +258,16 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
     lead: t.id === a.project.leadTeamId,
     total: counts.get(t.id)?.total ?? 0,
     done: counts.get(t.id)?.done ?? 0,
-    tickets: mineTickets.filter((x) => x.teamId === t.id).map((x) => ({ ref: `${t.key}-${x.number}`, title: x.title, priority: x.priority, column: x.column, done: x.role === "done", milestoneId: x.milestoneId })),
+    issues: mineIssues.filter((x) => x.teamId === t.id).map((x) => ({ ref: `${t.key}-${x.number}`, title: x.title, priority: x.priority, column: x.column, done: x.role === "done", milestoneId: x.milestoneId })),
   }));
   const otherIds = a.teamIds.filter((t) => !a.mine.has(t));
   const others = otherIds.reduce((acc, t) => ({ count: acc.count + 1, total: acc.total + (counts.get(t)?.total ?? 0), done: acc.done + (counts.get(t)?.done ?? 0) }), { count: 0, total: 0, done: 0 });
   const msCounts = await db
-    .select({ milestoneId: tickets.milestoneId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
-    .from(tickets)
-    .innerJoin(columns, eq(columns.id, tickets.columnId))
-    .where(and(eq(tickets.projectId, id), sql`${tickets.milestoneId} is not null`))
-    .groupBy(tickets.milestoneId);
+    .select({ milestoneId: issues.milestoneId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${columns.role} = 'done')::int` })
+    .from(issues)
+    .innerJoin(columns, eq(columns.id, issues.columnId))
+    .where(and(eq(issues.projectId, id), sql`${issues.milestoneId} is not null`))
+    .groupBy(issues.milestoneId);
   const byMs = new Map(msCounts.map((r) => [r.milestoneId, r]));
   const milestones = (await db.select().from(projectMilestones).where(eq(projectMilestones.projectId, id)).orderBy(asc(projectMilestones.position), asc(projectMilestones.createdAt))).map((m) => ({
     id: m.id,
@@ -422,16 +422,16 @@ export async function updateProject(actor: Actor, id: string, patch: ProjectInpu
   return getProject(actor, id, now);
 }
 
-/** Delete a project (soft). Its tickets stay on their boards, in no project and no milestone. */
+/** Delete a project (soft). Its issues stay on their boards, in no project and no milestone. */
 export async function deleteProject(actor: Actor, id: string) {
   const db = await getDb();
   await openProject(db, actor, id, "admin");
   return db.transaction(async (tx) => {
     const cur = await lockProject(tx, id);
-    const released = await tx.update(tickets).set({ projectId: null, milestoneId: null, version: sql`${tickets.version} + 1`, updatedAt: new Date() }).where(eq(tickets.projectId, id)).returning({ id: tickets.id });
+    const released = await tx.update(issues).set({ projectId: null, milestoneId: null, version: sql`${issues.version} + 1`, updatedAt: new Date() }).where(eq(issues.projectId, id)).returning({ id: issues.id });
     await tx.update(projects).set({ deletedAt: new Date(), version: cur.version + 1, updatedAt: new Date() }).where(eq(projects.id, id));
     const ids = (await tx.select({ id: projectTeams.teamId }).from(projectTeams).where(eq(projectTeams.projectId, id))).map((r) => r.id);
-    await workspaceEvent(tx, actor, { type: "project.deleted", entityId: id, summary: `deleted project "${cur.name}"${released.length ? ` (${released.length} ticket${released.length === 1 ? "" : "s"} left it)` : ""}`, data: { name: cur.name, released: released.length } });
+    await workspaceEvent(tx, actor, { type: "project.deleted", entityId: id, summary: `deleted project "${cur.name}"${released.length ? ` (${released.length} issue${released.length === 1 ? "" : "s"} left it)` : ""}`, data: { name: cur.name, released: released.length } });
     await teamEvents(tx, actor, ids, { type: "project.deleted", entityId: id, summary: `project "${cur.name}" was deleted`, data: { name: cur.name } });
     return { ok: true, released: released.length };
   });
@@ -459,10 +459,10 @@ export async function addProjectTeam(actor: Actor, id: string, teamKey: unknown)
 
 /**
  * Take a team out. The project's editors can, and so can an admin of that team (a team may leave). The lead team cannot go until
- * another is made lead. A team with tickets in the project is refused with their number, unless `releaseTickets` says they
+ * another is made lead. A team with issues in the project is refused with their number, unless `releaseIssues` says they
  * leave the project with it.
  */
-export async function removeProjectTeam(actor: Actor, id: string, teamKey: string, o: { releaseTickets?: boolean } = {}) {
+export async function removeProjectTeam(actor: Actor, id: string, teamKey: string, o: { releaseIssues?: boolean } = {}) {
   const db = await getDb();
   const a = await openProject(db, actor, id, "read");
   const team = (await db.select().from(teams).where(and(eq(teams.workspaceId, actor.workspaceId), sql`lower(${teams.key}) = lower(${teamKey})`)))[0];
@@ -473,12 +473,12 @@ export async function removeProjectTeam(actor: Actor, id: string, teamKey: strin
   if (team.id === a.project.leadTeamId) throw new ServiceError("conflict", "That is the lead team. Make another team the lead first.");
   return db.transaction(async (tx) => {
     const cur = await lockProject(tx, id);
-    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(tickets).where(and(eq(tickets.projectId, id), eq(tickets.teamId, team.id)));
-    if (Number(n) > 0 && !o.releaseTickets) throw new ServiceError("conflict", `${team.name} has ${n} ticket${Number(n) === 1 ? "" : "s"} in this project. Release them with the team, or move them out first.`, { tickets: Number(n) });
-    if (Number(n) > 0) await tx.update(tickets).set({ projectId: null, milestoneId: null, version: sql`${tickets.version} + 1`, updatedAt: new Date() }).where(and(eq(tickets.projectId, id), eq(tickets.teamId, team.id)));
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(issues).where(and(eq(issues.projectId, id), eq(issues.teamId, team.id)));
+    if (Number(n) > 0 && !o.releaseIssues) throw new ServiceError("conflict", `${team.name} has ${n} issue${Number(n) === 1 ? "" : "s"} in this project. Release them with the team, or move them out first.`, { issues: Number(n) });
+    if (Number(n) > 0) await tx.update(issues).set({ projectId: null, milestoneId: null, version: sql`${issues.version} + 1`, updatedAt: new Date() }).where(and(eq(issues.projectId, id), eq(issues.teamId, team.id)));
     await tx.delete(projectTeams).where(and(eq(projectTeams.projectId, id), eq(projectTeams.teamId, team.id)));
     await tx.update(projects).set({ version: cur.version + 1, updatedAt: new Date() }).where(eq(projects.id, id));
-    await workspaceEvent(tx, actor, { type: "project.team_removed", entityId: id, summary: `${team.key} left project "${cur.name}"${Number(n) ? ` (${n} ticket${Number(n) === 1 ? "" : "s"} left with it)` : ""}`, data: { team: team.key, released: Number(n) } });
+    await workspaceEvent(tx, actor, { type: "project.team_removed", entityId: id, summary: `${team.key} left project "${cur.name}"${Number(n) ? ` (${n} issue${Number(n) === 1 ? "" : "s"} left with it)` : ""}`, data: { team: team.key, released: Number(n) } });
     await teamEvents(tx, actor, [team.id], { type: "project.team_removed", entityId: id, summary: `left project "${cur.name}"`, data: { name: cur.name, released: Number(n) } });
     return { ok: true, released: Number(n) };
   });
@@ -558,21 +558,21 @@ export async function deleteMilestone(actor: Actor, id: string, milestoneId: str
   return getProject(actor, id);
 }
 
-// ───────── a ticket's project ─────────
+// ───────── an issue's project ─────────
 
-export type TicketProjectChoice = { projectId: string | null; milestoneId: string | null };
+export type IssueProjectChoice = { projectId: string | null; milestoneId: string | null };
 
 /**
- * What a ticket's `project` and `milestone` mean for its team. The project must be live in the workspace and the team must take
+ * What an issue's `project` and `milestone` mean for its team. The project must be live in the workspace and the team must take
  * part (the database refuses the rest); a milestone must be the project's. Changing the project drops the milestone unless one of
- * the new project is named, and a milestone alone keeps the project the ticket is in.
+ * the new project is named, and a milestone alone keeps the project the issue is in.
  */
-export async function resolveTicketProject(
+export async function resolveIssueProject(
   q: Q,
   team: { id: string; name: string; workspaceId: string },
-  current: TicketProjectChoice,
+  current: IssueProjectChoice,
   want: { project?: string | null; milestone?: string | null },
-): Promise<TicketProjectChoice> {
+): Promise<IssueProjectChoice> {
   let projectId = want.project === undefined ? current.projectId : want.project;
   const milestoneId = want.milestone === undefined ? (projectId === current.projectId ? current.milestoneId : null) : want.milestone;
   if (projectId !== null) {
@@ -588,12 +588,12 @@ export async function resolveTicketProject(
   if (milestoneId !== null) {
     if (!isUuid(milestoneId)) bad("milestoneId", "milestoneId must be a milestone id, or null for none");
     const [m] = await q.select({ id: projectMilestones.id }).from(projectMilestones).where(and(eq(projectMilestones.id, milestoneId), eq(projectMilestones.projectId, projectId!)));
-    if (!m) bad("milestoneId", "That milestone is not in this ticket's project");
+    if (!m) bad("milestoneId", "That milestone is not in this issue's project");
   }
   return { projectId, milestoneId };
 }
 
-/** The projects a team takes part in, with their milestones, for the board's chips and the ticket's Project field. */
+/** The projects a team takes part in, with their milestones, for the board's chips and the issue's Project field. */
 export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
 export async function projectsOfTeam(q: Q, teamId: string): Promise<TeamProjectOption[]> {
   const rows = await q

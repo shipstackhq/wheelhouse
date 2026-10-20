@@ -21,7 +21,7 @@ describe("the initiatives list", () => {
     expect(within(top).getByText("active", { selector: ".chip" })).toBeTruthy();
     expect(within(top).getByText("On track")).toBeTruthy();
     expect(top.textContent).toContain("Owned by Ada Lovelace · 2 projects · 1 sub-initiative");
-    expect(within(top).getByLabelText("4 of 10 tickets done")).toBeTruthy();
+    expect(within(top).getByLabelText("4 of 10 issues done")).toBeTruthy();
     expect(top.getAttribute("href")).toBe("/initiatives/i1");
     const sub = await card("SSO");
     expect(sub.textContent).toContain("No owner · 1 project");
@@ -110,13 +110,13 @@ describe("one initiative", () => {
     const projects = screen.getByRole("region", { name: "Projects" });
     expect(within(projects).getByRole("link", { name: "Launch SSO" }).getAttribute("href")).toBe("/projects/p1");
     expect(within(projects).getByText("through a sub-initiative")).toBeTruthy();
-    expect(projects.querySelector("[data-hidden]")!.textContent).toBe("2 other projects of teams you are not in: 1 of 3 tickets done.");
+    expect(projects.querySelector("[data-hidden]")!.textContent).toBe("2 other projects of teams you are not in: 1 of 3 issues done.");
   });
 
   test("with one hidden project it says so in the singular; with none there is no line, and none at all says so", async () => {
     const { unmount } = page(detail({ hidden: { count: 1, total: 1, done: 0 } }));
     await screen.findByRole("heading", { level: 2, name: "Enterprise ready" });
-    expect(document.querySelector("[data-hidden]")!.textContent).toBe("1 other project of teams you are not in: 0 of 1 ticket done.");
+    expect(document.querySelector("[data-hidden]")!.textContent).toBe("1 other project of teams you are not in: 0 of 1 issue done.");
     unmount();
     page(detail({ hidden: { count: 0, total: 0, done: 0 }, projects: [] }));
     await screen.findByRole("heading", { level: 2, name: "Enterprise ready" });

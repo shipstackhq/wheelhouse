@@ -22,8 +22,8 @@ before(async () => {
   t1 = newKey();
   t2 = newKey();
   for (const key of [t1, t2]) assert.equal((await app("POST", "/api/app/teams", owner, { body: { name: `Team ${key}`, key } })).status, 201);
-  assert.equal((await app("POST", `/api/app/teams/${t1}/tickets`, owner, { body: { title: "T1 ticket" } })).status, 201);
-  assert.equal((await app("POST", `/api/app/teams/${t2}/tickets`, owner, { body: { title: "T2 ticket" } })).status, 201);
+  assert.equal((await app("POST", `/api/app/teams/${t1}/issues`, owner, { body: { title: "T1 issue" } })).status, 201);
+  assert.equal((await app("POST", `/api/app/teams/${t2}/issues`, owner, { body: { title: "T2 issue" } })).status, 201);
 });
 
 describe("choosing a key's teams", () => {
@@ -76,10 +76,10 @@ describe("what a scoped key reaches", () => {
     assert.deepEqual((await v1ok(asKey(secret), "list_projects")).map((p: { key: string }) => p.key), [t1]);
     const refused: [string, Record<string, unknown>][] = [
       ["get_board", { project: t2 }],
-      ["get_ticket", { ticket: `${t2}-1` }],
-      ["create_ticket", { project: t2, title: "planted" }],
-      ["update_ticket", { ticket: `${t2}-1`, title: "hijacked" }],
-      ["comment", { ticket: `${t2}-1`, body: "hello" }],
+      ["get_issue", { issue: `${t2}-1` }],
+      ["create_issue", { project: t2, title: "planted" }],
+      ["update_issue", { issue: `${t2}-1`, title: "hijacked" }],
+      ["comment", { issue: `${t2}-1`, body: "hello" }],
       ["get_changes", { project: t2 }],
       ["get_briefing", { project: t2 }],
       ["list_docs", { project: t2 }],
@@ -92,7 +92,7 @@ describe("what a scoped key reaches", () => {
     const existing = await v1(asKey(secret), "get_board", { project: "ZZZZ" });
     const other = await v1(asKey(secret), "get_board", { project: t2 });
     assert.equal(other.json.error.message.replace(t2, "X"), existing.json.error.message.replace("ZZZZ", "X"), "a team it cannot open reads like one that does not exist");
-    assert.equal((await app("GET", `/api/app/teams/${t2}/board`, owner)).json.tickets.length, 1, "and nothing of T2 changed");
+    assert.equal((await app("GET", `/api/app/teams/${t2}/board`, owner)).json.issues.length, 1, "and nothing of T2 changed");
   });
 
   test("the MCP gives the same answers", async () => {

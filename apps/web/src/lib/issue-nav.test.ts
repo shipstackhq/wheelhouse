@@ -1,13 +1,13 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { arrowStep, isDirty, neighbours, parseTicketParam, singleLine, usesArrowKeys } from "./ticket-nav";
+import { arrowStep, isDirty, neighbours, parseIssueParam, singleLine, usesArrowKeys } from "./issue-nav";
 
 test("?t= accepts a team key and number, upper-cases the key, and ignores anything else", () => {
-  assert.equal(parseTicketParam("WH-49"), "WH-49");
-  assert.equal(parseTicketParam(" wh-7 "), "WH-7");
-  assert.equal(parseTicketParam("AB12-3"), "AB12-3");
+  assert.equal(parseIssueParam("WH-49"), "WH-49");
+  assert.equal(parseIssueParam(" wh-7 "), "WH-7");
+  assert.equal(parseIssueParam("AB12-3"), "AB12-3");
   for (const bad of [null, undefined, "", "WH", "WH-", "-4", "WH-4a", "WH-1 2", "W H-1", "../etc", "WH-1;DROP", "1WH-2", "WH-12345678901"])
-    assert.equal(parseTicketParam(bad), null, `${JSON.stringify(bad)} is not a ticket`);
+    assert.equal(parseIssueParam(bad), null, `${JSON.stringify(bad)} is not an issue`);
 });
 
 test("previous and next follow the column's order and stop at the ends", () => {
@@ -17,7 +17,7 @@ test("previous and next follow the column's order and stop at the ends", () => {
   assert.deepEqual(neighbours(refs, "WH-4"), { index: 2, total: 3, prev: "WH-9", next: null });
 });
 
-test("a ticket that isn't in the list, or a list of one, has nowhere to go", () => {
+test("an issue that isn't in the list, or a list of one, has nowhere to go", () => {
   assert.deepEqual(neighbours(["WH-1", "WH-2"], "WH-9"), { index: -1, total: 2, prev: null, next: null });
   assert.deepEqual(neighbours(["WH-1"], "WH-1"), { index: 0, total: 1, prev: null, next: null });
   assert.deepEqual(neighbours([], "WH-1"), { index: -1, total: 0, prev: null, next: null });
@@ -52,7 +52,7 @@ test("text fields, selects, menus and the confirmation keep their own arrow keys
   assert.equal(usesArrowKeys(null), false);
 });
 
-test("left and right move between tickets; other keys, modifiers and typing do not", () => {
+test("left and right move between issues; other keys, modifiers and typing do not", () => {
   const press = (over: Record<string, unknown>) => arrowStep({ key: "ArrowRight", target: el("DIV"), ...over });
   assert.equal(press({}), 1);
   assert.equal(press({ key: "ArrowLeft" }), -1);

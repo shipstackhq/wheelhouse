@@ -10,10 +10,10 @@ const A = asKey(fx.a.apiKey);
 const B = asKey(fx.b.apiKey);
 
 describe("one workspace cannot reach another's data over HTTP", () => {
-  test("reading another workspace's team, board, ticket, changes and activity is not_found", async () => {
+  test("reading another workspace's team, board, issue, changes and activity is not_found", async () => {
     const attempts: [string, Record<string, unknown>][] = [
       ["get_board", { project: fx.a.teamKey }],
-      ["get_ticket", { ticket: fx.a.ticketRef }],
+      ["get_issue", { issue: fx.a.issueRef }],
       ["get_changes", { project: fx.a.teamKey }],
       ["get_activity", { project: fx.a.teamKey }],
       ["get_graph", { project: fx.a.teamKey }],
@@ -26,26 +26,26 @@ describe("one workspace cannot reach another's data over HTTP", () => {
     }
   });
 
-  test("a ticket id (uuid) from another workspace is no more reachable than its ref", async () => {
-    const id = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket.id;
-    assert.equal((await v1(B, "get_ticket", { ticket: id })).status, 404);
+  test("an issue id (uuid) from another workspace is no more reachable than its ref", async () => {
+    const id = (await v1ok(A, "get_issue", { issue: fx.a.issueRef })).issue.id;
+    assert.equal((await v1(B, "get_issue", { issue: id })).status, 404);
   });
 
-  test("writing to another workspace's team or ticket is refused and changes nothing", async () => {
-    const before = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket;
+  test("writing to another workspace's team or issue is refused and changes nothing", async () => {
+    const before = (await v1ok(A, "get_issue", { issue: fx.a.issueRef })).issue;
     const writes: [string, Record<string, unknown>][] = [
-      ["create_ticket", { project: fx.a.teamKey, title: "intruder" }],
-      ["update_ticket", { ticket: fx.a.ticketRef, title: "hijacked" }],
-      ["move_ticket", { ticket: fx.a.ticketRef, column: "Done" }],
-      ["comment", { ticket: fx.a.ticketRef, body: "intruder" }],
-      ["claim_ticket", { ticket: fx.a.ticketRef }],
+      ["create_issue", { project: fx.a.teamKey, title: "intruder" }],
+      ["update_issue", { issue: fx.a.issueRef, title: "hijacked" }],
+      ["move_issue", { issue: fx.a.issueRef, column: "Done" }],
+      ["comment", { issue: fx.a.issueRef, body: "intruder" }],
+      ["claim_issue", { issue: fx.a.issueRef }],
       ["upsert_node", { project: fx.a.teamKey, name: "intruder node" }],
     ];
     for (const [tool, args] of writes) {
       const r = await v1(B, tool, args);
       assert.equal(r.status, 404, tool);
     }
-    const after = (await v1ok(A, "get_ticket", { ticket: fx.a.ticketRef })).ticket;
+    const after = (await v1ok(A, "get_issue", { issue: fx.a.issueRef })).issue;
     assert.equal(after.title, before.title);
     assert.equal(after.version, before.version);
     assert.equal(after.columnId, before.columnId);
