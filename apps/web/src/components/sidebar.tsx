@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, Reorder, useDragControls } from "motion/react";
+import { Reorder, useDragControls } from "motion/react";
 import { Popover } from "radix-ui";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
@@ -40,9 +40,6 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
     ],
   },
 ];
-
-/** A team's sections fade in and out, quickly. `MotionConfig reducedMotion="user"` (in the app root) turns it off for people who ask the OS for less motion. */
-const fade = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.12, ease: "easeOut" } }, exit: { opacity: 0, transition: { duration: 0.08, ease: "easeIn" } } } as const;
 
 /** How rows slide into place while a team is dragged: a stiff, well-damped spring, so they settle at once instead of wobbling. */
 const reorderSpring = { type: "spring", stiffness: 900, damping: 50, mass: 0.5 } as const;
@@ -448,12 +445,9 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
       ) : (
         row
       )}
-      <AnimatePresence initial={false}>
         {isOpen && (
-          <motion.div
-            key="sections"
+          <div
             id={`team-${t.key}`}
-            {...fade}
             className={clsx("ml-3 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}
           >
             <div className="mt-0.5 space-y-2">
@@ -467,9 +461,8 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
       </Reorder.Item>
   );
 }
