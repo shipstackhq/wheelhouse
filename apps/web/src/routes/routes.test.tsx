@@ -40,13 +40,15 @@ const ALL_APP_PATHS = [...PORTED_PAGES.map(([p]) => p), ...TEAM_PAGES.map(([p]) 
 const inShell = () => {
   const sidebar = screen.getByRole("navigation");
   expect(within(sidebar).getByRole("link", { name: "Home" })).toBeTruthy();
-  expect(within(sidebar).getByRole("button", { name: /Alpha|Select a team/ })).toBeTruthy(); // the switcher
+  expect(within(sidebar).getByRole("button", { name: "Search teams (⌘K)" })).toBeTruthy(); // the team search
+  expect(within(sidebar).getByRole("link", { name: /^Alpha/ })).toBeTruthy(); // the teams list
+  expect(screen.getByRole("button", { name: "Workspace menu" })).toBeTruthy(); // the workspace switcher
   expect(within(sidebar).getByRole("link", { name: "Members" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Account menu" })).toBeTruthy();
 };
 
 describe("signed in: every page is in the shell", () => {
-  test.each(PORTED_PAGES)("%s is the real page, with the sidebar, the team switcher and the account menu", async (path, heading) => {
+  test.each(PORTED_PAGES)("%s is the real page, with the sidebar, the workspace and team lists and the account menu", async (path, heading) => {
     const { at } = renderApp(path);
     await screen.findByRole("heading", { level: 1, name: heading });
     expect(at()).toBe(path);
