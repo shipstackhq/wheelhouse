@@ -3,8 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { Popover } from "radix-ui";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
-import { NavLink } from "./nav-link";
-import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, MoreIcon, NAV_ICONS, SearchIcon, TeamGlyphIcon, type IconPair } from "./icons";
+import { NAV_ICON, NAV_ICON_RAIL, NAV_ITEM, NAV_ITEM_RAIL, NavLink } from "./nav-link";
+import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, MoreFillIcon, NAV_ICONS, SearchIcon, TeamGlyphIcon, type IconPair } from "./icons";
 import { Tip } from "./tip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -41,6 +41,10 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
 
 /** A team's sections fade in and out, quickly. `MotionConfig reducedMotion="user"` (in the app root) turns it off for people who ask the OS for less motion. */
 const fade = { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: 0.12, ease: "easeOut" } }, exit: { opacity: 0, transition: { duration: 0.08, ease: "easeIn" } } } as const;
+
+/** A team's icon colour: one of a fixed set, picked from its key so it is the same on every visit and for everyone. */
+const TEAM_COLORS = ["text-sky-500", "text-emerald-500", "text-amber-500", "text-rose-500", "text-violet-500", "text-teal-500", "text-orange-500", "text-fuchsia-500", "text-lime-500", "text-indigo-500"];
+const teamColor = (key: string) => TEAM_COLORS[[...key].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % TEAM_COLORS.length];
 
 const RECENT_KEY = "wh:recent-teams";
 const COLLAPSED_KEY = "wh:sidebar-collapsed";
@@ -304,13 +308,14 @@ export function Sidebar({
                     aria-controls={`team-${t.key}`}
                     aria-label={collapsed ? t.name : undefined}
                     className={clsx(
-                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
-                      collapsed && "md:flex-none md:justify-center md:px-0 md:py-2",
+                      NAV_ITEM,
+                      "min-w-0 flex-1 text-left",
+                      collapsed && ["md:flex-none", NAV_ITEM_RAIL],
                       here && "font-medium",
                     )}
                   >
                     {/* A placeholder for the team's own icon, which a team will be able to choose later. */}
-                    <TeamGlyphIcon aria-hidden className={clsx("shrink-0 text-base", here ? "text-accent" : "text-muted", collapsed && "md:text-lg")} />
+                    <TeamGlyphIcon aria-hidden className={clsx(NAV_ICON, collapsed && NAV_ICON_RAIL, teamColor(t.key))} />
                     <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{t.name}</span>
                     <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-sm text-muted transition-transform duration-150", isOpen && "rotate-90", collapsed && "md:hidden")} />
                     <span className="flex-1" aria-hidden />
@@ -323,7 +328,7 @@ export function Sidebar({
                         collapsed && "md:hidden",
                       )}
                     >
-                      <MoreIcon aria-hidden className="text-base" />
+                      <MoreFillIcon aria-hidden className="text-base" />
                     </Popover.Trigger>
                     <Popover.Portal>
                       <Popover.Content side="right" align="start" sideOffset={6} collisionPadding={8} className="z-50 w-52 rounded-lg border border-line bg-panel p-3 text-sm text-muted shadow-xl">
