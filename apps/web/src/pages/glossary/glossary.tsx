@@ -98,7 +98,7 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
     <div className="flex h-full flex-col overflow-hidden bg-bg">
       {props.termId === undefined ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8 lg:py-12">
+          <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h1 className="text-3xl font-bold tracking-tight">Glossary</h1>
               <button className="btn btn-primary shrink-0" onClick={() => (setDraft({ term: "", definition: "", nodeId: "" }), setEditing("new"))}>
@@ -146,9 +146,9 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
             {!selected ? (
               <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">This term is not in the glossary.</p>
             ) : editing === selected.id ? (
-              <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 lg:py-10">{form(selected)}</div>
+              <div className="w-full px-4 py-8 sm:px-8 lg:py-10">{form(selected)}</div>
             ) : (
-              <article className="mx-auto w-full max-w-3xl space-y-5 px-4 py-8 sm:px-8 lg:py-10">
+              <article className="w-full space-y-5 px-4 py-8 sm:px-8 lg:py-10">
                 <div className="flex items-start justify-between gap-3">
                   <h1 className="min-w-0 flex-1 text-3xl font-bold tracking-tight">{selected.term}</h1>
                   <div className="flex shrink-0 gap-2">

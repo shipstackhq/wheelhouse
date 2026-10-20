@@ -116,7 +116,7 @@ export function RichMarkdownEditor({
                 className={clsx(
                   "md overflow-y-auto outline-none",
                   contentClassName,
-                  fullScreen ? "mx-auto h-full w-full max-w-4xl px-6 py-8 sm:px-10" : [maxHeight, minHeight],
+                  fullScreen ? "h-full w-full px-6 py-8 sm:px-10" : [maxHeight, minHeight],
                 )}
               />
             }

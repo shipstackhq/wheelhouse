@@ -22,7 +22,7 @@ export function ActivityPage() {
   );
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-6">
+      <div className="w-full px-6 py-6">
         <div className="mb-4 flex gap-1">
           {tab(undefined, "Everything")}
           {tab("agent", <><AgentIcon /> Agents</>)}

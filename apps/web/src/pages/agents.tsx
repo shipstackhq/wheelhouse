@@ -24,7 +24,7 @@ export function AgentsPage() {
         const { active, revoked } = splitKeys(rows);
         return (
           <div className="h-full overflow-y-auto">
-            <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
+            <div className="w-full space-y-8 px-6 py-10">
               <div>
                 <h1 className="text-xl font-semibold">Agents &amp; API keys</h1>
                 <p className="mt-1 text-sm text-muted">

@@ -19,7 +19,7 @@ export function Loaded<T>({ query, label, rows, children }: { query: UseQueryRes
   if (query.isError) {
     if (query.error instanceof ApiError && query.error.status === 404) return <NotFound />;
     return (
-      <div className="mx-auto max-w-3xl px-6 py-10" role="alert">
+      <div className="w-full px-6 py-10" role="alert">
         <p className="text-sm text-danger">{errorText(query.error)}</p>
         <button type="button" className="btn mt-3" onClick={() => void query.refetch()}>Try again</button>
       </div>

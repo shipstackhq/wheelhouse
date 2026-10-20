@@ -51,7 +51,7 @@ export function InitiativeView(props: { initiative: InitiativeDetail }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-6">
+      <div className="w-full px-6 py-6">
         <nav className="flex flex-wrap items-center gap-1 text-xs text-muted" aria-label="Where this sits">
           <Link to="/initiatives" className="hover:text-fg">
             All initiatives

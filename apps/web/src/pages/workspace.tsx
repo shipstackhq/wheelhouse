@@ -23,7 +23,7 @@ export function WorkspacePage() {
         const canManage = canManagePeople(t.role);
         return (
           <div className="h-full overflow-y-auto">
-            <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
+            <div className="w-full space-y-8 px-6 py-10">
               <div>
                 <h1 className="text-xl font-semibold">{t.workspace.name}</h1>
                 <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>

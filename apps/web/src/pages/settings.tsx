@@ -18,7 +18,7 @@ export function SettingsPage() {
   const manages = canManagePeople(me.role);
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-10 px-6 py-10">
+      <div className="w-full space-y-10 px-6 py-10">
         <div>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="mt-1 text-sm text-muted">Your own settings, and the workspace&apos;s.</p>

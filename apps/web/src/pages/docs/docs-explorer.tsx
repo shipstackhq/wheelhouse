@@ -411,7 +411,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
     <div className="confluence-docs flex h-full flex-col overflow-hidden bg-bg">
       {selectedId === null ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-8 lg:py-12">
+          <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
             <div className="mb-6 flex items-center justify-between gap-3">
               <h1 className="text-3xl font-bold tracking-tight">Docs</h1>
               <button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>

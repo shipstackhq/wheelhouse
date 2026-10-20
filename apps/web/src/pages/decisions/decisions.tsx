@@ -79,7 +79,7 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
       <div className="flex h-full flex-col overflow-hidden bg-bg">
         {props.number === undefined ? (
           <section className="min-h-0 flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-8 lg:py-12">
+            <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h1 className="text-3xl font-bold tracking-tight">Decisions</h1>
                 <button className="btn btn-primary shrink-0" onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}>
@@ -149,7 +149,7 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
               {!selected ? (
                 <p className="px-4 py-8 text-sm text-muted sm:px-8 lg:px-12">No decision ADR-{props.number} in this team.</p>
               ) : (
-                <article className="mx-auto w-full max-w-3xl space-y-5 px-4 py-8 sm:px-8 lg:py-10">
+                <article className="w-full space-y-5 px-4 py-8 sm:px-8 lg:py-10">
                   <div className="flex items-start justify-between gap-3">
                     <h1 className={clsx("min-w-0 flex-1 text-3xl font-bold tracking-tight", struck(selected))}>{selected.title}</h1>
                     <button className="btn btn-primary shrink-0" onClick={() => edit(selected)}>

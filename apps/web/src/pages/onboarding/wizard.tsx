@@ -49,7 +49,7 @@ export function OnboardingWizard({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+      <div className="w-full space-y-6 px-6 py-10">
         <div>
           <div className="flex items-center justify-between gap-4">
             <div>

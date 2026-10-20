@@ -37,7 +37,7 @@ export function Initiatives(props: { initiatives: InitiativeSummary[] }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-6">
+      <div className="w-full px-6 py-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Initiatives</h2>

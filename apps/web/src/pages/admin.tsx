@@ -19,7 +19,7 @@ export function AdminWorkspacesPage() {
     <Loaded query={query} label="Loading workspaces">
       {(workspaces) => (
         <div className="h-full overflow-y-auto">
-          <div className="mx-auto max-w-4xl space-y-6 px-6 py-10">
+          <div className="w-full space-y-6 px-6 py-10">
             <div>
               <h1 className="text-xl font-semibold">Workspaces on this server</h1>
               <p className="mt-1 text-sm text-muted">
@@ -61,7 +61,7 @@ export function AdminWorkspacePage() {
     <Loaded query={query} label="Loading the workspace">
       {(t) => (
         <div className="h-full overflow-y-auto">
-          <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+          <div className="w-full space-y-6 px-6 py-10">
             <div>
               <Link to="/admin/workspaces" className="text-sm text-muted hover:text-fg"><ArrowLeftIcon /> All workspaces</Link>
               <h1 className="mt-2 text-xl font-semibold">
@@ -158,7 +158,7 @@ export function AdminInvitesPage() {
     <Loaded query={query} label="Loading invites">
       {(pending) => (
         <div className="h-full overflow-y-auto">
-          <div className="mx-auto max-w-3xl space-y-8 px-6 py-10">
+          <div className="w-full space-y-8 px-6 py-10">
             <div>
               <h1 className="text-xl font-semibold">Invite a new workspace</h1>
               <p className="mt-1 text-sm text-muted">
