@@ -83,7 +83,7 @@ export const tools = {
   }),
 
   get_issue: tool({
-    description: "Full issue: description (markdown), comments thread with the team, linked architecture nodes, and change history.",
+    description: "Full issue: description (markdown), comments thread with the team, linked architecture nodes, change history, its parent issue and its sub-issues.",
     input: z.object({ issue }),
     readOnly: true,
     run: (a, i) => svc.getIssue(a, i.issue),
@@ -98,6 +98,7 @@ export const tools = {
       status: z.string().optional().describe("Status name, default Backlog"),
       priority: z.enum(PRIORITIES).optional(),
       labels: z.array(z.string()).optional(),
+      parent: z.string().optional().describe("Make it a sub-issue of this issue (a ref like WH-12 in the same team)"),
       link_nodes: z.array(z.string()).optional().describe("Graph node names/ids this issue touches"),
     }),
     run: async (a, i) => {
@@ -115,6 +116,7 @@ export const tools = {
       body: z.string().optional(),
       priority: z.enum(PRIORITIES).optional(),
       labels: z.array(z.string()).optional(),
+      parent: z.string().nullable().optional().describe("Move it under this issue (a ref like WH-12 in the same team), or null to make it a top-level issue"),
       expected_version: expectedVersion,
     }),
     run: (a, { issue, expected_version, ...patch }) => svc.updateIssue(a, issue, patch, expected_version),

@@ -61,17 +61,22 @@ describe("unique keys", () => {
     await assert.rejects(db.insert(schema.users).values({ email: `ADA-${RUN}@EXAMPLE.COM`, name: "dup", passwordHash: "x" }), unique);
   });
 
-  test("a column role is held by one column per team; custom columns are not limited", async () => {
-    const roleRows = await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a1.id));
-    const withRole = roleRows.find((c) => c.role === "review")!;
-    assert.ok(withRole);
-    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Second review", position: 50, role: "review" }), unique);
+  test("a role can be shared by several statuses, but only one is its default; names are unique in a team whatever their case", async () => {
+    const rows = await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a1.id));
+    const review = rows.find((c) => c.role === "review")!;
+    assert.ok(review?.isDefault, "the standard review status is the default for its role");
+    // a second review status is fine, as long as it is not marked default as well
+    await db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Design review", position: 50, role: "review" });
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Code review", position: 51, role: "review", isDefault: true }), unique);
     await db.insert(schema.statuses).values([
-      { teamId: a1.id, workspaceId: wsA, name: "Custom one", position: 51, role: null },
-      { teamId: a1.id, workspaceId: wsA, name: "Custom two", position: 52, role: null },
+      { teamId: a1.id, workspaceId: wsA, name: "Custom one", position: 52, role: null },
+      { teamId: a1.id, workspaceId: wsA, name: "Custom two", position: 53, role: null },
     ]);
-    // the same role in another team is fine
-    assert.ok((await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a2.id))).some((c) => c.role === "review"));
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "CUSTOM ONE", position: 54, role: null }), unique);
+    // a status that is the default of a role must have a role
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Roleless default", position: 55, role: null, isDefault: true }), checked);
+    // the same role and the same name in another team are fine
+    assert.ok((await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a2.id))).some((c) => c.role === "review" && c.isDefault));
   });
 });
 
@@ -165,7 +170,7 @@ describe("the TypeScript enums and the CHECK constraints agree", () => {
       from pg_constraint c where c.contype = 'c' and c.connamespace = 'public'::regnamespace and c.conname like '%\\_check'`);
     const list = (Array.isArray(res) ? res : (res as unknown as { rows: unknown[] }).rows) as { conname: string; def: string }[];
     // CHECKs that are about a rule, not about an enum, are named here.
-    const notEnums = new Set(["cycles_window_check", "projects_dates_check", "issues_milestone_needs_project_check", "initiatives_not_own_parent_check"]);
+    const notEnums = new Set(["cycles_window_check", "projects_dates_check", "issues_milestone_needs_project_check", "initiatives_not_own_parent_check", "issues_not_own_parent_check", "statuses_default_has_role_check"]);
     const inDb = new Map(list.filter((r) => !notEnums.has(r.conname)).map((r) => [r.conname, valuesIn(r.def)]));
     const expected = enumColumns();
     assert.ok(expected.length >= 30, `found only ${expected.length} enum columns`);

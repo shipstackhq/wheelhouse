@@ -2,7 +2,7 @@ import type { Actor } from "./access";
 import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
 import { timeAgo } from "./time";
 import { checklistBriefingLine } from "./setup-checklist";
-
+import { CLOSED_ROLES } from "./status-roles";
 /**
  * Context for agents, so a fresh session starts warm instead of re-reading the
  * codebase. Both renderers produce compact markdown: an overview with pointers,
@@ -76,14 +76,14 @@ export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?:
       : null;
 
   // Your work + board state
-  const open = board.issues.filter((t) => colRole.get(t.statusId) !== "done");
+  const open = board.issues.filter((t) => !CLOSED_ROLES.some((r) => r === colRole.get(t.statusId)));
   const mine = actor.kind === "agent" ? open.filter((t) => t.claimedByKeyId === actor.id) : open.filter((t) => t.assigneeId === actor.id);
   const inProgress = open.filter((t) => colRole.get(t.statusId) === "in_progress");
   const review = open.filter((t) => colRole.get(t.statusId) === "review");
   const urgent = open.filter((t) => t.priority === "urgent" || t.priority === "high");
   const busy = (t: (typeof open)[number]) => ["in_progress", "review"].includes(colRole.get(t.statusId) ?? "");
   const ready = open.filter((t) => t.agentClaimable && !t.claimedByKeyId && !busy(t));
-  const tl = (t: (typeof open)[number]) => `${t.ref} ${t.title} [${colName.get(t.statusId)}${t.priority !== "medium" ? `, ${t.priority}` : ""}]`;
+  const tl = (t: (typeof open)[number]) => `${t.ref} ${t.title} [${colName.get(t.statusId)}${t.priority !== "none" ? `, ${t.priority}` : ""}]`;
   const work = [
     "## Work",
     mine.length ? `Yours: ${mine.slice(0, 6).map(tl).join("; ")}` : actor.kind === "agent" ? "Yours: nothing claimed." : null,

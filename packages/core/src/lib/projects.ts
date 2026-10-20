@@ -154,7 +154,7 @@ async function progressOf(q: Q, projectIds: string[]): Promise<Counts> {
   const out: Counts = new Map(projectIds.map((id) => [id, { total: 0, done: 0 }]));
   if (!projectIds.length) return out;
   const rows = await q
-    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
+    .select({ projectId: issues.projectId, total: sql<number>`count(*) filter (where ${statuses.role} is distinct from 'canceled')::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
     .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(inArray(issues.projectId, projectIds))
@@ -234,7 +234,7 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
   const a = await openProject(db, actor, id);
   const [summary] = await summarise(db, actor, [a.project], now);
   const perTeam = await db
-    .select({ teamId: issues.teamId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
+    .select({ teamId: issues.teamId, total: sql<number>`count(*) filter (where ${statuses.role} is distinct from 'canceled')::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
     .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(eq(issues.projectId, id))
@@ -263,7 +263,7 @@ export async function getProject(actor: Actor, id: string, now = new Date()): Pr
   const otherIds = a.teamIds.filter((t) => !a.mine.has(t));
   const others = otherIds.reduce((acc, t) => ({ count: acc.count + 1, total: acc.total + (counts.get(t)?.total ?? 0), done: acc.done + (counts.get(t)?.done ?? 0) }), { count: 0, total: 0, done: 0 });
   const msCounts = await db
-    .select({ milestoneId: issues.milestoneId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
+    .select({ milestoneId: issues.milestoneId, total: sql<number>`count(*) filter (where ${statuses.role} is distinct from 'canceled')::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
     .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(and(eq(issues.projectId, id), sql`${issues.milestoneId} is not null`))

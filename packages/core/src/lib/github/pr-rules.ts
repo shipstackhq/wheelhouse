@@ -41,7 +41,7 @@ export function decideMove(i: MoveInput): MoveDecision {
   // Statuses are found by role, never by name, so a board can rename them (WH-86). No review status: leave issues alone.
   const review = statusForRole(i.statuses, "review");
   const progress = statusForRole(i.statuses, "in_progress");
-  const inReviewOrDone = hasRole(i.status, "review", "done");
+  const inReviewOrDone = hasRole(i.status, "review", "done", "canceled");
 
   let target: RoleStatus | undefined;
   let why = "";

@@ -24,16 +24,18 @@ describe("the board", () => {
     expect(within(column("Todo")).getByText("Build the board")).toBeTruthy();
   });
 
-  test("a card shows its ref, priority, labels, AI state, who made it and its comments, and only what is not ordinary", async () => {
+  test("a card shows its ref, priority, labels, AI state, who made it and its comments, and only what is set", async () => {
     await open();
     const plan = screen.getByText("Write the plan").closest("[data-issue]") as HTMLElement;
     expect(within(plan).getByText("AA-1")).toBeTruthy();
     expect(within(plan).getByText("high")).toBeTruthy();
     expect(within(plan).getByText("docs")).toBeTruthy();
     const build = screen.getByText("Build the board").closest("[data-issue]") as HTMLElement;
-    expect(within(build).queryByText("medium")).toBeNull(); // the usual priority is not shown
+    expect(within(build).queryByText("none")).toBeNull(); // no priority is not shown
+    expect(within(build).queryByText("no priority")).toBeNull();
     expect(within(build).getByText("AI-ready")).toBeTruthy();
     const crash = screen.getByText("Fix the crash").closest("[data-issue]") as HTMLElement;
+    expect(within(crash).getByText("medium")).toBeTruthy(); // any priority that is set is shown, medium included
     expect(within(crash).getByTitle("Created by an agent")).toBeTruthy();
     expect(within(crash).getByText("2")).toBeTruthy();
   });

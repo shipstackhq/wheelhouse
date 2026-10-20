@@ -258,7 +258,11 @@ export const teams = table("teams", {
   uniqueIndex("teams_workspace_key_idx").on(t.workspaceId, sql`lower(${t.key})`),
 ]);
 
-/** A team's statuses (what a board column is): the stages an issue moves through. */
+/**
+ * A team's statuses (what a board column is): the stages an issue moves through. Any number can share a role; the one with
+ * `is_default` is what an automatic move to that role (a merged pull request, "done") picks, so each role has at most one.
+ * Names are unique in a team whatever their case, so "Todo" and "todo" cannot both exist.
+ */
 export const statuses = table("statuses", {
   id: uuid("id").primaryKey().defaultRandom(),
   teamId: uuid("team_id").notNull(),
@@ -267,13 +271,15 @@ export const statuses = table("statuses", {
   position: doublePrecision("position").notNull(),
   // What stage of work this status stands for (WH-86); rules and reports use it, never the name. Null: a custom status.
   role: text("role", { enum: STATUS_ROLES }),
+  isDefault: boolean("is_default").notNull().default(false),
 }, (t) => [
   teamScope("statuses", t),
-  // One status per role per team (ADR-15); custom statuses have no role and there can be any number of them.
-  uniqueIndex("statuses_team_role_idx").on(t.teamId, t.role).where(sql`role is not null`),
+  uniqueIndex("statuses_team_default_role_idx").on(t.teamId, t.role).where(sql`is_default`),
+  uniqueIndex("statuses_team_name_idx").on(t.teamId, sql`lower(${t.name})`),
+  check("statuses_default_has_role_check", sql`not "is_default" or "role" is not null`),
 ]);
 
-export const PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+export const PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;
 
 export const issues = table(
   "issues",
@@ -285,7 +291,7 @@ export const issues = table(
     number: integer("number").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),
-    priority: text("priority", { enum: PRIORITIES }).notNull().default("medium"),
+    priority: text("priority", { enum: PRIORITIES }).notNull().default("none"),
     // Only a member of the issue's team can be assigned. The foreign key `(team_id, assignee_id)` to team_members
     // is `ON DELETE SET NULL (assignee_id)` (migration 0020; drizzle cannot express the column list), so leaving the
     // team unassigns the person's issues without touching team_id.
@@ -298,6 +304,10 @@ export const issues = table(
     // issue in the project (removing the team takes both columns out), and `(milestone_id, project_id)` to its milestones.
     projectId: uuid("project_id"),
     milestoneId: uuid("milestone_id"),
+    // The issue this one is a sub-issue of, in its own team: the foreign key `(parent_id, team_id)` to issues is
+    // `ON DELETE SET NULL (parent_id)` (migration 0031), so deleting a parent frees its sub-issues and leaves them in their team.
+    // The service refuses a parent that would make a loop (an issue under its own descendant); see `setParent`.
+    parentId: uuid("parent_id"),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     position: doublePrecision("position").notNull(),
@@ -314,6 +324,8 @@ export const issues = table(
     index("issues_cycle_idx").on(t.cycleId),
     index("issues_project_idx").on(t.projectId),
     index("issues_milestone_idx").on(t.milestoneId),
+    index("issues_parent_idx").on(t.parentId),
+    check("issues_not_own_parent_check", sql`"parent_id" is distinct from "id"`),
     check("issues_milestone_needs_project_check", sql`"milestone_id" is null or "project_id" is not null`),
     uniqueIndex("issues_team_number_idx").on(t.teamId, t.number),
   ],

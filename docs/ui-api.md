@@ -179,16 +179,16 @@ The board and the issue dialog. Everything needs a session. An issue is addresse
 
 | Endpoint | What it is |
 |---|---|
-| `GET /api/app/teams/:key/board` | the team page in one read: `team`, `statuses` (id, name, role, position), `issues` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
+| `GET /api/app/teams/:key/board` | the team page in one read: `team`, `statuses` (id, name, role, isDefault, position), `issues` (with `nodeIds` and `commentCount`), `nodes` (just id, name, kind, parentId, layer), `members` (id, name) and the setup `checklist` |
 | `GET /api/app/teams/:key/queue` | the Bots menu: `{ bots }`, each agent key with its queue depth and live sessions in this team |
 | `PATCH /api/app/issues/:ref` | see "The version check" below |
 | `POST /api/app/issues/:ref/move` | `{ status, index?, version? }`: the status by id, name or role; `index` is the place in the status (the end when absent) |
 
-An issue in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `statusId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the status's `name`.
+An issue in every answer has the same fields (`id`, `ref`, `number`, `title`, `body`, `statusId`, `priority`, `assigneeId`, `agentClaimable`, `claimedByKeyId`, `labels`, `cycle`, `projectId`, `milestoneId`, `parentId`, `position`, `version`, `createdByKind`, `createdAt`, `updatedAt`) and no internal ids. Create and move also say the status's `name`.
 
 **Claiming.** Only agents claim an issue (over MCP or `/api/v1`). A person decides whether agents may pick an issue up (`agentClaimable`) and sees whether one has (`claimedByKeyId`); there is no web endpoint to claim.
 
-**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`status`, one of `low|medium|high|urgent` for `priority`, a list of text for `labels`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's workspace.
+**Input is checked like the MCP tools check it.** A wrong type is a 400 whose `details.fields` names the field: text for `title`/`body`/`status`, one of `none|low|medium|high|urgent` for `priority` (a new issue has `none`), a list of text for `labels`, an issue ref such as `WH-12` or `null` for `parent`, true or false for `agentClaimable`, a whole number for `version` and `index`. Unknown fields are ignored. An assignee must belong to the caller's workspace.
 
 ### The version check
 
@@ -352,6 +352,8 @@ name, a key or a title.
 | `DELETE /api/app/projects/:id/milestones/:milestoneId` | `{ project }`; its issues stay in the project, in no milestone |
 
 An issue joins with `projectId` and `milestoneId` on `POST .../issues` or `PATCH /api/app/issues/:ref` (`null` leaves). The issue's team must take part in the project (`400`, and the database refuses
+
+**Sub-issues.** An issue can sit under another issue of its own team: `parent` (a ref such as `WH-12`, or an id) on `POST .../issues`, or on `PATCH /api/app/issues/:ref` (`null` makes it top-level again). The card carries `parentId`; `GET /api/app/issues/:ref` also answers `parent` and `children` (each `ref`, `title`, `priority`, `status`, `done`, `canceled`, `assigneeId`). Nesting has no practical limit (50 levels is a guard); a parent in another team, one that does not exist, or one that would put an issue under itself or its own descendant is a `400`. Deleting a parent frees its sub-issues, which stay in their team. Statuses can share a role; the one marked `isDefault` is the target of an automatic move to that role. A `canceled` issue counts in no total (a cycle's, a project's, a team's) and is never open work.
 anything else), the milestone must be that project's, changing the project drops the milestone unless a new one is named, and a milestone needs a project. The board answer carries
 `projects` (the ones this team takes part in, each with its milestones) for the card chip and the issue's fields.
 

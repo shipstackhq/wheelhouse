@@ -112,7 +112,7 @@ async function projectProgress(q: Q, projectIds: string[]): Promise<Map<string, 
   const out = new Map<string, ProgressCounts>(projectIds.map((id) => [id, { total: 0, done: 0 }]));
   if (!projectIds.length) return out;
   const rows = await q
-    .select({ projectId: issues.projectId, total: sql<number>`count(*)::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
+    .select({ projectId: issues.projectId, total: sql<number>`count(*) filter (where ${statuses.role} is distinct from 'canceled')::int`, done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int` })
     .from(issues)
     .innerJoin(statuses, eq(statuses.id, issues.statusId))
     .where(inArray(issues.projectId, projectIds))

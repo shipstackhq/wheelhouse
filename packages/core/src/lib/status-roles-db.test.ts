@@ -42,9 +42,10 @@ before(async () => {
 });
 
 describe("status roles", () => {
-  test("a new team's five statuses each have their role", async () => {
+  test("a new team's six statuses each have their role, and each is its role's default", async () => {
     const { statuses } = await svc.getBoard(human, "RR");
-    assert.deepEqual(statuses.map((c) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
+    assert.deepEqual(statuses.map((c) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"], ["Canceled", "canceled"]]);
+    assert.ok(statuses.every((c) => c.isDefault));
   });
 
   test("a renamed status is still found by its role, and an exact name still wins", async () => {
@@ -94,5 +95,26 @@ describe("status roles", () => {
     await svc.moveIssue(human, d.ref, "done");
     assert.ok(!markdown.includes("Finished"), "an issue in the renamed done status is not listed as open work");
     assert.equal(await columnOf(d.ref), "Shipped");
+  });
+
+  test("when several statuses share a role, a move to the role goes to the one marked default, not the first one", async () => {
+    const db = await getDb();
+    // Two more review statuses, one of them ahead of the default in board order.
+    await db.insert(schema.statuses).values([
+      { teamId, workspaceId: human.workspaceId, name: "Spec review", position: 0.5, role: "review" },
+      { teamId, workspaceId: human.workspaceId, name: "Security review", position: 4.5, role: "review" },
+    ]);
+    const board = (await svc.getBoard(human, "RR")).statuses;
+    assert.equal(board[0].name, "Spec review", "the extra status really is first in board order");
+    const t = await svc.createIssue(human, "RR", { title: "Needs a review" });
+    const defaultReview = board.find((c) => c.role === "review" && c.isDefault)!;
+    assert.equal((await svc.moveIssue(human, t.ref, "review")).status, defaultReview.name);
+    // and a status can still be named exactly, whatever its role
+    assert.equal((await svc.moveIssue(human, t.ref, "security review")).status, "Security review");
+    // with the default moved to another status of the role, the role follows it
+    await db.update(schema.statuses).set({ isDefault: false }).where(and(eq(schema.statuses.teamId, teamId), eq(schema.statuses.name, defaultReview.name)));
+    await db.update(schema.statuses).set({ isDefault: true }).where(and(eq(schema.statuses.teamId, teamId), eq(schema.statuses.name, "Security review")));
+    assert.equal((await svc.moveIssue(human, t.ref, "in_progress")).status, "In Progress");
+    assert.equal((await svc.moveIssue(human, t.ref, "review")).status, "Security review");
   });
 });

@@ -10,4 +10,5 @@ export const PRIORITY_STYLE: Record<string, string> = {
   high: "bg-warn/20 text-warn",
   medium: "bg-panel-2 text-muted",
   low: "bg-panel-2 text-muted/70",
+  none: "bg-panel-2 text-muted/50",
 };

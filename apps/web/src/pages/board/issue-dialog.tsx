@@ -324,7 +324,7 @@ export function IssueDialog(props: {
                     <Select
                       triggerClassName={PRIORITY_STYLE[t.priority]}
                       value={t.priority}
-                      options={["low", "medium", "high", "urgent"].map((p) => ({ value: p, label: p }))}
+                      options={["none", "low", "medium", "high", "urgent"].map((p) => ({ value: p, label: p === "none" ? "no priority" : p }))}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { priority: v as typeof t.priority, version: t.version }))}
                     />
                   </Field>

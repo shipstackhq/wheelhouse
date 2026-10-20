@@ -50,6 +50,7 @@
       "string"
     ],
     "number": "number",
+    "parentId": "null",
     "position": "number",
     "priority": "string",
     "projectId": "string",
@@ -61,6 +62,7 @@
     "version": "number"
   },
   "get_issue": {
+    "children": [],
     "comments": [],
     "history": [
       {
@@ -96,6 +98,7 @@
         "string"
       ],
       "number": "number",
+      "parentId": "null",
       "position": "number",
       "priority": "string",
       "projectId": "string",
@@ -107,6 +110,7 @@
       "version": "number"
     },
     "nodes": [],
+    "parent": "null",
     "project": {
       "createdAt": "string",
       "description": "string",

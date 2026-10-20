@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { openSse, v1ok } from "./lib/http";
+import { asKey, openSse, v1ok } from "./lib/http";
 import { anon, app, newAccount, type Sess } from "./lib/app";
 
 /**
@@ -71,12 +71,14 @@ describe("every endpoint needs a signed-in person, and refuses a forged request"
 });
 
 describe("GET /api/app/teams/:key/board", () => {
-  test("the team, its five statuses with their roles, issues, map nodes, members and the checklist", async () => {
+  test("the team, its six statuses with their roles, issues, map nodes, members and the checklist", async () => {
     const t = await workspace();
     const b = await board(t.s);
     assert.deepEqual(Object.keys(b).sort(), ["checklist", "cycles", "issues", "members", "nodes", "projects", "statuses", "team"]);
     assert.deepEqual(Object.keys(b.team).sort(), ["description", "id", "key", "name"]);
-    assert.deepEqual(b.statuses.map((c: { name: string; role: string }) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"]]);
+    assert.deepEqual(b.statuses.map((c: { name: string; role: string }) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"], ["Canceled", "canceled"]]);
+    assert.deepEqual(Object.keys(b.statuses[0]).sort(), ["id", "isDefault", "name", "position", "role"]);
+    assert.ok(b.statuses.every((c: { isDefault: boolean }) => c.isDefault), "a new team's statuses are each their role's default");
     assert.deepEqual(b.issues, []);
     assert.deepEqual(b.nodes, []);
     assert.deepEqual(b.members, [{ id: t.owner.me.user.id, name: "Owner" }]);
@@ -91,7 +93,7 @@ describe("GET /api/app/teams/:key/board", () => {
     await app("PUT", `/api/app/issues/${tk.ref}/nodes/${node.id}`, t.s);
     await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "hello" } });
     const b = await board(t.s);
-    assert.deepEqual(Object.keys(b.issues[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "milestoneId", "nodeIds", "number", "position", "priority", "projectId", "ref", "statusId", "title", "updatedAt", "version"]);
+    assert.deepEqual(Object.keys(b.issues[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "milestoneId", "nodeIds", "number", "parentId", "position", "priority", "projectId", "ref", "statusId", "title", "updatedAt", "version"]);
     assert.equal(b.issues[0].ref, "RKT-1");
     assert.deepEqual(b.issues[0].nodeIds, [node.id]);
     assert.equal(b.issues[0].commentCount, 1);
@@ -129,7 +131,7 @@ describe("POST /api/app/teams/:key/issues", () => {
     assert.equal(tk.ref, "RKT-1");
     assert.equal(tk.version, 1);
     assert.equal(tk.status, "Backlog");
-    assert.equal(tk.priority, "medium");
+    assert.equal(tk.priority, "none", "a new issue has no priority until it is given one");
     assert.equal(tk.createdByKind, "human");
     assert.equal(tk.agentClaimable, false, "a person's issue is not agent-claimable until they say so");
     assert.equal(tk.claimedByKeyId, null);
@@ -204,7 +206,7 @@ describe("GET /api/app/issues/:ref", () => {
     await app("PATCH", `/api/app/issues/${tk.ref}`, t.s, { body: { priority: "high" } });
     const r = await app("GET", `/api/app/issues/${tk.ref}`, t.s);
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json).sort(), ["comments", "history", "issue", "nodes", "pullRequests", "team"]);
+    assert.deepEqual(Object.keys(r.json).sort(), ["children", "comments", "history", "issue", "nodes", "parent", "pullRequests", "team"]);
     assert.equal(r.json.issue.ref, "RKT-1");
     assert.equal(r.json.issue.status, "Backlog");
     assert.deepEqual(r.json.team, { key: "RKT", name: "Rocket" });
@@ -532,3 +534,68 @@ describe("claim state", () => {
     assert.equal((await app("GET", `/api/app/issues/${tk.ref}`, t.s)).json.issue.claimedByKeyId, onBoard.claimedByKeyId);
   });
 });
+
+describe("sub-issues over the web API", () => {
+  test("an issue is created under another and shows on both: the card has parentId, the dialog has parent and children", async () => {
+    const t = await workspace();
+    const parent = await make(t.s, { title: "Parent" });
+    assert.equal(parent.parentId, null);
+    const child = await make(t.s, { title: "Child", parent: parent.ref });
+    assert.equal(child.parentId, parent.id);
+    assert.equal((await board(t.s)).issues.find((x: { ref: string }) => x.ref === child.ref).parentId, parent.id);
+    const p = (await app("GET", `/api/app/issues/${parent.ref}`, t.s)).json;
+    assert.deepEqual(p.children, [{ ref: child.ref, title: "Child", priority: "none", status: "Backlog", done: false, canceled: false, assigneeId: null }]);
+    assert.equal(p.parent, null);
+    assert.equal((await app("GET", `/api/app/issues/${child.ref}`, t.s)).json.parent.ref, parent.ref);
+  });
+
+  test("PATCH moves an issue under another and out again, and refuses a loop with a 400 that names the field's problem", async () => {
+    const t = await workspace();
+    const a = await make(t.s, { title: "A" });
+    const b = await make(t.s, { title: "B" });
+    const c = await make(t.s, { title: "C", parent: b.ref });
+    const moved = await app("PATCH", `/api/app/issues/${b.ref}`, t.s, { body: { parent: a.ref } });
+    assert.equal(moved.status, 200, moved.text);
+    assert.equal(moved.json.issue.parentId, a.id);
+    const loop = await app("PATCH", `/api/app/issues/${a.ref}`, t.s, { body: { parent: c.ref } });
+    assert.equal(loop.status, 400);
+    assert.match(loop.json.error.message, /cannot be the parent/);
+    assert.equal((await app("GET", `/api/app/issues/${a.ref}`, t.s)).json.issue.parentId, null, "the refused change left it as it was");
+    const freed = await app("PATCH", `/api/app/issues/${b.ref}`, t.s, { body: { parent: null } });
+    assert.equal(freed.json.issue.parentId, null);
+  });
+
+  test("a parent must be an issue ref (or null): a wrong type names the field, a made-up or another team's issue is refused", async () => {
+    const t = await workspace();
+    const other = (await app("POST", "/api/app/teams", t.s, { body: { name: "Other", key: "OTH" } })).json.team;
+    const foreign = await make(t.s, { title: "Elsewhere" }, other.key);
+    const mine = await make(t.s, { title: "Mine" });
+    for (const parent of [3, "", {}, []]) {
+      const r = await app("PATCH", `/api/app/issues/${mine.ref}`, t.s, { body: { parent } });
+      assert.equal(r.status, 400, JSON.stringify(parent));
+      assert.deepEqual(Object.keys(r.json.error.details.fields), ["parent"]);
+    }
+    for (const parent of [foreign.ref, "RKT-9999"]) assert.equal((await app("PATCH", `/api/app/issues/${mine.ref}`, t.s, { body: { parent } })).status, 400, parent);
+  });
+
+  test("deleting a parent leaves its sub-issues, free", async () => {
+    const t = await workspace();
+    const parent = await make(t.s, { title: "Parent" });
+    const child = await make(t.s, { title: "Child", parent: parent.ref });
+    assert.equal((await app("DELETE", `/api/app/issues/${parent.ref}`, t.s)).status, 200);
+    assert.equal((await app("GET", `/api/app/issues/${child.ref}`, t.s)).json.issue.parentId, null);
+  });
+
+  test("the agents' tools do the same: create_issue and update_issue take `parent`, get_issue shows the tree", async () => {
+    const t = await workspace();
+    const parent = await v1ok(asKey(t.key), "create_issue", { project: "RKT", title: "Epic" });
+    const child = await v1ok(asKey(t.key), "create_issue", { project: "RKT", title: "Task", parent: parent.ref });
+    assert.equal(child.parentId, parent.id);
+    const detail = await v1ok(asKey(t.key), "get_issue", { issue: parent.ref });
+    assert.deepEqual(detail.children.map((c: { ref: string }) => c.ref), [child.ref]);
+    const lone = await v1ok(asKey(t.key), "create_issue", { project: "RKT", title: "Lone" });
+    assert.equal((await v1ok(asKey(t.key), "update_issue", { issue: lone.ref, parent: parent.ref })).parentId, parent.id);
+    assert.equal((await v1ok(asKey(t.key), "update_issue", { issue: lone.ref, parent: null })).parentId, null);
+  });
+});
+

@@ -77,7 +77,7 @@ describe("cycles on the board", () => {
   });
 
   test("a view saved before cycles existed still loads and filters", async () => {
-    localStorage.setItem("wh:view:AA:c-todo", JSON.stringify({ priority: ["medium"], flags: [], sort: null })); // no `cycle` key
+    localStorage.setItem("wh:view:AA:c-todo", JSON.stringify({ priority: ["none"], flags: [], sort: null })); // no `cycle` key
     await open();
     await waitFor(() => expect(within(column("Todo")).getByText("Build the board")).toBeTruthy());
     expect(column("Todo").querySelectorAll("[data-issue]").length).toBeGreaterThan(0);

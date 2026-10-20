@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { migrationsFolder } from "../db";
 import { migrationsThrough } from "./db-copy";
 
 // Migration 0030 renames a board column to a status in place. This runs it over a database with columns, issues in them, and an
@@ -22,7 +21,7 @@ test("columns become statuses with their roles, issues and the status logged whe
     await q(`insert into events (workspace_id, team_id, actor_kind, actor_name, type, entity, entity_id, summary, data) select workspace_id, team_id, 'human', 'x', 'issue.created', 'issue', id, 'AA-1 created', '{"ref": "AA-1", "column": "Todo", "title": "one"}'::jsonb from issues`);
     await q(`insert into events (workspace_id, team_id, actor_kind, actor_name, type, entity, entity_id, summary, data) select workspace_id, team_id, 'human', 'x', 'issue.moved', 'issue', id, 'moved', '{"from": "Todo", "to": "Blocked"}'::jsonb from issues`);
 
-    await migrate(drizzle(client) as never, { migrationsFolder: migrationsFolder() });
+    await migrate(drizzle(client) as never, { migrationsFolder: migrationsThrough("0030") });
 
     assert.deepEqual(await q(`select name, role from statuses order by position`), [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }]);
     assert.deepEqual(await q(`select s.name from issues i join statuses s on s.id = i.status_id`), [{ name: "Todo" }], "the issue keeps its status");

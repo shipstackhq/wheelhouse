@@ -104,11 +104,11 @@ describe("POST /api/v1/:tool: issues", () => {
     expectGolden("v1-shapes", shapes);
   });
 
-  test("a new project's board has the five workflow statuses in order", async () => {
+  test("a new project's board has the six workflow statuses in order", async () => {
     const board = await v1ok(A, "get_board", { project: fx.a.teamKey });
     assert.deepEqual(
       board.statuses.map((c: { name: string }) => c.name),
-      ["Backlog", "Todo", "In Progress", "Review", "Done"],
+      ["Backlog", "Todo", "In Progress", "Review", "Done", "Canceled"],
     );
   });
 });

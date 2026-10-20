@@ -1,4 +1,4 @@
-import { idsWithRole } from "./status-roles";
+import { CLOSED_ROLES, idsWithRole, idsWithRoles } from "./status-roles";
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
@@ -77,7 +77,7 @@ type Snap = Awaited<ReturnType<typeof snapshot>>;
 function statusRoles(s: Snap) {
   const byTeam = new Map<string, Snap["statuses"]>();
   for (const c of s.statuses) byTeam.set(c.teamId, [...(byTeam.get(c.teamId) ?? []), c]);
-  return { byTeam, doneIds: idsWithRole(s.statuses, "done"), inProgress: idsWithRole(s.statuses, "in_progress"), review: idsWithRole(s.statuses, "review") };
+  return { byTeam, doneIds: idsWithRole(s.statuses, "done"), closedIds: idsWithRoles(s.statuses, ...CLOSED_ROLES), canceledIds: idsWithRole(s.statuses, "canceled"), inProgress: idsWithRole(s.statuses, "in_progress"), review: idsWithRole(s.statuses, "review") };
 }
 
 /** Moves into a team's done status, from the event log. Older events only recorded the status's name. */
@@ -92,7 +92,7 @@ function completions(s: Snap) {
 export async function summary(actor: Actor, teamId?: string) {
   const s = await snapshot(actor, teamId);
   const roles = statusRoles(s);
-  const open = s.issues.filter((t) => !roles.doneIds.has(t.statusId));
+  const open = s.issues.filter((t) => !roles.closedIds.has(t.statusId));
   const now = Date.now();
   const within = (d: Date, from: number, to: number) => {
     const age = now - new Date(d).getTime();
@@ -132,16 +132,18 @@ export async function teamProgress(actor: Actor, teamId?: string) {
     const cols = roles.byTeam.get(p.id) ?? [];
     const ts = s.issues.filter((t) => t.teamId === p.id);
     const stages = cols.map((c) => ({ id: c.id, name: c.name, count: ts.filter((t) => t.statusId === c.id).length }));
-    const done = ts.filter((t) => roles.doneIds.has(t.statusId)).length;
+    // A canceled issue is out of the team's scope: it is neither done nor still to do.
+    const scope = ts.filter((t) => !roles.canceledIds.has(t.statusId));
+    const done = scope.filter((t) => roles.doneIds.has(t.statusId)).length;
     const lastEvent = s.events.find((e) => e.teamId === p.id);
-    const open = ts.filter((t) => !roles.doneIds.has(t.statusId));
+    const open = ts.filter((t) => !roles.closedIds.has(t.statusId));
     return {
       id: p.id,
       key: p.key,
       name: p.name,
-      total: ts.length,
+      total: scope.length,
       done,
-      pct: ts.length ? done / ts.length : 0,
+      pct: scope.length ? done / scope.length : 0,
       stages,
       urgent: open.filter((t) => t.priority === "urgent" || t.priority === "high").length,
       agentReady: open.filter((t) => t.agentClaimable && !t.claimedByKeyId).length,
@@ -211,7 +213,7 @@ export async function needsAttention(actor: Actor, teamId?: string) {
   const s = await snapshot(actor, teamId);
   const roles = statusRoles(s);
   const pkey = new Map(s.teams.map((p) => [p.id, p.key]));
-  const doneIds = roles.doneIds;
+  const closedIds = roles.closedIds;
   const ref = (t: Snap["issues"][number]) => `${pkey.get(t.teamId)}-${t.number}`;
   const byUpdated = (a: { updatedAt: Date }, b: { updatedAt: Date }) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
   const review = s.issues
@@ -220,7 +222,7 @@ export async function needsAttention(actor: Actor, teamId?: string) {
     .slice(0, 6)
     .map((t) => ({ ref: ref(t), title: t.title, teamKey: pkey.get(t.teamId)!, byAgent: t.createdByKind === "agent" || !!t.claimedByKeyId, updatedAt: t.updatedAt }));
   const urgent = s.issues
-    .filter((t) => !doneIds.has(t.statusId) && t.priority === "urgent")
+    .filter((t) => !closedIds.has(t.statusId) && t.priority === "urgent")
     .sort(byUpdated)
     .slice(0, 6)
     .map((t) => ({ ref: ref(t), title: t.title, teamKey: pkey.get(t.teamId)!, status: s.statuses.find((c) => c.id === t.statusId)?.name ?? "" }));
@@ -254,7 +256,7 @@ export async function syncHealth(actor: Actor, teamId?: string) {
   if (!pids.length) return { untracked: [], quiet: [], drafts: [] };
   const pkey = new Map(s.teams.map((p) => [p.id, p.key]));
   const roles = statusRoles(s);
-  const doneIds = roles.doneIds;
+  const closedIds = roles.closedIds;
 
   const sessions = await db
     .select()
@@ -269,7 +271,7 @@ export async function syncHealth(actor: Actor, teamId?: string) {
   const keys = await db.select({ id: apiKeys.id, name: apiKeys.name }).from(apiKeys).where(eq(apiKeys.workspaceId, actor.workspaceId));
   const keyName = new Map(keys.map((k) => [k.id, k.name]));
   const quiet = s.issues
-    .filter((t) => t.claimedByKeyId && !doneIds.has(t.statusId))
+    .filter((t) => t.claimedByKeyId && !closedIds.has(t.statusId))
     .map((t) => {
       const last = s.events.find((e) => e.entityId === t.id && e.actorId === t.claimedByKeyId);
       const lastAt = last ? new Date(last.createdAt).getTime() : new Date(t.updatedAt).getTime();

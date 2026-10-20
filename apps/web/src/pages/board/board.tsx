@@ -352,7 +352,7 @@ function Card({ t, nodes, cycles, projects, selected, overlay }: { t: Issue; nod
         <span className="font-mono text-[11px] text-muted">{t.ref}</span>
         <div className="flex gap-1">
           {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent"><AgentIcon /></span>}
-          {t.priority !== "medium" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
+          {t.priority !== "none" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
         </div>
       </div>
       <div className="mt-1 leading-snug">{t.title}</div>

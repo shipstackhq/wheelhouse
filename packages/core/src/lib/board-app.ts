@@ -7,7 +7,7 @@ import { cycleOptions, type CycleOption } from "./cycles";
 import { projectsOfTeam, type TeamProjectOption } from "./projects";
 import { ServiceError } from "./service";
 import type { ChecklistState } from "./setup-checklist";
-
+import type { IssueRelative } from "./sub-issues";
 /**
  * What the web app's board and issue dialog read and write (WH-96), as functions of the signed-in person. The API's controllers
  * call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another workspace's team or
@@ -31,6 +31,8 @@ export type IssueView = {
   /** The project (a deliverable that can span teams) and the milestone it is in; the board's `projects` names them. */
   projectId: string | null;
   milestoneId: string | null;
+  /** The issue this is a sub-issue of (the same team's), or null. The board has every issue, so a card finds its parent from this. */
+  parentId: string | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -55,6 +57,7 @@ export const issueView = (t: IssueRow): IssueView => ({
   cycle: t.cycle,
   projectId: t.projectId,
   milestoneId: t.milestoneId,
+  parentId: t.parentId,
   position: t.position,
   version: t.version,
   createdByKind: t.createdByKind,
@@ -67,7 +70,7 @@ export type BoardIssue = IssueView & { nodeIds: string[]; commentCount: number }
 
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
-  statuses: { id: string; name: string; role: string | null; position: number }[];
+  statuses: { id: string; name: string; role: string | null; isDefault: boolean; position: number }[];
   issues: BoardIssue[];
   /** Just enough of the map to show and link nodes. The map itself is another page. */
   nodes: { id: string; name: string; kind: string; parentId: string | null; layer: string }[];
@@ -98,7 +101,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
   const teamProjects = await projectsOfTeam(db, board.team.id);
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
-    statuses: board.statuses.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, position: c.position })),
+    statuses: board.statuses.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, isDefault: c.isDefault, position: c.position })),
     issues: board.issues.map((t) => ({ ...issueView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
     nodes,
     members,
@@ -115,6 +118,9 @@ export type IssueDetail = {
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
   pullRequests: Awaited<ReturnType<typeof import("./github/service").pullRequestsForIssue>>;
+  /** The issue above this one, and the ones directly under it. */
+  parent: IssueRelative | null;
+  children: IssueRelative[];
 };
 
 /** One issue for the dialog: its fields, discussion, linked map nodes, history and the pull requests GitHub reported against it. */
@@ -127,6 +133,8 @@ export async function issueDetail(actor: Actor, ref: string): Promise<IssueDetai
     nodes: d.nodes,
     history: d.history.map((e) => ({ seq: e.seq, actorKind: e.actorKind, actorName: e.actorName, summary: e.summary, createdAt: e.createdAt })),
     pullRequests: d.pullRequests,
+    parent: d.parent,
+    children: d.children,
   };
 }
 
@@ -180,6 +188,10 @@ export function issueInput(b: Record<string, unknown>, o: { create: boolean }): 
       if (b[f] !== null && typeof b[f] !== "string") bad(f, `${f} must be an id, or null for none`);
       out[f] = (b[f] as string | null) || null;
     }
+  }
+  if (b.parent !== undefined) {
+    if (b.parent !== null && (typeof b.parent !== "string" || !b.parent.trim())) bad("parent", "parent must be an issue ref like WH-12, or null for none");
+    out.parent = b.parent === null ? null : (b.parent as string).trim();
   }
   if (b.cycle !== undefined) {
     if (b.cycle !== null && (typeof b.cycle !== "number" || !Number.isSafeInteger(b.cycle))) bad("cycle", "cycle must be a cycle number, or null for none");

@@ -516,7 +516,7 @@ describe("the instance admin's workspaces pages", () => {
 });
 
 describe("POST /api/app/teams", () => {
-  test("creates a team with the five statuses, derives a key from the name, and answers 201", async () => {
+  test("creates a team with the six statuses, derives a key from the name, and answers 201", async () => {
     const p = await signUp();
     const r = await app("POST", "/api/app/teams", p.sess, { body: { name: "Rocket Launcher", description: "Agents read this." } });
     assert.equal(r.status, 201);
@@ -572,7 +572,7 @@ describe("the dashboard", () => {
     const progress = await get("progress");
     assert.deepEqual(progress.map((p: { key: string }) => p.key), [fx.a.teamKey], "workspace A's team, never workspace B's");
     assert.deepEqual(Object.keys(progress[0]).sort(), ["agentReady", "done", "id", "key", "lastActivity", "mapNodes", "name", "pct", "stages", "staleDocs", "staleNodes", "total", "urgent"]);
-    assert.equal(progress[0].stages.length, 5);
+    assert.equal(progress[0].stages.length, 6);
     for (const w of ["throughput", "activity-split"]) {
       const days = await get(w);
       assert.equal(days.length, 14, w);

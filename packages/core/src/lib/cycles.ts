@@ -83,7 +83,7 @@ export type CycleSummary = {
   startsAt: Date;
   endsAt: Date;
   state: CycleState;
-  /** Issues in the cycle now, how many of them are done, how many are still open (a custom status counts as open). */
+  /** Issues in the cycle now, how many of them are done, how many are still open (a custom status counts as open; a canceled issue is not counted at all). */
   total: number;
   done: number;
   open: number;
@@ -94,7 +94,7 @@ async function summaries(q: Q, rows: CycleRow[], now: Date): Promise<CycleSummar
   const counts = await q
     .select({
       cycleId: issues.cycleId,
-      total: sql<number>`count(*)::int`,
+      total: sql<number>`count(*) filter (where ${statuses.role} is distinct from 'canceled')::int`,
       done: sql<number>`count(*) filter (where ${statuses.role} = 'done')::int`,
     })
     .from(issues)
@@ -115,7 +115,7 @@ async function summaries(q: Q, rows: CycleRow[], now: Date): Promise<CycleSummar
 export type RolloverResult = { cycles: number; moved: number };
 
 /**
- * Cycles whose window has ended hand their unfinished issues (any status but a done one) to the next cycle of the team, once:
+ * Cycles whose window has ended hand their unfinished issues (any status but a done or canceled one) to the next cycle of the team, once:
  * `rolled_over_at` is set whether or not anything moved, so running it again, or from two requests at once, changes nothing. The
  * next cycle is the team's next one by start; if there is none, one of the same length is made, starting where this one ended and
  * moved on by whole lengths if the team was away, so it holds `now`. Reads call this, as the claim sweep does.
@@ -134,7 +134,7 @@ export async function rolloverCycles(teamId: string, now = new Date()): Promise<
         .select({ id: issues.id, number: issues.number, version: issues.version })
         .from(issues)
         .innerJoin(statuses, eq(statuses.id, issues.statusId))
-        .where(and(eq(issues.cycleId, c.id), sql`${statuses.role} is distinct from 'done'`));
+        .where(and(eq(issues.cycleId, c.id), sql`coalesce(${statuses.role}, '') not in ('done', 'canceled')`));
       if (unfinished.length) {
         let [next] = await tx.select().from(cycles).where(and(eq(cycles.teamId, teamId), gte(cycles.startsAt, c.endsAt))).orderBy(asc(cycles.startsAt)).limit(1);
         if (!next) {

@@ -187,7 +187,7 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
       .insert(teams)
       .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "" })
       .returning();
-    await tx.insert(statuses).values(DEFAULT_STATUS_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, position: i + 1 })));
+    await tx.insert(statuses).values(DEFAULT_STATUS_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, isDefault: true, position: i + 1 })));
     // The creator becomes the team's first admin: without a row here nobody could open the team they just made.
     if (actor.kind === "human") {
       await tx.insert(schema.teamMembers).values({ teamId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
@@ -343,7 +343,8 @@ export async function getIssue(actor: Actor, ref: string) {
   const { pullRequestsForIssue } = await import("./github/service");
   const pullRequests = await pullRequestsForIssue(issue.id);
   const [withLabel] = await withCycle(db, await withLabels(db, [issue]));
-  return { issue: { ...withLabel, ref: r, status: col?.name }, team, comments: cs, nodes: linked, history, pullRequests };
+  const { parent, children } = await (await import("./sub-issues")).relatives(db, team, issue);
+  return { issue: { ...withLabel, ref: r, status: col?.name }, team, comments: cs, nodes: linked, history, pullRequests, parent, children };
 }
 
 async function positionAt(q: Q, statusId: string, index: number | undefined, excludeId?: string) {
@@ -377,6 +378,8 @@ export type IssueInput = {
   projectId?: string | null;
   /** The id of a milestone of the issue's project; null clears it. Changing the project clears it unless a new one is named. */
   milestoneId?: string | null;
+  /** The issue this one is a sub-issue of: a ref ("WH-12") or id of an issue in the same team; null makes it a top-level issue. */
+  parent?: string | null;
 };
 
 /** The issue joined or left a project: said to the issue's team, whose agents read that log. */
@@ -399,6 +402,7 @@ export async function createIssue(actor: Actor, teamRef: string, input: IssueInp
       input.projectId === undefined && input.milestoneId === undefined
         ? { projectId: null, milestoneId: null }
         : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
+    const parentId = input.parent == null ? null : await (await import("./sub-issues")).resolveParent(tx, team, null, input.parent);
     const col = await resolveStatus(tx, team.id, input.status ?? DEFAULT_STATUSES[0]);
     const [{ issueCounter }] = await tx
       .update(teams)
@@ -415,11 +419,12 @@ export async function createIssue(actor: Actor, teamRef: string, input: IssueInp
         number: issueCounter,
         title: input.title.trim(),
         body: input.body ?? "",
-        priority: input.priority ?? "medium",
+        priority: input.priority ?? "none",
         assigneeId: input.assigneeId ?? null,
         cycleId: cycle?.id ?? null,
         projectId: inProject.projectId,
         milestoneId: inProject.milestoneId,
+        parentId,
         agentClaimable: input.agentClaimable ?? actor.kind === "agent",
         position,
         createdByKind: actor.kind,
@@ -434,7 +439,7 @@ export async function createIssue(actor: Actor, teamRef: string, input: IssueInp
       entity: "issue",
       entityId: t.id,
       summary: `created ${ref} "${t.title}" in ${col.name}`,
-      data: { ref, status: col.name, title: t.title },
+      data: { ref, status: col.name, title: t.title, ...(parentId ? { parent: input.parent } : {}) },
     });
     const [withLabel] = await withCycle(tx, await withLabels(tx, [t]));
     return { ...withLabel, ref, status: col.name };
@@ -472,18 +477,19 @@ async function updateIssueTx(actor: Actor, ref: string, patch: IssueInput, expec
       else clean.labels = want;
     }
     await assertAssignee(tx, team.id, clean.assigneeId);
-    const { projectId: wantProject, milestoneId: wantMilestone, ...cleanRest } = clean;
+    const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, ...cleanRest } = clean;
+    const parentChange = wantParent === undefined ? {} : { parentId: await (await import("./sub-issues")).resolveParent(tx, team, issue.id, wantParent) };
     const projectChoice =
       wantProject === undefined && wantMilestone === undefined
         ? undefined
         : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
-    const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}) } as Record<string, unknown>);
+    const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange } as Record<string, unknown>);
     if (!Object.keys(changes).length) return { ...issue, ref: r };
     const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
     const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await (await import("./cycles")).cycleForIssue(tx, team.id, newCycle)).id };
     const [row] = await tx
       .update(issues)
-      .set({ ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), version: issue.version + 1, updatedAt: new Date() })
+      .set({ ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, version: issue.version + 1, updatedAt: new Date() })
       .where(eq(issues.id, issue.id))
       .returning();
     if (newLabels) await setIssueLabels(tx, team, row.id, newLabels);

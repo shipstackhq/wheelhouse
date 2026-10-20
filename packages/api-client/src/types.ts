@@ -217,7 +217,7 @@ export type DashboardWidgets = {
 
 // ───────── the board and its issues ─────────
 
-export type Priority = "low" | "medium" | "high" | "urgent";
+export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
 export type IssueView = {
   id: string;
@@ -236,6 +236,8 @@ export type IssueView = {
   /** The project and milestone it is in (ids; the board's `projects` names them). */
   projectId: string | null;
   milestoneId: string | null;
+  /** The issue this is a sub-issue of (in the same team), or null. */
+  parentId: string | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -380,7 +382,7 @@ export type InitiativeInput = {
 };
 export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
 
-export type BoardStatus = { id: string; name: string; role: string | null; position: number };
+export type BoardStatus = { id: string; name: string; role: string | null; isDefault: boolean; position: number };
 export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
 export type BoardMember = { id: string; name: string };
 
@@ -411,6 +413,9 @@ export type IssuePullRequest = {
   updatedAt: string;
 };
 
+/** The issue above another, or one directly under it. */
+export type IssueRelative = { ref: string; title: string; priority: Priority; status: string; done: boolean; canceled: boolean; assigneeId: string | null };
+
 export type IssueDetail = {
   issue: IssueView & { status: string | undefined };
   team: { key: string; name: string };
@@ -418,6 +423,8 @@ export type IssueDetail = {
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: IssueHistoryItem[];
   pullRequests: IssuePullRequest[];
+  parent: IssueRelative | null;
+  children: IssueRelative[];
 };
 
 /** The fields of an issue a person can change. `version` is what you last read: a change by anyone since is a 409 conflict. */
@@ -434,6 +441,8 @@ export type IssuePatch = {
   projectId?: string | null;
   /** A milestone of the issue's project; null clears it. */
   milestoneId?: string | null;
+  /** An issue of this team (a ref like "WH-12") to put this one under; null makes it a top-level issue. */
+  parent?: string | null;
   version?: number;
 };
 export type NewIssue = Omit<IssuePatch, "version"> & { title: string; status?: string };

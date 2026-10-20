@@ -96,6 +96,7 @@
         "priority": {
           "type": "string",
           "enum": [
+            "none",
             "low",
             "medium",
             "high",
@@ -107,6 +108,10 @@
           "items": {
             "type": "string"
           }
+        },
+        "parent": {
+          "description": "Make it a sub-issue of this issue (a ref like WH-12 in the same team)",
+          "type": "string"
         },
         "link_nodes": {
           "description": "Graph node names/ids this issue touches",
@@ -1067,6 +1072,7 @@
         "priority": {
           "type": "string",
           "enum": [
+            "none",
             "low",
             "medium",
             "high",
@@ -1078,6 +1084,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "parent": {
+          "description": "Move it under this issue (a ref like WH-12 in the same team), or null to make it a top-level issue",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "expected_version": {
           "description": "Issue version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",

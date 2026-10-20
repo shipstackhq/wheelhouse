@@ -149,11 +149,12 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 import type { BoardIssue, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, IssueDetail } from "@wheelhouse/api-client";
 
 export const STATUSES = [
-  { id: "c-backlog", name: "Backlog", role: "backlog", position: 1000 },
-  { id: "c-todo", name: "Todo", role: "todo", position: 2000 },
-  { id: "c-progress", name: "In Progress", role: "in_progress", position: 3000 },
-  { id: "c-review", name: "Review", role: "review", position: 4000 },
-  { id: "c-done", name: "Done", role: "done", position: 5000 },
+  { id: "c-backlog", name: "Backlog", role: "backlog", isDefault: true, position: 1000 },
+  { id: "c-todo", name: "Todo", role: "todo", isDefault: true, position: 2000 },
+  { id: "c-progress", name: "In Progress", role: "in_progress", isDefault: true, position: 3000 },
+  { id: "c-review", name: "Review", role: "review", isDefault: true, position: 4000 },
+  { id: "c-done", name: "Done", role: "done", isDefault: true, position: 5000 },
+  { id: "c-canceled", name: "Canceled", role: "canceled", isDefault: true, position: 6000 },
 ];
 
 let seq = 0;
@@ -166,13 +167,14 @@ export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
     title: `Issue ${n}`,
     body: "",
     statusId: "c-backlog",
-    priority: "medium",
+    priority: "none",
     assigneeId: null,
     agentClaimable: false,
     claimedByKeyId: null,
     labels: [],
     cycle: null,
     projectId: null,
+    parentId: null,
     milestoneId: null,
     position: n * 1000,
     version: 1,
@@ -191,7 +193,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
   issues: [
     issue({ number: 1, title: "Write the plan", statusId: "c-backlog", priority: "high", labels: ["docs"] }),
     issue({ number: 2, title: "Build the board", statusId: "c-todo", agentClaimable: true }),
-    issue({ number: 3, title: "Fix the crash", statusId: "c-todo", createdByKind: "agent", commentCount: 2 }),
+    issue({ number: 3, title: "Fix the crash", statusId: "c-todo", priority: "medium", createdByKind: "agent", commentCount: 2 }),
     issue({ number: 4, title: "Ship it", statusId: "c-done" }),
   ],
   nodes: [
@@ -226,6 +228,8 @@ export const detail = (t: BoardIssue, over: Partial<IssueDetail> = {}): IssueDet
   nodes: [],
   history: [{ seq: 1, actorKind: "human", actorName: "Ada Lovelace", summary: `created ${t.ref} "${t.title}" in Backlog`, createdAt: "2026-10-10T00:00:00.000Z" }],
   pullRequests: [],
+  parent: null,
+  children: [],
   ...over,
 });
 

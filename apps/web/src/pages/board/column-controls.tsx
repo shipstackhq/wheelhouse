@@ -18,8 +18,8 @@ export type View = {
 
 export const EMPTY_VIEW: View = { priority: [], assignee: [], label: [], cycle: [], flags: [], sort: null };
 
-const PRIORITIES = ["urgent", "high", "medium", "low"];
-const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+const PRIORITIES = ["urgent", "high", "medium", "low", "none"];
+const PRIORITY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
 
 const FLAGS: { value: Flag; label: string }[] = [
   { value: "aiReady", label: "AI-ready" },
@@ -192,7 +192,7 @@ export function ColumnControls(props: {
             <div className={HEAD}>Priority</div>
             {PRIORITIES.map((p) => (
               <Check key={p} checked={view.priority.includes(p)} onSelect={() => set({ priority: toggle(view.priority, p) })}>
-                {cap(p)}
+                {p === "none" ? "No priority" : cap(p)}
               </Check>
             ))}
             <div className={HEAD}>Assignee</div>

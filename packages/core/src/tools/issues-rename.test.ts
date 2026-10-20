@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { migrationsFolder } from "../db";
 import { migrationsThrough } from "./db-copy";
 
 // Migration 0029 renames tickets to issues in place. This runs it over a database that has tickets, a label on one, and the
@@ -24,7 +23,7 @@ test("tickets become issues with their data, labels, counter and logged event ty
     await q(`insert into events (workspace_id, team_id, actor_kind, actor_name, type, entity, entity_id, summary) select workspace_id, team_id, 'human', 'x', 'node.updated', 'node', id, 'a node' from tickets`);
     await q(`insert into workspace_events (workspace_id, actor_kind, actor_name, type, entity, entity_id, summary) select workspace_id, 'human', 'x', 'project.ticket_joined', 'project', id, 'AA-7 joined' from tickets`);
 
-    await migrate(drizzle(client) as never, { migrationsFolder: migrationsFolder() });
+    await migrate(drizzle(client) as never, { migrationsFolder: migrationsThrough("0029") });
 
     assert.deepEqual(await q(`select title, number from issues`), [{ title: "seven", number: 7 }]);
     assert.deepEqual(await q(`select issue_counter from teams`), [{ issue_counter: 7 }], "the counter keeps its value");
