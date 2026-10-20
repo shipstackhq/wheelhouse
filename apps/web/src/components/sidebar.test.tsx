@@ -22,7 +22,7 @@ describe("what the sidebar shows", () => {
     renderIn(sidebar(), "/t/BB/docs");
     expect(within(nav()).getByText("Teams")).toBeTruthy();
     const teams = within(nav()).getAllByRole("button").filter((b) => /^(Alpha|Beta|Gamma)/.test(b.textContent ?? ""));
-    expect(teams.map((b) => b.textContent)).toEqual(["AlphaAA", "BetaBB", "GammaCC"]);
+    expect(teams.map((b) => b.textContent)).toEqual(["Alpha", "Beta", "Gamma"]);
     expect(teams.map((b) => b.getAttribute("aria-expanded"))).toEqual(["false", "true", "false"]); // the team you are in is open
     expect(within(nav()).getAllByRole("link", { name: "Docs" })).toHaveLength(1); // only the open team's sections
     expect(within(nav()).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/t/BB/docs");
@@ -59,6 +59,19 @@ describe("what the sidebar shows", () => {
     expect(within(nav()).queryByRole("link", { name: "Docs" })).toBeNull();
   });
 
+  test("each team has a three-dot options menu at the end of its row; opening it neither toggles nor navigates", async () => {
+    const user = userEvent.setup();
+    const { router } = renderIn(sidebar(), "/t/AA/docs");
+    const dots = within(nav()).getByRole("button", { name: "Options for Beta" });
+    await user.click(dots);
+    expect(await screen.findByText(/Options for Beta will go here/)).toBeTruthy();
+    expect(router.state.location.pathname).toBe("/t/AA/docs");
+    expect(within(nav()).getByRole("button", { name: /^Beta/ }).getAttribute("aria-expanded")).toBe("false");
+    const row = within(nav()).getByRole("button", { name: /^Beta/ }).parentElement!;
+    expect(row.lastElementChild!.contains(dots) || row.contains(dots)).toBe(true);
+    expect(row.children[0].textContent).toBe("Beta"); // the name, no key label
+  });
+
   test("going to a team by its sections (or the search) opens it", async () => {
     const user = userEvent.setup();
     const { router } = renderIn(sidebar(), "/t/AA");
@@ -86,7 +99,7 @@ describe("what the sidebar shows", () => {
 
   test("with no team open no team is expanded, and every team is still listed", () => {
     renderIn(sidebar(), "/workspace");
-    for (const name of ["Alpha", "Beta", "Gamma"]) expect(within(nav()).getByRole("button", { name: new RegExp(name) }).getAttribute("aria-expanded")).toBe("false");
+    for (const name of ["Alpha", "Beta", "Gamma"]) expect(within(nav()).getByRole("button", { name: new RegExp(`^${name}`) }).getAttribute("aria-expanded")).toBe("false");
     expect(within(nav()).queryByRole("link", { name: "Board" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Members" }).classList.contains("bg-panel-2")).toBe(true);
   });

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { Popover } from "radix-ui";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { NavLink } from "./nav-link";
-import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, NAV_ICONS, SearchIcon, TeamGlyphIcon, type IconPair } from "./icons";
+import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, MoreIcon, NAV_ICONS, SearchIcon, TeamGlyphIcon, type IconPair } from "./icons";
 import { Tip } from "./tip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -289,24 +290,48 @@ export function Sidebar({
               const here = t.key === current?.key;
               const isOpen = openTeams.includes(t.key);
               const row = (
-                <button
-                  type="button"
-                  onClick={() => toggleTeam(t.key)}
-                  aria-expanded={isOpen}
-                  aria-controls={`team-${t.key}`}
-                  aria-label={collapsed ? t.name : undefined}
+                <div
                   className={clsx(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
-                    collapsed && "md:justify-center md:px-0 md:py-2",
-                    here ? "font-medium text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
+                    "group flex items-center rounded-md",
+                    collapsed && "md:justify-center",
+                    here ? "text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
                   )}
                 >
-                  {/* A placeholder for the team's own icon, which a team will be able to choose later. */}
-                  <TeamGlyphIcon aria-hidden className={clsx("shrink-0 text-lg", here ? "text-accent" : "text-muted", collapsed && "md:text-xl")} />
-                  <span className={clsx("min-w-0 flex-1 truncate", collapsed && "md:hidden")}>{t.name}</span>
-                  <span className={clsx("font-mono text-[11px] text-muted", collapsed && "md:hidden")}>{t.key}</span>
-                  <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-muted transition-transform duration-150", isOpen && "rotate-90", collapsed && "md:hidden")} />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleTeam(t.key)}
+                    aria-expanded={isOpen}
+                    aria-controls={`team-${t.key}`}
+                    aria-label={collapsed ? t.name : undefined}
+                    className={clsx(
+                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
+                      collapsed && "md:flex-none md:justify-center md:px-0 md:py-2",
+                      here && "font-medium",
+                    )}
+                  >
+                    {/* A placeholder for the team's own icon, which a team will be able to choose later. */}
+                    <TeamGlyphIcon aria-hidden className={clsx("shrink-0 text-base", here ? "text-accent" : "text-muted", collapsed && "md:text-lg")} />
+                    <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{t.name}</span>
+                    <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-sm text-muted transition-transform duration-150", isOpen && "rotate-90", collapsed && "md:hidden")} />
+                    <span className="flex-1" aria-hidden />
+                  </button>
+                  <Popover.Root>
+                    <Popover.Trigger
+                      aria-label={`Options for ${t.name}`}
+                      className={clsx(
+                        "mr-1 shrink-0 rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:opacity-100 md:opacity-0 md:group-hover:opacity-100",
+                        collapsed && "md:hidden",
+                      )}
+                    >
+                      <MoreIcon aria-hidden className="text-base" />
+                    </Popover.Trigger>
+                    <Popover.Portal>
+                      <Popover.Content side="right" align="start" sideOffset={6} collisionPadding={8} className="z-50 w-52 rounded-lg border border-line bg-panel p-3 text-sm text-muted shadow-xl">
+                        Options for {t.name} will go here.
+                      </Popover.Content>
+                    </Popover.Portal>
+                  </Popover.Root>
+                </div>
               );
               return (
                 <div key={t.key}>
