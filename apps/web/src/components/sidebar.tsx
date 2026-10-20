@@ -427,19 +427,21 @@ function useFolded(title: string) {
  */
 function SectionLabel({ title, closed, onToggle, controls, collapsed, gap, actions }: { title: string; closed: boolean; onToggle: () => void; controls: string; collapsed: boolean; gap: string; actions?: React.ReactNode }) {
   return (
-    <div className={clsx("group flex items-center rounded-md hover:bg-panel-2", gap, collapsed && "md:hidden")}>
+    <div className={clsx("group relative", gap, collapsed && "md:hidden")}>
+      {/* The whole row is the toggle (its hover area too); the actions sit above it, on their own layer, so they take their own clicks. */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={!closed}
         aria-controls={controls}
-        className="flex min-w-0 items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50"
+        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50"
       >
         <span className="truncate">{title}</span>
         <ChevronDownIcon aria-hidden className={clsx("shrink-0 text-sm transition-transform duration-150", closed && "-rotate-90")} />
       </button>
-      <span className="flex-1" aria-hidden />
-      {actions && <span className="mr-1 flex items-center gap-0.5 md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">{actions}</span>}
+      {actions && (
+        <span className="absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">{actions}</span>
+      )}
     </div>
   );
 }
