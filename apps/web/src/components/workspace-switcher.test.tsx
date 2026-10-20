@@ -49,8 +49,11 @@ describe("the workspace switcher", () => {
     expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing from the old workspace lingers
   });
 
-  test("in the icon-only rail it is hidden (a phone drawer is never the rail, so it stays there)", () => {
+  test("in the icon-only rail the icon stays and the down arrow goes (a phone drawer is never the rail, so it keeps it)", () => {
     renderIn(<WorkspaceSwitcher name="Analytical Engines" collapsed />);
-    expect(screen.getByRole("button", { name: "Workspace menu: Analytical Engines", hidden: true }).className).toContain("md:hidden");
+    const button = screen.getByRole("button", { name: "Workspace menu: Analytical Engines" });
+    expect(button.className).not.toContain("md:hidden");
+    expect(button.textContent).toBe("A");
+    expect(button.querySelector("svg")!.getAttribute("class")).toContain("md:hidden");
   });
 });

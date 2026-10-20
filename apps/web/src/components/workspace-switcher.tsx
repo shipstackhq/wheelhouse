@@ -8,7 +8,7 @@ import { ChevronDownIcon } from "./icons";
 /**
  * The workspace, as a round icon with its initial and a down arrow, at the top of the sidebar. It opens a menu of the person's
  * workspaces; choosing another moves this session there and drops everything read from the old one (every team, project and key
- * is the other workspace's). With a single workspace the menu just names it. `collapsed` is the icon-only rail, where it is hidden.
+ * is the other workspace's). With a single workspace the menu just names it. `collapsed` is the icon-only rail, where the arrow is hidden and only the icon stays.
  */
 export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; collapsed?: boolean }) {
   const { api, queryClient } = useServices();
@@ -31,13 +31,13 @@ export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; c
         title={name}
         className={clsx(
           "group flex shrink-0 items-center gap-0.5 rounded-full py-0.5 pl-0.5 pr-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2 data-[state=open]:text-fg",
-          collapsed && "md:hidden", // not in the icon-only rail (a phone drawer is never the rail)
+          collapsed && "md:gap-0 md:pr-0.5", // in the icon-only rail the arrow goes and only the icon stays
         )}
       >
         <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
           {name.trim().charAt(0) || "W"}
         </span>
-        <ChevronDownIcon aria-hidden className="text-sm transition-transform group-data-[state=open]:rotate-180" />
+        <ChevronDownIcon aria-hidden className={clsx("text-sm transition-transform group-data-[state=open]:rotate-180", collapsed && "md:hidden")} />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content side={collapsed ? "right" : "bottom"} align="start" sideOffset={6} collisionPadding={8} className="z-50 w-60 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl">
