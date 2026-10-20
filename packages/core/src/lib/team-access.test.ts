@@ -273,6 +273,27 @@ describe("a key scoped to teams (WH-120)", () => {
   });
 });
 
+describe("the order a person keeps their teams in", () => {
+  test("is their own: it follows them, changes nothing for anyone else, and ignores teams that are not theirs", async () => {
+    const extra = await team(ada, `OR${L}`);
+    await addTo(ada, extra.key, bob, "editor");
+    const keys = async (who: Actor) => (await pmem.listTeamsWithRole(who)).map((t) => t.key);
+    const before = await keys(ada);
+    const bobBefore = await keys(bob);
+    assert.equal(before.at(-1), extra.key, "oldest first until they order them: the newest is last");
+    const set = await pmem.setTeamOrder(ada, [extra.key, p1.key, p2.key, q1.key, "NOPE"]);
+    assert.equal(set.placed, 2, "only their own teams are placed: a team they are not in (p2), another workspace's (q1) and an unknown key are ignored");
+    assert.deepEqual((await keys(ada)).slice(0, 2), [extra.key, p1.key]);
+    assert.deepEqual(await keys(bob), bobBefore, "bob's order is untouched");
+    await pmem.setTeamOrder(ada, [p1.key]);
+    const after = await keys(ada);
+    assert.equal(after[0], p1.key, "placed ones come first");
+    assert.ok(after.indexOf(extra.key) > 0, "a team left out comes after");
+    await assert.rejects(() => pmem.setTeamOrder(ada, "AA"), code("invalid"));
+    await assert.rejects(() => pmem.setTeamOrder(keyA, [p1.key]), code("forbidden"), "an agent key has no sidebar");
+  });
+});
+
 describe("who is in a team", () => {
   test("members are listed to any member; adding needs a workspace member; duplicates and strangers are refused", async () => {
     const seen = await pmem.listTeamMembers(cy, p1.key);

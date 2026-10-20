@@ -239,6 +239,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
 
     teams: {
       list: async () => (await request<{ teams: Team[] }>("GET", "/api/app/teams")).teams,
+      /** Keep the teams in this order (keys, first to last) for this person; `list` then returns them so. */
+      reorder: (keys: string[]) => request<{ ok: true; placed: number }>("PUT", "/api/app/teams/order", { keys }),
       create: async (input: CreateTeamInput) => (await request<{ team: Team }>("POST", "/api/app/teams", input)).team,
       /** Team settings: rename it or change its description (team admins). */
       update: async (teamKey: string, input: { name?: string; description?: string }) =>

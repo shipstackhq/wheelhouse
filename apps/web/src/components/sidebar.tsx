@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, Reorder, useDragControls } from "motion/react";
 import { Popover } from "radix-ui";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { NAV_ICON, NAV_ICON_RAIL, NAV_ITEM, NAV_ITEM_RAIL, NavLink } from "./nav-link";
 import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, MoreFillIcon, NAV_ICONS, SearchIcon, TeamGlyphIcon, type IconPair } from "./icons";
+import { useServices } from "../lib/services";
 import { Tip } from "./tip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -108,6 +109,34 @@ export function Sidebar({
     if (currentKey) setOpenTeams((o) => (o.includes(currentKey) ? o : [...o, currentKey]));
   }, [currentKey]);
   const [teamsClosed, toggleTeamsClosed] = useFolded("Teams");
+  // The person's own order of their teams: the server's, until they drag one. Kept in step with the server after each drop.
+  const { api, queryClient } = useServices();
+  const [orderKeys, setOrderKeys] = useState<string[] | null>(null);
+  const latest = useRef<string[]>([]);
+  const signature = teams.map((t) => t.key).join(",");
+  useEffect(() => setOrderKeys(null), [signature]);
+  const shown = orderKeys ? orderKeys.map((k) => teams.find((t) => t.key === k)).filter((t): t is TeamItem => !!t) : teams;
+  const reorder = (keys: string[]) => {
+    latest.current = keys;
+    setOrderKeys(keys);
+  };
+  const saveOrder = () => {
+    const keys = latest.current;
+    if (!keys.length || keys.join(",") === signature) return;
+    api.teams
+      .reorder(keys)
+      .then(() => queryClient.invalidateQueries({ queryKey: ["teams"] }))
+      .catch(() => setOrderKeys(null)); // not saved: back to the order the server has
+  };
+  const move = (key: string, delta: -1 | 1) => {
+    const keys = shown.map((t) => t.key);
+    const i = keys.indexOf(key);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= keys.length) return;
+    [keys[i], keys[j]] = [keys[j], keys[i]];
+    reorder(keys);
+    saveOrder();
+  };
   const [switcher, setSwitcher] = useState(false);
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -291,88 +320,21 @@ export function Sidebar({
           </div>
           <div id="group-teams" className={clsx("mt-0.5 space-y-0.5", teamsClosed && "hidden", teamsClosed && collapsed && "md:block")}>
             {teams.length === 0 && <p className={clsx("px-2 py-1.5 text-xs text-muted", collapsed && "md:hidden")}>No teams yet. Teams you are a member of appear here.</p>}
-            {teams.map((t) => {
-              const here = t.key === current?.key;
-              const isOpen = openTeams.includes(t.key);
-              const row = (
-                <div
-                  className={clsx(
-                    "group flex items-center rounded-md",
-                    collapsed && "md:justify-center",
-                    here ? "text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleTeam(t.key)}
-                    aria-expanded={isOpen}
-                    aria-controls={`team-${t.key}`}
-                    aria-label={collapsed ? t.name : undefined}
-                    className={clsx(
-                      NAV_ITEM,
-                      "min-w-0 flex-1 text-left",
-                      collapsed && ["md:flex-none", NAV_ITEM_RAIL],
-                      here && "font-medium",
-                    )}
-                  >
-                    {/* A placeholder for the team's own icon, which a team will be able to choose later. */}
-                    <TeamGlyphIcon aria-hidden className={clsx(NAV_ICON, collapsed && NAV_ICON_RAIL, teamColor(t.key))} />
-                    <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{t.name}</span>
-                    <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-sm text-muted transition-transform duration-150", isOpen && "rotate-90", collapsed && "md:hidden")} />
-                    <span className="flex-1" aria-hidden />
-                  </button>
-                  <Popover.Root>
-                    <Popover.Trigger
-                      aria-label={`Options for ${t.name}`}
-                      className={clsx(
-                        "mr-1 shrink-0 rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:opacity-100 md:opacity-0 md:group-hover:opacity-100",
-                        collapsed && "md:hidden",
-                      )}
-                    >
-                      <MoreFillIcon aria-hidden className="text-base" />
-                    </Popover.Trigger>
-                    <Popover.Portal>
-                      <Popover.Content side="right" align="start" sideOffset={6} collisionPadding={8} className="z-50 w-52 rounded-lg border border-line bg-panel p-3 text-sm text-muted shadow-xl">
-                        Options for {t.name} will go here.
-                      </Popover.Content>
-                    </Popover.Portal>
-                  </Popover.Root>
-                </div>
-              );
-              return (
-                <div key={t.key}>
-                  {collapsed ? (
-                    <Tip content={t.name} side="right" align="center">
-                      {row}
-                    </Tip>
-                  ) : (
-                    row
-                  )}
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        key="sections"
-                        id={`team-${t.key}`}
-                        {...fade}
-                        className={clsx("ml-3 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}
-                      >
-                        <div className="mt-0.5 space-y-2">
-                          {SECTIONS.map((g) => (
-                            <div key={g.group} className={clsx("space-y-0.5", collapsed && "md:border-t md:border-line md:pt-1")}>
-                              {g.items.map((i) => (
-                                <NavLink key={i.path} href={`/t/${t.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
-                                  {i.label}
-                                </NavLink>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
+            <Reorder.Group as="div" axis="y" values={shown.map((t) => t.key)} onReorder={reorder} className="space-y-0.5">
+              {shown.map((t) => (
+                <TeamRow
+                  key={t.key}
+                  t={t}
+                  here={t.key === current?.key}
+                  isOpen={openTeams.includes(t.key)}
+                  collapsed={collapsed}
+                  dragEnabled={!collapsed}
+                  onToggle={() => toggleTeam(t.key)}
+                  onMove={(d) => move(t.key, d)}
+                  onDragEnd={saveOrder}
+                />
+              ))}
+            </Reorder.Group>
           </div>
           {isAdmin && (
             <Group title="Admin" collapsed={collapsed} gap="mt-5">
@@ -419,6 +381,97 @@ function useFolded(title: string) {
       return !c;
     });
   return [closed, toggle] as const;
+}
+
+/** One team in the sidebar: its row (a toggle, with a three-dot menu) and, when open, its sections. A row is dragged by its toggle (a mouse or pen; Alt+Up and Alt+Down do the same from the keyboard). */
+function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, onDragEnd }: { t: TeamItem; here: boolean; isOpen: boolean; collapsed: boolean; dragEnabled: boolean; onToggle: () => void; onMove: (delta: -1 | 1) => void; onDragEnd: () => void }) {
+  const controls = useDragControls();
+  const row = (
+    <div
+      className={clsx(
+        "group flex items-center rounded-md",
+        collapsed && "md:justify-center",
+        here ? "text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+          onPointerDown={dragEnabled ? (e) => e.pointerType !== "touch" && controls.start(e) : undefined}
+          onKeyDown={(e) => {
+            if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+              e.preventDefault();
+              onMove(e.key === "ArrowUp" ? -1 : 1);
+            }
+          }}
+          title={collapsed ? undefined : "Drag to reorder, or Alt+Up and Alt+Down"}
+        aria-expanded={isOpen}
+        aria-controls={`team-${t.key}`}
+        aria-label={collapsed ? t.name : undefined}
+        className={clsx(
+          NAV_ITEM,
+          "min-w-0 flex-1 text-left",
+          collapsed && ["md:flex-none", NAV_ITEM_RAIL],
+          here && "font-medium",
+        )}
+      >
+        {/* A placeholder for the team's own icon, which a team will be able to choose later. */}
+        <TeamGlyphIcon aria-hidden className={clsx(NAV_ICON, collapsed && NAV_ICON_RAIL, teamColor(t.key))} />
+        <span className={clsx("min-w-0 truncate", collapsed && "md:hidden")}>{t.name}</span>
+        <ChevronRightIcon aria-hidden className={clsx("shrink-0 text-sm text-muted transition-transform duration-150", isOpen && "rotate-90", collapsed && "md:hidden")} />
+        <span className="flex-1" aria-hidden />
+      </button>
+      <Popover.Root>
+        <Popover.Trigger
+          aria-label={`Options for ${t.name}`}
+          className={clsx(
+            "mr-1 shrink-0 rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:opacity-100 md:opacity-0 md:group-hover:opacity-100",
+            collapsed && "md:hidden",
+          )}
+        >
+          <MoreFillIcon aria-hidden className="text-base" />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content side="right" align="start" sideOffset={6} collisionPadding={8} className="z-50 w-52 rounded-lg border border-line bg-panel p-3 text-sm text-muted shadow-xl">
+            Options for {t.name} will go here.
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
+  );
+  return (
+      <Reorder.Item as="div" value={t.key} dragListener={false} dragControls={controls} onDragEnd={onDragEnd} whileDrag={{ zIndex: 20 }} className="relative">
+      {collapsed ? (
+        <Tip content={t.name} side="right" align="center">
+          {row}
+        </Tip>
+      ) : (
+        row
+      )}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="sections"
+            id={`team-${t.key}`}
+            {...fade}
+            className={clsx("ml-3 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}
+          >
+            <div className="mt-0.5 space-y-2">
+              {SECTIONS.map((g) => (
+                <div key={g.group} className={clsx("space-y-0.5", collapsed && "md:border-t md:border-line md:pt-1")}>
+                  {g.items.map((i) => (
+                    <NavLink key={i.path} href={`/t/${t.key}${i.path}`} prefix={i.path !== ""} icon={i.icon} collapsed={collapsed}>
+                      {i.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </Reorder.Item>
+  );
 }
 
 /**

@@ -395,3 +395,7 @@ for the one team that owns the repository, and the cycle sweep for the one team 
 
 A key that creates a team (`create_project`) is scoped to it, or it could not open what it made. Migration 0026 gave every existing key every team of its workspace, so nobody lost access; an owner narrows them afterwards.
 Design for routing work by team (the dispatcher itself is WH-32): [agent-keys-and-routing.md](agent-keys-and-routing.md).
+
+## Team order (WH-120 follow-up)
+
+`PUT /api/app/teams/order` with `{ keys }` remembers the order this person keeps their teams in (first to last), on their own `team_members` rows (`position`, migration 0027), so it follows them across devices and changes nothing for anyone else. Keys that are not teams they can open are ignored (`placed` says how many were). `GET /api/app/teams` then returns their teams in that order: the ones they placed first, then any they have not, oldest first. Agent keys have no order. The sidebar drags a team by its row (and moves it with Alt+Up and Alt+Down).

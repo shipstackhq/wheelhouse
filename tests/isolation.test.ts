@@ -875,6 +875,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/me": "the signed-in person from their session (SessionGuard); nothing taken from the request",
   "GET /api/app/teams": "listTeams(actor) for the signed-in person's workspace (SessionGuard); a workspaceId in the query or a header is ignored (tested)",
   "POST /api/app/teams": "svc.createTeam(actor): the team is made in the actor's own workspace; the workspace is never taken from the request (tested)",
+  "PUT /api/app/teams/order": "setTeamOrder(actor): writes only the caller's own team_members rows (user, workspace and team all matched); keys that are not teams the caller can open are ignored, so another workspace's team cannot be touched or learned about (tested in team-access.test.ts)",
   "PATCH /api/app/teams/:key": "svc.updateTeam(actor): requireTeam(actor, key, admin), so another workspace's team and one the person is not in are 404, a non-admin member is 403, and agents are refused; only name and description change, never the key (tested in team-access.test.ts)",
   "DELETE /api/app/teams/:key/sessions/:sessionId": "svc.removeSession(actor): the team is resolved through requireTeam(actor) and the session must belong to it, so another workspace's is a 404 (tested)",
   "POST /api/app/me/password": "changes the signed-in person's own password, after checking the current one; nothing is taken from the request but the two passwords",

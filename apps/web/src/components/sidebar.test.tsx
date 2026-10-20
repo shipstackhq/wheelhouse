@@ -4,7 +4,7 @@ import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./sidebar";
 import { NAV_ICONS } from "./icons";
-import { renderIn } from "../test/harness";
+import { renderIn, serverWithData } from "../test/harness";
 
 const TEAMS = [
   { key: "AA", name: "Alpha" },
@@ -70,6 +70,22 @@ describe("what the sidebar shows", () => {
     const row = within(nav()).getByRole("button", { name: /^Beta/ }).parentElement!;
     expect(row.lastElementChild!.contains(dots) || row.contains(dots)).toBe(true);
     expect(row.children[0].textContent).toBe("Beta"); // the name, no key label
+  });
+
+  test("teams can be moved from the keyboard with Alt+Up and Alt+Down, and the new order is saved for the person", async () => {
+    const server = serverWithData();
+    server.on("PUT /api/app/teams/order", { ok: true, placed: 3 });
+    const user = userEvent.setup();
+    renderIn(sidebar(), "/t/AA", server);
+    const names = () => within(nav()).getAllByRole("button").map((b) => b.textContent).filter((t) => /^(Alpha|Beta|Gamma)$/.test(t ?? ""));
+    expect(names()).toEqual(["Alpha", "Beta", "Gamma"]);
+    within(nav()).getByRole("button", { name: /^Beta/ }).focus();
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(names()).toEqual(["Alpha", "Gamma", "Beta"]);
+    await vi.waitFor(() => expect(server.sent("PUT /api/app/teams/order")).toHaveLength(1));
+    expect(server.sent("PUT /api/app/teams/order")[0].body).toEqual({ keys: ["AA", "CC", "BB"] });
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}"); // already last: nothing to do
+    expect(server.sent("PUT /api/app/teams/order")).toHaveLength(1);
   });
 
   test("going to a team by its sections (or the search) opens it", async () => {
@@ -289,7 +305,7 @@ describe("collapsing to the icon-only rail", () => {
     const board = within(nav()).getByRole("link", { name: "Board" });
     expect(board.querySelector("span")!.className).toContain("md:sr-only");
     expect(board.getAttribute("href")).toBe("/t/AA");
-    expect(screen.getByText("Workspace").closest("button")!.className).toContain("md:hidden"); // the title makes way for a thin rule
+    expect(screen.getByText("Workspace").closest("div")!.className).toContain("md:hidden"); // the title makes way for a thin rule
     await user.click(expand);
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeTruthy();
     expect(aside().className).not.toContain("md:w-14");
@@ -342,7 +358,7 @@ describe("collapsing to the icon-only rail", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     const { router } = renderIn(sidebar(), "/t/AA/docs");
     const user = userEvent.setup();
-    await user.click(within(nav()).getByRole("button", { name: "Search teams (⌘K)" }));
+    await user.click(within(nav()).getAllByRole("button", { name: "Search teams (⌘K)" }).at(-1)!); // the rail's own (the title row's is hidden there)
     await user.type(await screen.findByPlaceholderText("Search teams…"), "gam");
     await user.click(screen.getByRole("option", { name: /Gamma/ }));
     expect(router.state.location.pathname).toBe("/t/CC/docs"); // keeps the section
@@ -352,7 +368,7 @@ describe("collapsing to the icon-only rail", () => {
   test("with no team open the collapsed rail still lists the teams and offers the search", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     renderIn(sidebar(), "/workspace");
-    expect(within(nav()).getByRole("button", { name: "Search teams (⌘K)" })).toBeTruthy();
+    expect(within(nav()).getAllByRole("button", { name: "Search teams (⌘K)" }).length).toBeGreaterThan(0);
     expect(within(nav()).getByRole("button", { name: "Beta" })).toBeTruthy(); // the rail names each team by its key and tooltip
   });
 

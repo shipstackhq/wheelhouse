@@ -13,11 +13,43 @@ import { ServiceError } from "./service-error";
 
 const { teamMembers: pm, memberships, users } = schema;
 
-/** The caller's teams, each with the caller's own role in it (an agent key or the system is an editor everywhere). */
+/**
+ * The caller's teams, each with the caller's own role in it, in the order the person keeps them (see `setTeamOrder`): the ones they
+ * have placed first, in their order, then any they have not, oldest first. An agent key or the system gets creation order.
+ */
 export async function listTeamsWithRole(actor: Actor) {
   const db = await getDb();
   const [teams, roles] = await Promise.all([listTeams(actor), teamRoleMap(db, actor)]);
-  return teams.map((p) => ({ ...p, role: (roles?.get(p.id) ?? "editor") as TeamRole }));
+  const placed = new Map<string, number>();
+  if (actor.kind === "human" && !actor.system) {
+    const rows = await db.select({ teamId: pm.teamId, position: pm.position }).from(pm).where(and(eq(pm.userId, actor.id), eq(pm.workspaceId, actor.workspaceId)));
+    for (const r of rows) if (r.position !== null) placed.set(r.teamId, r.position);
+  }
+  const rank = (id: string) => placed.get(id) ?? Number.POSITIVE_INFINITY;
+  return teams
+    .map((p) => ({ ...p, role: (roles?.get(p.id) ?? "editor") as TeamRole }))
+    .sort((a, b) => (rank(a.id) === rank(b.id) ? a.createdAt.getTime() - b.createdAt.getTime() : rank(a.id) < rank(b.id) ? -1 : 1));
+}
+
+/**
+ * Remember the order the person wants their teams in: `keys` first to last. It is theirs alone (their own `team_members` rows), so it
+ * changes nothing for anyone else. A key that is not one of their teams is ignored, and a team left out keeps its place after the rest.
+ */
+export async function setTeamOrder(actor: Actor, keys: unknown) {
+  people(actor);
+  if (!Array.isArray(keys) || keys.length > 500 || keys.some((k) => typeof k !== "string")) {
+    throw new ServiceError("invalid", "keys must be a list of team keys", { fields: { keys: "a list of team keys" } });
+  }
+  const db = await getDb();
+  const mine = await listTeams(actor);
+  const byKey = new Map(mine.map((t) => [t.key.toUpperCase(), t.id]));
+  const ids = [...new Set((keys as string[]).map((k) => byKey.get(k.toUpperCase())).filter((x): x is string => !!x))];
+  await db.transaction(async (tx) => {
+    for (const [i, teamId] of ids.entries()) {
+      await tx.update(pm).set({ position: (i + 1) * 1000 }).where(and(eq(pm.teamId, teamId), eq(pm.userId, actor.id), eq(pm.workspaceId, actor.workspaceId)));
+    }
+  });
+  return { ok: true as const, placed: ids.length };
 }
 
 export type TeamMemberView = { userId: string; name: string; email: string; role: TeamRole; workspaceRole: WorkspaceRole; addedAt: Date };

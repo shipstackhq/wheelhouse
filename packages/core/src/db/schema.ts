@@ -119,6 +119,8 @@ export const teamMembers = table(
     userId: uuid("user_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
     role: text("role", { enum: TEAM_ROLES }).notNull().default("editor"),
+    // Where this person keeps the team in their own sidebar (they drag it); null until they have ordered their teams.
+    position: doublePrecision("position"),
     addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },

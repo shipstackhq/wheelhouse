@@ -1,5 +1,5 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { listTeamsWithRole } from "@wheelhouse/core/lib/team-members";
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { listTeamsWithRole, setTeamOrder } from "@wheelhouse/core/lib/team-members";
 import { createTeam, removeSession, updateTeam } from "@wheelhouse/core/lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
@@ -10,11 +10,18 @@ const view = (p: { id: string; key: string; name: string; description: string; c
 @Controller("api/app/teams")
 @AppEndpoints()
 export class TeamsController {
-  /** The workspace's teams, oldest first. The workspace is the signed-in person's own; it is never taken from the request. */
+  /** The person's teams, in the order they keep them (oldest first until they reorder). The workspace is the signed-in person's own; it is never taken from the request. */
   @Get()
   @UseGuards(SessionGuard)
   async list(@Req() req: SessionRequest) {
     return { teams: (await listTeamsWithRole(req.human.actor)).map(view) };
+  }
+
+  /** `{ keys }`: the order this person keeps their teams in, first to last. Theirs alone; the list above comes back in it. */
+  @Put("order")
+  @UseGuards(SessionGuard)
+  async order(@Req() req: SessionRequest & RawTextRequest) {
+    return setTeamOrder(req.human.actor, jsonBody(req).keys);
   }
 
   /** `{ name, key?, description? }`. The key defaults from the name. 201 with the team; a taken key is a 409. */

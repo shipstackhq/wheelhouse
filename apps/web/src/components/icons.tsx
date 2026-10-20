@@ -98,7 +98,6 @@ import {
   RiLoopRightLine,
   RiRocket2Line,
   RiFlag2Line,
-  RiBox3Line,
   RiBox3Fill,
   RiMoreFill,
   RiFlag2Fill,
