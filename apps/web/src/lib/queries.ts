@@ -46,6 +46,10 @@ export const onboardingQuery = (api: ApiClient, teamKey: string) => ({ queryKey:
 export const useDocs = (teamKey: string) => useQuery(docsQuery(useServices().api, teamKey));
 export const useRepos = (teamKey: string) => useQuery(reposQuery(useServices().api, teamKey));
 
+/** A team's statuses as its settings list them: role, default, colour and issue count. */
+export const statusesQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["statuses", teamKey] as const, queryFn: () => api.statuses.list(teamKey) });
+export const useStatuses = (teamKey: string) => useQuery(statusesQuery(useServices().api, teamKey));
+
 /** A team's cycles (WH-117): the list by when they are, and one with its issues and what landed. */
 export const cyclesQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["cycles", teamKey] as const, queryFn: () => api.cycles.list(teamKey) });
 export const cycleQuery = (api: ApiClient, teamKey: string, number: number) => ({ queryKey: ["cycle", teamKey, number] as const, queryFn: () => api.cycles.get(teamKey, number) });

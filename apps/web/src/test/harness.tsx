@@ -3,7 +3,7 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { createApiClient, type Me, type Team } from "@wheelhouse/api-client";
 import { createServices, ServicesProvider } from "../lib/services";
-import { activityEvent, adminWorkspace, adminWorkspaceDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, teamMembers, repo, serveWidgets, workspace } from "./data";
+import { activityEvent, adminWorkspace, adminWorkspaceDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, teamMembers, statusSettings, repo, serveWidgets, workspace } from "./data";
 import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
@@ -91,6 +91,7 @@ export function serverWithData() {
   serveWidgets(server);
   for (const key of ["AA", "BB"]) {
     server.on(`GET /api/app/teams/${key}/board`, board(key));
+    server.on(`GET /api/app/teams/${key}/statuses`, { statuses: statusSettings() });
     server.on(`GET /api/app/teams/${key}/queue`, { bots: [] });
     server.on(`GET /api/app/teams/${key}/graph`, graph(key));
     server.on(`GET /api/app/teams/${key}/activity`, { events: [activityEvent()] });

@@ -2,6 +2,7 @@ import { useActionState, useState } from "react";
 import { useParams } from "react-router";
 import { Loaded } from "../components/query-state";
 import { TeamIconPicker } from "../components/team-icon-picker";
+import { StatusesSection } from "./team-statuses";
 import { SubmitButton } from "../components/submit-button";
 import { failure, field, type FormState } from "../lib/form-state";
 import { useTeamMembers } from "../lib/queries";
@@ -41,6 +42,14 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
           <h2 className="mb-1 font-medium">Icon</h2>
           <p className="mb-4 text-sm text-muted">Shown beside the team in the sidebar. Pick an icon and a colour, or an emoji.</p>
           <IconSection key={`${team.icon}\n${team.iconColor}`} teamKey={key} icon={team.icon} iconColor={team.iconColor} canEdit={myRole === "admin"} />
+        </div>
+        <div className="card mt-6 p-5">
+          <h2 className="mb-1 font-medium">Statuses</h2>
+          <p className="mb-4 text-sm text-muted">
+            The stages an issue moves through. Each stage needs at least one status; when several share a stage, the default is where automatic moves
+            (a merged pull request, an agent moving work to review) put an issue.
+          </p>
+          <StatusesSection teamKey={key} canEdit={myRole === "admin"} />
         </div>
       </div>
     </div>

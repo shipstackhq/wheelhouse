@@ -146,7 +146,7 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 
 // ───────── the board ─────────
 
-import type { BoardIssue, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, IssueDetail } from "@wheelhouse/api-client";
+import type { BoardIssue, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, IssueDetail, StatusRole, StatusSetting } from "@wheelhouse/api-client";
 
 export const STATUSES = [
   { id: "c-backlog", name: "Backlog", role: "backlog", isDefault: true, color: null, position: 1000 },
@@ -156,6 +156,12 @@ export const STATUSES = [
   { id: "c-done", name: "Done", role: "done", isDefault: true, color: null, position: 5000 },
   { id: "c-canceled", name: "Canceled", role: "canceled", isDefault: true, color: null, position: 6000 },
 ];
+
+/** What the team settings list: the board's statuses with how many issues are in each (the board's issues are in Backlog and Todo). */
+export const statusSettings = (over: Partial<StatusSetting>[] | ((all: StatusSetting[]) => StatusSetting[]) = []): StatusSetting[] => {
+  const all: StatusSetting[] = STATUSES.map((s) => ({ ...s, role: s.role as StatusRole, issueCount: { "c-backlog": 1, "c-todo": 2 }[s.id] ?? 0 }));
+  return typeof over === "function" ? over(all) : all.map((s, i) => ({ ...s, ...(over[i] ?? {}) }));
+};
 
 let seq = 0;
 export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
