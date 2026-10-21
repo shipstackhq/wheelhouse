@@ -646,3 +646,57 @@ export type GithubStatus = {
   installations: { installationId: string; account: string; failed: boolean; repositories: { id: string; fullName: string; private: boolean }[] }[];
 };
 export type OnboardingPage = { team: { key: string; name: string }; hasRepos: boolean; setup: SetupCommands };
+
+// ───────── the agent daemon: devices and runs ─────────
+
+export type DeviceStatus = "online" | "offline" | "revoked";
+/** A machine paired to run agent jobs (the Wheelhouse daemon). Only its owner sees it. */
+export type DeviceView = {
+  id: string;
+  name: string;
+  os: string;
+  status: DeviceStatus;
+  poolSize: number;
+  chatModel: string | null;
+  daemonVersion: string | null;
+  capabilities: {
+    claude?: { installed?: boolean; version?: string | null; signedIn?: boolean; subscriptionType?: string | null; models?: string[] };
+    platform?: string | null;
+    power?: { onBattery?: boolean };
+  };
+  /** The models a run on it may ask for. */
+  models: string[];
+  lastSeenAt: string | null;
+  createdAt: string;
+  /** Runs it has been offered or is running now. */
+  activeJobs: number;
+};
+/** The machine behind a pairing code, before anyone approves it. */
+export type PairingPeek = { userCode: string; name: string; os: string; expiresAt: string };
+
+export type JobState = "offered" | "accepted" | "running" | "succeeded" | "failed" | "canceled" | "rejected" | "expired" | "lost";
+/** One "Run on device" of an issue. */
+export type JobView = {
+  id: string;
+  state: JobState;
+  model: string;
+  branch: string;
+  deviceId: string;
+  deviceName: string | null;
+  repositoryId: string | null;
+  repositoryName: string | null;
+  result: { commit?: string | null; pushed?: boolean; diffStats?: { files: number | null; insertions: number | null; deletions: number | null }; costUsd?: number | null; durationMs?: number | null };
+  error: string | null;
+  cancelRequested: boolean;
+  createdAt: string;
+  acceptedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+};
+export type JobEvent = { seq: number; at: string; type: string; data: Record<string, unknown> };
+/** An issue's runs, and what a new one can use. */
+export type IssueRuns = {
+  jobs: JobView[];
+  devices: { id: string; name: string; status: DeviceStatus; models: string[]; poolSize: number; activeJobs: number }[];
+  repositories: { id: string; name: string; fullName: string | null; defaultBranch: string }[];
+};

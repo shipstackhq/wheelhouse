@@ -13,6 +13,7 @@ const ITEMS: { group: string; items: { to: string; label: string }[] }[] = [
     items: [
       { to: "/settings/profile", label: "Profile" },
       { to: "/settings/password", label: "Password" },
+      { to: "/settings/devices", label: "Devices" },
     ],
   },
   {

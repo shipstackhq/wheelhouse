@@ -79,6 +79,11 @@ import type {
   IssueDetail,
   IssuePatch,
   IssueView,
+  DeviceView,
+  IssueRuns,
+  JobEvent,
+  JobView,
+  PairingPeek,
 } from "./types";
 
 export type * from "./types";
@@ -464,6 +469,31 @@ export function createApiClient(options: ApiClientOptions = {}) {
       suspend: (id: string, input: { confirm: string; reason?: string }) =>
         request<{ name: string; sessionsEnded: number }>("POST", `/api/app/admin/workspaces/${encodeURIComponent(id)}/suspend`, input),
       restore: (id: string) => request<{ ok: true }>("POST", `/api/app/admin/workspaces/${encodeURIComponent(id)}/restore`, {}),
+    },
+
+    /** Your machines (the agent daemon): pairing one, its settings, unpairing it. */
+    devices: {
+      list: async () => (await request<{ devices: DeviceView[] }>("GET", "/api/app/devices")).devices,
+      /** The machine behind the code `wheelhouse-daemon pair` printed. */
+      peekPairing: (code: string) => request<PairingPeek>("GET", `/api/app/devices/pair?code=${encodeURIComponent(code)}`),
+      approvePairing: async (code: string, name?: string) => (await request<{ device: DeviceView }>("POST", "/api/app/devices/pair", name ? { code, name } : { code })).device,
+      denyPairing: (code: string) => request<{ ok: true }>("POST", "/api/app/devices/pair/deny", { code }),
+      update: async (id: string, patch: { name?: string; poolSize?: number; chatModel?: string | null }) =>
+        (await request<{ device: DeviceView }>("PATCH", `/api/app/devices/${encodeURIComponent(id)}`, patch)).device,
+      /** Its token stops working and what it was running is canceled. */
+      unpair: (id: string) => request<{ ok: true; canceled: number }>("DELETE", `/api/app/devices/${encodeURIComponent(id)}`),
+    },
+
+    /** Runs of an issue on a device: an agent working on it in a worktree on that machine. */
+    runs: {
+      forIssue: (ref: string) => request<IssueRuns>("GET", `/api/app/issues/${encodeURIComponent(ref)}/jobs`),
+      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string }) =>
+        (await request<{ job: JobView }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/jobs`, input)).job,
+      /** Progress after event number `after`. */
+      events: (id: string, after?: number) =>
+        request<{ job: JobView; events: JobEvent[] }>("GET", `/api/app/jobs/${encodeURIComponent(id)}/events${after !== undefined ? `?after=${after}` : ""}`),
+      /** An offer ends at once; a run in progress is asked to stop. */
+      cancel: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/cancel`, {})).job,
     },
 
     dashboard: {

@@ -2,6 +2,7 @@ import { Navigate, type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
 import { AdminInvitesPage, AdminWorkspacePage, AdminWorkspacesPage } from "../pages/admin";
 import { AgentsPage } from "../pages/agents";
+import { DevicePairPage, DevicesSettingsPage } from "../pages/devices";
 import { PasswordSettingsPage, ProfileSettingsPage, TeamsSettingsPage, WorkspaceSettingsPage } from "../pages/settings/pages";
 import { SettingsLayout } from "../pages/settings/settings-layout";
 import { ActivityPage } from "../pages/activity/activity";
@@ -58,6 +59,7 @@ export function buildRoutes(services: Services): RouteObject[] {
             { index: true, element: <Navigate to="profile" replace /> },
             { path: "profile", Component: ProfileSettingsPage },
             { path: "password", Component: PasswordSettingsPage },
+            { path: "devices", Component: DevicesSettingsPage },
             { path: "workspace", Component: WorkspaceSettingsPage },
             { path: "members", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
@@ -77,6 +79,7 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "projects/:id", Component: ProjectPage },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
+            { path: "devices/pair", Component: DevicePairPage },
             {
               Component: RequireAdmin,
               children: [

@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ActorGuard } from "./auth/actor.guard";
+import { DaemonController, DeviceGuard } from "./daemon/daemon.controller";
+import { DaemonSweep } from "./daemon/daemon.sweep";
 import { DatabaseService } from "./database/database.service";
 import { HumanGuard } from "./auth/human.guard";
 import { GithubController } from "./github/github.controller";
@@ -14,6 +16,7 @@ import { AuthController } from "./web/auth.controller";
 import { BoardController } from "./web/board.controller";
 import { StatusesController } from "./web/statuses.controller";
 import { DashboardController } from "./web/dashboard.controller";
+import { DevicesController } from "./web/devices.controller";
 import { InvitesController } from "./web/invites.controller";
 import { KeysController } from "./web/keys.controller";
 import { WorkspaceController } from "./web/workspace.controller";
@@ -30,7 +33,7 @@ import { TeamMembersController } from "./web/team-members.controller";
 import { TeamsController } from "./web/teams.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, StatusesController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController],
-  providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, StatusesController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController, DaemonController, DevicesController],
+  providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard, DeviceGuard, DaemonSweep],
 })
 export class AppModule {}

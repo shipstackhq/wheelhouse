@@ -22,6 +22,7 @@ import { useServices } from "../../lib/services";
 import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/issue-nav";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite } from "./shared";
 import { DiscussionThread } from "./thread";
+import { IssueRunsSection } from "./issue-runs";
 import { cycleTitle } from "../cycles/cycle-bits";
 import { AgentIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, NodeIcon } from "../../components/icons";
 
@@ -304,6 +305,8 @@ export function IssueDialog(props: {
                   onOpen={(ref) => void go(ref)}
                   onAdd={(title) => mutate(() => api.issues.create(props.teamKey, { title, parent: t.ref }))}
                 />
+
+                <IssueRunsSection issueRef={t.ref} />
 
                 <section>
                   <span className="label">
