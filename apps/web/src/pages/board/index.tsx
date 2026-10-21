@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { useParams } from "react-router";
 import { Loaded } from "../../components/query-state";
+import { BoardIcon, BulletListIcon } from "../../components/icons";
 import { useBoard } from "../../lib/queries";
 import { relationsOf } from "../../lib/sub-issues";
 import { LAYOUTS, loadLayout, saveLayout, type Layout } from "../../lib/issue-layout";
@@ -60,8 +61,9 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
               type="button"
               aria-pressed={layout === l}
               onClick={() => choose(l)}
-              className={clsx("rounded-full px-3 py-1 capitalize outline-none focus-visible:ring-2 focus-visible:ring-accent/50", layout === l ? "bg-panel text-fg shadow-sm" : "text-muted hover:text-fg")}
+              className={clsx("inline-flex items-center gap-1 rounded-full px-3 py-1 capitalize outline-none focus-visible:ring-2 focus-visible:ring-accent/50", layout === l ? "bg-panel text-fg shadow-sm" : "text-muted hover:text-fg")}
             >
+              {l === "list" ? <BulletListIcon aria-hidden /> : <BoardIcon aria-hidden />}
               {l}
             </button>
           ))}

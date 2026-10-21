@@ -267,7 +267,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
   test("on the Docs page, Docs has the solid icon and every other item the outline one", () => {
     renderIn(sidebar({ isAdmin: true }), "/t/AA/docs");
     const expected: Record<string, keyof typeof NAV_ICONS> = {
-      Home: "home", Overview: "overview", Issues: "board", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
+      Home: "home", Overview: "overview", Issues: "issues", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
       Repos: "repos", "Team members": "teamMembers", "Team settings": "teamSettings", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
     };
     for (const [label, key] of Object.entries(expected)) {
@@ -280,7 +280,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
 
   test("moving to another page moves the solid icon", () => {
     const { unmount } = renderIn(sidebar(), "/t/AA");
-    expect(iconOf(within(nav()).getByRole("link", { name: "Issues" }))).toBe(pathOf(NAV_ICONS.board.fill as never));
+    expect(iconOf(within(nav()).getByRole("link", { name: "Issues" }))).toBe(pathOf(NAV_ICONS.issues.fill as never));
     expect(iconOf(within(nav()).getByRole("link", { name: "Overview" }))).toBe(pathOf(NAV_ICONS.overview.line as never)); // /overview is its own address
     unmount();
     renderIn(sidebar(), "/workspace");

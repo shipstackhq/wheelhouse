@@ -69,7 +69,8 @@ import {
   RiSparklingLine,
   RiStrikethrough,
   RiTable2,
-  RiTicketLine,
+  RiRecordCircleLine,
+  RiRecordCircleFill,
   RiHome4Line,
   RiHome4Fill,
   RiDashboardLine,
@@ -148,7 +149,8 @@ export const BookIcon = icon(RiBookOpenLine);
 export const FileIcon = icon(RiFileTextLine);
 export const FolderIcon = icon(RiFolderLine);
 export const NodeIcon = icon(RiNodeTree);
-export const IssueIcon = icon(RiTicketLine);
+export const IssueIcon = icon(RiRecordCircleLine);
+export const IssueFillIcon = icon(RiRecordCircleFill);
 export const CommentIcon = icon(RiChat1Line);
 export const TermIcon = icon(RiBookmarkLine);
 export const MapIcon = icon(RiMapLine);
@@ -233,7 +235,7 @@ export type IconPair = { line: ReturnType<typeof icon>; fill: ReturnType<typeof 
 export const NAV_ICONS = {
   home: { line: HomeIcon, fill: HomeFillIcon },
   overview: { line: OverviewIcon, fill: OverviewFillIcon },
-  board: { line: BoardIcon, fill: BoardFillIcon },
+  issues: { line: IssueIcon, fill: IssueFillIcon },
   cycles: { line: CyclesIcon, fill: CyclesFillIcon },
   projects: { line: ProjectsIcon, fill: ProjectsFillIcon },
   initiatives: { line: InitiativesIcon, fill: InitiativesFillIcon },

@@ -1,8 +1,8 @@
 # Shipstack Wheelhouse
 
-Kanban boards and architecture maps that a small team **and its AI agents** share.
+Issues (as a list or a kanban board, with sub-issues, statuses and priorities) and architecture maps that a small team **and its AI agents** share.
 
-- **Board**: drag-and-drop issues, markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
+- **Issues**: a list or a drag-and-drop board of the same issues, grouped by status, priority, assignee, project or cycle; search and filters; sub-issues to any depth, with progress; statuses each team defines (several per stage, one the default, plus Canceled); markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
 - **Knowledge map**: React Flow canvas with four linked zoom levels:
   - **Concepts**: what the product does
   - **Systems**: what runs where
