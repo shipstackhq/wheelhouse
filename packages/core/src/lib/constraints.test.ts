@@ -25,6 +25,7 @@ const refusedWith = (code: string) => (e: unknown) => (e as { cause?: { code?: s
 const unique = refusedWith("23505");
 const foreign = refusedWith("23503");
 const checked = refusedWith("23514");
+const notNull = refusedWith("23502");
 
 let db: Awaited<ReturnType<typeof getDb>>;
 let ada: Actor;
@@ -69,12 +70,10 @@ describe("unique keys", () => {
     await db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Design review", position: 50, role: "review" });
     await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Code review", position: 51, role: "review", isDefault: true }), unique);
     await db.insert(schema.statuses).values([
-      { teamId: a1.id, workspaceId: wsA, name: "Custom one", position: 52, role: null },
-      { teamId: a1.id, workspaceId: wsA, name: "Custom two", position: 53, role: null },
+      { teamId: a1.id, workspaceId: wsA, name: "Custom one", position: 52, role: "todo" },
+      { teamId: a1.id, workspaceId: wsA, name: "Custom two", position: 53, role: "todo" },
     ]);
-    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "CUSTOM ONE", position: 54, role: null }), unique);
-    // a status that is the default of a role must have a role
-    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "Roleless default", position: 55, role: null, isDefault: true }), checked);
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: a1.id, workspaceId: wsA, name: "CUSTOM ONE", position: 54, role: "todo" }), unique);
     // the same role and the same name in another team are fine
     assert.ok((await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a2.id))).some((c) => c.role === "review" && c.isDefault));
   });
@@ -142,8 +141,9 @@ describe("a value outside its enum is refused", () => {
   });
   for (const [what, attempt] of bad) test(what, async () => assert.rejects(attempt(), checked));
 
-  test("a null is still allowed where the column allows it (a custom column has no role)", async () => {
-    await db.insert(schema.statuses).values({ teamId: a2.id, workspaceId: wsA, name: "No role", position: 70, role: null });
+  test("a status must have a role: none at all, or a null, is refused", async () => {
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: a2.id, workspaceId: wsA, name: "No role", position: 70, role: null as never }), notNull);
+    await assert.rejects(db.execute(sql`insert into statuses (team_id, workspace_id, name, position) values (${a2.id}, ${wsA}, 'Nothing', 71)`), notNull);
   });
 });
 

@@ -232,6 +232,13 @@
       "when": 1792606117956,
       "tag": "0032_status_color",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792613599261,
+      "tag": "0033_status_role_required",
+      "breakpoints": true
     }
   ]
 }

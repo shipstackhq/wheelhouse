@@ -13,7 +13,7 @@ import { TEAM_ICON_COLORS } from "./team-icon";
  *
  * A status's role never changes once it is made, as in Linear; to put work in another stage, make a status in that stage. Every team
  * keeps at least one status in each required role, and statuses stay grouped by role (all the backlog ones, then todo, and so on)
- * so a board and a list can lay them out without sorting. A role-less status (older boards have a few) can sit anywhere.
+ * so a board and a list can lay them out without sorting. Every status has a role.
  *
  * Every change takes the team's row lock, so two admins reordering or deleting at once are taken one after the other.
  */
@@ -23,7 +23,7 @@ const { statuses, issues, teams } = schema;
 export type StatusView = {
   id: string;
   name: string;
-  role: StatusRole | null;
+  role: StatusRole;
   isDefault: boolean;
   color: (typeof TEAM_ICON_COLORS)[number] | null;
   position: number;
@@ -146,7 +146,6 @@ export async function updateStatus(actor: Actor, teamRef: string, statusRef: str
     let makeDefault = false;
     if (patch.isDefault !== undefined) {
       if (patch.isDefault !== true) bad("isDefault", "isDefault can only be set to true: make another status the default instead");
-      if (!row.role) bad("isDefault", "A status with no role cannot be a default");
       makeDefault = !row.isDefault;
     }
     if (!Object.keys(next).length && !makeDefault) return view(row, await countIn(tx, row.id));
@@ -176,7 +175,6 @@ export async function reorderStatuses(actor: Actor, teamRef: string, ids: unknow
     let rank = -1;
     for (const id of want) {
       const role = byId.get(id)!.role;
-      if (!role) continue;
       if (roleRank(role) < rank) bad("ids", `Statuses stay grouped by role (${ROLE_ORDER.join(", ")}): "${byId.get(id)!.name}" cannot come after a later role`);
       rank = roleRank(role);
     }
@@ -201,7 +199,7 @@ export async function deleteStatus(actor: Actor, teamRef: string, statusRef: str
     const rows = await rowsOf(tx, team.id);
     const row = pick(rows, statusRef);
     const others = rows.filter((r) => r.id !== row.id);
-    if (row.role && (REQUIRED_ROLES as readonly string[]).includes(row.role) && !others.some((r) => r.role === row.role)) {
+    if ((REQUIRED_ROLES as readonly string[]).includes(row.role) && !others.some((r) => r.role === row.role)) {
       throw new ServiceError("conflict", `"${row.name}" is the team's last ${row.role} status; a team needs one`);
     }
     const count = await countIn(tx, row.id);
@@ -221,7 +219,7 @@ export async function deleteStatus(actor: Actor, teamRef: string, statusRef: str
       moved = count;
     }
     await tx.delete(statuses).where(eq(statuses.id, row.id));
-    if (row.isDefault && row.role) {
+    if (row.isDefault) {
       const heir = others.find((r) => r.role === row.role);
       if (heir) await tx.update(statuses).set({ isDefault: true }).where(eq(statuses.id, heir.id));
     }

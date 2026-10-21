@@ -22,17 +22,17 @@ describe("status roles", () => {
     assert.equal(statusForRole(cols, "review")?.id, "2");
     assert.equal(statusForRole(cols, "todo")?.id, "3", "with none marked, the first");
   });
-  test("done and canceled are closed; a status with no role, or a missing one, never is", () => {
+  test("done and canceled are closed; no other role is, and neither is a missing status", () => {
     assert.deepEqual([...CLOSED_ROLES], ["done", "canceled"]);
     assert.equal(isClosed({ role: "done" }), true);
     assert.equal(isClosed({ role: "canceled" }), true);
-    for (const role of ["backlog", "todo", "in_progress", "review", null] as const) assert.equal(isClosed({ role }), false, String(role));
+    for (const role of ["backlog", "todo", "in_progress", "review"] as const) assert.equal(isClosed({ role }), false, String(role));
     assert.equal(isClosed(undefined), false);
-    const cols = [{ id: "1", name: "A", role: "done" as const }, { id: "2", name: "B", role: "canceled" as const }, { id: "3", name: "C", role: "todo" as const }, { id: "4", name: "D", role: null }];
+    const cols = [{ id: "1", name: "A", role: "done" as const }, { id: "2", name: "B", role: "canceled" as const }, { id: "3", name: "C", role: "todo" as const }, { id: "4", name: "D", role: "in_progress" as const }];
     assert.deepEqual([...idsWithRoles(cols, ...CLOSED_ROLES)].sort(), ["1", "2"]);
   });
-  test("hasRole and idsWithRole ignore names, and a missing or role-less status has no role", () => {
-    const cols = [{ id: "1", name: "Review", role: null }, { id: "2", name: "QA", role: "review" as const }, { id: "3", name: "Shipped", role: "done" as const }];
+  test("hasRole and idsWithRole ignore names, and a missing status has no role", () => {
+    const cols = [{ id: "1", name: "Review", role: "todo" as const }, { id: "2", name: "QA", role: "review" as const }, { id: "3", name: "Shipped", role: "done" as const }];
     assert.equal(hasRole(cols[0], "review"), false);
     assert.equal(hasRole(cols[1], "review", "done"), true);
     assert.equal(hasRole(undefined, "done"), false);

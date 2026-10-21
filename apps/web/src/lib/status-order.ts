@@ -10,26 +10,20 @@ export const ROLE_LABEL: Record<StatusRole, string> = {
   canceled: "Canceled",
 };
 
-export type Ordered = { id: string; role: StatusRole | null };
+export type Ordered = { id: string; role: StatusRole };
 
-export type Group<T extends Ordered> = { role: StatusRole | null; label: string; items: T[] };
+export type Group<T extends Ordered> = { role: StatusRole; label: string; items: T[] };
 
-/**
- * The statuses grouped by role, in the order of the roles, each group in board order. Statuses with no role (older boards have a few)
- * come last as one group, so none is ever out of sight.
- */
+/** The statuses grouped by role, in the order of the roles, each group in board order. A role nobody has is not a group. */
 export function groupStatuses<T extends Ordered>(list: T[]): Group<T>[] {
-  const groups: Group<T>[] = ROLE_ORDER.map((role) => ({ role, label: ROLE_LABEL[role], items: list.filter((s) => s.role === role) })).filter((g) => g.items.length);
-  const none = list.filter((s) => !s.role);
-  if (none.length) groups.push({ role: null, label: "No role", items: none });
-  return groups;
+  return ROLE_ORDER.map((role) => ({ role, label: ROLE_LABEL[role], items: list.filter((s) => s.role === role) })).filter((g) => g.items.length);
 }
 
 /**
  * The whole list's ids after `fromId` is dropped where `toId` is, both in the group of `role`. Only that group's own places in the list are
- * refilled, so a status of another role (or none) that sits between them stays exactly where it was.
+ * refilled, so a status of another role that sits between them stays exactly where it was.
  */
-export function reorderWithinGroup(all: Ordered[], role: StatusRole | null, fromId: string, toId: string): string[] {
+export function reorderWithinGroup(all: Ordered[], role: StatusRole, fromId: string, toId: string): string[] {
   const members = all.filter((s) => s.role === role).map((s) => s.id);
   const from = members.indexOf(fromId);
   const to = members.indexOf(toId);

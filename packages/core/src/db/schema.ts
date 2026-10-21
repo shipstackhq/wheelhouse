@@ -269,8 +269,8 @@ export const statuses = table("statuses", {
   workspaceId: uuid("workspace_id").notNull(),
   name: text("name").notNull(),
   position: doublePrecision("position").notNull(),
-  // What stage of work this status stands for (WH-86); rules and reports use it, never the name. Null: a custom status.
-  role: text("role", { enum: STATUS_ROLES }),
+  // What stage of work this status stands for (WH-86); rules and reports use it, never the name. Every status has one.
+  role: text("role", { enum: STATUS_ROLES }).notNull(),
   isDefault: boolean("is_default").notNull().default(false),
   // The colour of the status's dot, from the team icon palette; null draws the colour of its role.
   color: text("color", { enum: TEAM_ICON_COLORS }),
@@ -278,7 +278,6 @@ export const statuses = table("statuses", {
   teamScope("statuses", t),
   uniqueIndex("statuses_team_default_role_idx").on(t.teamId, t.role).where(sql`is_default`),
   uniqueIndex("statuses_team_name_idx").on(t.teamId, sql`lower(${t.name})`),
-  check("statuses_default_has_role_check", sql`not "is_default" or "role" is not null`),
 ]);
 
 export const PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;

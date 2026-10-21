@@ -265,7 +265,7 @@ function Row(props: {
       <span className="w-16 shrink-0 font-mono text-[11px] text-muted">{t.ref}</span>
       <Menu
         label={`Status of ${t.ref}: ${status?.name ?? ""}`}
-        trigger={<StatusIcon role={status?.role ?? null} color={status?.color ?? null} />}
+        trigger={<StatusIcon role={status?.role ?? ""} color={status?.color ?? null} />}
         items={statuses.map((s) => ({ key: s.id, label: s.name, icon: <StatusIcon role={s.role} color={s.color} />, current: s.id === t.statusId, onSelect: () => s.id !== t.statusId && props.onStatus(s.id) }))}
       />
       <button type="button" onClick={props.onOpen} className="min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent/50">

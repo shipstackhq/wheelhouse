@@ -48,7 +48,7 @@ describe("issue references", () => {
 
 describe("what a pull request does to its issue", () => {
   // Statuses carry a role (WH-86); the rules only ever look at roles. Standard names get their standard roles here.
-  const cols = (...names: string[]): RoleStatus[] => names.map((name) => ({ name, role: roleFromText(name) }));
+  const cols = (...names: string[]): RoleStatus[] => names.map((name) => ({ name, role: roleFromText(name)! }));
   const board = cols("Backlog", "Todo", "In Progress", "Review", "Done");
   const now = new Date("2026-10-15T12:00:00Z");
   const base = { merged: false, draft: false, statuses: board, now, lastMove: null };
@@ -109,18 +109,16 @@ describe("what a pull request does to its issue", () => {
     assert.equal(d({ action: "opened", status: "Shipped", statuses: renamed }).move, null);
     assert.match(d({ action: "opened", status: "Doing", statuses: renamed }).note!, /moved to QA: pull request opened/);
   });
-  test("a status literally named Review but with no role is not treated as the review status", () => {
-    const odd: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: null }, { name: "Done", role: "done" }];
-    assert.equal(d({ action: "opened", status: "Todo", statuses: odd }).move, null);
-    assert.equal(d({ action: "closed", status: "Review", statuses: odd }).move, null);
+  test("a status literally named Review but of another role is not treated as the review status", () => {
+    const odd: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: "todo" }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", status: "Todo", statuses: odd }).move, null, "no status has the review role: nothing to move to");
+    assert.equal(d({ action: "closed", status: "Review", statuses: odd }).move, null, "and Review here is a todo status, not the one to go back from");
   });
-  test("a custom status with no role is outside the workflow: never a target, and an issue in one is left where a person put it", () => {
-    const custom: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
-    for (const action of ["opened", "reopened", "ready_for_review", "closed"]) {
-      assert.equal(d({ action, status: "Blocked", statuses: custom }).move, null, action);
-      assert.equal(d({ action, merged: action === "closed", status: "Blocked", statuses: custom }).move, null, `${action} merged`);
-    }
-    assert.equal(d({ action: "opened", status: "Doing", statuses: custom }).move, "Review", "custom statuses between the standard ones do not get in the way");
+  test("a status takes part by its role, whatever it is called: an extra todo or in-progress status is moved like the standard one", () => {
+    const custom: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: "todo" }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
+    for (const action of ["opened", "reopened", "ready_for_review"]) assert.equal(d({ action, status: "Blocked", statuses: custom }).move, "Review", action);
+    assert.equal(d({ action: "closed", merged: true, status: "Blocked", statuses: custom }).move, "Review");
+    assert.equal(d({ action: "opened", status: "Doing", statuses: custom }).move, "Review", "extra statuses between the standard ones do not get in the way");
     assert.equal(d({ action: "closed", status: "Review", statuses: custom }).move, "Doing");
   });
   test("two statuses with the review role: the first in board order is the target", () => {

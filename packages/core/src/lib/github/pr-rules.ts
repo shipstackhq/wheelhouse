@@ -7,7 +7,7 @@
  *   closed without merging               -> back to In Progress, but only from Review
  *   draft pull requests                  -> left alone until they are ready
  *   an issue in Done                     -> never moved
- *   an issue in a custom status (no role) -> never moved: a person put it outside the workflow on purpose (WH-86)
+ *   an issue in Canceled                 -> never moved
  *   the issue was moved by someone else in the last few minutes -> left alone, and the comment says so
  */
 
@@ -37,7 +37,6 @@ const same = (a: RoleStatus, b: RoleStatus) => (a.id !== undefined && b.id !== u
 const NONE: MoveDecision = { move: null, note: null };
 
 export function decideMove(i: MoveInput): MoveDecision {
-  if (!i.status.role) return NONE; // custom statuses are outside the workflow; automation never moves an issue out of one
   // Statuses are found by role, never by name, so a board can rename them (WH-86). No review status: leave issues alone.
   const review = statusForRole(i.statuses, "review");
   const progress = statusForRole(i.statuses, "in_progress");

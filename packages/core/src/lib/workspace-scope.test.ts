@@ -70,7 +70,7 @@ describe("a row names its team's own workspace", () => {
   });
 
   const cases: [string, () => Promise<unknown>][] = [
-    ["statuses", async () => (await getDb()).insert(schema.statuses).values({ ...wrong(), name: "x", position: 1 })],
+    ["statuses", async () => (await getDb()).insert(schema.statuses).values({ ...wrong(), name: "x", position: 1, role: "todo" })],
     ["issues", async () => {
       const db = await getDb();
       const [col] = await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, a1.id));

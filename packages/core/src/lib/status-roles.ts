@@ -1,7 +1,7 @@
 /**
  * Status roles (WH-86). A status's name is for display and can be renamed; its role says what stage of work it stands
- * for, and is what rules and reports key off. A status with no role (say "Blocked") is never the target of an automatic
- * move and never counts as done. Several statuses may share a role ("Code review" and "Design review" are both review): the
+ * for, and is what rules and reports key off. Every status has one (a "Blocked" status is a todo or an in-progress one), so no status
+ * is ever outside the workflow. Several statuses may share a role ("Code review" and "Design review" are both review): the
  * one marked as the role's default is the target of an automatic move, and with none marked it is the first in board order.
  * Done and canceled are the two closed roles: an issue in either is no longer open work.
  *
@@ -24,7 +24,7 @@ export const STATUS_NAME_MAX = 40;
 /** The roles of statuses whose issues are finished, one way or the other. */
 export const CLOSED_ROLES = ["done", "canceled"] as const satisfies readonly StatusRole[];
 
-export type RoleStatus = { id?: string; name: string; role: StatusRole | null; isDefault?: boolean };
+export type RoleStatus = { id?: string; name: string; role: StatusRole; isDefault?: boolean };
 
 /** What a new team's board starts with. */
 export const DEFAULT_STATUS_DEFS: { name: string; role: StatusRole }[] = [
@@ -36,7 +36,7 @@ export const DEFAULT_STATUS_DEFS: { name: string; role: StatusRole }[] = [
   { name: "Canceled", role: "canceled" },
 ];
 
-/** "In Progress", "in-progress" and "in_progress" are all the in_progress role; anything else is no role. */
+/** "In Progress", "in-progress" and "in_progress" are all the in_progress role; anything else is not a role name (null). */
 export function roleFromText(text: string): StatusRole | null {
   const key = text.trim().toLowerCase().replace(/[\s-]+/g, "_");
   return (STATUS_ROLES as readonly string[]).includes(key) ? (key as StatusRole) : null;
@@ -50,7 +50,7 @@ export function statusForRole<C extends RoleStatus>(statuses: C[], role: StatusR
 
 export const hasRole = (c: Pick<RoleStatus, "role"> | null | undefined, ...roles: StatusRole[]) => !!c?.role && roles.includes(c.role);
 
-/** Whether the status is done or canceled. A status with no role is never closed. */
+/** Whether the status is done or canceled. A missing status (null or undefined) is never closed. */
 export const isClosed = (c: Pick<RoleStatus, "role"> | null | undefined) => hasRole(c, ...CLOSED_ROLES);
 
 /** Ids of the statuses with this role. */

@@ -58,9 +58,9 @@ describe("status roles", () => {
     assert.equal((await svc.moveIssue(human, t.ref, "done")).status, "Shipped", "role finds the renamed done status");
     await assert.rejects(svc.moveIssue(human, t.ref, "nonsense"), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
 
-    // A status that is literally called "review" but has no role beats the role alias on an exact name match.
+    // A status that is literally called "review" but is a todo one beats the role alias on an exact name match.
     const db = await getDb();
-    await db.insert(schema.statuses).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: null });
+    await db.insert(schema.statuses).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: "todo" });
     assert.equal((await svc.moveIssue(human, t.ref, "review")).status, "review");
     // It cannot be deleted with the issue still in it (the key refuses), so the issue goes back first.
     await svc.moveIssue(human, t.ref, "backlog");

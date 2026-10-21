@@ -51,7 +51,7 @@ function Editor({ teamKey, canEdit, list }: { teamKey: string; canEdit: boolean;
       setError(describeFailure(e));
     }
   };
-  const onDragEnd = (role: StatusRole | null) => (e: DragEndEvent) => {
+  const onDragEnd = (role: StatusRole) => (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
     const ids = reorderWithinGroup(list, role, String(e.active.id), String(e.over.id));
     if (ids.every((id, i) => id === list[i].id)) return; // dropped where it was, or on another role's status: nothing to save
@@ -67,9 +67,9 @@ function Editor({ teamKey, canEdit, list }: { teamKey: string; canEdit: boolean;
       )}
       <div className="grid gap-5">
         {groups.map((g) => (
-          <section key={g.role ?? "none"} aria-label={g.label}>
+          <section key={g.role} aria-label={g.label}>
             <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">{g.label}</h3>
-            <DndContext id={`statuses-${g.role ?? "none"}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd(g.role)}>
+            <DndContext id={`statuses-${g.role}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd(g.role)}>
               <SortableContext items={g.items.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                 <ul className="divide-y divide-line rounded-md border border-line">
                   {g.items.map((s) => (
@@ -87,7 +87,7 @@ function Editor({ teamKey, canEdit, list }: { teamKey: string; canEdit: boolean;
                 </ul>
               </SortableContext>
             </DndContext>
-            {canEdit && g.role && <AddStatus role={g.role} onAdd={(name) => run(() => api.statuses.create(teamKey, { name, role: g.role! }))} />}
+            {canEdit && <AddStatus role={g.role} onAdd={(name) => run(() => api.statuses.create(teamKey, { name, role: g.role }))} />}
           </section>
         ))}
       </div>
@@ -117,7 +117,7 @@ function Row(props: {
 }) {
   const { status: s, group, canEdit } = props;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: s.id, disabled: !canEdit });
-  const lastOfRequired = !!s.role && (REQUIRED_ROLES as readonly string[]).includes(s.role) && group.items.length === 1;
+  const lastOfRequired = (REQUIRED_ROLES as readonly string[]).includes(s.role) && group.items.length === 1;
   const shared = group.items.length > 1;
   return (
     <li
@@ -161,7 +161,7 @@ function Row(props: {
       )}
       {shared && s.isDefault && <span className="chip bg-accent/15 text-accent">Default</span>}
       {canEdit && shared && !s.isDefault && (
-        <button type="button" className="text-xs text-muted outline-none hover:text-fg focus-visible:underline" onClick={props.onDefault} aria-label={`Make ${s.name} the default ${ROLE_LABEL[s.role!]?.toLowerCase() ?? ""} status`}>
+        <button type="button" className="text-xs text-muted outline-none hover:text-fg focus-visible:underline" onClick={props.onDefault} aria-label={`Make ${s.name} the default ${ROLE_LABEL[s.role].toLowerCase()} status`}>
           Make default
         </button>
       )}
@@ -170,7 +170,7 @@ function Row(props: {
         <button
           type="button"
           aria-label={`Delete ${s.name}`}
-          title={lastOfRequired ? `A team needs at least one ${ROLE_LABEL[s.role!].toLowerCase()} status` : undefined}
+          title={lastOfRequired ? `A team needs at least one ${ROLE_LABEL[s.role].toLowerCase()} status` : undefined}
           disabled={lastOfRequired}
           onClick={props.onDelete}
           className="rounded p-1 text-muted outline-none hover:text-danger focus-visible:ring-2 focus-visible:ring-accent/50 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-muted"
@@ -182,7 +182,7 @@ function Row(props: {
   );
 }
 
-function ColorMenu(props: { name: string; role: string | null; color: StatusColor | null; onPick: (color: StatusColor | null) => void }) {
+function ColorMenu(props: { name: string; role: string; color: StatusColor | null; onPick: (color: StatusColor | null) => void }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger aria-label={`Colour of ${props.name}`} className="rounded p-1 outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50">

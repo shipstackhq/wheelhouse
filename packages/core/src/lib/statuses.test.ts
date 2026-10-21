@@ -143,7 +143,7 @@ describe("editing", () => {
 });
 
 describe("the default of a role", () => {
-  test("making another status the default moves it; only true is accepted; a role-less status cannot be one", async () => {
+  test("making another status the default moves it; only true is accepted", async () => {
     const qa = await byName("Ready for QA");
     assert.equal(qa.isDefault, false);
     const made = await st.updateStatus(owner, "SA", qa.id, { isDefault: true });
@@ -154,8 +154,6 @@ describe("the default of a role", () => {
     await assert.rejects(st.updateStatus(owner, "SA", "In Progress", { isDefault: false }), code("invalid"));
     await st.updateStatus(owner, "SA", "In Progress", { isDefault: true });
     assert.equal((await byName("Ready for QA")).isDefault, false);
-    await db.insert(schema.statuses).values({ teamId: (await svc.requireTeam(owner, "SA")).id, workspaceId: owner.workspaceId, name: "Legacy", position: 99999, role: null });
-    await assert.rejects(st.updateStatus(owner, "SA", "Legacy", { isDefault: true }), code("invalid"));
   });
 });
 

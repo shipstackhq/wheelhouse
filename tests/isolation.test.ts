@@ -786,7 +786,7 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
   test("B's workspace id on A's team is refused, for a status, a node and a team member", async () => {
     const db = await getDb();
     const before = await fingerprint(A);
-    await assert.rejects(db.insert(schema.statuses).values({ teamId: A.teamId, workspaceId: B.workspaceId, name: "planted", position: 99 }), refused);
+    await assert.rejects(db.insert(schema.statuses).values({ teamId: A.teamId, workspaceId: B.workspaceId, name: "planted", position: 99, role: "todo" }), refused);
     await assert.rejects(db.insert(schema.nodes).values({ teamId: A.teamId, workspaceId: B.workspaceId, layer: "system", kind: "service", name: "planted" }), refused);
     await assert.rejects(db.insert(schema.teamMembers).values({ teamId: A.teamId, workspaceId: B.workspaceId, userId: B.owner.id, role: "admin" }), refused);
     assert.equal(await fingerprint(A), before);
