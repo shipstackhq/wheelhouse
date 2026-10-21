@@ -213,15 +213,17 @@ describe("display: grouping", () => {
     await group(user, "Priority");
     expect(await screen.findByText("Fix login bug")).toBeTruthy();
   });
-  test("on the board the columns are statuses: the grouping choices are off and say why", async () => {
+  test("on the board the same grouping chooses the columns", async () => {
     localStorage.setItem("wh:layout:AA", "board");
     const user = userEvent.setup();
     open();
     await screen.findByText("Fix login bug");
-    const m = await openMenu(user, "Display options");
-    expect(m.getByText("The board's columns are its statuses.")).toBeTruthy();
-    for (const r of m.getAllByRole("radio")) expect((r as HTMLInputElement).disabled).toBe(true);
-    expect((m.getByRole("radio", { name: "Status" }) as HTMLInputElement).checked).toBe(true);
+    const columns = () => [...document.querySelectorAll("[data-column]")].map((c) => c.getAttribute("data-column"));
+    expect(columns()).toEqual(["status:c-backlog", "status:c-todo", "status:c-progress", "status:c-review", "status:c-done", "status:c-canceled"]);
+    await group(user, "Assignee");
+    await waitFor(() => expect(columns()).toEqual(["assignee:u1", "assignee:u2", "assignee:none"]));
+    expect(within(document.querySelector('[data-column="assignee:u1"]') as HTMLElement).getByText("Ada Lovelace")).toBeTruthy();
+    expect(within(document.querySelector('[data-column="assignee:u1"]') as HTMLElement).getByText("Ship it")).toBeTruthy();
   });
 });
 

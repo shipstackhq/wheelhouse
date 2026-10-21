@@ -4,7 +4,7 @@ import { useParams } from "react-router";
 import { Loaded } from "../../components/query-state";
 import { useBoard } from "../../lib/queries";
 import { LAYOUTS, loadLayout, saveLayout, type Layout } from "../../lib/issue-layout";
-import { EMPTY_FILTERS, filterIssues, isFiltered, loadIssueView, saveIssueView, type IssueView } from "../../lib/issue-view";
+import { EMPTY_FILTERS, filterIssues, groupIssues, isFiltered, loadIssueView, saveIssueView, type IssueView } from "../../lib/issue-view";
 import { Board } from "./board";
 import { IssueViewBar } from "./view-bar";
 import { IssueList } from "./issue-list";
@@ -37,6 +37,8 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
   };
   const shown = useMemo(() => filterIssues(board.issues, view), [board.issues, view]);
   const ctx = useMemo(() => ({ statuses: board.statuses, members: board.members, projects: board.projects, cycles: board.cycles, labels }), [board.statuses, board.members, board.projects, board.cycles, labels]);
+  // A list leaves out groups with nothing to show; a board keeps every column, so a card can be dropped into an empty one.
+  const groups = useMemo(() => groupIssues(shown, view, ctx, { keepEmpty: layout === "board" }), [shown, view, ctx, layout]);
   const choose = (next: Layout) => {
     saveLayout(teamKey, next);
     setChosen({ team: teamKey, layout: next });
@@ -45,7 +47,7 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
     <div className="flex h-full min-h-0 flex-col">
       <h1 className="sr-only">{board.team.name}</h1> {/* the header's breadcrumbs name the team, but are not a heading */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 pb-2 pt-3">
-        <IssueViewBar view={view} onChange={changeView} ctx={ctx} layout={layout} />
+        <IssueViewBar view={view} onChange={changeView} ctx={ctx} />
         <div role="group" aria-label="Layout" className="inline-flex rounded-full border border-line bg-panel-2 p-0.5 text-xs">
           {LAYOUTS.map((l) => (
             <button
@@ -64,7 +66,7 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
         {layout === "list" ? (
           <IssueList teamKey={teamKey} statuses={board.statuses} issues={shown} view={view} filtered={isFiltered(view)} onClearFilters={() => changeView({ ...view, filters: EMPTY_FILTERS, search: "" })} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
         ) : (
-          <Board teamKey={teamKey} columns={columns} issues={shown} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
+          <Board teamKey={teamKey} groups={groups} statuses={columns} manualOrder={view.groupBy === "status" && view.sort.key === "manual"} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
         )}
       </div>
     </div>

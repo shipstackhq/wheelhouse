@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { DEFAULT_VIEW, EMPTY_FILTERS, FILTER_KEYS, filterCount, filterOptions, filterIssues, groupIssues, isFiltered, loadIssueView, matchesSearch, parseView, saveIssueView, sortIssues, startingFields, type IssueView } from "./issue-view";
+import { DEFAULT_VIEW, EMPTY_FILTERS, FILTER_KEYS, fieldPatch, filterCount, filterOptions, filterIssues, groupIssues, isFiltered, loadIssueView, matchesSearch, parseView, retagIssue, saveIssueView, sortIssues, startingFields, type IssueView } from "./issue-view";
 import { issue, STATUSES } from "../test/data";
 
 afterEach(() => vi.restoreAllMocks());
@@ -109,6 +109,9 @@ describe("grouping", () => {
     };
     expect(narrowed({ filters: { priority: ["urgent"] } })).toEqual([["Todo", ["AA-3"]]]);
     expect(narrowed({ search: "zzz" })).toEqual([]);
+    // a board keeps its columns however much is filtered
+    const view = v({ groupBy: "status", filters: { priority: ["urgent"] } });
+    expect(groupIssues(filterIssues(ALL, view), view, CTX, { keepEmpty: true }).map((g) => g.label)).toEqual(STATUSES.map((s) => s.name));
   });
   test("by priority: most pressing first, only groups with issues", () => {
     expect(shape(by("priority"))).toEqual([["Urgent", ["AA-3"]], ["High", ["AA-1"]], ["Low", ["AA-4"]], ["No priority", ["AA-2"]]]);
@@ -121,6 +124,15 @@ describe("grouping", () => {
   });
   test("by cycle: the team's cycles in the order given, 'No cycle' last, a name only when it has one", () => {
     expect(shape(by("cycle"))).toEqual([["Cycle 3", ["AA-3"]], ["Cycle 2: Autumn", ["AA-1", "AA-4"]], ["No cycle", ["AA-2"]]]);
+  });
+  test("for a board every group stays, even with nothing in it, so a card can be dropped into any of them", () => {
+    const all = (groupBy: IssueView["groupBy"]) => groupIssues([B], v({ groupBy }), CTX, { keepEmpty: true }).map((g) => g.label);
+    expect(all("priority")).toEqual(["Urgent", "High", "Medium", "Low", "No priority"]);
+    expect(all("assignee")).toEqual(["Ada Lovelace", "Grace Hopper", "Unassigned"]);
+    expect(all("project")).toEqual(["Alpha", "Zeta", "No project"]);
+    expect(all("cycle")).toEqual(["Cycle 3", "Cycle 2: Autumn", "No cycle"]);
+    // a list leaves them out
+    expect(groupIssues([B], v({ groupBy: "priority" }), CTX).map((g) => g.label)).toEqual(["No priority"]);
   });
   test("with no grouping there is one group of everything, even nothing", () => {
     expect(shape(by("none"))).toEqual([["All issues", ["AA-2", "AA-3", "AA-1", "AA-4"]]]);
@@ -197,5 +209,31 @@ describe("what each filter offers", () => {
   });
   test("every filter key has options, so a menu section can be drawn for each", () => {
     for (const k of FILTER_KEYS) expect(filterOptions(k, ctx).length).toBeGreaterThan(0);
+  });
+});
+
+describe("dropping an issue into a group", () => {
+  const g = (groupBy: IssueView["groupBy"]) => groupIssues(ALL, v({ groupBy }), CTX);
+  test("it takes on what the group is, and nothing else; leaving a project clears its milestone", () => {
+    expect(retagIssue(g("status")[0].what, A)).toEqual({ ...A, statusId: "c-backlog" });
+    expect(retagIssue(g("priority")[0].what, A)).toEqual({ ...A, priority: "urgent" });
+    expect(retagIssue(g("assignee")[1].what, A)).toEqual({ ...A, assigneeId: "u2" });
+    expect(retagIssue(g("assignee").at(-1)!.what, A).assigneeId).toBeNull();
+    expect(retagIssue(g("project")[1].what, { ...A, milestoneId: "m1" })).toEqual({ ...A, projectId: "p2", milestoneId: null });
+    expect(retagIssue(g("project").at(-1)!.what, A).projectId).toBeNull();
+    expect(retagIssue(g("cycle")[1].what, A).cycle).toBe(2);
+    expect(retagIssue(g("cycle").at(-1)!.what, A).cycle).toBeNull();
+    expect(retagIssue(g("none")[0].what, A)).toBe(A);
+  });
+  test("the server is told the one field the grouping is by; for a status group (a move) and no grouping there is no patch", () => {
+    expect(fieldPatch(g("priority")[2].what)).toEqual({ priority: "low" });
+    expect(fieldPatch(g("assignee")[0].what)).toEqual({ assigneeId: "u1" });
+    expect(fieldPatch(g("assignee").at(-1)!.what)).toEqual({ assigneeId: null });
+    expect(fieldPatch(g("project")[0].what)).toEqual({ projectId: "p1" });
+    expect(fieldPatch(g("project").at(-1)!.what)).toEqual({ projectId: null });
+    expect(fieldPatch(g("cycle")[0].what)).toEqual({ cycle: 3 });
+    expect(fieldPatch(g("cycle").at(-1)!.what)).toEqual({ cycle: null });
+    expect(fieldPatch(g("status")[0].what)).toBeNull();
+    expect(fieldPatch(g("none")[0].what)).toBeNull();
   });
 });

@@ -16,7 +16,6 @@ import {
   type GroupContext,
   type IssueView,
 } from "../../lib/issue-view";
-import type { Layout } from "../../lib/issue-layout";
 
 const PANEL = "z-50 max-h-[26rem] overflow-y-auto rounded-lg border border-line bg-panel p-2 text-sm text-fg shadow-xl";
 const TRIGGER = "btn gap-1.5 !rounded-full py-1 text-xs data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2";
@@ -27,8 +26,8 @@ const ROW = "flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg
  * Display menu (what to group by, what to order by) and, under them, a chip for each thing kept that takes it off again. The view is one
  * object the page owns, so the list and the board narrow and order the same way.
  */
-export function IssueViewBar(props: { view: IssueView; onChange: (v: IssueView) => void; ctx: GroupContext & { labels: string[] }; layout: Layout }) {
-  const { view, ctx, layout } = props;
+export function IssueViewBar(props: { view: IssueView; onChange: (v: IssueView) => void; ctx: GroupContext & { labels: string[] } }) {
+  const { view, ctx } = props;
   const set = (patch: Partial<IssueView>) => props.onChange({ ...view, ...patch });
   const toggle = (key: FilterKey, value: string) => {
     const has = view.filters[key].includes(value);
@@ -96,10 +95,9 @@ export function IssueViewBar(props: { view: IssueView; onChange: (v: IssueView) 
           <Popover.Content align="start" sideOffset={6} collisionPadding={8} className={clsx(PANEL, "w-60")}>
             <fieldset aria-label="Grouping" className="mb-2">
               <legend className="label px-1">Grouping</legend>
-              {layout === "board" && <p className="px-1 pb-1 text-xs text-muted">The board's columns are its statuses.</p>}
               {GROUP_BYS.map((g) => (
-                <label key={g} className={clsx(ROW, layout === "board" && "cursor-not-allowed opacity-50")}>
-                  <input type="radio" name="group-by" disabled={layout === "board"} checked={(layout === "board" ? "status" : view.groupBy) === g} onChange={() => set({ groupBy: g })} />
+                <label key={g} className={ROW}>
+                  <input type="radio" name="group-by" checked={view.groupBy === g} onChange={() => set({ groupBy: g })} />
                   {GROUP_LABEL[g]}
                 </label>
               ))}

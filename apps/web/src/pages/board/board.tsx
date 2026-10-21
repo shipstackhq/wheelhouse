@@ -21,7 +21,8 @@ import type { CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { useServices } from "../../lib/services";
 import { neighbours, parseIssueParam } from "../../lib/issue-nav";
-import { dragOver, drop, findCol, group, type Items } from "./board-state";
+import { fieldPatch, retagIssue, startingFields, type IssueGroup } from "../../lib/issue-view";
+import { dragOver, drop, findCol, itemsOf, type Items } from "./board-state";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Issue } from "./shared";
 import { IssueDialog } from "./issue-dialog";
@@ -36,20 +37,35 @@ import { cycleTitle } from "../cycles/cycle-bits";
 const NO_CYCLES: CycleOption[] = [];
 const NO_PROJECTS: TeamProjectOption[] = [];
 
-export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[]; nodes: NodeLite[]; members: Member[]; cycles?: CycleOption[]; projects?: TeamProjectOption[] }) {
-  const { teamKey, columns, nodes, members } = props;
+export function Board(props: {
+  teamKey: string;
+  /** The columns, each with the issues in it: the view's groups (by status, priority, person, project, cycle, or all in one). */
+  groups: IssueGroup[];
+  /** The team's statuses, for the issue dialog's Status field (the columns may be something else). */
+  statuses: Col[];
+  /** True when a column's order is the manual board order, which only a board grouped by status and not sorted has. */
+  manualOrder: boolean;
+  nodes: NodeLite[];
+  members: Member[];
+  cycles?: CycleOption[];
+  projects?: TeamProjectOption[];
+}) {
+  const { teamKey, groups, statuses, nodes, members } = props;
+  const columns = useMemo(() => groups.map((g) => ({ id: g.id, name: g.label })), [groups]);
   const cycles = props.cycles ?? NO_CYCLES;
   const projects = props.projects ?? NO_PROJECTS;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
-  const [items, setItems] = useState<Items>(() => group(columns, props.issues));
+  const [items, setItems] = useState<Items>(() => itemsOf(groups));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dragging = useRef(false);
   const dragFrom = useRef<string | null>(null);
   const [views, setViews] = useState<Record<string, View>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const viewKey = (colId: string) => `wh:view:${teamKey}:${colId}`;
+  // A column's own filter and sort are kept under its status id, as they always were; other columns under their group id.
+  const viewKey = (colId: string) => `wh:view:${teamKey}:${colId.replace(/^status:/, "")}`;
+  const whatOf = (colId: string) => groups.find((g) => g.id === colId)?.what;
   const viewOf = (colId: string) => views[colId] ?? EMPTY_VIEW;
   // ?t= is the source of truth for the open issue; a value that isn't an issue ref is ignored.
   const openRef = parseIssueParam(search.get("t"));
@@ -58,8 +74,8 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {
-    if (!dragging.current) setItems(group(columns, props.issues));
-  }, [columns, props.issues]);
+    if (!dragging.current) setItems(itemsOf(groups));
+  }, [groups]);
 
   // Restore each column's filter/sort when the team or its columns change.
   // Keyed on the column ids, not the array: a refresh hands over a new array, and reloading here would give each Column a fresh
@@ -81,7 +97,7 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
     saveView(viewKey(colId), v);
   };
 
-  const labels = useMemo(() => [...new Set(props.issues.flatMap((t) => t.labels))].sort(), [props.issues]);
+  const labels = useMemo(() => [...new Set(groups.flatMap((g) => g.issues.flatMap((t) => t.labels)))].sort(), [groups]);
 
   const byId = useMemo(() => {
     const m = new Map<string, Issue>();
@@ -107,27 +123,36 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
   const onDragOver = (e: DragOverEvent) => {
     if (!e.over) return;
     const { active, over } = e;
-    setItems((prev) => dragOver(prev, String(active.id), String(over.id)));
+    setItems((prev) => dragOver(prev, String(active.id), String(over.id), (t, colId) => {
+      const what = whatOf(colId);
+      return what ? retagIssue(what, t) : t;
+    }));
   };
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     setActiveId(null);
-    const result = drop(items, String(active.id), over ? String(over.id) : null, dragFrom.current, (col) => !!viewOf(col).sort);
+    const result = drop(items, String(active.id), over ? String(over.id) : null, dragFrom.current, (col) => !!viewOf(col).sort || !props.manualOrder);
     setItems(result.items);
     if (!result.move) {
       dragging.current = false;
       return;
     }
-    const { statusId, index, crossed } = result.move;
+    const { colId, index, crossed } = result.move;
     const t = byId.get(String(active.id))!;
-    const target = viewOf(statusId);
+    const what = whatOf(colId);
+    const target = viewOf(colId);
     if (crossed && isFiltered(target) && !matches(t, target)) {
-      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === statusId)?.name}, but the column filter hides it.`);
+      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === colId)?.name}, but the column filter hides it.`);
     }
     void (async () => {
       try {
-        await api.issues.move(t.ref, { status: statusId, index });
+        // A status column is a move (which also says where in the column); any other column is a change to the one field it groups by.
+        if (what?.kind === "status") await api.issues.move(t.ref, { status: what.status.id, index });
+        else {
+          const patch = what && crossed ? fieldPatch(what) : null;
+          if (patch) await api.issues.update(t.ref, { ...patch, version: t.version });
+        }
       } catch (err) {
         setError(describeFailure(err));
       } finally {
@@ -186,6 +211,7 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
                 onOpen={openIssue}
                 selected={openRef}
                 teamKey={teamKey}
+                starts={startingFields(groups.find((g) => g.id === c.id)!.what)}
                 onCreated={() => void refreshBoard()}
               />
             ))}
@@ -198,7 +224,7 @@ export function Board(props: { teamKey: string; columns: Col[]; issues: Issue[];
           key={openRef}
           issueRef={openRef}
           teamKey={teamKey}
-          columns={columns}
+          columns={statuses}
           nodes={nodes}
           members={members}
           cycles={cycles}
@@ -224,6 +250,8 @@ function Column(props: {
   nodes: NodeLite[];
   selected: string | null;
   teamKey: string;
+  /** What an issue added in this column starts with: its status, or whatever the column groups by. */
+  starts: ReturnType<typeof startingFields>;
   onOpen: (ref: string) => void;
   onCreated: () => void;
 }) {
@@ -253,7 +281,7 @@ function Column(props: {
     if (!keepOpen) setAdding(false);
     void (async () => {
       try {
-        await api.issues.create(props.teamKey, { title: value, status: col.id });
+        await api.issues.create(props.teamKey, { title: value, ...props.starts });
         props.onCreated();
       } catch {
         props.onCreated(); // whatever happened, show the board as the server has it

@@ -128,10 +128,10 @@ export type GroupContext = { statuses: BoardStatus[]; members: BoardMember[]; pr
 
 /**
  * The issues in groups, each in the view's order. Statuses are the workflow, so every status has its group even with nothing in it
- * (to add into), unless something is filtered, when empty groups are only noise. Every other grouping shows the groups that have issues;
+ * (to add into), unless something is filtered, when empty groups are only noise in a list (a board keeps its columns, whatever it is grouped by, so a card can be dropped into an empty one: `keepEmpty`). Every other grouping shows the groups that have issues;
  * the group for "none of this" (no assignee, no project, no cycle) comes last.
  */
-export function groupIssues(issues: BoardIssue[], view: IssueView, ctx: GroupContext): IssueGroup[] {
+export function groupIssues(issues: BoardIssue[], view: IssueView, ctx: GroupContext, opts: { keepEmpty?: boolean } = {}): IssueGroup[] {
   const ordered = sortIssues(issues, view.sort);
   const make = (id: string, label: string, what: GroupKind, pick: (t: BoardIssue) => boolean): IssueGroup => ({ id: `${view.groupBy}:${id}`, label, what, issues: ordered.filter(pick) });
   let groups: IssueGroup[];
@@ -167,7 +167,7 @@ export function groupIssues(issues: BoardIssue[], view: IssueView, ctx: GroupCon
       keepEmpty = true;
       break;
   }
-  return keepEmpty ? groups : groups.filter((g) => g.issues.length > 0);
+  return keepEmpty || opts.keepEmpty ? groups : groups.filter((g) => g.issues.length > 0);
 }
 
 /** The fields a new issue made in this group should start with, so it lands where the person is looking. */
@@ -196,5 +196,34 @@ export function filterOptions(key: FilterKey, ctx: GroupContext & { labels: stri
     case "label": return ctx.labels.map((l) => ({ value: l, label: l }));
     case "project": return [...[...ctx.projects].sort((a, b) => a.name.localeCompare(b.name)).map((p) => ({ value: p.id, label: p.name })), { value: "none", label: "No project" }];
     case "cycle": return [...ctx.cycles.map((c) => ({ value: String(c.number), label: cycleName(c) })), { value: "none", label: "No cycle" }];
+  }
+}
+
+// ───────── moving an issue into a group ─────────
+
+/** The issue as it will be once dropped in this group, for the board to show at once (the server's answer replaces it a moment later). */
+export function retagIssue(what: GroupKind, t: BoardIssue): BoardIssue {
+  switch (what.kind) {
+    case "status": return { ...t, statusId: what.status.id };
+    case "priority": return { ...t, priority: what.priority };
+    case "assignee": return { ...t, assigneeId: what.member?.id ?? null };
+    case "project": return { ...t, projectId: what.project?.id ?? null, milestoneId: null };
+    case "cycle": return { ...t, cycle: what.cycle?.number ?? null };
+    case "none": return t;
+  }
+}
+
+/**
+ * What to tell the server so an issue dropped in this group belongs to it: the one field the grouping is by. Null for a status group
+ * (a move, which also says where in the column) and for no grouping (nothing to change).
+ */
+export function fieldPatch(what: GroupKind): { priority?: BoardIssue["priority"]; assigneeId?: string | null; projectId?: string | null; cycle?: number | null } | null {
+  switch (what.kind) {
+    case "priority": return { priority: what.priority };
+    case "assignee": return { assigneeId: what.member?.id ?? null };
+    case "project": return { projectId: what.project?.id ?? null };
+    case "cycle": return { cycle: what.cycle?.number ?? null };
+    case "status":
+    case "none": return null;
   }
 }

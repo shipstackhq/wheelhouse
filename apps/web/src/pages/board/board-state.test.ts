@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { dragOver, drop, findCol, group, type Items } from "./board-state";
+import { dragOver, drop, findCol, group, itemsOf, type Items } from "./board-state";
 import { STATUSES, issue } from "../../test/data";
 
 /**
@@ -77,31 +77,31 @@ describe("letting go", () => {
     // While it is dragged, dnd-kit reports the card's own slot as "over" once it has moved in.
     const over = dragOver(board(), a.id, d.id);
     const res = drop(over, a.id, a.id, "c-todo", never);
-    expect(res.move).toEqual({ statusId: "c-review", index: 0, crossed: true });
+    expect(res.move).toEqual({ colId: "c-review", index: 0, crossed: true });
     expect(refs(res.items, "c-review")).toEqual([a.ref, d.ref]);
   });
 
   test("released over the very card it was moved in front of, it goes behind that card (as it always has)", () => {
     const over = dragOver(board(), a.id, d.id);
     const res = drop(over, a.id, d.id, "c-todo", never);
-    expect(res.move).toEqual({ statusId: "c-review", index: 1, crossed: true });
+    expect(res.move).toEqual({ colId: "c-review", index: 1, crossed: true });
     expect(refs(res.items, "c-review")).toEqual([d.ref, a.ref]);
   });
 
   test("into an empty column", () => {
     const over = dragOver(board(), a.id, "c-backlog");
-    expect(drop(over, a.id, "c-backlog", "c-todo", never).move).toEqual({ statusId: "c-backlog", index: 0, crossed: true });
+    expect(drop(over, a.id, "c-backlog", "c-todo", never).move).toEqual({ colId: "c-backlog", index: 0, crossed: true });
   });
 
   test("below the last card of another column: it ends up last", () => {
     const over = dragOver(board(), a.id, "c-review");
-    expect(drop(over, a.id, "c-review", "c-todo", never).move).toEqual({ statusId: "c-review", index: 1, crossed: true });
+    expect(drop(over, a.id, "c-review", "c-todo", never).move).toEqual({ colId: "c-review", index: 1, crossed: true });
   });
 
   test("reordering in the same column: the cards are reordered at once and the new place is sent", () => {
     const res = drop(board(), a.id, c.id, "c-todo", never);
     expect(refs(res.items, "c-todo")).toEqual([b.ref, c.ref, a.ref]);
-    expect(res.move).toEqual({ statusId: "c-todo", index: 2, crossed: false });
+    expect(res.move).toEqual({ colId: "c-todo", index: 2, crossed: false });
     expect(refs(drop(board(), c.id, a.id, "c-todo", never).items, "c-todo")).toEqual([c.ref, a.ref, b.ref]);
   });
 
@@ -115,7 +115,7 @@ describe("letting go", () => {
   });
 
   test("released over itself in the same column: it is sent as it was (the same place), as before", () => {
-    expect(drop(board(), b.id, b.id, "c-todo", never).move).toEqual({ statusId: "c-todo", index: 1, crossed: false });
+    expect(drop(board(), b.id, b.id, "c-todo", never).move).toEqual({ colId: "c-todo", index: 1, crossed: false });
   });
 
   test("a column sorted by a field has no manual order: putting a card back in it changes nothing, but a card can still arrive from another column", () => {
@@ -123,7 +123,7 @@ describe("letting go", () => {
     expect(drop(board(), a.id, c.id, "c-todo", sorted)).toEqual({ items: board(), move: null });
     const over = dragOver(board(), d.id, c.id);
     const res = drop(over, d.id, c.id, "c-review", sorted);
-    expect(res.move).toMatchObject({ statusId: "c-todo", crossed: true });
+    expect(res.move).toMatchObject({ colId: "c-todo", crossed: true });
   });
 
   test("a whole drag, step by step, ends where the card was dropped", () => {
@@ -132,10 +132,28 @@ describe("letting go", () => {
     items = dragOver(items, b.id, "c-backlog"); // changed its mind: to the empty column
     items = dragOver(items, b.id, a.id); // and back among the first column's cards
     const res = drop(items, b.id, a.id, "c-todo", never);
-    expect(res.move?.statusId).toBe("c-todo");
+    expect(res.move?.colId).toBe("c-todo");
     expect(refs(res.items, "c-todo")).toContain(b.ref);
     const total = Object.values(res.items).flat().length;
     expect(total).toBe(4); // nothing lost, nothing duplicated
     expect(new Set(Object.values(res.items).flat().map((t) => t.id)).size).toBe(4);
+  });
+});
+
+describe("a board whose columns are groups", () => {
+  test("itemsOf keys each group's issues by the group's id", () => {
+    expect(itemsOf([{ id: "priority:high", issues: [a] }, { id: "priority:none", issues: [] }])).toEqual({ "priority:high": [a], "priority:none": [] });
+  });
+  test("dragging into another group retags the card the way the grouping says, not as a status", () => {
+    const items = { "priority:high": [a, b], "priority:low": [c] };
+    const next = dragOver(items, a.id, c.id, (t, col) => ({ ...t, priority: col === "priority:low" ? "low" : "high" }));
+    expect(next["priority:low"].map((t) => [t.title, t.priority])).toEqual([["a", "low"], ["c", "none"]]);
+    expect(next["priority:low"][0].statusId).toBe("c-todo"); // its status is untouched
+    expect(next["priority:high"].map((t) => t.title)).toEqual(["b"]);
+  });
+  test("a drop reports the column it landed in as colId, whatever the columns are", () => {
+    const items = { "assignee:u1": [a], "assignee:none": [b] };
+    const over = dragOver(items, a.id, b.id); // the drag has already carried the card across
+    expect(drop(over, a.id, b.id, "assignee:u1", () => false).move).toEqual({ colId: "assignee:none", index: 1, crossed: true });
   });
 });
