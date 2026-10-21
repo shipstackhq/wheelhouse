@@ -46,6 +46,42 @@ test("every kind of offender is found and named, and nothing is changed", async 
   }
 });
 
+test("the enum checks reach tables by the names they have at 0020 (tickets, columns), and the old words in the event log are fine", async () => {
+  const conn = await open();
+  try {
+    const q = conn.query;
+    await q(`insert into workspaces (name) values ('W')`);
+    await q(`insert into teams (workspace_id, key, name) select id, 'AA', 'T' from workspaces`);
+    await q(`insert into columns (team_id, workspace_id, name, position, role) select id, workspace_id, 'Odd', 1, 'qa' from teams`);
+    await q(`insert into tickets (team_id, workspace_id, column_id, number, title, position, created_by_kind, priority) select c.team_id, c.workspace_id, c.id, 1, 't', 1, 'human', 'asap' from columns c`);
+    // what the event log held before the renames: entities "ticket" and "column"
+    await q(`insert into events (workspace_id, team_id, actor_kind, actor_name, type, entity, entity_id, summary) select workspace_id, id, 'human', 'x', 'ticket.created', 'ticket', gen_random_uuid(), 's' from teams`);
+    await q(`insert into events (workspace_id, team_id, actor_kind, actor_name, type, entity, entity_id, summary) select workspace_id, id, 'human', 'x', 'column.renamed', 'column', gen_random_uuid(), 's' from teams`);
+    const findings = await preflight(conn.query);
+    const errors = new Map(findings.filter((f) => f.level === "error").map((f) => [f.check, f.detail]));
+    assert.match(errors.get("columns.role: allowed values")!, /"qa"/, "found through the table's old name");
+    assert.match(errors.get("tickets.priority: allowed values")!, /"asap"/, "found through the table's old name");
+    assert.equal(errors.has("events.entity: allowed values"), false, "'ticket' and 'column' are still allowed here: the migrations rewrite them");
+    assert.deepEqual([...errors.keys()].sort(), ["columns.role: allowed values", "tickets.priority: allowed values"]);
+  } finally {
+    await conn.close();
+  }
+});
+
+test("an entity that was never valid is still refused", async () => {
+  const conn = await open();
+  try {
+    const q = conn.query;
+    await q(`insert into workspaces (name) values ('W')`);
+    await q(`insert into teams (workspace_id, key, name) select id, 'AA', 'T' from workspaces`);
+    await q(`insert into events (workspace_id, team_id, actor_kind, actor_name, type, entity, entity_id, summary) select workspace_id, id, 'human', 'x', 'x.y', 'spaceship', gen_random_uuid(), 's' from teams`);
+    const errors = new Map((await preflight(conn.query)).filter((f) => f.level === "error").map((f) => [f.check, f.detail]));
+    assert.match(errors.get("events.entity: allowed values")!, /"spaceship"/);
+  } finally {
+    await conn.close();
+  }
+});
+
 test("--through stops at the migration it is given", async () => {
   const conn = await open();
   try {

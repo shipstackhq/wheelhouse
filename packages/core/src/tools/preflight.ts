@@ -8,8 +8,15 @@ import type { Finding, Q } from "./db-copy";
  * the rows that would make a migration fail so they can be fixed by hand first (never by dropping them). Run it on a copy
  * brought to the migration just before 0021:
  *   pnpm db:migrate --to <copy> --through 0020 && pnpm db:preflight --to <copy>
- * The enum checks come from the same TypeScript enums the migration's CHECK constraints are made from.
+ * The enum checks come from the same TypeScript enums the migration's CHECK constraints are made from, with two allowances for the renames
+ * that came later (the data checked is from before them): its tables are still called `tickets` and `columns` (0029 and 0030 rename
+ * them), and an event's entity is still "ticket" or "column" until those migrations rewrite it.
  */
+
+/** The name a table has in a database that has not had its rename yet, which is what migration 0021 puts its CHECK constraints on. */
+const TABLE_BEFORE_RENAME: Record<string, string> = { issues: "tickets", statuses: "columns" };
+/** Values an enum column held before a rename, still valid for the data being checked. */
+const VALUES_BEFORE_RENAME: Record<string, string[]> = { "events.entity": ["ticket", "column"] };
 
 const qi = (name: string) => `"${name.replaceAll('"', '""')}"`;
 const lit = (v: string) => `'${v.replaceAll("'", "''")}'`;
@@ -112,7 +119,12 @@ export async function preflight(q: Q): Promise<Finding[]> {
     );
 
   let checked = 0;
-  for (const { table, column, values } of enumColumns()) {
+  for (const entry of enumColumns()) {
+    const { column } = entry;
+    const old = TABLE_BEFORE_RENAME[entry.table];
+    // Look the table up by the name it has in this database: the old one first (the usual case), else the new one.
+    const table = old && (await present(q, old, column)) ? old : entry.table;
+    const values = [...entry.values, ...(VALUES_BEFORE_RENAME[`${entry.table}.${column}`] ?? [])];
     if (!(await present(q, table, column))) {
       ok(`${table}.${column}: allowed values`, "not in this database yet (a later migration adds it)");
       continue;
