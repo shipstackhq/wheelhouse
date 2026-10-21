@@ -62,6 +62,8 @@ describe("status roles", () => {
     const db = await getDb();
     await db.insert(schema.statuses).values({ teamId, workspaceId: human.workspaceId, name: "review", position: 99, role: null });
     assert.equal((await svc.moveIssue(human, t.ref, "review")).status, "review");
+    // It cannot be deleted with the issue still in it (the key refuses), so the issue goes back first.
+    await svc.moveIssue(human, t.ref, "backlog");
     await db.delete(schema.statuses).where(and(eq(schema.statuses.teamId, teamId), eq(schema.statuses.name, "review")));
   });
 

@@ -70,7 +70,7 @@ export type BoardIssue = IssueView & { nodeIds: string[]; commentCount: number }
 
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
-  statuses: { id: string; name: string; role: string | null; isDefault: boolean; position: number }[];
+  statuses: { id: string; name: string; role: string | null; isDefault: boolean; color: string | null; position: number }[];
   issues: BoardIssue[];
   /** Just enough of the map to show and link nodes. The map itself is another page. */
   nodes: { id: string; name: string; kind: string; parentId: string | null; layer: string }[];
@@ -101,7 +101,7 @@ export async function boardView(actor: Actor, teamKey: string): Promise<BoardVie
   const teamProjects = await projectsOfTeam(db, board.team.id);
   return {
     team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
-    statuses: board.statuses.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, isDefault: c.isDefault, position: c.position })),
+    statuses: board.statuses.map((c) => ({ id: c.id, name: c.name, role: c.role ?? null, isDefault: c.isDefault, color: c.color, position: c.position })),
     issues: board.issues.map((t) => ({ ...issueView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
     nodes,
     members,

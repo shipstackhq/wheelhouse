@@ -405,3 +405,17 @@ Design for routing work by team (the dispatcher itself is WH-32): [agent-keys-an
 ## Team icons
 
 A team has an `icon` and an `iconColor` (migration 0028), both null by default. `icon` is `ri:<name>` (one of the Remix icons in `TEAM_ICON_NAMES`, drawn solid in `iconColor`) or a single emoji (drawn by the system's emoji font). `PATCH /api/app/teams/:key` takes them with the name and description (team admins; `null` clears; a bad value is a `400` naming the field), `GET /api/app/teams` and the team answers carry them. With none, the sidebar draws the default glyph in a colour taken from the team's key. `/api/v1` and the MCP never show them. They are set on the team's settings page.
+
+## Team statuses
+
+A team's statuses are what an issue moves through (a board's columns, a list's groups). Anyone on the team reads them; changing them is for **team admins** (`403` otherwise) and for people only (an agent works inside the statuses a team has). A team of another workspace, or one the person is not on, is a `404`. A status is addressed by its id or its name (any case).
+
+| Endpoint | Body and answer |
+|---|---|
+| `GET /api/app/teams/:key/statuses` | `{ statuses }` in board order: `id`, `name`, `role`, `isDefault`, `color`, `position`, `issueCount` |
+| `POST /api/app/teams/:key/statuses` | `{ name, role, color? }` → `201 { status }`, at the end of its role's group; the first of a role is its default. A missing or long (over 40) name, an unknown role or colour is a `400` naming the field; a name the team already has, in any case, is a `409` |
+| `PATCH /api/app/teams/:key/statuses/:id` | `{ name?, color?, isDefault? }` → `{ status }`. `color: null` goes back to the role's own. `isDefault` only as `true` (it moves the role's default here). **A role cannot change** (`400` on `role`): make a status in the other role and move the issues |
+| `PUT /api/app/teams/:key/statuses/order` | `{ ids }`, every status of the team once, in the order wanted → `{ statuses }`. Statuses with a role stay grouped in the order of the roles (backlog, todo, in_progress, review, done, canceled); one with no role can sit anywhere |
+| `DELETE /api/app/teams/:key/statuses/:id?moveTo=` | → `{ ok, deleted, moved }`. A status with issues needs `moveTo` (an id or a name of another status of the team): without it a `409` with `details.issues`. The issues land after what is already there, in their own order, each with its version up by one. The last status of backlog, todo, in_progress, done or canceled stays (`409`); review may go. If it was its role's default the next status of that role takes over |
+
+The database also refuses to delete a status that still has issues, so a bug here cannot take issues with it. Each change is written to the team's activity (`status.created`, `status.updated`, `status.reordered`, `status.deleted`) and to the access audit log.

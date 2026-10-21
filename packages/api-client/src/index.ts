@@ -54,6 +54,9 @@ import type {
   CycleDetail,
   CycleInput,
   CycleList,
+  NewStatus,
+  StatusPatch,
+  StatusSetting,
   CycleSummary,
   CreateInviteInput,
   DashboardWidgets,
@@ -263,6 +266,21 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Teammates remove an agent session from a team. */
       removeSession: (teamKey: string, sessionId: string) =>
         request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/sessions/${encodeURIComponent(sessionId)}`),
+    },
+
+    statuses: {
+      /** The team's statuses in board order, each with its role, whether it is its role's default, its colour and its issue count. */
+      list: async (teamKey: string) => (await request<{ statuses: StatusSetting[] }>("GET", `${team(teamKey)}/statuses`)).statuses,
+      /** A new status at the end of its role's group (team admins). The first of a role is its default. */
+      create: async (teamKey: string, input: NewStatus) => (await request<{ status: StatusSetting }>("POST", `${team(teamKey)}/statuses`, input)).status,
+      /** Rename, recolour or make default (team admins). A role cannot change. `status` is an id or a name. */
+      update: async (teamKey: string, status: string, patch: StatusPatch) =>
+        (await request<{ status: StatusSetting }>("PATCH", `${team(teamKey)}/statuses/${encodeURIComponent(status)}`, patch)).status,
+      /** Every status of the team, in the order wanted; roles stay grouped. Answers the list. */
+      reorder: async (teamKey: string, ids: string[]) => (await request<{ statuses: StatusSetting[] }>("PUT", `${team(teamKey)}/statuses/order`, { ids })).statuses,
+      /** A status with issues needs `moveTo` (an id or a name) to say where they go; the last status of a required role stays. */
+      remove: (teamKey: string, status: string, moveTo?: string) =>
+        request<{ ok: true; deleted: string; moved: number }>("DELETE", `${team(teamKey)}/statuses/${encodeURIComponent(status)}${moveTo ? `?moveTo=${encodeURIComponent(moveTo)}` : ""}`),
     },
 
     issues: {

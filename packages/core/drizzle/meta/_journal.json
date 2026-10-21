@@ -225,6 +225,13 @@
       "when": 1792530800234,
       "tag": "0031_issue_model",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792606117956,
+      "tag": "0032_status_color",
+      "breakpoints": true
     }
   ]
 }

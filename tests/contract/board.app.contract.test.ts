@@ -77,7 +77,7 @@ describe("GET /api/app/teams/:key/board", () => {
     assert.deepEqual(Object.keys(b).sort(), ["checklist", "cycles", "issues", "members", "nodes", "projects", "statuses", "team"]);
     assert.deepEqual(Object.keys(b.team).sort(), ["description", "id", "key", "name"]);
     assert.deepEqual(b.statuses.map((c: { name: string; role: string }) => [c.name, c.role]), [["Backlog", "backlog"], ["Todo", "todo"], ["In Progress", "in_progress"], ["Review", "review"], ["Done", "done"], ["Canceled", "canceled"]]);
-    assert.deepEqual(Object.keys(b.statuses[0]).sort(), ["id", "isDefault", "name", "position", "role"]);
+    assert.deepEqual(Object.keys(b.statuses[0]).sort(), ["color", "id", "isDefault", "name", "position", "role"]);
     assert.ok(b.statuses.every((c: { isDefault: boolean }) => c.isDefault), "a new team's statuses are each their role's default");
     assert.deepEqual(b.issues, []);
     assert.deepEqual(b.nodes, []);

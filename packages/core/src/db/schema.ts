@@ -272,6 +272,8 @@ export const statuses = table("statuses", {
   // What stage of work this status stands for (WH-86); rules and reports use it, never the name. Null: a custom status.
   role: text("role", { enum: STATUS_ROLES }),
   isDefault: boolean("is_default").notNull().default(false),
+  // The colour of the status's dot, from the team icon palette; null draws the colour of its role.
+  color: text("color", { enum: TEAM_ICON_COLORS }),
 }, (t) => [
   teamScope("statuses", t),
   uniqueIndex("statuses_team_default_role_idx").on(t.teamId, t.role).where(sql`is_default`),
@@ -287,7 +289,9 @@ export const issues = table(
     id: uuid("id").primaryKey().defaultRandom(),
     teamId: uuid("team_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
-    statusId: uuid("status_id").notNull().references(() => statuses.id, { onDelete: "cascade" }),
+    // No action, not cascade: a status that still has issues cannot be deleted by accident (the service moves them first). A team's
+    // deletion removes both in one statement, which this allows.
+    statusId: uuid("status_id").notNull().references(() => statuses.id, { onDelete: "no action" }),
     number: integer("number").notNull(),
     title: text("title").notNull(),
     body: text("body").notNull().default(""),

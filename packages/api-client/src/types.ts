@@ -382,7 +382,17 @@ export type InitiativeInput = {
 };
 export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
 
-export type BoardStatus = { id: string; name: string; role: string | null; isDefault: boolean; position: number };
+/** The colours a status dot can take (the team icon palette); null draws the colour of its role. */
+export type StatusColor = "slate" | "sky" | "emerald" | "amber" | "rose" | "violet" | "teal" | "orange" | "fuchsia" | "lime" | "indigo";
+export type StatusRole = "backlog" | "todo" | "in_progress" | "review" | "done" | "canceled";
+
+export type BoardStatus = { id: string; name: string; role: string | null; isDefault: boolean; color: StatusColor | null; position: number };
+
+/** A status as the team's settings list it: the board's fields, with a typed role and how many issues are in it. */
+export type StatusSetting = Omit<BoardStatus, "role"> & { role: StatusRole | null; issueCount: number };
+export type NewStatus = { name: string; role: StatusRole; color?: StatusColor | null };
+/** `isDefault` can only be set to true. A role cannot change. */
+export type StatusPatch = { name?: string; color?: StatusColor | null; isDefault?: true };
 export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
 export type BoardMember = { id: string; name: string };
 

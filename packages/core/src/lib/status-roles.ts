@@ -11,6 +11,16 @@
 export const STATUS_ROLES = ["backlog", "todo", "in_progress", "review", "done", "canceled"] as const;
 export type StatusRole = (typeof STATUS_ROLES)[number];
 
+/** The order roles are laid out in on a board and in a list: a status never sits after one of a later role. */
+export const ROLE_ORDER: readonly StatusRole[] = ["backlog", "todo", "in_progress", "review", "done", "canceled"];
+export const roleRank = (role: StatusRole) => ROLE_ORDER.indexOf(role);
+
+/** A team always has at least one status of each of these (review is optional: without one, pull requests leave issues alone). */
+export const REQUIRED_ROLES = ["backlog", "todo", "in_progress", "done", "canceled"] as const satisfies readonly StatusRole[];
+
+/** The longest a status name can be. */
+export const STATUS_NAME_MAX = 40;
+
 /** The roles of statuses whose issues are finished, one way or the other. */
 export const CLOSED_ROLES = ["done", "canceled"] as const satisfies readonly StatusRole[];
 

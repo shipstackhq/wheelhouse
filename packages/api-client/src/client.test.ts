@@ -230,6 +230,18 @@ describe("the board endpoints (WH-96)", () => {
     assert.equal(s.calls[0].url, "/api/app/teams/WH/queue");
   });
 
+  test("statuses: list, create, edit, reorder and delete, each at its address; the envelopes come off, a name and moveTo are escaped", async () => {
+    const one = { status: { id: "s1" } };
+    assert.deepEqual(await sent((a) => a.statuses.list("W H"), { json: { statuses: [] } }), { method: "GET", url: "/api/app/teams/W%20H/statuses", body: undefined });
+    assert.deepEqual(await sent((a) => a.statuses.create("WH", { name: "QA", role: "review", color: "teal" }), { status: 201, json: one }), { method: "POST", url: "/api/app/teams/WH/statuses", body: { name: "QA", role: "review", color: "teal" } });
+    assert.deepEqual(await sent((a) => a.statuses.update("WH", "In Progress", { isDefault: true }), { json: one }), { method: "PATCH", url: "/api/app/teams/WH/statuses/In%20Progress", body: { isDefault: true } });
+    assert.deepEqual(await sent((a) => a.statuses.reorder("WH", ["b", "a"]), { json: { statuses: [] } }), { method: "PUT", url: "/api/app/teams/WH/statuses/order", body: { ids: ["b", "a"] } });
+    assert.deepEqual(await sent((a) => a.statuses.remove("WH", "Blocked", "To do")), { method: "DELETE", url: "/api/app/teams/WH/statuses/Blocked?moveTo=To%20do", body: undefined });
+    assert.deepEqual(await sent((a) => a.statuses.remove("WH", "Spare")), { method: "DELETE", url: "/api/app/teams/WH/statuses/Spare", body: undefined });
+    const s = script([{ json: { statuses: [{ id: "s1" }] } }]);
+    assert.deepEqual(await createApiClient({ fetch: s.f }).statuses.list("WH"), [{ id: "s1" }]);
+  });
+
   test("issues: create, read, edit, move, delete, comment, link and unlink, each at its address with the ref escaped", async () => {
     const t = { issue: { ref: "WH-1" } };
     assert.deepEqual(await sent((a) => a.issues.create("WH", { title: "x", status: "review" }), { status: 201, json: t }), { method: "POST", url: "/api/app/teams/WH/issues", body: { title: "x", status: "review" } });

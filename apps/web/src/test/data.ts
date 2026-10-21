@@ -149,12 +149,12 @@ export const serveWidgets = (server: { on: (route: string, answer: unknown) => u
 import type { BoardIssue, BoardView, Bot, CycleDetail, CycleSummary, InitiativeDetail, InitiativeSummary, ProjectDetail, ProjectSummary, IssueDetail } from "@wheelhouse/api-client";
 
 export const STATUSES = [
-  { id: "c-backlog", name: "Backlog", role: "backlog", isDefault: true, position: 1000 },
-  { id: "c-todo", name: "Todo", role: "todo", isDefault: true, position: 2000 },
-  { id: "c-progress", name: "In Progress", role: "in_progress", isDefault: true, position: 3000 },
-  { id: "c-review", name: "Review", role: "review", isDefault: true, position: 4000 },
-  { id: "c-done", name: "Done", role: "done", isDefault: true, position: 5000 },
-  { id: "c-canceled", name: "Canceled", role: "canceled", isDefault: true, position: 6000 },
+  { id: "c-backlog", name: "Backlog", role: "backlog", isDefault: true, color: null, position: 1000 },
+  { id: "c-todo", name: "Todo", role: "todo", isDefault: true, color: null, position: 2000 },
+  { id: "c-progress", name: "In Progress", role: "in_progress", isDefault: true, color: null, position: 3000 },
+  { id: "c-review", name: "Review", role: "review", isDefault: true, color: null, position: 4000 },
+  { id: "c-done", name: "Done", role: "done", isDefault: true, color: null, position: 5000 },
+  { id: "c-canceled", name: "Canceled", role: "canceled", isDefault: true, color: null, position: 6000 },
 ];
 
 let seq = 0;
