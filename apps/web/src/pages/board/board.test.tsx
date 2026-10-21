@@ -49,17 +49,21 @@ describe("the board", () => {
     expect(within(card).getByText("API")).toBeTruthy();
   });
 
-  test("the filter row: pick labels from the Filter button and they appear as chips (not applied to the board yet)", async () => {
+  test("the search and filters above the board narrow its cards, and the columns stay", async () => {
     const user = userEvent.setup();
     await open();
-    await user.type(screen.getByRole("searchbox", { name: "Search issues" }), "login");
-    expect((screen.getByRole("searchbox", { name: "Search issues" }) as HTMLInputElement).value).toBe("login");
-    await user.click(screen.getByRole("button", { name: "Filter issues by label" }));
-    const boxes = await screen.findAllByRole("checkbox");
-    await user.click(boxes[0]);
+    await user.type(screen.getByRole("searchbox", { name: "Search issues" }), "crash");
+    await waitFor(() => expect(screen.queryByText("Write the plan")).toBeNull());
+    expect(screen.getByText("Fix the crash")).toBeTruthy();
+    expect(document.querySelectorAll("[data-column]")).toHaveLength(6); // every status is still a column
+    await user.clear(screen.getByRole("searchbox", { name: "Search issues" }));
+    await user.click(screen.getByRole("button", { name: "Filter issues" }));
+    await user.click(await screen.findByRole("checkbox", { name: "docs" }));
+    await waitFor(() => expect(screen.queryByText("Fix the crash")).toBeNull());
+    expect(screen.getByText("Write the plan")).toBeTruthy();
     expect(document.querySelectorAll("[data-filter-chip]").length).toBe(1);
     await user.click(screen.getByRole("button", { name: /^Remove filter / }));
-    expect(document.querySelectorAll("[data-filter-chip]").length).toBe(0);
+    expect(await screen.findByText("Fix the crash")).toBeTruthy();
   });
 
   test("while the board loads there is a busy skeleton; if it cannot load there is a message with Try again", async () => {

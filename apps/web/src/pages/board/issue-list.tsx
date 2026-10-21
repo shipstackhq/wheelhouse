@@ -10,6 +10,7 @@ import { StatusIcon } from "../../components/status-icon";
 import { describeFailure } from "../../lib/form-state";
 import { loadFolded, saveFolded } from "../../lib/issue-layout";
 import { neighbours, parseIssueParam } from "../../lib/issue-nav";
+import { groupIssues, startingFields, type GroupKind, type IssueGroup, type IssueView } from "../../lib/issue-view";
 import { useServices } from "../../lib/services";
 import { cycleTitle } from "../cycles/cycle-bits";
 import { IssueDialog } from "./issue-dialog";
@@ -29,23 +30,25 @@ const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { m
 export function IssueList(props: {
   teamKey: string;
   statuses: BoardStatus[];
+  /** The issues the view lets through (already filtered); the list groups and orders them by the view. */
   issues: Issue[];
+  view: IssueView;
+  /** True when the view hides something, so an empty list can say why and offer to undo it. */
+  filtered: boolean;
+  onClearFilters: () => void;
   nodes: NodeLite[];
   members: Member[];
   cycles: CycleOption[];
   projects: TeamProjectOption[];
 }) {
-  const { teamKey, statuses, issues, nodes, members, cycles, projects } = props;
+  const { teamKey, statuses, issues, view, nodes, members, cycles, projects } = props;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
   const [folded, setFolded] = useState(() => loadFolded(teamKey));
   const [error, setError] = useState<string | null>(null);
   const openRef = parseIssueParam(search.get("t"));
 
-  const groups = useMemo(
-    () => statuses.map((s) => ({ status: s, issues: issues.filter((t) => t.statusId === s.id).sort((a, b) => a.position - b.position) })),
-    [statuses, issues],
-  );
+  const groups = useMemo(() => groupIssues(issues, view, { statuses, members, projects, cycles }), [issues, view, statuses, members, projects, cycles]);
   const memberName = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
 
   /** One change, then the board is read again whatever happened, so the list shows the server's answer (and undoes a refusal). */
@@ -82,18 +85,23 @@ export function IssueList(props: {
         </div>
       )}
       <div className="pb-8">
-        {groups.map(({ status, issues: list }) => (
-          <section key={status.id} aria-label={status.name}>
+        {props.filtered && order.length === 0 && (
+          <div className="px-4 py-10 text-center text-sm text-muted">
+            <p>No issues match.</p>
+            <button type="button" className="mt-2 text-accent hover:underline" onClick={props.onClearFilters}>Clear filters</button>
+          </div>
+        )}
+        {groups.map((g) => (
+          <section key={g.id} aria-label={g.label}>
             <GroupHeader
-              status={status}
-              count={list.length}
-              folded={folded.has(status.id)}
-              onToggle={() => toggle(status.id)}
-              onAdd={(title) => act(() => api.issues.create(teamKey, { title, status: status.id }))}
+              group={g}
+              folded={folded.has(g.id)}
+              onToggle={() => toggle(g.id)}
+              onAdd={(title) => act(() => api.issues.create(teamKey, { title, ...startingFields(g.what) }))}
             />
-            {!folded.has(status.id) && (
+            {!folded.has(g.id) && (
               <ul>
-                {list.map((t) => (
+                {g.issues.map((t) => (
                   <Row
                     key={t.id}
                     issue={t}
@@ -134,8 +142,21 @@ export function IssueList(props: {
   );
 }
 
-function GroupHeader(props: { status: BoardStatus; count: number; folded: boolean; onToggle: () => void; onAdd: (title: string) => void }) {
-  const { status } = props;
+/** The icon that says what a group is: its status, its priority, the person, the project or the cycle. */
+function GroupIcon({ what }: { what: GroupKind }) {
+  switch (what.kind) {
+    case "status": return <StatusIcon role={what.status.role} color={what.status.color} />;
+    case "priority": return <PriorityIcon priority={what.priority} />;
+    case "assignee": return <Avatar name={what.member?.name} />;
+    case "project": return <ProjectsIcon aria-hidden className="text-muted" />;
+    case "cycle": return <CyclesIcon aria-hidden className="text-muted" />;
+    case "none": return null;
+  }
+}
+
+function GroupHeader(props: { group: IssueGroup; folded: boolean; onToggle: () => void; onAdd: (title: string) => void }) {
+  const { group } = props;
+  const count = group.issues.length;
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const close = () => {
@@ -145,13 +166,13 @@ function GroupHeader(props: { status: BoardStatus; count: number; folded: boolea
   return (
     <div className="sticky top-0 z-10 border-y border-line bg-panel-2/95 backdrop-blur">
       <div className="flex items-center gap-2 px-4 py-1.5">
-        <button type="button" aria-expanded={!props.folded} aria-label={`${status.name}, ${props.count} ${props.count === 1 ? "issue" : "issues"}`} onClick={props.onToggle} className="flex min-w-0 items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
+        <button type="button" aria-expanded={!props.folded} aria-label={`${group.label}, ${count} ${count === 1 ? "issue" : "issues"}`} onClick={props.onToggle} className="flex min-w-0 items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
           {props.folded ? <ChevronRightIcon aria-hidden className="text-muted" /> : <ChevronDownIcon aria-hidden className="text-muted" />}
-          <StatusIcon role={status.role} color={status.color} />
-          <span className="truncate text-sm font-medium">{status.name}</span>
-          <span className="text-xs tabular-nums text-muted">{props.count}</span>
+          <GroupIcon what={group.what} />
+          <span className="truncate text-sm font-medium">{group.label}</span>
+          <span className="text-xs tabular-nums text-muted">{count}</span>
         </button>
-        <button type="button" aria-label={`Add an issue to ${status.name}`} className="ml-auto rounded p-1 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50" onClick={() => setAdding(true)}>
+        <button type="button" aria-label={`Add an issue to ${group.label}`} className="ml-auto rounded p-1 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50" onClick={() => setAdding(true)}>
           <AddIcon aria-hidden />
         </button>
       </div>
@@ -165,11 +186,11 @@ function GroupHeader(props: { status: BoardStatus; count: number; folded: boolea
             close();
           }}
         >
-          <StatusIcon role={status.role} color={status.color} />
+          <GroupIcon what={group.what} />
           <input
             autoFocus
             className="min-w-0 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-muted"
-            aria-label={`New issue in ${status.name}`}
+            aria-label={`New issue in ${group.label}`}
             placeholder="Issue title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}

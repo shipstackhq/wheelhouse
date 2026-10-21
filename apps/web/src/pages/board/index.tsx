@@ -4,8 +4,9 @@ import { useParams } from "react-router";
 import { Loaded } from "../../components/query-state";
 import { useBoard } from "../../lib/queries";
 import { LAYOUTS, loadLayout, saveLayout, type Layout } from "../../lib/issue-layout";
+import { EMPTY_FILTERS, filterIssues, isFiltered, loadIssueView, saveIssueView, type IssueView } from "../../lib/issue-view";
 import { Board } from "./board";
-import { BoardFilterBar } from "./filter-bar";
+import { IssueViewBar } from "./view-bar";
 import { IssueList } from "./issue-list";
 
 /** `/t/:key`: the team's issues, as a list grouped by status or as a kanban board (the team's own choice, remembered). */
@@ -23,11 +24,19 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
   // A refresh hands over equal data in a new array; the board only re-reads its columns when they really change.
   const columns = useMemo(() => board.statuses.map(({ id, name }) => ({ id, name })), [board.statuses]);
   const labels = useMemo(() => [...new Set(board.issues.flatMap((t) => t.labels))].sort(), [board.issues]);
-  const [selected, setSelected] = useState<string[]>([]);
   const teamKey = board.team.key;
   const [chosen, setChosen] = useState<{ team: string; layout: Layout }>(() => ({ team: teamKey, layout: loadLayout(teamKey) }));
   // Another team has its own choice: read it when the page is for a different team than the one chosen for.
   const layout = chosen.team === teamKey ? chosen.layout : loadLayout(teamKey);
+  // The view (what is kept, how it is grouped and ordered) is the team's too, and shared by both layouts.
+  const [viewOf, setViewOf] = useState<{ team: string; view: IssueView }>(() => ({ team: teamKey, view: loadIssueView(teamKey) }));
+  const view = viewOf.team === teamKey ? viewOf.view : loadIssueView(teamKey);
+  const changeView = (next: IssueView) => {
+    saveIssueView(teamKey, next);
+    setViewOf({ team: teamKey, view: next });
+  };
+  const shown = useMemo(() => filterIssues(board.issues, view), [board.issues, view]);
+  const ctx = useMemo(() => ({ statuses: board.statuses, members: board.members, projects: board.projects, cycles: board.cycles, labels }), [board.statuses, board.members, board.projects, board.cycles, labels]);
   const choose = (next: Layout) => {
     saveLayout(teamKey, next);
     setChosen({ team: teamKey, layout: next });
@@ -36,7 +45,7 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
     <div className="flex h-full min-h-0 flex-col">
       <h1 className="sr-only">{board.team.name}</h1> {/* the header's breadcrumbs name the team, but are not a heading */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 pb-2 pt-3">
-        <BoardFilterBar labels={labels} selected={selected} onChange={setSelected} />
+        <IssueViewBar view={view} onChange={changeView} ctx={ctx} layout={layout} />
         <div role="group" aria-label="Layout" className="inline-flex rounded-full border border-line bg-panel-2 p-0.5 text-xs">
           {LAYOUTS.map((l) => (
             <button
@@ -53,9 +62,9 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
       </div>
       <div className="min-h-0 flex-1">
         {layout === "list" ? (
-          <IssueList teamKey={teamKey} statuses={board.statuses} issues={board.issues} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
+          <IssueList teamKey={teamKey} statuses={board.statuses} issues={shown} view={view} filtered={isFiltered(view)} onClearFilters={() => changeView({ ...view, filters: EMPTY_FILTERS, search: "" })} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
         ) : (
-          <Board teamKey={teamKey} columns={columns} issues={board.issues} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
+          <Board teamKey={teamKey} columns={columns} issues={shown} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
         )}
       </div>
     </div>
