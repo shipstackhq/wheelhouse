@@ -45,7 +45,7 @@ export function crumbsFor(pathname: string, workspaceName: string, teams: { key:
   if (first === "t" && second) {
     const team = teams.find((t) => t.key === second);
     const teamCrumb: Crumb = { label: team?.name ?? second, to: `/t/${second}` };
-    if (!third) return [root, { ...teamCrumb, to: undefined }, { label: "Board" }];
+    if (!third) return [root, { ...teamCrumb, to: undefined }, { label: "Issues" }];
     const section = TEAM_SECTIONS[third];
     if (!section) return [root, teamCrumb];
     const item = parts[3] ? TEAM_ITEM[third] : undefined;

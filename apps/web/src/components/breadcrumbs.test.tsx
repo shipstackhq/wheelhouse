@@ -10,8 +10,8 @@ describe("the breadcrumb trail", () => {
     expect(trail("/agents")).toEqual(["Analytical Engines -> /", "Agents & API keys"]);
   });
 
-  test("a team's board is its own address, and a section sits under the team", () => {
-    expect(trail("/t/AA")).toEqual(["Analytical Engines -> /", "Alpha", "Board"]);
+  test("a team's issues page is its own address, and a section sits under the team", () => {
+    expect(trail("/t/AA")).toEqual(["Analytical Engines -> /", "Alpha", "Issues"]);
     expect(trail("/t/AA/docs")).toEqual(["Analytical Engines -> /", "Alpha -> /t/AA", "Docs"]);
   });
 

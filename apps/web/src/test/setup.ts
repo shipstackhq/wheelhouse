@@ -43,6 +43,10 @@ beforeEach(() => {
   document.cookie = "wh_last_team=; path=/; max-age=0";
   try {
     localStorage.clear();
+    // The team page opens as a list unless a team has chosen otherwise; the board tests were written for the board, so they start there.
+    // The tests of the list and of the layout choice clear this to see the real default.
+    localStorage.setItem("wh:layout:AA", "board");
+    localStorage.setItem("wh:layout:BB", "board");
   } catch {
     /* no storage */
   }

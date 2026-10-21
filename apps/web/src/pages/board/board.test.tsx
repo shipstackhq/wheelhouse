@@ -72,7 +72,7 @@ describe("the board", () => {
         return makeBoard("AA");
       });
     });
-    expect((await screen.findByText("Loading the board…")).closest("[role=status]")?.getAttribute("aria-busy")).toBe("true");
+    expect((await screen.findByText("Loading the issues…")).closest("[role=status]")?.getAttribute("aria-busy")).toBe("true");
     await waitFor(() => expect(release).toBeTypeOf("function"));
     release();
     await screen.findByText("Write the plan");

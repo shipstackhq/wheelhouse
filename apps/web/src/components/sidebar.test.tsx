@@ -103,12 +103,12 @@ describe("what the sidebar shows", () => {
     expect(within(nav()).getByRole("link", { name: "Create a team" }).getAttribute("href")).toBe("/teams/new");
   });
 
-  test("a team's sections are grouped under it, with the current one marked and Board only on the exact address", () => {
+  test("a team's sections are grouped under it, with the current one marked and Issues only on the exact address", () => {
     renderIn(sidebar(), "/t/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(links).toMatchObject({ Home: "/", Board: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", Repos: "/t/AA/repos", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
+    expect(links).toMatchObject({ Home: "/", Issues: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", Repos: "/t/AA/repos", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
     expect(within(nav()).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true);
-    expect(within(nav()).getByRole("link", { name: "Board" }).classList.contains("bg-panel-2")).toBe(false);
+    expect(within(nav()).getByRole("link", { name: "Issues" }).classList.contains("bg-panel-2")).toBe(false);
     expect(screen.getByRole("button", { name: /^Workspace menu/ })).toBeTruthy();
     expect(screen.getByText("the profile")).toBeTruthy();
   });
@@ -116,7 +116,7 @@ describe("what the sidebar shows", () => {
   test("with no team open no team is expanded, and every team is still listed", () => {
     renderIn(sidebar(), "/workspace");
     for (const name of ["Alpha", "Beta", "Gamma"]) expect(within(nav()).getByRole("button", { name: new RegExp(`^${name}`) }).getAttribute("aria-expanded")).toBe("false");
-    expect(within(nav()).queryByRole("link", { name: "Board" })).toBeNull();
+    expect(within(nav()).queryByRole("link", { name: "Issues" })).toBeNull();
     expect(within(nav()).getByRole("link", { name: "Members" }).classList.contains("bg-panel-2")).toBe(true);
   });
 
@@ -267,7 +267,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
   test("on the Docs page, Docs has the solid icon and every other item the outline one", () => {
     renderIn(sidebar({ isAdmin: true }), "/t/AA/docs");
     const expected: Record<string, keyof typeof NAV_ICONS> = {
-      Home: "home", Overview: "overview", Board: "board", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
+      Home: "home", Overview: "overview", Issues: "board", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
       Repos: "repos", "Team members": "teamMembers", "Team settings": "teamSettings", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
     };
     for (const [label, key] of Object.entries(expected)) {
@@ -280,7 +280,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
 
   test("moving to another page moves the solid icon", () => {
     const { unmount } = renderIn(sidebar(), "/t/AA");
-    expect(iconOf(within(nav()).getByRole("link", { name: "Board" }))).toBe(pathOf(NAV_ICONS.board.fill as never));
+    expect(iconOf(within(nav()).getByRole("link", { name: "Issues" }))).toBe(pathOf(NAV_ICONS.board.fill as never));
     expect(iconOf(within(nav()).getByRole("link", { name: "Overview" }))).toBe(pathOf(NAV_ICONS.overview.line as never)); // /overview is its own address
     unmount();
     renderIn(sidebar(), "/workspace");
@@ -302,7 +302,7 @@ describe("collapsing to the icon-only rail", () => {
     expect(aside().getAttribute("data-collapsed")).toBe("true");
     expect(aside().className).toContain("md:w-14");
     // still reachable by name, with the text visible to screen readers only
-    const board = within(nav()).getByRole("link", { name: "Board" });
+    const board = within(nav()).getByRole("link", { name: "Issues" });
     expect(board.querySelector("span")!.className).toContain("md:sr-only");
     expect(board.getAttribute("href")).toBe("/t/AA");
     expect(screen.getByText("Workspace").closest("div")!.className).toContain("md:hidden"); // the title makes way for a thin rule
@@ -350,7 +350,7 @@ describe("collapsing to the icon-only rail", () => {
 
   test("expanded, there are no tooltips and no hidden labels", () => {
     renderIn(sidebar(), "/t/AA");
-    const board = within(nav()).getByRole("link", { name: "Board" });
+    const board = within(nav()).getByRole("link", { name: "Issues" });
     expect(board.querySelector("span")!.className).not.toContain("md:sr-only");
   });
 

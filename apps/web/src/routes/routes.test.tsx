@@ -71,7 +71,7 @@ describe("signed in: every page is in the shell", () => {
     expect(trail.getByRole("link", { name: "Beta" }).getAttribute("href")).toBe("/t/BB");
     expect(trail.getByText("Docs").getAttribute("aria-current")).toBe("page");
     const sidebar = screen.getByRole("navigation", { name: "Main" });
-    for (const name of ["Board", "Activity", "Map", "Docs", "Decisions", "Glossary", "Repos"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
+    for (const name of ["Issues", "Activity", "Map", "Docs", "Decisions", "Glossary", "Repos"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
     expect(within(sidebar).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true); // the current section is marked
   });
 
