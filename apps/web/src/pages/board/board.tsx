@@ -22,6 +22,8 @@ import { describeFailure } from "../../lib/form-state";
 import { useServices } from "../../lib/services";
 import { neighbours, parseIssueParam } from "../../lib/issue-nav";
 import { fieldPatch, retagIssue, startingFields, type IssueGroup } from "../../lib/issue-view";
+import type { Relations } from "../../lib/sub-issues";
+import { SubIssueProgress } from "../../components/sub-issue-progress";
 import { dragOver, drop, findCol, itemsOf, type Items } from "./board-state";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Issue } from "./shared";
@@ -45,12 +47,14 @@ export function Board(props: {
   statuses: Col[];
   /** True when a column's order is the manual board order, which only a board grouped by status and not sorted has. */
   manualOrder: boolean;
+  /** Whose sub-issue a card is and how its own sub-issues are getting on. */
+  relations: Relations;
   nodes: NodeLite[];
   members: Member[];
   cycles?: CycleOption[];
   projects?: TeamProjectOption[];
 }) {
-  const { teamKey, groups, statuses, nodes, members } = props;
+  const { teamKey, groups, statuses, nodes, members, relations } = props;
   const columns = useMemo(() => groups.map((g) => ({ id: g.id, name: g.label })), [groups]);
   const cycles = props.cycles ?? NO_CYCLES;
   const projects = props.projects ?? NO_PROJECTS;
@@ -211,12 +215,13 @@ export function Board(props: {
                 onOpen={openIssue}
                 selected={openRef}
                 teamKey={teamKey}
+                relations={relations}
                 starts={startingFields(groups.find((g) => g.id === c.id)!.what)}
                 onCreated={() => void refreshBoard()}
               />
             ))}
           </div>
-          <DragOverlay>{active ? <Card t={active} nodes={nodes} cycles={cycles} projects={projects} overlay /> : null}</DragOverlay>
+          <DragOverlay>{active ? <Card t={active} nodes={nodes} cycles={cycles} projects={projects} relations={relations} overlay /> : null}</DragOverlay>
         </DndContext>
       </div>
       {openRef && (
@@ -250,6 +255,7 @@ function Column(props: {
   nodes: NodeLite[];
   selected: string | null;
   teamKey: string;
+  relations: Relations;
   /** What an issue added in this column starts with: its status, or whatever the column groups by. */
   starts: ReturnType<typeof startingFields>;
   onOpen: (ref: string) => void;
@@ -306,7 +312,7 @@ function Column(props: {
       <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         <SortableContext items={issues.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {issues.map((t) => (
-            <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} projects={props.projects} selected={props.selected === t.ref} onOpen={props.onOpen} />
+            <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} projects={props.projects} relations={props.relations} selected={props.selected === t.ref} onOpen={props.onOpen} />
           ))}
         </SortableContext>
         {adding ? (
@@ -347,7 +353,7 @@ function Column(props: {
   );
 }
 
-function SortableCard({ t, nodes, cycles, projects, selected, onOpen }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; selected: boolean; onOpen: (ref: string) => void }) {
+function SortableCard({ t, nodes, cycles, projects, relations, selected, onOpen }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected: boolean; onOpen: (ref: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
     <div
@@ -359,12 +365,14 @@ function SortableCard({ t, nodes, cycles, projects, selected, onOpen }: { t: Iss
       className={clsx(isDragging && "opacity-30")}
       data-issue={t.ref}
     >
-      <Card t={t} nodes={nodes} cycles={cycles} projects={projects} selected={selected} />
+      <Card t={t} nodes={nodes} cycles={cycles} projects={projects} relations={relations} selected={selected} />
     </div>
   );
 }
 
-function Card({ t, nodes, cycles, projects, selected, overlay }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; selected?: boolean; overlay?: boolean }) {
+function Card({ t, nodes, cycles, projects, relations, selected, overlay }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected?: boolean; overlay?: boolean }) {
+  const parentRef = relations.parentRef(t);
+  const progress = relations.progress(t);
   const linked = t.nodeIds.map((id) => nodes.find((n) => n.id === id)).filter(Boolean) as NodeLite[];
   const project = t.projectId ? projects.find((x) => x.id === t.projectId) : undefined;
   const cycle = t.cycle == null ? null : (cycles.find((c) => c.number === t.cycle) ?? { number: t.cycle, name: "", startsAt: "", endsAt: "", state: "current" as const });
@@ -384,8 +392,14 @@ function Card({ t, nodes, cycles, projects, selected, overlay }: { t: Issue; nod
         </div>
       </div>
       <div className="mt-1 leading-snug">{t.title}</div>
-      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle || project) && (
+      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle || project || parentRef || progress) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
+          {parentRef && (
+            <span className="chip bg-bg text-muted" title={`Sub-issue of ${parentRef}`} data-parent-chip>
+              ↳ {parentRef}
+            </span>
+          )}
+          {progress && <SubIssueProgress progress={progress} />}
           {project && (
             <span className="chip max-w-[10rem] bg-accent/10 text-accent/90" title={`Project: ${project.name}`} data-project-chip>
               <ProjectsIcon /> <span className="truncate">{project.name}</span>

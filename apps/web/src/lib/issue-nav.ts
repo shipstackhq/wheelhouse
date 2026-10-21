@@ -21,8 +21,8 @@ export function neighbours(refs: string[], current: string): Neighbours {
 }
 
 /** True when closing or switching issue would throw away something the person typed. */
-export function isDirty(s: { editingBody: boolean; body: string; savedBody: string; comment: string; title: string; savedTitle: string; labelsPending?: boolean }): boolean {
-  return (s.editingBody && s.body !== s.savedBody) || s.comment.trim() !== "" || s.title !== s.savedTitle || !!s.labelsPending;
+export function isDirty(s: { editingBody: boolean; body: string; savedBody: string; comment: string; title: string; savedTitle: string; labelsPending?: boolean; subIssueDraft?: boolean }): boolean {
+  return (s.editingBody && s.body !== s.savedBody) || s.comment.trim() !== "" || s.title !== s.savedTitle || !!s.labelsPending || !!s.subIssueDraft;
 }
 
 type KeyTarget = { tagName?: string; isContentEditable?: boolean; closest?: (selector: string) => unknown };

@@ -171,6 +171,14 @@ describe("remembering the view", () => {
     expect(loadIssueView("AA")).toEqual({ ...mine, search: "" });
     expect(loadIssueView("BB")).toEqual(DEFAULT_VIEW);
   });
+  test("sub-issue options default to shown and nested, are kept when set, and ignore anything that is not true or false", () => {
+    expect(DEFAULT_VIEW).toMatchObject({ showSub: true, nest: true });
+    expect(parseView({ showSub: false, nest: false })).toMatchObject({ showSub: false, nest: false });
+    expect(parseView({ showSub: "no", nest: 0 })).toMatchObject({ showSub: true, nest: true });
+    const mine = v({ showSub: false, nest: false });
+    saveIssueView("CC", mine);
+    expect(loadIssueView("CC")).toMatchObject({ showSub: false, nest: false });
+  });
   test("damaged or unknown parts are replaced by the default for that part, never thrown", () => {
     expect(parseView(null)).toEqual(DEFAULT_VIEW);
     expect(parseView("nope")).toEqual(DEFAULT_VIEW);

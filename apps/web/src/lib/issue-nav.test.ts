@@ -73,4 +73,6 @@ test("a title never contains a line break: pasted ones become one space, and ord
 test("label edits that have not been saved yet count as a draft too", () => {
   assert.equal(isDirty({ ...clean, labelsPending: true }), true);
   assert.equal(isDirty({ ...clean, labelsPending: false }), false);
+  assert.equal(isDirty({ ...clean, subIssueDraft: true }), true); // a sub-issue title typed and not added
+  assert.equal(isDirty({ ...clean, subIssueDraft: false }), false);
 });

@@ -19,10 +19,11 @@ export type Filters = { status: string[]; priority: string[]; assignee: string[]
 export const FILTER_KEYS = ["status", "priority", "assignee", "label", "project", "cycle"] as const satisfies readonly (keyof Filters)[];
 export type FilterKey = (typeof FILTER_KEYS)[number];
 
-export type IssueView = { groupBy: GroupBy; filters: Filters; sort: { key: SortKey; dir: "asc" | "desc" }; search: string };
+/** `showSub` false hides sub-issues from the list; `nest` puts a sub-issue under its parent when both are in a group (both are list options). */
+export type IssueView = { groupBy: GroupBy; filters: Filters; sort: { key: SortKey; dir: "asc" | "desc" }; search: string; showSub: boolean; nest: boolean };
 
 export const EMPTY_FILTERS: Filters = { status: [], priority: [], assignee: [], label: [], project: [], cycle: [] };
-export const DEFAULT_VIEW: IssueView = { groupBy: "status", filters: EMPTY_FILTERS, sort: { key: "manual", dir: "asc" }, search: "" };
+export const DEFAULT_VIEW: IssueView = { groupBy: "status", filters: EMPTY_FILTERS, sort: { key: "manual", dir: "asc" }, search: "", showSub: true, nest: true };
 
 export const isFiltered = (v: IssueView) => v.search.trim() !== "" || FILTER_KEYS.some((k) => v.filters[k].length > 0);
 export const filterCount = (v: IssueView) => FILTER_KEYS.reduce((n, k) => n + v.filters[k].length, 0);
@@ -42,6 +43,8 @@ export function parseView(raw: unknown): IssueView {
     filters: Object.fromEntries(FILTER_KEYS.map((k) => [k, strings(f[k])])) as Filters,
     sort: { key: (SORT_KEYS as readonly unknown[]).includes(s.key) ? (s.key as SortKey) : "manual", dir: s.dir === "desc" ? "desc" : "asc" },
     search: typeof o.search === "string" ? o.search : "",
+    showSub: typeof o.showSub === "boolean" ? o.showSub : true,
+    nest: typeof o.nest === "boolean" ? o.nest : true,
   };
 }
 

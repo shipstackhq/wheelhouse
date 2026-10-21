@@ -102,6 +102,17 @@ export function IssueViewBar(props: { view: IssueView; onChange: (v: IssueView) 
                 </label>
               ))}
             </fieldset>
+            <fieldset aria-label="Sub-issues" className="mb-2">
+              <legend className="label px-1">Sub-issues</legend>
+              <label className={ROW}>
+                <input type="checkbox" checked={view.showSub} onChange={(e) => set({ showSub: e.target.checked })} />
+                Show sub-issues
+              </label>
+              <label className={clsx(ROW, !view.showSub && "cursor-not-allowed opacity-50")}>
+                <input type="checkbox" checked={view.nest} disabled={!view.showSub} onChange={(e) => set({ nest: e.target.checked })} />
+                Nest under their parent
+              </label>
+            </fieldset>
             <div>
               <label className="label px-1" htmlFor="order-by">Ordering</label>
               <div className="flex items-center gap-1">

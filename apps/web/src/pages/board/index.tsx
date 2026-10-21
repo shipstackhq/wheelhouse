@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { useParams } from "react-router";
 import { Loaded } from "../../components/query-state";
 import { useBoard } from "../../lib/queries";
+import { relationsOf } from "../../lib/sub-issues";
 import { LAYOUTS, loadLayout, saveLayout, type Layout } from "../../lib/issue-layout";
 import { EMPTY_FILTERS, filterIssues, groupIssues, isFiltered, loadIssueView, saveIssueView, type IssueView } from "../../lib/issue-view";
 import { Board } from "./board";
@@ -38,6 +39,10 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
   const shown = useMemo(() => filterIssues(board.issues, view), [board.issues, view]);
   const ctx = useMemo(() => ({ statuses: board.statuses, members: board.members, projects: board.projects, cycles: board.cycles, labels }), [board.statuses, board.members, board.projects, board.cycles, labels]);
   // A list leaves out groups with nothing to show; a board keeps every column, so a card can be dropped into an empty one.
+  const relations = useMemo(() => {
+    const roles = new Map(board.statuses.map((s) => [s.id, s.role]));
+    return relationsOf(board.issues, (id) => roles.get(id) ?? null);
+  }, [board.statuses, board.issues]);
   const groups = useMemo(() => groupIssues(shown, view, ctx, { keepEmpty: layout === "board" }), [shown, view, ctx, layout]);
   const choose = (next: Layout) => {
     saveLayout(teamKey, next);
@@ -64,9 +69,9 @@ function BoardScreen({ board }: { board: NonNullable<ReturnType<typeof useBoard>
       </div>
       <div className="min-h-0 flex-1">
         {layout === "list" ? (
-          <IssueList teamKey={teamKey} statuses={board.statuses} issues={shown} view={view} filtered={isFiltered(view)} onClearFilters={() => changeView({ ...view, filters: EMPTY_FILTERS, search: "" })} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
+          <IssueList teamKey={teamKey} statuses={board.statuses} issues={shown} allIssues={board.issues} view={view} filtered={isFiltered(view)} onClearFilters={() => changeView({ ...view, filters: EMPTY_FILTERS, search: "" })} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
         ) : (
-          <Board teamKey={teamKey} groups={groups} statuses={columns} manualOrder={view.groupBy === "status" && view.sort.key === "manual"} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
+          <Board teamKey={teamKey} groups={groups} statuses={columns} manualOrder={view.groupBy === "status" && view.sort.key === "manual"} relations={relations} nodes={board.nodes} members={board.members} cycles={board.cycles} projects={board.projects} />
         )}
       </div>
     </div>

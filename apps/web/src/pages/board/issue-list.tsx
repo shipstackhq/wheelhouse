@@ -5,12 +5,14 @@ import { DropdownMenu } from "radix-ui";
 import type { BoardStatus, CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
 import { AddIcon, AgentIcon, ChevronDownIcon, ChevronRightIcon, CommentIcon, CyclesIcon, ProjectsIcon } from "../../components/icons";
 import { Avatar } from "../../components/avatar";
+import { SubIssueProgress } from "../../components/sub-issue-progress";
 import { PRIORITY_LABEL, PRIORITY_ORDER, PriorityIcon } from "../../components/priority-icon";
 import { StatusIcon } from "../../components/status-icon";
 import { describeFailure } from "../../lib/form-state";
 import { loadFolded, saveFolded } from "../../lib/issue-layout";
 import { neighbours, parseIssueParam } from "../../lib/issue-nav";
 import { groupIssues, startingFields, type GroupKind, type IssueGroup, type IssueView } from "../../lib/issue-view";
+import { arrangeRows, type ListRow } from "../../lib/sub-issues";
 import { useServices } from "../../lib/services";
 import { cycleTitle } from "../cycles/cycle-bits";
 import { IssueDialog } from "./issue-dialog";
@@ -32,6 +34,8 @@ export function IssueList(props: {
   statuses: BoardStatus[];
   /** The issues the view lets through (already filtered); the list groups and orders them by the view. */
   issues: Issue[];
+  /** Every issue of the team, filtered or not: a parent's progress counts all its sub-issues. */
+  allIssues: Issue[];
   view: IssueView;
   /** True when the view hides something, so an empty list can say why and offer to undo it. */
   filtered: boolean;
@@ -41,7 +45,7 @@ export function IssueList(props: {
   cycles: CycleOption[];
   projects: TeamProjectOption[];
 }) {
-  const { teamKey, statuses, issues, view, nodes, members, cycles, projects } = props;
+  const { teamKey, statuses, issues, allIssues, view, nodes, members, cycles, projects } = props;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
   const [folded, setFolded] = useState(() => loadFolded(teamKey));
@@ -49,6 +53,13 @@ export function IssueList(props: {
   const openRef = parseIssueParam(search.get("t"));
 
   const groups = useMemo(() => groupIssues(issues, view, { statuses, members, projects, cycles }), [issues, view, statuses, members, projects, cycles]);
+  const roleOf = useMemo(() => {
+    const roles = new Map(statuses.map((s) => [s.id, s.role]));
+    return (statusId: string) => roles.get(statusId) ?? null;
+  }, [statuses]);
+  // Parents folded away are kept with the folded groups, as "issue:<id>".
+  const foldedParents = useMemo(() => new Set([...folded].filter((f) => f.startsWith("issue:")).map((f) => f.slice(6))), [folded]);
+  const rowsOf = (g: IssueGroup): ListRow[] => arrangeRows(g.issues, allIssues, { showSub: view.showSub, nest: view.nest, folded: foldedParents }, roleOf);
   const memberName = useMemo(() => new Map(members.map((m) => [m.id, m.name])), [members]);
 
   /** One change, then the board is read again whatever happened, so the list shows the server's answer (and undoes a refusal). */
@@ -75,7 +86,7 @@ export function IssueList(props: {
     setSearch(sp, { replace: true, preventScrollReset: true });
   };
   // Previous and next in the dialog walk the list in the order it shows, folded groups included.
-  const order = groups.flatMap((g) => g.issues.map((t) => t.ref));
+  const order = groups.flatMap((g) => rowsOf(g).map((r) => r.issue.ref));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -101,21 +112,23 @@ export function IssueList(props: {
             />
             {!folded.has(g.id) && (
               <ul>
-                {g.issues.map((t) => (
+                {rowsOf(g).map((r) => (
                   <Row
-                    key={t.id}
-                    issue={t}
+                    key={r.issue.id}
+                    row={r}
+                    onFold={() => toggle(`issue:${r.issue.id}`)}
+                    parentFolded={foldedParents.has(r.issue.id)}
                     statuses={statuses}
                     members={members}
-                    assignee={t.assigneeId ? memberName.get(t.assigneeId) : undefined}
+                    assignee={r.issue.assigneeId ? memberName.get(r.issue.assigneeId) : undefined}
                     nodes={nodes}
                     cycles={cycles}
                     projects={projects}
-                    selected={t.ref === openRef}
-                    onOpen={() => openIssue(t.ref)}
-                    onStatus={(statusId) => act(() => api.issues.move(t.ref, { status: statusId }))}
-                    onPriority={(priority) => act(() => api.issues.update(t.ref, { priority, version: t.version }))}
-                    onAssignee={(assigneeId) => act(() => api.issues.update(t.ref, { assigneeId, version: t.version }))}
+                    selected={r.issue.ref === openRef}
+                    onOpen={() => openIssue(r.issue.ref)}
+                    onStatus={(statusId) => act(() => api.issues.move(r.issue.ref, { status: statusId }))}
+                    onPriority={(priority) => act(() => api.issues.update(r.issue.ref, { priority, version: r.issue.version }))}
+                    onAssignee={(assigneeId) => act(() => api.issues.update(r.issue.ref, { assigneeId, version: r.issue.version }))}
                   />
                 ))}
               </ul>
@@ -204,7 +217,9 @@ function GroupHeader(props: { group: IssueGroup; folded: boolean; onToggle: () =
 }
 
 function Row(props: {
-  issue: Issue;
+  row: ListRow;
+  onFold: () => void;
+  parentFolded: boolean;
   statuses: BoardStatus[];
   members: Member[];
   assignee: string | undefined;
@@ -217,12 +232,31 @@ function Row(props: {
   onPriority: (priority: Issue["priority"]) => void;
   onAssignee: (assigneeId: string | null) => void;
 }) {
-  const { issue: t, statuses } = props;
+  const { issue: t, depth, progress, childrenHere, parentRef } = props.row;
+  const { statuses } = props;
   const status = statuses.find((s) => s.id === t.statusId);
   const project = t.projectId ? props.projects.find((x) => x.id === t.projectId) : undefined;
   const cycle = t.cycle == null ? null : (props.cycles.find((c) => c.number === t.cycle) ?? { number: t.cycle, name: "", startsAt: "", endsAt: "", state: "current" as const });
   return (
-    <li className={clsx("flex items-center gap-1.5 border-b border-line px-3 py-1 text-sm hover:bg-panel-2/60", props.selected && "bg-accent/10")} data-issue={t.ref}>
+    <li
+      className={clsx("flex items-center gap-1.5 border-b border-line py-1 pr-3 text-sm hover:bg-panel-2/60", props.selected && "bg-accent/10")}
+      style={{ paddingLeft: 12 + depth * 20 }}
+      data-issue={t.ref}
+      data-depth={depth}
+    >
+      {childrenHere > 0 ? (
+        <button
+          type="button"
+          aria-expanded={!props.parentFolded}
+          aria-label={`${props.parentFolded ? "Show" : "Hide"} the sub-issues of ${t.ref}`}
+          onClick={props.onFold}
+          className="rounded p-0.5 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50"
+        >
+          {props.parentFolded ? <ChevronRightIcon aria-hidden /> : <ChevronDownIcon aria-hidden />}
+        </button>
+      ) : (
+        <span aria-hidden className="inline-block w-5 shrink-0" />
+      )}
       <Menu
         label={`Priority of ${t.ref}: ${PRIORITY_LABEL[t.priority]}`}
         trigger={<PriorityIcon priority={t.priority} />}
@@ -238,6 +272,12 @@ function Row(props: {
         {t.title}
       </button>
       <div className="hidden shrink-0 items-center gap-1 md:flex">
+        {parentRef && (
+          <span className="chip bg-bg text-muted" title={`Sub-issue of ${parentRef}`} data-parent-chip>
+            ↳ {parentRef}
+          </span>
+        )}
+        {progress && <SubIssueProgress progress={progress} />}
         {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent"><AgentIcon /></span>}
         {t.labels.slice(0, 3).map((l) => (
           <span key={l} className="chip bg-bg text-muted">{l}</span>

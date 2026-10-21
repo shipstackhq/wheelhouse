@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import clsx from "clsx";
 import { Link } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Dialog } from "radix-ui";
+import { Dialog, Popover } from "radix-ui";
 import ReactMarkdown from "react-markdown";
-import type { CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
+import type { CycleOption, IssueRelative, TeamProjectOption } from "@wheelhouse/api-client";
 import remarkGfm from "remark-gfm";
 import { AutoGrowTextarea } from "../../components/auto-grow-textarea";
 import { DescriptionEditor } from "../../components/description-editor";
@@ -13,7 +14,10 @@ import { errorText } from "../../components/query-state";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { parseLabels } from "../../lib/labels";
-import { issueQuery } from "../../lib/queries";
+import { boardQuery, issueQuery } from "../../lib/queries";
+import { parentCandidates } from "../../lib/sub-issues";
+import { PriorityIcon } from "../../components/priority-icon";
+import { SubIssueProgress } from "../../components/sub-issue-progress";
 import { useServices } from "../../lib/services";
 import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/issue-nav";
 import { PRIORITY_STYLE, type Col, type Member, type NodeLite } from "./shared";
@@ -57,6 +61,7 @@ export function IssueDialog(props: {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [labelsPending, setLabelsPending] = useState(false);
+  const [subIssueDraft, setSubIssueDraft] = useState(false);
   const { confirm, dialogs } = useDialogs();
   const content = useRef<HTMLDivElement>(null);
 
@@ -68,7 +73,7 @@ export function IssueDialog(props: {
     setTitle((cur) => (document.activeElement?.id === "issue-title" ? cur : savedTitle));
   }, [savedTitle, t?.version]);
 
-  const dirty = isDirty({ editingBody, body, savedBody: t?.body ?? "", comment, title, savedTitle: t?.title ?? title, labelsPending });
+  const dirty = isDirty({ editingBody, body, savedBody: t?.body ?? "", comment, title, savedTitle: t?.title ?? title, labelsPending, subIssueDraft });
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
 
@@ -291,6 +296,15 @@ export function IssueDialog(props: {
                   )}
                 </section>
 
+                <SubIssues
+                  issue={t}
+                  subIssues={data?.children ?? []}
+                  busy={busy}
+                  onDraftChange={setSubIssueDraft}
+                  onOpen={(ref) => void go(ref)}
+                  onAdd={(title) => mutate(() => api.issues.create(props.teamKey, { title, parent: t.ref }))}
+                />
+
                 <section>
                   <span className="label">
                     Discussion{data && data.comments.length > 0 && <span className="normal-case text-muted/70"> ({data.comments.length})</span>}
@@ -333,6 +347,15 @@ export function IssueDialog(props: {
                       value={t.assigneeId ?? ""}
                       options={[{ value: "", label: "Unassigned" }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { assigneeId: v || null, version: t.version }))}
+                    />
+                  </Field>
+                  <Field label="Parent">
+                    <ParentField
+                      teamKey={props.teamKey}
+                      issue={t}
+                      parent={data?.parent ?? null}
+                      onOpen={(ref) => void go(ref)}
+                      onSet={(ref) => void mutate(() => api.issues.update(t.ref, { parent: ref, version: t.version }))}
                     />
                   </Field>
                   {(cycles.length > 0 || t.cycle != null) && (
@@ -417,7 +440,7 @@ export function IssueDialog(props: {
                   <button
                     className="btn btn-danger"
                     onClick={async () => {
-                      if (!(await confirm({ title: `Delete ${t.ref}?`, description: "This removes the issue and its comments.", confirmLabel: "Delete", danger: true }))) return;
+                      if (!(await confirm({ title: `Delete ${t.ref}?`, description: data!.children.length ? `This removes the issue and its comments. Its ${data!.children.length === 1 ? "sub-issue stays, as a top-level issue" : `${data!.children.length} sub-issues stay, as top-level issues`}.` : "This removes the issue and its comments.", confirmLabel: "Delete", danger: true }))) return;
                       setBusy(true);
                       try {
                         await api.issues.remove(t.ref);
@@ -447,6 +470,140 @@ function Field({ label, children, className }: { label: string; children: React.
     <div className={className}>
       <span className="label">{label}</span>
       {children}
+    </div>
+  );
+}
+
+/** The issue's sub-issues, how far along they are, each opening in place, and a box to add one. */
+function SubIssues(props: {
+  issue: { ref: string };
+  subIssues: IssueRelative[];
+  busy: boolean;
+  /** Whether a title has been typed and not yet added, so closing the dialog can ask first (as it does for a comment). */
+  onDraftChange: (draft: boolean) => void;
+  onOpen: (ref: string) => void;
+  onAdd: (title: string) => Promise<boolean>;
+}) {
+  const kids = props.subIssues;
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState("");
+  const draft = (v: string) => {
+    setTitle(v);
+    props.onDraftChange(v.trim() !== "");
+  };
+  const stop = () => {
+    draft("");
+    setAdding(false);
+  };
+  const counted = kids.filter((k) => !k.canceled);
+  const progress = { done: counted.filter((k) => k.done).length, total: counted.length };
+  if (kids.length === 0 && !adding) {
+    return (
+      <section aria-label="Sub-issues">
+        <button type="button" className="text-xs text-muted hover:text-fg" onClick={() => setAdding(true)}>+ Add sub-issue</button>
+      </section>
+    );
+  }
+  return (
+    <section aria-label="Sub-issues">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="label mb-0 flex items-center gap-2">
+          Sub-issues <SubIssueProgress progress={progress} />
+        </span>
+        {!adding && (
+          <button type="button" className="text-xs text-muted hover:text-fg" onClick={() => setAdding(true)}>
+            + Add sub-issue
+          </button>
+        )}
+      </div>
+      {kids.length > 0 && (
+        <ul className="divide-y divide-line rounded-md border border-line">
+          {kids.map((k) => (
+            <li key={k.ref} className="flex items-center gap-2 px-2 py-1.5 text-sm" data-sub-issue={k.ref}>
+              <PriorityIcon priority={k.priority} />
+              <span className="font-mono text-[11px] text-muted">{k.ref}</span>
+              <button type="button" className={clsx("min-w-0 flex-1 truncate text-left hover:underline", (k.done || k.canceled) && "text-muted line-through")} onClick={() => props.onOpen(k.ref)}>
+                {k.title}
+              </button>
+              <span className="chip bg-bg text-muted">{k.status}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {adding && (
+        <form
+          className="mt-2 flex items-center gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const v = title.trim();
+            if (!v) return stop();
+            draft("");
+            await props.onAdd(v);
+          }}
+        >
+          <input
+            autoFocus
+            className="input min-w-0 flex-1 py-1"
+            aria-label="New sub-issue title"
+            placeholder="Sub-issue title"
+            value={title}
+            disabled={props.busy}
+            onChange={(e) => draft(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary py-1" disabled={props.busy}>Add</button>
+          <button type="button" className="btn py-1" onClick={stop}>Cancel</button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Whose sub-issue this is: the parent (opening it, or taking it away), or a button to choose one from the team's issues. The choice
+ * never offers the issue itself or anything below it, which would be a loop; the server refuses those too.
+ */
+function ParentField(props: { teamKey: string; issue: { id: string; ref: string }; parent: { ref: string; title: string } | null; onOpen: (ref: string) => void; onSet: (ref: string | null) => void }) {
+  const { api } = useServices();
+  const board = useQuery(boardQuery(api, props.teamKey));
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const candidates = parentCandidates(board.data?.issues ?? [], props.issue.id)
+    .filter((c) => words.every((w) => `${c.ref} ${c.title}`.toLowerCase().includes(w)))
+    .slice(0, 30);
+  return (
+    <div className="flex items-center gap-1">
+      {props.parent && (
+        <button type="button" className="min-w-0 flex-1 truncate rounded border border-line px-2 py-1.5 text-left text-sm hover:bg-panel-2" onClick={() => props.onOpen(props.parent!.ref)} title={props.parent.title}>
+          <span className="font-mono text-[11px] text-muted">{props.parent.ref}</span> {props.parent.title}
+        </button>
+      )}
+      <Popover.Root open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQ(""); }}>
+        <Popover.Trigger className={clsx("btn py-1.5 text-xs", props.parent ? "px-2" : "w-full justify-start text-muted")} aria-label={props.parent ? "Change parent" : "Set parent"}>
+          {props.parent ? "Change" : "No parent"}
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content align="end" sideOffset={4} collisionPadding={8} className="z-[60] w-72 rounded-lg border border-line bg-panel p-2 text-sm text-fg shadow-xl">
+            <input autoFocus type="search" className="input mb-1 py-1" aria-label="Find an issue" placeholder="Find an issue" value={q} onChange={(e) => setQ(e.target.value)} />
+            <ul className="max-h-60 overflow-y-auto" aria-label="Issues">
+              {candidates.map((c) => (
+                <li key={c.id}>
+                  <button type="button" className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-panel-2" onClick={() => { setOpen(false); props.onSet(c.ref); }}>
+                    <span className="font-mono text-[11px] text-muted">{c.ref}</span>
+                    <span className="truncate">{c.title}</span>
+                  </button>
+                </li>
+              ))}
+              {candidates.length === 0 && <li className="px-2 py-2 text-xs text-muted">No issue matches.</li>}
+            </ul>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      {props.parent && (
+        <button type="button" className="rounded p-1 text-muted hover:text-danger" aria-label="Remove parent" onClick={() => props.onSet(null)}>
+          <CloseIcon aria-hidden />
+        </button>
+      )}
     </div>
   );
 }
