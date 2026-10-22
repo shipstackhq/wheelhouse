@@ -45,7 +45,7 @@ describe("new team", () => {
     await user.type(screen.getByLabelText("Description"), "Agents read this.");
     await user.click(screen.getByRole("button", { name: "Create team" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/t/NT/onboarding"));
-    expect(server.sent("POST /api/app/teams")[0].body).toEqual({ name: "New Thing", key: "NT", description: "Agents read this." });
+    expect(server.sent("POST /api/app/teams")[0].body).toEqual({ name: "New Thing", key: "NT", description: "Agents read this.", parent: null });
     expect(server.sent("POST /api/app/teams")[0].headers["x-csrf-token"]).toBe("csrf-ada");
     await screen.findByRole("heading", { level: 2, name: "Where does your code live?" });
     const teams = services.queryClient.getQueryData(["teams"]) as { key: string }[];

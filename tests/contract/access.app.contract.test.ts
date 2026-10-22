@@ -139,6 +139,10 @@ describe("roles inside a team", () => {
     const bob = await join(owner, "Bob", "member");
     const key = await makeTeam(owner, "Leave me");
     await add(owner, key, bob, "editor");
+    // Bob is on no other team yet, so leaving would leave him on none: refused. With a team of his own he may go.
+    const stuck = await app("DELETE", `/api/app/teams/${key}/members/${bob.id}`, bob.sess);
+    assert.equal(stuck.status, 409, stuck.text);
+    await makeTeam(bob, "Bob home");
     assert.equal((await app("DELETE", `/api/app/teams/${key}/members/${bob.id}`, bob.sess)).status, 200);
     assert.equal((await app("GET", `/api/app/teams/${key}/board`, bob.sess)).status, 404);
   });
