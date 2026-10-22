@@ -242,6 +242,22 @@ describe("the device's stream", () => {
   });
 });
 
+describe("what a run delivered", () => {
+  test("nothing, a pushed branch, an open pull request, or a refused one; nothing to say until it ends", () => {
+    assert.equal(d.jobDelivery("succeeded", { pushed: false }), "none");
+    assert.equal(d.jobDelivery("succeeded", {}), "none");
+    assert.equal(d.jobDelivery("succeeded", { pushed: true }), "pushed");
+    assert.equal(d.jobDelivery("succeeded", { pushed: true, pullRequest: { number: 3, url: "u" } }), "pr_opened");
+    assert.equal(d.jobDelivery("succeeded", { pushed: true, pullRequestError: "GitHub refused" }), "pr_failed");
+    // No GitHub App means no pull request was expected: that is a push, not a failure.
+    assert.equal(d.jobDelivery("succeeded", { pushed: true, pullRequestSkipped: "App not set up" }), "pushed");
+    // A stopped or failed run still pushes what it had.
+    assert.equal(d.jobDelivery("canceled", { pushed: true }), "pushed");
+    assert.equal(d.jobDelivery("failed", { pushed: false }), "none");
+    for (const s of ["offered", "accepted", "running", "rejected", "expired", "lost"] as const) assert.equal(d.jobDelivery(s, {}), null, s);
+  });
+});
+
 describe("jobs", () => {
   test("run on device: a signed offer with the issue and the repository, accepted, run, and finished", async () => {
     const { device, poll } = await paired();
@@ -278,6 +294,7 @@ describe("jobs", () => {
     await d.finishJob(device, job.id, { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 2, insertions: 10, deletions: 3 }, costUsd: 0.4 });
     const done = (await d.issueJobs(teammate, issue.ref)).jobs.find((j) => j.id === job.id)!;
     assert.equal(done.state, "succeeded");
+    assert.equal(done.delivery, "pushed");
     assert.equal(done.result.commit, "abc1234");
     await d.finishJob(device, job.id, { state: "succeeded" }); // the same finish again is fine
     await assert.rejects(d.recordJobEvents(device, job.id, { events: [{ seq: 3, type: "x" }] }), code("conflict"));

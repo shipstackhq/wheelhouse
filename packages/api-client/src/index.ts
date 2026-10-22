@@ -81,6 +81,7 @@ import type {
   IssueView,
   DeviceView,
   IssueRuns,
+  JobDelivery,
   JobEvent,
   JobView,
   PairingPeek,

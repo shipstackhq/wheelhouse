@@ -546,7 +546,7 @@ export async function finishJob(device: Device, jobId: string, input: Record<str
 
 /**
  * The run's pull request, from its branch into the branch it started from. It is opened ready for review, not as a draft, so the
- * pull request rules move the issue to Review. A failure is recorded on the run (`result.pullRequestError`) and never fails the
+ * pull request rules move the issue to Review. A refusal is recorded on the run (`result.pullRequestError`), and a repository the App cannot reach as a note (`pullRequestSkipped`); neither fails the
  * finish: the branch is pushed either way, and a person can open the pull request by hand.
  */
 async function openJobPullRequest(j: typeof deviceJobs.$inferSelect, device: Device, gh: PullRequestOpener) {
@@ -559,7 +559,8 @@ async function openJobPullRequest(j: typeof deviceJobs.$inferSelect, device: Dev
     .where(eq(issues.id, j.issueId));
   let outcome: Record<string, unknown>;
   if (!row) return;
-  if (!gh || !row.repo.githubInstallationId || !row.repo.githubRepoId) outcome = { pullRequestError: "The GitHub App is not set up for this repository, so no pull request was opened" };
+  if (!gh || !row.repo.githubInstallationId || !row.repo.githubRepoId) // Not an error: without the App no pull request was ever expected, so the run just reads as pushed.
+    outcome = { pullRequestSkipped: "The GitHub App is not set up for this repository, so no pull request was opened" };
   else {
     const ref = `${row.teamKey}-${row.issue.number}`;
     const r = j.result as { costUsd?: number | null; diffStats?: { files: number | null; insertions: number | null; deletions: number | null } };
@@ -735,6 +736,21 @@ const slugify = (s: string) =>
 /** `wh/WH-12-fix-the-login-3f2a1c`: the issue ref (so the GitHub App links it), its title, and a bit of the job id, since an issue can run again. */
 export const jobBranch = (ref: string, title: string, jobId: string) => `wh/${[ref, slugify(title), jobId.replace(/-/g, "").slice(0, 6)].filter(Boolean).join("-")}`;
 
+/** What a run left behind, apart from how it ended: nothing, a pushed branch, an open pull request, or a branch whose pull request GitHub refused. */
+export type JobDelivery = "none" | "pushed" | "pr_opened" | "pr_failed";
+
+/**
+ * Derived from what the run recorded, so it needs no column of its own. Null while a run has not finished (or was never taken up),
+ * because it has nothing to report yet. A pull request is opened a moment after the run finishes, so a pushed run reads `pushed`
+ * until that attempt lands.
+ */
+export function jobDelivery(state: DeviceJobState, result: Record<string, unknown>): JobDelivery | null {
+  if (result.pullRequest) return "pr_opened";
+  if (result.pullRequestError) return "pr_failed";
+  if (result.pushed === true) return "pushed";
+  return state === "succeeded" || state === "failed" || state === "canceled" ? "none" : null;
+}
+
 function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string | null; repositoryName?: string | null } = {}) {
   return {
     id: j.id,
@@ -747,6 +763,7 @@ function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string
     repositoryId: j.repositoryId,
     repositoryName: extra.repositoryName ?? null,
     result: j.result,
+    delivery: jobDelivery(j.state, j.result),
     error: j.error,
     cancelRequested: !!j.cancelRequestedAt,
     createdAt: j.createdAt.toISOString(),
