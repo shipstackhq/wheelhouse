@@ -808,6 +808,8 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
 
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
 const DB_FILE_AUDIT: Record<string, string> = {
+  "packages/core/src/lib/daemon.ts": "the agent daemon. People: devices are selected by owner id AND the caller's workspace id (another person's or another workspace's device is not_found); runs go through resolveIssue(actor), repositories through the issue's own team, a job is read only through its issue's team (tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused). Devices: every request carries a token that names one device, and a device reaches only its own jobs and messages (jobId AND deviceId in every query; another device's job is not_found, tested). Pairing creates the device in the approving person's own workspace",
+  "packages/core/src/lib/daemon-crypto.ts": "reads and writes only the instance's own signing key (instance_keys); no workspace data",
   "apps/api/src/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
   "packages/core/src/db/index.ts": "the connection itself",
   "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
@@ -858,6 +860,29 @@ describe("new entry points must be audited", () => {
  * "scoped" means: the person or key is resolved first, and everything after is the service layer, which takes the actor.
  */
 const API_ROUTE_AUDIT: Record<string, string> = {
+  // The agent daemon (daemon.ts). /api/daemon is for devices: pairing and the token exchange are the way in and need no session;
+  // everything else needs a device token, which names exactly one device, and reaches only that device's own jobs and messages.
+  "POST /api/daemon/pair/start": "no workspace data: stores a pending pairing (the machine's public key and name) behind a random code; rate limited per address",
+  "POST /api/daemon/pair/poll": "the daemon's secret device code: answers only that pairing's state, and once approved its own device id and workspace name",
+  "POST /api/daemon/token": "an assertion signed by the device's own key: answers a token for that one device; another key, a revoked device or a reused assertion is refused (tested)",
+  "GET /api/daemon/stream": "the device token's own messages only (device_messages by device id); ends when the device is revoked (tested)",
+  "POST /api/daemon/hello": "updates the token's own device; reconciles only that device's jobs",
+  "POST /api/daemon/heartbeat": "updates the token's own device",
+  "POST /api/daemon/jobs/:id/accept": "the job by id AND the token's device id; another device's job is not_found (tested)",
+  "POST /api/daemon/jobs/:id/reject": "the job by id AND the token's device id",
+  "POST /api/daemon/jobs/:id/events": "the job by id AND the token's device id",
+  "POST /api/daemon/jobs/:id/finish": "the job by id AND the token's device id",
+  "GET /api/app/devices": "the caller's own devices: owner id AND the session's workspace id",
+  "PATCH /api/app/devices/:id": "a device of the caller's own (owner id AND workspace id); anyone else's is not_found (tested)",
+  "DELETE /api/app/devices/:id": "a device of the caller's own (owner id AND workspace id)",
+  "GET /api/app/devices/pair": "a pending pairing by its code; no workspace data until approved; viewers and guests refused (tested)",
+  "POST /api/app/devices/pair": "approving creates the device in the caller's own workspace, owned by the caller",
+  "POST /api/app/devices/pair/deny": "a pending pairing by its code; changes only its state",
+  "GET /api/app/issues/:ref/jobs": "resolveIssue(actor) first; the runs of that issue, the caller's own devices, the issue team's repositories",
+  "GET /api/app/issues/:ref/jobs/branches": "resolveIssue(actor) first; a repository of the issue's own team",
+  "POST /api/app/issues/:ref/jobs": "resolveIssue(actor, edit); a device of the caller's own; a repository of the issue's team; a continued run must be of the same issue (tested)",
+  "GET /api/app/jobs/:id/events": "the job's workspace must be the caller's, and its issue must resolve for the caller (resolveIssue); otherwise not_found (tested)",
+  "POST /api/app/jobs/:id/cancel": "as reading the job, and only its starter or the device's owner may cancel (tested)",
   "GET /api/health": "select 1; no data, no auth",
   "POST /mcp": "actor from the API key or session (ActorGuard); every tool runs through the service layer with that actor (tested over HTTP in the contract suite)",
   "GET /mcp": "405, nothing read",
