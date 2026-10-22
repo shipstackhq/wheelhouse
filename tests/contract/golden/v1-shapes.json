@@ -4,17 +4,21 @@
       "createdAt": "string",
       "description": "string",
       "id": "string",
+      "issueCounter": "number",
       "key": "string",
       "name": "string",
-      "teamId": "string",
-      "ticketCounter": "number"
+      "teamId": "string"
     }
   ],
   "get_board": {
-    "columns": [
+    "project": {
+      "description": "string",
+      "key": "string",
+      "name": "string"
+    },
+    "statuses": [
       {
-        "name": "string",
-        "tickets": [
+        "issues": [
           {
             "agentClaimable": "boolean",
             "claimed": "boolean",
@@ -28,22 +32,16 @@
             "title": "string",
             "version": "number"
           }
-        ]
+        ],
+        "name": "string"
       }
-    ],
-    "project": {
-      "description": "string",
-      "key": "string",
-      "name": "string"
-    }
+    ]
   },
-  "create_ticket": {
+  "create_issue": {
     "agentClaimable": "boolean",
     "assigneeId": "null",
     "body": "string",
     "claimedByKeyId": "null",
-    "column": "string",
-    "columnId": "string",
     "createdAt": "string",
     "createdById": "string",
     "createdByKind": "string",
@@ -52,15 +50,19 @@
       "string"
     ],
     "number": "number",
+    "parentId": "null",
     "position": "number",
     "priority": "string",
     "projectId": "string",
     "ref": "string",
+    "status": "string",
+    "statusId": "string",
     "title": "string",
     "updatedAt": "string",
     "version": "number"
   },
-  "get_ticket": {
+  "get_issue": {
+    "children": [],
     "comments": [],
     "history": [
       {
@@ -69,8 +71,8 @@
         "actorName": "string",
         "createdAt": "string",
         "data": {
-          "column": "string",
           "ref": "string",
+          "status": "string",
           "title": "string"
         },
         "entity": "string",
@@ -83,24 +85,11 @@
         "type": "string"
       }
     ],
-    "nodes": [],
-    "project": {
-      "createdAt": "string",
-      "description": "string",
-      "id": "string",
-      "key": "string",
-      "name": "string",
-      "teamId": "string",
-      "ticketCounter": "number"
-    },
-    "pullRequests": [],
-    "ticket": {
+    "issue": {
       "agentClaimable": "boolean",
       "assigneeId": "null",
       "body": "string",
       "claimedByKeyId": "null",
-      "column": "string",
-      "columnId": "string",
       "createdAt": "string",
       "createdById": "string",
       "createdByKind": "string",
@@ -109,14 +98,29 @@
         "string"
       ],
       "number": "number",
+      "parentId": "null",
       "position": "number",
       "priority": "string",
       "projectId": "string",
       "ref": "string",
+      "status": "string",
+      "statusId": "string",
       "title": "string",
       "updatedAt": "string",
       "version": "number"
-    }
+    },
+    "nodes": [],
+    "parent": "null",
+    "project": {
+      "createdAt": "string",
+      "description": "string",
+      "id": "string",
+      "issueCounter": "number",
+      "key": "string",
+      "name": "string",
+      "teamId": "string"
+    },
+    "pullRequests": []
   },
   "get_changes": {
     "changes": [
@@ -126,8 +130,8 @@
         "actorName": "string",
         "createdAt": "string",
         "data": {
-          "column": "string",
           "ref": "string",
+          "status": "string",
           "title": "string"
         },
         "entity": "string",
@@ -162,11 +166,11 @@
             "to": "string"
           }
         },
-        "column": "string",
         "commentId": "string",
         "from": "string",
         "fromRole": "string",
         "ref": "string",
+        "status": "string",
         "title": "string",
         "to": "string",
         "toRole": "string"

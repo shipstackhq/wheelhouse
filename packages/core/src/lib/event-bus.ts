@@ -1,5 +1,5 @@
 /**
- * In-process fan-out of change signals to the browsers watching a project (WH-1).
+ * In-process fan-out of change signals to the browsers watching a team (WH-1).
  *
  * The events table stays the source of truth; this only tells open streams "something new is in it". It sits behind
  * the small `EventBus` interface so Postgres LISTEN/NOTIFY can replace it when more than one instance runs; today
@@ -10,8 +10,8 @@
  */
 
 export type StreamEvent = {
+  workspaceId: string;
   teamId: string;
-  projectId: string;
   /** The events-table sequence. Absent on transient signals (an agent acked its queue), which are not in the log. */
   seq?: number;
   type: string;
@@ -22,7 +22,7 @@ export type StreamEvent = {
   summary?: string;
 };
 
-export type Scope = { project: string } | { team: string };
+export type Scope = { team: string } | { workspace: string };
 
 export interface EventBus {
   publish(e: StreamEvent): void;
@@ -31,13 +31,13 @@ export interface EventBus {
   size(): number;
 }
 
-const key = (s: Scope) => ("project" in s ? `project:${s.project}` : `team:${s.team}`);
+const key = (s: Scope) => ("team" in s ? `team:${s.team}` : `workspace:${s.workspace}`);
 
 export class MemoryBus implements EventBus {
   private subs = new Map<string, Set<(e: StreamEvent) => void>>();
 
   publish(e: StreamEvent) {
-    for (const k of [`project:${e.projectId}`, `team:${e.teamId}`]) {
+    for (const k of [`team:${e.teamId}`, `workspace:${e.workspaceId}`]) {
       for (const fn of [...(this.subs.get(k) ?? [])]) {
         try {
           fn(e);

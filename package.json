@@ -17,7 +17,8 @@
     "db:import": "tsx packages/core/src/tools/db-cli.ts import",
     "db:verify": "tsx packages/core/src/tools/db-cli.ts verify",
     "map:reanchor": "tsx packages/core/src/tools/reanchor-cli.ts",
-    "map:after-migration": "tsx packages/core/src/tools/post-migration-map-cli.ts"
+    "map:after-migration": "tsx packages/core/src/tools/post-migration-map-cli.ts",
+    "db:preflight": "tsx packages/core/src/tools/db-cli.ts preflight"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.9",

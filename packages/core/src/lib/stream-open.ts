@@ -8,13 +8,13 @@ import { eventStream, parseSince, SSE_HEADERS } from "./sse";
 
 export { SSE_HEADERS };
 
-/** Browsers open one stream per project tab plus one for the dashboard; this is generous for a person and fatal for a flood. */
+/** Browsers open one stream per team tab plus one for the dashboard; this is generous for a person and fatal for a flood. */
 export const MAX_STREAMS_PER_USER = 12;
 const open = new Map<string, number>();
 
 const toStreamEvent = (r: typeof schema.events.$inferSelect): StreamEvent => ({
+  workspaceId: r.workspaceId,
   teamId: r.teamId,
-  projectId: r.projectId,
   seq: r.seq,
   type: r.type,
   entity: r.entity,
@@ -28,8 +28,8 @@ const toStreamEvent = (r: typeof schema.events.$inferSelect): StreamEvent => ({
 export type StreamResult = { status: 200; headers: typeof SSE_HEADERS; body: ReadableStream<Uint8Array> } | { status: number; text: string; headers?: Record<string, string> };
 
 /**
- * Shared by the project stream and the dashboard's team stream: the caller must be a person signed in with a session
- * cookie, the scope is resolved to exactly their own team, and then the event stream is handed back. `getActor` resolves the
+ * Shared by the team stream and the dashboard's workspace stream: the caller must be a person signed in with a session
+ * cookie, the scope is resolved to exactly their own workspace, and then the event stream is handed back. `getActor` resolves the
  * caller the host's way; `signal` ends the stream when the client goes away.
  */
 export async function openStream(i: {

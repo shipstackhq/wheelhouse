@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { appJwt, GithubApi, GithubApiError, isZeroSha } from "./api";
 import { githubConfig, githubMissing, type GithubConfig } from "./config";
-import { roleFromText, type RoleColumn } from "../column-roles";
+import { roleFromText, type RoleStatus } from "../status-roles";
 import { ciState, decideMove, RECENT_MOVE_MS } from "./pr-rules";
-import { parseTicketRefs, refsForProject } from "./refs";
+import { parseIssueRefs, refsForTeam } from "./refs";
 import { signBody, verifySignature } from "./signature";
 import { makeState, readState, STATE_TTL_MS } from "./state";
 
@@ -28,109 +28,107 @@ describe("webhook signatures", () => {
   });
 });
 
-describe("ticket references", () => {
+describe("issue references", () => {
   test("found in titles and branch names, in any case, once each, in order", () => {
-    assert.deepEqual(parseTicketRefs("WH-12 Add the thing", "feature/wh-12-add-thing"), [{ key: "WH", number: 12 }]);
-    assert.deepEqual(parseTicketRefs("Fix WH-3 and WH-14 (see wh-3)"), [{ key: "WH", number: 3 }, { key: "WH", number: 14 }]);
-    assert.deepEqual(parseTicketRefs("[WH-9] polish", "wh-9/polish"), [{ key: "WH", number: 9 }]);
+    assert.deepEqual(parseIssueRefs("WH-12 Add the thing", "feature/wh-12-add-thing"), [{ key: "WH", number: 12 }]);
+    assert.deepEqual(parseIssueRefs("Fix WH-3 and WH-14 (see wh-3)"), [{ key: "WH", number: 3 }, { key: "WH", number: 14 }]);
+    assert.deepEqual(parseIssueRefs("[WH-9] polish", "wh-9/polish"), [{ key: "WH", number: 9 }]);
   });
   test("things that only look like references are not", () => {
-    assert.deepEqual(parseTicketRefs("Bump utf-8 handling", "v1-2", "ABCDEFG-1", "WH-0", "WH-", "-12", "x1WH-5", "WH-1234567"), [{ key: "UTF", number: 8 }], "only well-formed ones, still unresolved until a project key matches");
-    assert.deepEqual(parseTicketRefs(null, undefined, ""), []);
+    assert.deepEqual(parseIssueRefs("Bump utf-8 handling", "v1-2", "ABCDEFG-1", "WH-0", "WH-", "-12", "x1WH-5", "WH-1234567"), [{ key: "UTF", number: 8 }], "only well-formed ones, still unresolved until a team key matches");
+    assert.deepEqual(parseIssueRefs(null, undefined, ""), []);
   });
-  test("only the project's own key counts, so a shared repository does not link another project's tickets", () => {
-    const refs = parseTicketRefs("WH-12 and API-7 and UTF-8");
-    assert.deepEqual(refsForProject(refs, "WH"), [{ key: "WH", number: 12 }]);
-    assert.deepEqual(refsForProject(refs, "wh"), [{ key: "WH", number: 12 }]);
-    assert.deepEqual(refsForProject(refs, "API"), [{ key: "API", number: 7 }]);
+  test("only the team's own key counts, so a shared repository does not link another team's issues", () => {
+    const refs = parseIssueRefs("WH-12 and API-7 and UTF-8");
+    assert.deepEqual(refsForTeam(refs, "WH"), [{ key: "WH", number: 12 }]);
+    assert.deepEqual(refsForTeam(refs, "wh"), [{ key: "WH", number: 12 }]);
+    assert.deepEqual(refsForTeam(refs, "API"), [{ key: "API", number: 7 }]);
   });
 });
 
-describe("what a pull request does to its ticket", () => {
-  // Columns carry a role (WH-86); the rules only ever look at roles. Standard names get their standard roles here.
-  const cols = (...names: string[]): RoleColumn[] => names.map((name) => ({ name, role: roleFromText(name) }));
+describe("what a pull request does to its issue", () => {
+  // Statuses carry a role (WH-86); the rules only ever look at roles. Standard names get their standard roles here.
+  const cols = (...names: string[]): RoleStatus[] => names.map((name) => ({ name, role: roleFromText(name)! }));
   const board = cols("Backlog", "Todo", "In Progress", "Review", "Done");
   const now = new Date("2026-10-15T12:00:00Z");
-  const base = { merged: false, draft: false, columns: board, now, lastMove: null };
-  const d = (over: Partial<Omit<Parameters<typeof decideMove>[0], "column">> & { action: string; column: string }) => {
-    const columns = over.columns ?? board;
-    return decideMove({ ...base, ...over, columns, column: columns.find((c) => c.name === over.column)! });
+  const base = { merged: false, draft: false, statuses: board, now, lastMove: null };
+  const d = (over: Partial<Omit<Parameters<typeof decideMove>[0], "status">> & { action: string; status: string }) => {
+    const statuses = over.statuses ?? board;
+    return decideMove({ ...base, ...over, statuses, status: statuses.find((c) => c.name === over.status)! });
   };
 
-  test("opened moves the ticket to Review, from anywhere before it", () => {
-    for (const column of ["Backlog", "Todo", "In Progress"]) assert.equal(d({ action: "opened", column }).move, "Review", column);
-    assert.equal(d({ action: "reopened", column: "In Progress" }).move, "Review");
-    assert.equal(d({ action: "ready_for_review", column: "In Progress" }).move, "Review");
+  test("opened moves the issue to Review, from anywhere before it", () => {
+    for (const status of ["Backlog", "Todo", "In Progress"]) assert.equal(d({ action: "opened", status }).move, "Review", status);
+    assert.equal(d({ action: "reopened", status: "In Progress" }).move, "Review");
+    assert.equal(d({ action: "ready_for_review", status: "In Progress" }).move, "Review");
   });
-  test("a draft is left alone until it is ready, and a ticket already in Review or Done is not touched", () => {
-    assert.equal(d({ action: "opened", column: "In Progress", draft: true }).move, null);
-    assert.equal(d({ action: "opened", column: "Review" }).move, null);
-    assert.equal(d({ action: "opened", column: "Done" }).move, null);
+  test("a draft is left alone until it is ready, and an issue already in Review or Done is not touched", () => {
+    assert.equal(d({ action: "opened", status: "In Progress", draft: true }).move, null);
+    assert.equal(d({ action: "opened", status: "Review" }).move, null);
+    assert.equal(d({ action: "opened", status: "Done" }).move, null);
   });
-  test("merged leaves a ticket in Review for a person, and only pulls an earlier one forward", () => {
-    assert.equal(d({ action: "closed", merged: true, column: "Review" }).move, null);
-    assert.equal(d({ action: "closed", merged: true, column: "Done" }).move, null);
-    assert.equal(d({ action: "closed", merged: true, column: "In Progress" }).move, "Review");
-    assert.equal(d({ action: "closed", merged: true, column: "Todo" }).move, "Review");
+  test("merged leaves an issue in Review for a person, and only pulls an earlier one forward", () => {
+    assert.equal(d({ action: "closed", merged: true, status: "Review" }).move, null);
+    assert.equal(d({ action: "closed", merged: true, status: "Done" }).move, null);
+    assert.equal(d({ action: "closed", merged: true, status: "In Progress" }).move, "Review");
+    assert.equal(d({ action: "closed", merged: true, status: "Todo" }).move, "Review");
   });
   test("closed without merging goes back to In Progress, but only from Review", () => {
-    assert.equal(d({ action: "closed", column: "Review" }).move, "In Progress");
-    for (const column of ["Backlog", "Todo", "In Progress", "Done"]) assert.equal(d({ action: "closed", column }).move, null, column);
+    assert.equal(d({ action: "closed", status: "Review" }).move, "In Progress");
+    for (const status of ["Backlog", "Todo", "In Progress", "Done"]) assert.equal(d({ action: "closed", status }).move, null, status);
   });
-  test("pushes, edits and everything else never move a ticket", () => {
-    for (const action of ["synchronize", "edited", "labeled", "assigned", "converted_to_draft"]) assert.equal(d({ action, column: "In Progress" }).move, null, action);
+  test("pushes, edits and everything else never move an issue", () => {
+    for (const action of ["synchronize", "edited", "labeled", "assigned", "converted_to_draft"]) assert.equal(d({ action, status: "In Progress" }).move, null, action);
   });
   test("someone moved it a moment ago: leave it, and say why", () => {
-    const r = d({ action: "opened", column: "In Progress", lastMove: { at: new Date(now.getTime() - 3 * 60_000), by: "Claude Atharva's Macbook Pro" } });
+    const r = d({ action: "opened", status: "In Progress", lastMove: { at: new Date(now.getTime() - 3 * 60_000), by: "Claude Atharva's Macbook Pro" } });
     assert.equal(r.move, null);
     assert.match(r.note!, /Claude Atharva's Macbook Pro moved it 3 minutes ago/);
     assert.match(r.note!, /did not move it/);
   });
   test("an older move does not get in the way, and the window can be changed", () => {
     const old = { at: new Date(now.getTime() - RECENT_MOVE_MS - 1000), by: "Demo" };
-    assert.equal(d({ action: "opened", column: "In Progress", lastMove: old }).move, "Review");
-    assert.equal(d({ action: "opened", column: "In Progress", lastMove: old, recentMs: 60 * 60_000 }).move, null);
+    assert.equal(d({ action: "opened", status: "In Progress", lastMove: old }).move, "Review");
+    assert.equal(d({ action: "opened", status: "In Progress", lastMove: old, recentMs: 60 * 60_000 }).move, null);
   });
-  test("a board without a Review column is left alone instead of guessed at", () => {
-    assert.equal(d({ action: "opened", column: "Todo", columns: cols("Todo", "Doing", "Done") }).move, null);
+  test("a board without a Review status is left alone instead of guessed at", () => {
+    assert.equal(d({ action: "opened", status: "Todo", statuses: cols("Todo", "Doing", "Done") }).move, null);
   });
-  test("columns are found by role, so renaming them changes nothing", () => {
-    const renamed: RoleColumn[] = [
+  test("statuses are found by role, so renaming them changes nothing", () => {
+    const renamed: RoleStatus[] = [
       { name: "Ideas", role: "backlog" },
       { name: "Ready", role: "todo" },
       { name: "Doing", role: "in_progress" },
       { name: "QA", role: "review" },
       { name: "Shipped", role: "done" },
     ];
-    assert.equal(d({ action: "opened", column: "Doing", columns: renamed }).move, "QA");
-    assert.equal(d({ action: "closed", column: "QA", columns: renamed }).move, "Doing");
-    assert.equal(d({ action: "closed", merged: true, column: "Ready", columns: renamed }).move, "QA");
-    assert.equal(d({ action: "closed", merged: true, column: "QA", columns: renamed }).move, null);
-    assert.equal(d({ action: "opened", column: "Shipped", columns: renamed }).move, null);
-    assert.match(d({ action: "opened", column: "Doing", columns: renamed }).note!, /moved to QA: pull request opened/);
+    assert.equal(d({ action: "opened", status: "Doing", statuses: renamed }).move, "QA");
+    assert.equal(d({ action: "closed", status: "QA", statuses: renamed }).move, "Doing");
+    assert.equal(d({ action: "closed", merged: true, status: "Ready", statuses: renamed }).move, "QA");
+    assert.equal(d({ action: "closed", merged: true, status: "QA", statuses: renamed }).move, null);
+    assert.equal(d({ action: "opened", status: "Shipped", statuses: renamed }).move, null);
+    assert.match(d({ action: "opened", status: "Doing", statuses: renamed }).note!, /moved to QA: pull request opened/);
   });
-  test("a column literally named Review but with no role is not treated as the review column", () => {
-    const odd: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: null }, { name: "Done", role: "done" }];
-    assert.equal(d({ action: "opened", column: "Todo", columns: odd }).move, null);
-    assert.equal(d({ action: "closed", column: "Review", columns: odd }).move, null);
+  test("a status literally named Review but of another role is not treated as the review status", () => {
+    const odd: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Review", role: "todo" }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", status: "Todo", statuses: odd }).move, null, "no status has the review role: nothing to move to");
+    assert.equal(d({ action: "closed", status: "Review", statuses: odd }).move, null, "and Review here is a todo status, not the one to go back from");
   });
-  test("a custom column with no role is outside the workflow: never a target, and a ticket in one is left where a person put it", () => {
-    const custom: RoleColumn[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: null }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
-    for (const action of ["opened", "reopened", "ready_for_review", "closed"]) {
-      assert.equal(d({ action, column: "Blocked", columns: custom }).move, null, action);
-      assert.equal(d({ action, merged: action === "closed", column: "Blocked", columns: custom }).move, null, `${action} merged`);
-    }
-    assert.equal(d({ action: "opened", column: "Doing", columns: custom }).move, "Review", "custom columns between the standard ones do not get in the way");
-    assert.equal(d({ action: "closed", column: "Review", columns: custom }).move, "Doing");
+  test("a status takes part by its role, whatever it is called: an extra todo or in-progress status is moved like the standard one", () => {
+    const custom: RoleStatus[] = [{ name: "Todo", role: "todo" }, { name: "Blocked", role: "todo" }, { name: "Doing", role: "in_progress" }, { name: "Review", role: "review" }, { name: "Done", role: "done" }];
+    for (const action of ["opened", "reopened", "ready_for_review"]) assert.equal(d({ action, status: "Blocked", statuses: custom }).move, "Review", action);
+    assert.equal(d({ action: "closed", merged: true, status: "Blocked", statuses: custom }).move, "Review");
+    assert.equal(d({ action: "opened", status: "Doing", statuses: custom }).move, "Review", "extra statuses between the standard ones do not get in the way");
+    assert.equal(d({ action: "closed", status: "Review", statuses: custom }).move, "Doing");
   });
-  test("two columns with the review role: the first in board order is the target", () => {
-    const two: RoleColumn[] = [{ name: "Doing", role: "in_progress" }, { name: "Code review", role: "review" }, { name: "Design review", role: "review" }, { name: "Done", role: "done" }];
-    assert.equal(d({ action: "opened", column: "Doing", columns: two }).move, "Code review");
-    assert.equal(d({ action: "opened", column: "Design review", columns: two }).move, null, "already in a review column");
+  test("two statuses with the review role: the first in board order is the target", () => {
+    const two: RoleStatus[] = [{ name: "Doing", role: "in_progress" }, { name: "Code review", role: "review" }, { name: "Design review", role: "review" }, { name: "Done", role: "done" }];
+    assert.equal(d({ action: "opened", status: "Doing", statuses: two }).move, "Code review");
+    assert.equal(d({ action: "opened", status: "Design review", statuses: two }).move, null, "already in a review status");
   });
   test("the note explains a move", () => {
-    assert.match(d({ action: "opened", column: "Todo" }).note!, /moved to Review: pull request opened/);
-    assert.match(d({ action: "closed", column: "Review" }).note!, /moved to In Progress: pull request closed without merging/);
+    assert.match(d({ action: "opened", status: "Todo" }).note!, /moved to Review: pull request opened/);
+    assert.match(d({ action: "closed", status: "Review" }).note!, /moved to In Progress: pull request closed without merging/);
   });
 });
 
@@ -150,21 +148,21 @@ describe("combining checks", () => {
 describe("the signed connect link", () => {
   const t0 = 1_800_000_000_000;
   test("a fresh link comes back as it was made", () => {
-    const { state, nonce } = makeState("k", { user: "u1", project: "WH" }, t0);
-    assert.deepEqual(readState("k", state, t0 + 1000), { user: "u1", project: "WH", nonce, exp: t0 + STATE_TTL_MS });
+    const { state, nonce } = makeState("k", { user: "u1", team: "WH" }, t0);
+    assert.deepEqual(readState("k", state, t0 + 1000), { user: "u1", team: "WH", nonce, exp: t0 + STATE_TTL_MS });
   });
   test("a link that expired, was tampered with, was signed with another key, or is garbage is refused", () => {
-    const { state } = makeState("k", { user: "u1", project: "WH" }, t0);
+    const { state } = makeState("k", { user: "u1", team: "WH" }, t0);
     assert.equal(readState("k", state, t0 + STATE_TTL_MS + 1), null, "expired");
     assert.equal(readState("other", state, t0 + 1), null, "another key");
     const [body, sig] = state.split(".");
-    const forged = Buffer.from(JSON.stringify({ user: "attacker", project: "WH", nonce: "x", exp: t0 + 99999999 })).toString("base64url");
+    const forged = Buffer.from(JSON.stringify({ user: "attacker", team: "WH", nonce: "x", exp: t0 + 99999999 })).toString("base64url");
     assert.equal(readState("k", `${forged}.${sig}`, t0 + 1), null, "body changed");
     assert.equal(readState("k", `${body}.${sig.slice(0, -2)}xx`, t0 + 1), null, "signature changed");
     for (const junk of [null, undefined, "", "abc", "a.b", "a.b.c", "."]) assert.equal(readState("k", junk as string, t0), null, String(junk));
   });
   test("every link has its own nonce", () => {
-    assert.notEqual(makeState("k", { user: "u", project: "WH" }, t0).nonce, makeState("k", { user: "u", project: "WH" }, t0).nonce);
+    assert.notEqual(makeState("k", { user: "u", team: "WH" }, t0).nonce, makeState("k", { user: "u", team: "WH" }, t0).nonce);
   });
 });
 

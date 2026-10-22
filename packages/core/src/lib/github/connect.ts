@@ -1,14 +1,16 @@
 import type { Human } from "../auth-core";
-import { getProject, ServiceError } from "../service";
+import { requireTeam, ServiceError } from "../service";
 import { githubConfig } from "./config";
 import { github } from "./runtime";
 import { makeState, readState, STATE_TTL_MS } from "./state";
 import { registerInstallation } from "./service";
 
 /**
- * Connecting GitHub for a project (WH-20, ADR-12). Each function returns what the host should send; the host does the
- * redirect and the cookie. Paths are relative to the app (`/p/KEY/repos?...`); the GitHub address is absolute.
+ * Connecting GitHub for a team (WH-20, ADR-12). Each function returns what the host should send; the host does the
+ * redirect and the cookie. Paths are relative to the app (`/settings/integrations/github?team=KEY&...`); the GitHub address is absolute.
  */
+const integrationPage = (team: string, query = "") => `/settings/integrations/github?team=${encodeURIComponent(team)}${query ? `&${query}` : ""}`;
+
 export type ConnectReply = {
   status: number;
   redirect?: string;
@@ -20,18 +22,18 @@ export type ConnectReply = {
 };
 
 /** Start connecting: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
-export async function startConnect(h: Human, projectKey: string): Promise<ConnectReply> {
+export async function startConnect(h: Human, teamKey: string): Promise<ConnectReply> {
   const cfg = githubConfig();
-  const back = (err: string): ConnectReply => ({ status: 307, redirect: `/p/${encodeURIComponent(projectKey)}/repos?github_error=${err}` });
+  const back = (err: string): ConnectReply => ({ status: 307, redirect: integrationPage(teamKey, `github_error=${err}`) });
   if (!cfg) return back("not_configured");
   if (h.membership.role !== "owner") return back("owner_only");
   try {
-    await getProject(h.actor, projectKey);
+    await requireTeam(h.actor, teamKey);
   } catch (e) {
     if (e instanceof ServiceError) return { status: 404, text: "Not found" };
     throw e;
   }
-  const { state, nonce } = makeState(cfg.clientSecret, { user: h.user.id, project: projectKey });
+  const { state, nonce } = makeState(cfg.clientSecret, { user: h.user.id, team: teamKey });
   return {
     status: 307,
     redirect: `${cfg.webUrl}/apps/${encodeURIComponent(cfg.slug)}/installations/new?state=${encodeURIComponent(state)}`,
@@ -48,15 +50,15 @@ export async function startConnect(h: Human, projectKey: string): Promise<Connec
 export async function finishConnect(h: Human, q: { state: string | null; installationId: string | null; code: string | null }, nonce: string | undefined): Promise<ConnectReply> {
   const gh = github();
   const state = gh ? readState(gh.cfg.clientSecret, q.state) : null;
-  const project = state?.project ?? "";
+  const team = state?.team ?? "";
   const back = (err?: string, extra = ""): ConnectReply => ({
     status: 307,
     clearStateCookie: true,
-    redirect: `/p/${encodeURIComponent(project)}/repos${err ? `?github_error=${err}` : extra ? `?${extra}` : ""}`,
+    redirect: integrationPage(team, err ? `github_error=${err}` : extra),
   });
   if (!gh) return { status: 503, text: "The GitHub App is not configured on this server", clearStateCookie: true };
   if (!state || state.user !== h.user.id || !nonce || nonce !== state.nonce)
-    return { status: 400, text: "This connection link is not valid any more. Start again from the project's Repositories page.", clearStateCookie: true };
+    return { status: 400, text: "This connection link is not valid any more. Start again from Settings → Integrations → GitHub.", clearStateCookie: true };
   if (h.membership.role !== "owner") return back("owner_only");
 
   const installationId = q.installationId ?? "";

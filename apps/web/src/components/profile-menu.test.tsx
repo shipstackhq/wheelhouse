@@ -5,10 +5,10 @@ import { Avatar, avatarUrl, ProfileMenu } from "./profile-menu";
 import { renderIn, serverWithData } from "../test/harness";
 
 afterEach(() => Reflect.deleteProperty(navigator, "serviceWorker"));
-const menu = () => <ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={["eng", "lead"]} team="Analytical Engines" />;
+const menu = () => <ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={["eng", "lead"]} workspace="Analytical Engines" />;
 
 describe("the account menu", () => {
-  test("shows who you are, your team, your role and your tags", async () => {
+  test("shows who you are, your workspace, your role and your tags", async () => {
     renderIn(menu());
     await userEvent.setup().click(screen.getByRole("button", { name: "Account menu" }));
     const content = await screen.findByText("Analytical Engines");
@@ -21,13 +21,7 @@ describe("the account menu", () => {
     expect(within(panel).getByLabelText("Dark mode")).toBeTruthy();
   });
 
-  test("with one workspace there is no switcher; with several it lists them, marks the current one, and switching moves the session and forgets everything read", async () => {
-    const one = renderIn(menu());
-    await userEvent.setup().click(screen.getByRole("button", { name: "Account menu" }));
-    await screen.findByText("Analytical Engines");
-    expect(screen.queryByRole("group", { name: "Workspaces" })).toBeNull();
-    one.unmount();
-
+  test("the workspace switcher is not in the account menu any more (it is at the top of the sidebar)", async () => {
     const two = serverWithData();
     two.on("GET /api/app/me/workspaces", {
       workspaces: [
@@ -35,25 +29,14 @@ describe("the account menu", () => {
         { id: "t2", name: "Difference Engines", role: "viewer", active: false },
       ],
     });
-    two.on("POST /api/app/me/workspace", { team: { id: "t2", name: "Difference Engines" } });
-    const { server, services, router } = renderIn(menu(), "/p/AA", two);
-    services.queryClient.setQueryData(["marker"], "from the old workspace");
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Account menu" }));
-    const group = await screen.findByRole("group", { name: "Workspaces" });
-    const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
-    expect(current.disabled).toBe(true);
-    expect(current.getAttribute("aria-current")).toBe("true");
-    expect(within(group).getByText("viewer")).toBeTruthy();
-    await user.click(within(group).getByRole("button", { name: /Difference Engines/ }));
-    await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
-    expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ teamId: "t2" });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
-    expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing from the old workspace lingers
+    renderIn(menu(), "/t/AA", two);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Account menu" }));
+    await screen.findByText("Analytical Engines");
+    expect(screen.queryByRole("group", { name: "Workspaces" })).toBeNull();
   });
 
   test("compact (the icon-only sidebar): only the avatar shows on the button, and the menu it opens is the same", async () => {
-    renderIn(<ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={[]} team="Analytical Engines" compact />);
+    renderIn(<ProfileMenu name="Ada Lovelace" email="ada@example.test" role="owner" tags={[]} workspace="Analytical Engines" compact />);
     const trigger = screen.getByRole("button", { name: "Account menu" });
     expect(within(trigger).getByText("Ada Lovelace").parentElement!.className).toContain("md:hidden"); // name and email leave the button
     await userEvent.setup().click(trigger);
@@ -64,26 +47,26 @@ describe("the account menu", () => {
   test("signing out ends the session, forgets everything in memory, and goes to /login", async () => {
     const wipe = vi.fn();
     Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: { getRegistration: async () => ({ active: { postMessage: wipe } }) } });
-    const { server, services, router } = renderIn(menu(), "/p/AA");
-    services.queryClient.setQueryData(["projects"], [{ key: "AA" }]);
+    const { server, services, router } = renderIn(menu(), "/t/AA");
+    services.queryClient.setQueryData(["teams"], [{ key: "AA" }]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(server.requests).toContain("POST /api/app/auth/logout");
     expect(wipe).toHaveBeenCalledWith("CLEAR_CACHES");
-    expect(services.queryClient.getQueryData(["projects"])).toBeUndefined();
+    expect(services.queryClient.getQueryData(["teams"])).toBeUndefined();
   });
 
   test("even if the server cannot be reached, the person is sent to /login and nothing stays in memory", async () => {
     const { server, services, router } = renderIn(menu(), "/");
     server.fail["/api/app/auth/logout"] = "network";
-    services.queryClient.setQueryData(["projects"], [{ key: "AA" }]);
+    services.queryClient.setQueryData(["teams"], [{ key: "AA" }]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
-    expect(services.queryClient.getQueryData(["projects"])).toBeUndefined();
+    expect(services.queryClient.getQueryData(["teams"])).toBeUndefined();
   });
 });
 

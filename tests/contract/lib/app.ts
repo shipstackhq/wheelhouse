@@ -55,10 +55,10 @@ export function browserFetch(): typeof fetch {
   }) as typeof fetch;
 }
 
-/** A brand-new account and team, for tests that change data and must not touch the seeded teams. */
+/** A brand-new account and workspace, for tests that change data and must not touch the seeded workspaces. */
 export async function newAccount(name = "Owner") {
   const email = newEmail();
-  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: "a-long-enough-password", team: `${name} team` } });
+  const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name, email, password: "a-long-enough-password", workspace: `${name} workspace` } });
   if (r.status !== 201) throw new Error(`could not sign up: ${r.status} ${r.text.slice(0, 200)}`);
-  return { email, sess: sessionFrom(r), me: r.json as { user: { id: string }; team: { id: string }; role: string } };
+  return { email, sess: sessionFrom(r), me: r.json as { user: { id: string }; workspace: { id: string }; role: string } };
 }

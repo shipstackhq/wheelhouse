@@ -12,12 +12,12 @@ export type Bot = { id: string; name: string; pending: number; sessions: Session
  * Actions are passed in so this stays presentational: "mark all seen" appears on hover/focus, never as permanent clutter.
  */
 export function BotsList({
-  projectKey,
+  teamKey,
   bots,
   markAllSeen,
   sessionAction,
 }: {
-  projectKey: string;
+  teamKey: string;
   bots: Bot[];
   markAllSeen: (formData: FormData) => void | Promise<void>;
   sessionAction?: (s: SessionView) => React.ReactNode;
@@ -44,8 +44,8 @@ export function BotsList({
                 className="shrink-0 opacity-0 transition-opacity group-focus-within/bot:opacity-100 group-hover/bot:opacity-100 [@media(hover:none)]:opacity-100"
               >
                 <input type="hidden" name="keyId" value={b.id} />
-                <input type="hidden" name="project" value={projectKey} />
-                <SubmitButton className="underline-offset-2 hover:text-fg hover:underline" title="Mark everything as seen for this agent in this project">
+                <input type="hidden" name="team" value={teamKey} />
+                <SubmitButton className="underline-offset-2 hover:text-fg hover:underline" title="Mark everything as seen for this agent in this team">
                   mark all seen
                 </SubmitButton>
               </form>

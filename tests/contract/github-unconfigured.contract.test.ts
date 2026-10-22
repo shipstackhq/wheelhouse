@@ -19,23 +19,24 @@ describe("with no GitHub App configured", () => {
     assert.equal((await deliver("ping", { zen: "x" }, { secret: "anything" })).status, 503);
   });
 
-  test("an owner starting the connection is sent back to the repositories page with not_configured", async () => {
-    const r = await call(`/api/github/install?project=${fx.a.projectKey}`, { cookie: fx.a.sessionToken });
+  test("an owner starting the connection is sent back to the GitHub integration page with not_configured", async () => {
+    const r = await call(`/api/github/install?team=${fx.a.teamKey}`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 307);
     const to = new URL(r.headers.get("location")!, "http://x");
-    assert.equal(to.pathname, `/p/${fx.a.projectKey}/repos`);
+    assert.equal(to.pathname, `/settings/integrations/github`);
+    assert.equal(to.searchParams.get("team"), fx.a.teamKey);
     assert.equal(to.searchParams.get("github_error"), "not_configured");
   });
 
   test("the Connect GitHub card says so: an owner is told which settings are missing, a member is not, and connecting is refused", async () => {
     const owner = await signIn(fx.a.email);
-    const r = await app("GET", `/api/app/projects/${fx.a.projectKey}/repositories/github`, owner);
+    const r = await app("GET", `/api/app/teams/${fx.a.teamKey}/repositories/github`, owner);
     assert.equal(r.status, 200);
     assert.deepEqual([r.json.configured, r.json.isOwner, r.json.installations], [false, true, []]);
     assert.ok(r.json.missing.includes("GITHUB_APP_ID"));
-    const member = await app("GET", `/api/app/projects/${fx.a.projectKey}/repositories/github`, await signIn(fx.a.memberEmail));
+    const member = await app("GET", `/api/app/teams/${fx.a.teamKey}/repositories/github`, await signIn(fx.a.memberEmail));
     assert.deepEqual([member.json.configured, member.json.missing], [false, []]);
-    const connect = await app("POST", `/api/app/projects/${fx.a.projectKey}/repositories/github`, owner, { body: { installationId: "1", repoId: "2" } });
+    const connect = await app("POST", `/api/app/teams/${fx.a.teamKey}/repositories/github`, owner, { body: { installationId: "1", repoId: "2" } });
     assert.ok(connect.status >= 400 && connect.status < 500, `${connect.status}`);
   });
 

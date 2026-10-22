@@ -16,8 +16,8 @@ describe("reconnecting", () => {
   });
 
   test("resumes from where it left off, or starts clean", () => {
-    assert.equal(streamUrl("/api/projects/WH/stream", null), "/api/projects/WH/stream");
-    assert.equal(streamUrl("/api/projects/WH/stream", 120), "/api/projects/WH/stream?since=120");
+    assert.equal(streamUrl("/api/teams/WH/stream", null), "/api/teams/WH/stream");
+    assert.equal(streamUrl("/api/teams/WH/stream", 120), "/api/teams/WH/stream?since=120");
     assert.equal(streamUrl("/api/stream", 0), "/api/stream?since=0", "position 0 is a position");
   });
 

@@ -8,10 +8,10 @@ The NestJS API (WH-91, part of the Next.js to NestJS + React migration, WH-87 / 
 | `GET /api/v1`, `POST /api/v1/:tool` | REST over the same tools |
 | `GET /api/health` | liveness and database check |
 | `POST /api/webhooks/github` | GitHub's webhook: signature over the raw body, then the delivery (WH-20) |
-| `GET /api/github/install`, `GET /api/github/callback` | connecting GitHub for a project: owners only, a signed state and a cookie (ADR-12) |
-| `GET /api/stream`, `GET /api/projects/:key/stream` | server-sent events for the signed-in team or one project (WH-1) |
+| `GET /api/github/install`, `GET /api/github/callback` | connecting GitHub for a team: owners only, a signed state and a cookie (ADR-12) |
+| `GET /api/stream`, `GET /api/teams/:key/stream` | server-sent events for the signed-in workspace or one team (WH-1) |
 
-| `GET /api/app/auth/options`, `POST /api/app/auth/login`, `/signup`, `/logout`, `GET /api/app/me`, `GET /api/app/projects` | the web app's own API (WH-93); the rest follows in WH-95 to WH-98 |
+| `GET /api/app/auth/options`, `POST /api/app/auth/login`, `/signup`, `/logout`, `GET /api/app/me`, `GET /api/app/teams` | the web app's own API (WH-93); the rest follows in WH-95 to WH-98 |
 
 `/api/app/*` is **new surface, used only by the React app** (conventions, CSRF and the inventory of the 59 server actions it replaces: `docs/ui-api.md`; typed client: `@wheelhouse/api-client`). Every controller there uses `@AppEndpoints()` (CSRF check and the error envelope) and `@UseGuards(SessionGuard)` for signed-in routes.
 

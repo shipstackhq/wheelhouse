@@ -1,8 +1,8 @@
 # Shipstack Wheelhouse
 
-Kanban boards and architecture maps that a small team **and its AI agents** share.
+Issues (as a list or a kanban board, with sub-issues, statuses and priorities) and architecture maps that a small team **and its AI agents** share.
 
-- **Board**: drag-and-drop tickets, markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
+- **Issues**: a list or a drag-and-drop board of the same issues, grouped by status, priority, assignee, project or cycle; search and filters; sub-issues to any depth, with progress; statuses each team defines (several per stage, one the default, plus Canceled); markdown descriptions, comment threads, priorities, labels, "AI-ready" flag.
 - **Knowledge map**: React Flow canvas with four linked zoom levels:
   - **Concepts**: what the product does
   - **Systems**: what runs where
@@ -14,7 +14,7 @@ Kanban boards and architecture maps that a small team **and its AI agents** shar
   Each node has a structured explainer (purpose, responsibilities, interfaces, gotchas) plus code anchors. **Flows** play step by step across the map. **Decisions** (ADRs) and a **Glossary**, with hover definitions, hang off nodes.
 - **Freshness**: `report_changes` (from agents or a post-commit hook) flags the most specifically anchored node per layer as stale. Stale nodes show on the map and in agents' queues until they're re-described.
 - **Ask**: Claude answers questions about the system from the map (`ANTHROPIC_API_KEY` required; uses `claude-opus-5-5`).
-- **AI loop**: every human or agent change is written to an append-only event log. Each agent API key has its own cursor into it, so `get_changes` returns exactly what the team did since the agent last looked. Agents write back through the same tools, and their work shows up on the board live with a 🤖 badge.
+- **AI loop**: every human or agent change is written to an append-only event log. Each agent API key has its own cursor into it, so `get_changes` returns exactly what the workspace did since the agent last looked. Agents write back through the same tools, and their work shows up on the board live with a 🤖 badge.
 - **Claude integration**: a remote MCP server at `/mcp`, plus the same operations over REST at `POST /api/v1/<tool>`.
 
 ## CLI and Claude Code plugin
@@ -67,12 +67,12 @@ Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Po
 ## Layout
 
 ```
-packages/core/src/db/schema.ts   Drizzle schema (users, teams, projects, tickets, nodes, edges, events, agent_cursors…)
+packages/core/src/db/schema.ts   Drizzle schema (users, workspaces, teams, issues, nodes, edges, events, agent_cursors…)
 packages/core/drizzle/           migrations
 packages/core/src/lib/service.ts single write path: access checks, optimistic locking, event emission
 packages/core/src/lib/tools.ts   tool registry → exposed via /mcp and /api/v1/<tool>
 apps/api                         NestJS: /mcp, /api/v1, /api/app, the GitHub webhook and connect flow, live streams; serves the React build
-apps/web                         the React app (Vite): board, map, docs, decisions, glossary, team, agents
+apps/web                         the React app (Vite): board, map, docs, decisions, glossary, workspace, agents
 packages/api-client              the typed client the React app uses for /api/app
 tests/                           the HTTP contract suite (tests/contract) and the database suites (isolation, invites)
 docs/                            deploy, cutover, isolation audit, the web app's API, migration history
@@ -84,4 +84,4 @@ The app used to be a single Next.js app. It is archived at the git tag `archive/
 
 ## Known limits
 
-No email is sent: an invite is a link the inviter shares. There is no password reset yet (WH-73). Live updates use server-sent events and need a single app process. A person can belong to several workspaces, and a project is visible only to its members.
+No email is sent: an invite is a link the inviter shares. There is no password reset yet (WH-73). Live updates use server-sent events and need a single app process. A person can belong to several workspaces, and a team is visible only to its members.

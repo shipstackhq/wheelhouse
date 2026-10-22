@@ -3,13 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Loaded } from "../../components/query-state";
 import { onboardingQuery, useRepos } from "../../lib/queries";
 import { useServices } from "../../lib/services";
-import { GithubConnect } from "../repos/github-connect";
-import { Repos } from "../repos/repos";
+import { GithubConnect } from "../integrations/github/github-connect";
+import { Repos } from "../integrations/github/repos";
 import { OnboardingWizard } from "./wizard";
 
 /**
- * `/p/:key/onboarding`: the guided steps after "New project". The wizard never traps anyone: "Skip to board" is always there.
- * The code-location step hosts the same GitHub card and repository list as the Repos page.
+ * `/t/:key/onboarding`: the guided steps after "New team". The wizard never traps anyone: "Skip to board" is always there.
+ * The code-location step hosts the same GitHub card and repository list as Settings → Integrations → GitHub.
  */
 export function OnboardingPage() {
   const { key = "" } = useParams();
@@ -20,12 +20,12 @@ export function OnboardingPage() {
     <Loaded query={query} label="Loading the setup">
       {(page) => (
         <OnboardingWizard
-          projectKey={page.project.key}
-          projectName={page.project.name}
+          teamKey={page.team.key}
+          teamName={page.team.name}
           hasRepos={page.hasRepos}
           cmd={page.setup}
-          githubConnect={<GithubConnect projectKey={key} />}
-          localRepos={repos.data ? <Repos projectKey={key} repos={repos.data} /> : null}
+          githubConnect={<GithubConnect teamKey={key} />}
+          localRepos={repos.data ? <Repos teamKey={key} repos={repos.data} /> : null}
         />
       )}
     </Loaded>

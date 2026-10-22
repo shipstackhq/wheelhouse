@@ -8,13 +8,13 @@ import { FakeEventSource } from "../../test/fake-event-source";
 
 afterEach(() => localStorage.clear());
 
-const HOME = "/p/AA/docs";
+const HOME = "/t/AA/docs";
 const DOC = `${HOME}/d-plan`;
 const open = (path = DOC, setup: (s: FakeServer) => unknown = () => {}) => renderApp(path, setup);
 const row = async (title: string) => screen.findByRole("button", { name: new RegExp(`^${title}$`) });
 /** The doc's own title (the page's h1; the text can have an h1 of its own too). */
 const heading = (title: string) => waitFor(() => expect(document.querySelector("h1.text-3xl")?.textContent).toBe(title));
-const url = (path: string) => `/api/app/projects/AA/${path}`;
+const url = (path: string) => `/api/app/teams/AA/${path}`;
 /** Serve a doc (and the index with it), so a test can make it a different one. */
 const serve = (s: FakeServer, docs = DOCS, nodes: Parameters<typeof docDetail>[1] = []) => {
   s.on(`GET ${url("docs")}`, docsIndex(docs));
@@ -41,7 +41,7 @@ describe("the docs home", () => {
     await user.click(await row("Phase 1"));
     await heading("Phase 1");
     expect(await screen.findByText("Phase one.")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/p/AA/docs");
+    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/t/AA/docs");
   });
 
   test("with no docs it says so, and offers to create one", async () => {
@@ -101,7 +101,7 @@ describe("the doc tree sheet", () => {
     open(`${HOME}/d-sub`);
     await heading("Phase 1");
     const nav = screen.getByRole("navigation", { name: "Doc navigation" });
-    expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/p/AA/docs/d-plan");
+    expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/t/AA/docs/d-plan");
   });
 
   test("the 'About this doc' column sits beside the doc while reading and while editing", async () => {
@@ -295,10 +295,10 @@ describe("editing", () => {
 
   test("WH-104: a doc opened by its uuid address, as the real data has it (untitled slug, no text, no labels), opens in the editor under its own title", async () => {
     const id = "6d9e6f95-3187-433d-9935-e936100655c6";
-    const real = doc({ id, slug: "untitled-doc", title: "Project Documentation", body: "", version: 2, labels: [] });
+    const real = doc({ id, slug: "untitled-doc", title: "Team Documentation", body: "", version: 2, labels: [] });
     open(`${HOME}/${id}`, (s) => serve(s, [real]));
     expect(await screen.findByRole("button", { name: "Save" })).toBeTruthy();
-    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Project Documentation");
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Team Documentation");
     expect(screen.getByText(/untitled-doc · v2/)).toBeTruthy();
   });
 
@@ -421,29 +421,29 @@ describe("attached files (anchors)", () => {
 describe("action items", () => {
   const withItems = doc({ body: "## Action items\n- [ ] Write the runbook\n- [x] Done already\n- [ ] Ask legal\n" });
 
-  test("each unchecked item can become a ticket; the box is then checked in the doc, against the version that was read", async () => {
+  test("each unchecked item can become an issue; the box is then checked in the doc, against the version that was read", async () => {
     const { server } = open(DOC, (s) => {
       serve(s, [withItems]);
-      s.on(`POST ${url("tickets")}`, () => Response.json({ ticket: { ref: "AA-5", title: "Write the runbook" } }, { status: 201 }));
+      s.on(`POST ${url("issues")}`, () => Response.json({ issue: { ref: "AA-5", title: "Write the runbook" } }, { status: 201 }));
       s.on(`PATCH ${url("docs/d-plan")}`, { doc: doc({ version: 2 }) });
     });
     const user = userEvent.setup();
     const section = (await screen.findByText("Action items", { selector: "span.label" })).closest("section") as HTMLElement;
-    expect(within(section).getAllByRole("button", { name: "Create ticket" })).toHaveLength(2); // the checked one is not offered
-    await user.click(within(section).getAllByRole("button", { name: "Create ticket" })[0]);
-    await waitFor(() => expect(server.sent(`POST ${url("tickets")}`)).toHaveLength(1));
-    expect(server.sent(`POST ${url("tickets")}`)[0].body).toEqual({ title: "Write the runbook" });
+    expect(within(section).getAllByRole("button", { name: "Create issue" })).toHaveLength(2); // the checked one is not offered
+    await user.click(within(section).getAllByRole("button", { name: "Create issue" })[0]);
+    await waitFor(() => expect(server.sent(`POST ${url("issues")}`)).toHaveLength(1));
+    expect(server.sent(`POST ${url("issues")}`)[0].body).toEqual({ title: "Write the runbook" });
     await waitFor(() => expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(1));
     expect(server.sent(`PATCH ${url("docs/d-plan")}`)[0].body).toEqual({ body: "## Action items\n- [x] Write the runbook\n- [x] Done already\n- [ ] Ask legal\n", version: 1 });
   });
 
-  test("if the ticket cannot be made the box stays unchecked and the reason is shown", async () => {
+  test("if the issue cannot be made the box stays unchecked and the reason is shown", async () => {
     const { server } = open(DOC, (s) => {
       serve(s, [withItems]);
-      s.on(`POST ${url("tickets")}`, apiError(400, "invalid", "title is required"));
+      s.on(`POST ${url("issues")}`, apiError(400, "invalid", "title is required"));
     });
     const user = userEvent.setup();
-    await user.click((await screen.findAllByRole("button", { name: "Create ticket" }))[0]);
+    await user.click((await screen.findAllByRole("button", { name: "Create issue" }))[0]);
     expect(await screen.findByText("title is required")).toBeTruthy();
     expect(server.sent(`PATCH ${url("docs/d-plan")}`)).toHaveLength(0);
   });
@@ -466,7 +466,7 @@ describe("decision records", () => {
     const user = userEvent.setup();
     await createRecord(user);
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
-    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/p/AA/decisions");
+    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/t/AA/decisions");
     await user.click(within(section).getByRole("button", { name: "+ Create ADR from this doc" }));
     await waitFor(() => expect(server.sent(`PUT ${url("decisions")}`)).toHaveLength(1));
     expect(server.sent(`PUT ${url("decisions")}`)[0].body).toEqual({
@@ -476,7 +476,7 @@ describe("decision records", () => {
       decision: "REST over HTTP.",
       consequences: "No streaming.",
     });
-    await waitFor(() => expect(at()).toBe("/p/AA/decisions"));
+    await waitFor(() => expect(at()).toBe("/t/AA/decisions"));
   });
 
   test("an existing ADR can be linked instead", async () => {
@@ -489,7 +489,7 @@ describe("decision records", () => {
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
     await user.click(within(section).getByRole("combobox"));
     await user.click(await screen.findByRole("option", { name: "ADR-1: Use REST" }));
-    await waitFor(() => expect(at()).toBe("/p/AA/decisions/1")); // the linked decision opens
+    await waitFor(() => expect(at()).toBe("/t/AA/decisions/1")); // the linked decision opens
   });
 
   test("an ordinary doc does not offer it", async () => {
@@ -577,8 +577,8 @@ describe("live", () => {
     expect(await screen.findByRole("button", { name: "Runbook" })).toBeTruthy();
   });
 
-  test("another team's project has no docs page", async () => {
-    renderApp("/p/ZZ/docs");
+  test("another workspace's team has no docs page", async () => {
+    renderApp("/t/ZZ/docs");
     expect(await screen.findByText(/not found|can.t find|doesn.t exist/i)).toBeTruthy();
   });
 });

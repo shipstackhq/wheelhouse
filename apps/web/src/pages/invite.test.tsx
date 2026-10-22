@@ -21,7 +21,7 @@ describe("the invite page", () => {
     at(`#${TOKEN}`);
     const { server } = renderApp("/invite", (s) => {
       signedOut(s);
-      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_team", teamName: "Analytical Engines" } });
+      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_workspace", workspaceName: "Analytical Engines" } });
     });
     await screen.findByText("Create your account to join Analytical Engines.");
     expect(window.location.hash).toBe("");
@@ -34,7 +34,7 @@ describe("the invite page", () => {
     at(`#${TOKEN}`);
     renderApp("/invite", (s) => {
       signedOut(s);
-      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_team", teamName: "Analytical Engines" } });
+      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_workspace", workspaceName: "Analytical Engines" } });
     });
     const email = (await screen.findByLabelText("Email")) as HTMLInputElement;
     expect(email.value).toBe("grace@example.test");
@@ -44,11 +44,11 @@ describe("the invite page", () => {
     expect(screen.getByLabelText("Repeat password")).toBeTruthy();
   });
 
-  test("a new-team invite says the person gets a team of their own", async () => {
+  test("a new-workspace invite says the person gets a workspace of their own", async () => {
     at(`#${TOKEN}`);
     renderApp("/invite", (s) => {
       signedOut(s);
-      s.on("POST /api/app/invites/peek", { invite: { email: "founder@example.test", kind: "new_team", teamName: "Fresh Co" } });
+      s.on("POST /api/app/invites/peek", { invite: { email: "founder@example.test", kind: "new_workspace", workspaceName: "Fresh Co" } });
     });
     await screen.findByText("Create your account and your workspace, Fresh Co.");
   });
@@ -85,7 +85,7 @@ describe("the invite page", () => {
     at(`#${TOKEN}`);
     const { server, router, services } = renderApp("/invite", (s) => {
       signedOut(s);
-      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_team", teamName: "Analytical Engines" } });
+      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_workspace", workspaceName: "Analytical Engines" } });
       s.on("POST /api/app/invites/accept", () => ((s.me = ADA), ADA));
     });
     const user = userEvent.setup();
@@ -102,7 +102,7 @@ describe("the invite page", () => {
     at(`#${TOKEN}`);
     const { router } = renderApp("/invite", (s) => {
       signedOut(s);
-      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_team", teamName: "Analytical Engines" } });
+      s.on("POST /api/app/invites/peek", { invite: { email: "grace@example.test", kind: "join_workspace", workspaceName: "Analytical Engines" } });
       s.on("POST /api/app/invites/accept", ({ body }) =>
         (body as { confirm: string }).confirm === "different long password"
           ? apiError(400, "invalid", "The two passwords do not match", { fields: { confirm: "The two passwords do not match" } })
@@ -143,14 +143,14 @@ describe("the invite page", () => {
 
 describe("the invite page, for someone who already has an account", () => {
   const notNew = () => apiError(400, "invalid", "This invite link is invalid or has expired."); // a fresh Response each time: a body can be read once
-  const existing = { invite: { email: "ada@example.test", teamName: "Difference Engines", role: "viewer", projects: [{ key: "DE", name: "Engine", role: "editor" }] } };
+  const existing = { invite: { email: "ada@example.test", workspaceName: "Difference Engines", role: "viewer", teams: [{ key: "DE", name: "Engine", role: "editor" }] } };
 
   test("signed in as the invited address, they are offered to join and keep their account; joining moves them in and forgets the old workspace", async () => {
     at(`#${TOKEN}`);
     const { server, services, router } = renderApp("/invite", (s) => {
       s.on("POST /api/app/invites/peek", notNew());
       s.on("POST /api/app/invites/peek-existing", existing);
-      s.on("POST /api/app/invites/accept-existing", { team: { id: "t2", name: "Difference Engines" } });
+      s.on("POST /api/app/invites/accept-existing", { workspace: { id: "t2", name: "Difference Engines" } });
     });
     services.queryClient.setQueryData(["marker"], "from the old workspace");
     await screen.findByRole("button", { name: "Join Difference Engines" });

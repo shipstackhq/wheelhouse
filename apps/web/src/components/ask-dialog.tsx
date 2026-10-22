@@ -10,7 +10,7 @@ type QA = { q: string; a?: string; error?: string; truncated?: boolean };
 export function AskDialog(props: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  projectKey: string;
+  teamKey: string;
   enabled: boolean;
   focus?: { id: string; name: string; layer: string } | null;
   onLink: (href: string) => boolean;
@@ -29,7 +29,7 @@ export function AskDialog(props: {
       // Claude is called from the server with the server's own key; all that comes back is the answer, or a plain reason it failed.
       let result: QA;
       try {
-        const res = await api.map.ask(props.projectKey, question, focus?.id);
+        const res = await api.map.ask(props.teamKey, question, focus?.id);
         result = { q: question, a: res.answer, truncated: res.truncated };
       } catch (e) {
         result = { q: question, error: describeFailure(e) };

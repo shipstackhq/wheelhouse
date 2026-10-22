@@ -2,33 +2,33 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import { Dialog } from "radix-ui";
 import { useQuery } from "@tanstack/react-query";
-import type { ProjectMember, ProjectRole } from "@wheelhouse/api-client";
+import type { TeamMember, TeamRole } from "@wheelhouse/api-client";
 import { Loaded } from "../../components/query-state";
 import { Select, useDialogs } from "../../components/ui";
 import { failure } from "../../lib/form-state";
-import { addableMembersQuery, useProjectMembers } from "../../lib/queries";
+import { addableMembersQuery, useTeamMembers } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
-import { PROJECT_ROLES } from "../../lib/roles";
+import { TEAM_ROLES } from "../../lib/roles";
 import { useServices } from "../../lib/services";
 import { useMe } from "../../lib/session";
 
 /**
- * `/p/:key/members`: who can open this project and with what role (ADR-23). A project is reachable only through this list;
- * the workspace role never opens it. Any member reads it; project admins add, re-role and remove people.
+ * `/t/:key/members`: who can open this team and with what role (ADR-23). A team is reachable only through this list;
+ * the workspace role never opens it. Any member reads it; team admins add, re-role and remove people.
  */
-export function ProjectMembersPage() {
+export function TeamMembersPage() {
   const { key = "" } = useParams();
-  const query = useProjectMembers(key);
+  const query = useTeamMembers(key);
   return (
     <Loaded query={query} label="Loading the members">
-      {(d) => <Members projectKey={key} projectName={d.project.name} myRole={d.myRole} members={d.members} />}
+      {(d) => <Members teamKey={key} teamName={d.team.name} myRole={d.myRole} members={d.members} />}
     </Loaded>
   );
 }
 
 const initial = (name: string) => (name[0] ?? "?").toUpperCase();
 
-function Members({ projectKey, projectName, myRole, members }: { projectKey: string; projectName: string; myRole: ProjectRole | null; members: ProjectMember[] }) {
+function Members({ teamKey, teamName, myRole, members }: { teamKey: string; teamName: string; myRole: TeamRole | null; members: TeamMember[] }) {
   const { api, queryClient } = useServices();
   const youId = useMe().data?.user.id;
   const isAdmin = myRole === "admin";
@@ -48,9 +48,9 @@ function Members({ projectKey, projectName, myRole, members }: { projectKey: str
 
   return (
     <div className="h-full overflow-y-auto bg-bg">
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-8 lg:py-12">
+      <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold tracking-tight">Project members</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Team members</h1>
           {isAdmin && (
             <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>
               + Add member
@@ -58,8 +58,8 @@ function Members({ projectKey, projectName, myRole, members }: { projectKey: str
           )}
         </div>
         <p className="mb-6 text-sm text-muted">
-          Only the people listed here can open <span className="font-medium text-fg">{projectName}</span>. Your role: <span className="font-medium text-fg">{myRole ?? "none"}</span>.
-          {!isAdmin && " Ask a project admin to add someone or change a role."}
+          Only the people listed here can open <span className="font-medium text-fg">{teamName}</span>. Your role: <span className="font-medium text-fg">{myRole ?? "none"}</span>.
+          {!isAdmin && " Ask a team admin to add someone or change a role."}
         </p>
         {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
@@ -81,8 +81,8 @@ function Members({ projectKey, projectName, myRole, members }: { projectKey: str
                     value={m.role}
                     ariaLabel={`Role of ${m.name}`}
                     className="w-28"
-                    options={PROJECT_ROLES.map((r) => ({ value: r.value, label: r.label }))}
-                    onValueChange={(v) => attempt(() => api.projects.setMemberRole(projectKey, m.userId, v as ProjectRole))}
+                    options={TEAM_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+                    onValueChange={(v) => attempt(() => api.teams.setMemberRole(teamKey, m.userId, v as TeamRole))}
                   />
                 ) : (
                   <span className="chip bg-panel-2 text-fg">{m.role}</span>
@@ -91,15 +91,15 @@ function Members({ projectKey, projectName, myRole, members }: { projectKey: str
                   <button
                     className="btn btn-danger"
                     disabled={lastAdmin}
-                    title={lastAdmin ? "A project needs at least one admin" : undefined}
+                    title={lastAdmin ? "A team needs at least one admin" : undefined}
                     onClick={async () => {
                       const ok = await confirm({
-                        title: isYou ? `Leave ${projectName}?` : `Remove ${m.name}?`,
-                        description: isYou ? "You will no longer be able to open this project until someone adds you again." : `${m.name} will no longer be able to open ${projectName}.`,
+                        title: isYou ? `Leave ${teamName}?` : `Remove ${m.name}?`,
+                        description: isYou ? "You will no longer be able to open this team until someone adds you again." : `${m.name} will no longer be able to open ${teamName}.`,
                         confirmLabel: isYou ? "Leave" : "Remove",
                         danger: true,
                       });
-                      if (ok) await attempt(() => api.projects.removeMember(projectKey, m.userId));
+                      if (ok) await attempt(() => api.teams.removeMember(teamKey, m.userId));
                     }}
                   >
                     {isYou ? "Leave" : "Remove"}
@@ -110,22 +110,22 @@ function Members({ projectKey, projectName, myRole, members }: { projectKey: str
           })}
         </ul>
       </div>
-      {adding && <AddMemberDialog projectKey={projectKey} onClose={() => setAdding(false)} />}
+      {adding && <AddMemberDialog teamKey={teamKey} onClose={() => setAdding(false)} />}
       {dialogs}
     </div>
   );
 }
 
-function AddMemberDialog({ projectKey, onClose }: { projectKey: string; onClose: () => void }) {
+function AddMemberDialog({ teamKey, onClose }: { teamKey: string; onClose: () => void }) {
   const { api, queryClient } = useServices();
-  const query = useQuery(addableMembersQuery(api, projectKey));
-  const [role, setRole] = useState<ProjectRole>("editor");
+  const query = useQuery(addableMembersQuery(api, teamKey));
+  const [role, setRole] = useState<TeamRole>("editor");
   const [error, setError] = useState<string>();
   const people = query.data ?? [];
   const add = async (userId: string) => {
     setError(undefined);
     try {
-      await api.projects.addMember(projectKey, { userId, role });
+      await api.teams.addMember(teamKey, { userId, role });
     } catch (e) {
       setError(failure(e)?.error);
       return;
@@ -138,17 +138,17 @@ function AddMemberDialog({ projectKey, onClose }: { projectKey: string; onClose:
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[80vh] w-[min(94vw,520px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-line bg-panel text-fg shadow-2xl">
           <div className="border-b border-line px-5 py-3">
-            <Dialog.Title className="font-semibold">Add to the project</Dialog.Title>
+            <Dialog.Title className="font-semibold">Add to the team</Dialog.Title>
             <Dialog.Description className="text-xs text-muted">People already in the workspace. They get the role below.</Dialog.Description>
           </div>
           <div className="flex items-center gap-2 border-b border-line px-5 py-3 text-sm">
             <span className="text-muted">Role</span>
-            <Select value={role} ariaLabel="Role to give" className="w-32" options={PROJECT_ROLES.map((r) => ({ value: r.value, label: r.label }))} onValueChange={(v) => setRole(v as ProjectRole)} />
-            <span className="text-xs text-muted">{PROJECT_ROLES.find((r) => r.value === role)?.hint}</span>
+            <Select value={role} ariaLabel="Role to give" className="w-32" options={TEAM_ROLES.map((r) => ({ value: r.value, label: r.label }))} onValueChange={(v) => setRole(v as TeamRole)} />
+            <span className="text-xs text-muted">{TEAM_ROLES.find((r) => r.value === role)?.hint}</span>
           </div>
           <ul className="flex-1 divide-y divide-line overflow-y-auto px-2">
             {query.isPending && <li className="px-3 py-4 text-sm text-muted">Loading…</li>}
-            {query.isSuccess && people.length === 0 && <li className="px-3 py-4 text-sm text-muted">Everyone in the workspace is already in this project. Invite people from the Members page in the sidebar first.</li>}
+            {query.isSuccess && people.length === 0 && <li className="px-3 py-4 text-sm text-muted">Everyone in the workspace is already in this team. Invite people from the Members page in the sidebar first.</li>}
             {people.map((p) => (
               <li key={p.userId} className="flex items-center gap-3 px-3 py-2.5 text-sm">
                 <div className="min-w-0 flex-1">

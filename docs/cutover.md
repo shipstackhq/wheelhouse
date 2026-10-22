@@ -1,12 +1,45 @@
 # Moving the data and cutting over (WH-100)
 
-> **Four additive migrations came after the freeze: 0014 (WH-103, `docs.labels`) and, for WH-105, 0015 (project members and the access audit log), 0016 (`invites.projects`) and 0017 (`sessions.active_team_id`), and `db:import` refuses a target whose migrations differ from the export's.**
+> **Four additive migrations came after the freeze: 0014 (WH-103, `docs.labels`) and, for WH-105, 0015 (project members and the access audit log), 0016 (`invites.projects`) and 0017 (`sessions.active_workspace_id`), and `db:import` refuses a target whose migrations differ from the export's.**
 > Before exporting, bring a **copy** of the source database to this code's migrations with `pnpm db:migrate --to <copy>` (all are additive; 0015 also gives every current member access to the projects they could already see,
 > so the old app keeps working on a database that has them). Otherwise the import stops with "the target's migrations (18) are not the export's (14)".
 
-The schema is frozen (migrations 0000 to 0013, plus the additive 0014 to 0017 above), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
+> **Then the foundation migrations 0018 to 0022 (WH-111 to WH-115) changed the schema on purpose**, so moving data from a database made before them needs the section *The foundation migrations* below, not just `db:migrate`.
+
+The schema was frozen for the move (migrations 0000 to 0013, plus the additive 0014 to 0017 above), so moving Wheelhouse from the Next app to the Nest + React app is a **copy of the data**, not a
 transform. The tools below copy it exactly, prove they did, and never write to the original. They also move data between PGlite and Postgres in
 either direction, so the same procedure covers the local control plane (PGlite, port 3456) and a server (Postgres, `docs/deploy.md`).
+
+## The foundation migrations (0018 to 0022, WH-111 to WH-116)
+
+These rename the tenant to **workspace** and today's project to **team** (the word *project* is free for the later deliverable), tie every team-scoped row to its
+workspace with composite keys, add unique keys, parent keys and a CHECK for every enum column, and turn three JSON arrays (ADR nodes, ticket labels, invite teams)
+into rows. A database made before them is brought across like this, **always on a copy**:
+
+```
+pnpm db:migrate --to <copy> --through 0020      # the state just before the constraints; applies 0018 (workspaces), 0019 (teams), 0020 (workspace keys)
+pnpm db:preflight --to <copy>                   # read only: every row the new constraints would refuse, named
+pnpm db:preflight --to <copy> --resolve         # only if it listed dangling references: removes exactly those entries, saying each one
+pnpm db:migrate --to <copy>                     # 0021 (constraints) and 0022 (join tables); a dangling reference makes 0022 stop with nothing changed
+```
+
+What the preflight can list, and what to do with it:
+
+| Finding | What it means | Fix |
+|---|---|---|
+| `decisions.node_ids` names a node that is not there | an ADR still pointed at a map node that was deleted (the JSON array never cleaned itself) | `--resolve` removes the entry; or relink the ADR to the node that replaced it first (`upsert_decision`) |
+| `invites.teams` names a team that is gone or of another workspace | a stale grant on an old invite | `--resolve` removes the grant |
+| two teams of one workspace share a key, any case; two users share an email, any case; two columns share a role | the new unique keys cannot be built | fix by hand (rename or merge): the tool never deletes rows |
+| a value outside an enum (a role, status, kind…) | the CHECK would refuse it | fix by hand |
+
+Two data effects of 0020 are not preflight findings, because they are the point of the migration: a `team_members` row for someone who is not a member of that workspace is
+deleted, and a ticket assigned to someone who is not on the ticket's team is unassigned. Both are rare; look at the real database for them before the day.
+
+The address of a team is now `/t/<KEY>/…` (was `/p/<KEY>/…`) and its API `/api/app/teams/…` (was `/api/app/projects/…`), the team stream `/api/teams/<KEY>/stream`.
+**Links printed by the plugin and CLI that still say `/p/` stop working** (no compatibility shim; dev only). `/api/v1` and the MCP are unchanged: the tool names, the `project`
+argument and every response shape stay, and `runTool` in `packages/core/src/lib/tools.ts` is the one place that maps them.
+
+The rehearsal script below does all of this on a copy (steps 0 and 0b) and then the same checks as before on the new schema.
 
 ## The tools
 
@@ -66,13 +99,18 @@ Scale: a table is read into memory at once, which is fine for Wheelhouse (about 
 
 `scripts/rehearse-data-move.sh <PGlite directory> [name]` is one full rehearsal on a copy, timed, in about a minute. It runs, and logs under `.work/rehearsal-<name>/`:
 
+0. a copy brought to migration 0020, **0b. the preflight** (reported, then resolved with `--resolve` if it found dangling references, and clean after that) and migrations 0021 and 0022;
 1. export; 2. import into a fresh PGlite directory; 3. verify against the export **and** against the source directly;
 4. the same into a throwaway Postgres 18 (Docker) and back to PGlite, which must equal the source;
 5. **continuity**, with the new app started on the copy using the same `.env.local` as the old one: the person's real API key (from
    `~/.config/wheelhouse/credentials.json`) authenticates; in every project the key resumes at exactly its cursor with exactly the number of changes waiting
    that the data says (not a replay from zero); a pull_request webhook, signed with the real webhook secret, for the repository that is really connected,
    naming an open ticket, is handled and matched to its project; the same process serves the React app;
-6. the **whole contract suite** (311 + 6) against the app on the imported copy (its fixtures are added to the copy).
+6. the **whole contract suite** (326 + 6) against the app on the imported copy (its fixtures are added to the copy);
+7. (in the script after step 4) **4b**: the database suites (queue, invites, admin, isolation, version lock, db-copy, workspace scope, constraints, join tables, cycles, projects, initiatives, team access and scoped keys) against the Postgres 18 that holds the imported data, as CI runs them;
+8. the **image** builds, starts against a fresh Postgres, serves the React app at `/t/…`, answers 401 on the web API signed out and has applied every migration (skip with `REHEARSAL_SKIP_IMAGE=1`).
+
+`REHEARSAL_BASE=<git ref>` is the code the map was last anchored to (default: where the branch left `staging`), used by the re-anchoring in step 5; `REHEARSAL_RESOLVE=0` makes dangling references fail the rehearsal instead of being resolved.
 
 | | Source | Export | Import | Verify | Postgres and back | Continuity | Contract | Total | Result |
 |---|---|---|---|---|---|---|---|---|---|

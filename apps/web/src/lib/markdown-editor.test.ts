@@ -13,13 +13,13 @@ function roundTrip(md: string): string {
   return out;
 }
 
-// Syntax that real ticket bodies use (taken from the kinds of content on the board).
+// Syntax that real issue bodies use (taken from the kinds of content on the board).
 const SAMPLES: Record<string, string> = {
   headings: "## Why\n\nSome text.\n\n### Scope\n\nMore text.",
   bullets: "- one\n- two\n- three",
   numbers: "1. first\n2. second\n3. third",
   tasks: "- [ ] todo\n- [x] done",
-  identifiers: "Call `get_ticket_context`, then get_changes and ack_changes; the session_id comes from hooks, in ~25s.",
+  identifiers: "Call `get_issue_context`, then get_changes and ack_changes; the session_id comes from hooks, in ~25s.",
   emphasis: "**bold** and *italic* and ~~gone~~ and `code` and [a link](https://example.com).",
   fence: "```ts\nconst session_id = a_b;\n```",
   quote: "> a quote\n> over two lines",
@@ -54,7 +54,7 @@ test("identifiers keep their underscores: the escapes Lexical adds are undone", 
 });
 
 test("unescapeHarmless removes only escapes that cannot change the meaning", () => {
-  assert.equal(unescapeHarmless("get\\_ticket\\_context"), "get_ticket_context");
+  assert.equal(unescapeHarmless("get\\_issue\\_context"), "get_issue_context");
   assert.equal(unescapeHarmless("about \\~25s"), "about ~25s");
   assert.equal(unescapeHarmless("5 \\* 3"), "5 * 3");
   // these could start or end emphasis or strikethrough, so they stay escaped

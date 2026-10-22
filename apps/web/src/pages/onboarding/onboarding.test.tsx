@@ -4,12 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { apiError, renderApp } from "../../test/harness";
 import { onboardingPage, repo } from "../../test/data";
 
-const open = (setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp("/p/AA/onboarding", setup);
+const open = (setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp("/t/AA/onboarding", setup);
 const step = async (title: string) => screen.findByRole("heading", { level: 2, name: title });
 const current = () => document.querySelector('li[aria-current="step"]')?.textContent;
 
 describe("the onboarding wizard", () => {
-  test("shows the project and four steps, starting at where the code lives", async () => {
+  test("shows the team and four steps, starting at where the code lives", async () => {
     open();
     await step("Where does your code live?");
     expect(screen.getAllByText("Alpha").length).toBeGreaterThan(0);
@@ -20,11 +20,11 @@ describe("the onboarding wizard", () => {
   test("Skip to board is always there, and goes to the board", async () => {
     const { at } = open();
     await userEvent.setup().click(await screen.findByRole("button", { name: "Skip to board" }));
-    await waitFor(() => expect(at()).toBe("/p/AA"));
+    await waitFor(() => expect(at()).toBe("/t/AA"));
   });
 
-  test("a project that already has a repository starts with GitHub chosen", async () => {
-    open((s) => s.on("GET /api/app/projects/AA/onboarding", onboardingPage("AA", { hasRepos: true })));
+  test("a team that already has a repository starts with GitHub chosen", async () => {
+    open((s) => s.on("GET /api/app/teams/AA/onboarding", onboardingPage("AA", { hasRepos: true })));
     await step("Where does your code live?");
     expect(screen.getByRole("button", { name: /Connect GitHub/ }).getAttribute("aria-pressed")).toBe("true");
     expect(await screen.findByRole("heading", { level: 2, name: "GitHub" })).toBeTruthy();
@@ -48,18 +48,18 @@ describe("the onboarding wizard", () => {
   test("'No code yet': the description starts the map; an empty one is refused with the server's words", async () => {
     let calls = 0;
     const { server } = open((s) =>
-      s.on("POST /api/app/projects/AA/onboarding/concept", () => (++calls === 1 ? apiError(400, "invalid", "Write a few sentences about what you're building.", { fields: { description: "Write a few sentences about what you're building." } }) : { ok: true })),
+      s.on("POST /api/app/teams/AA/onboarding/concept", () => (++calls === 1 ? apiError(400, "invalid", "Write a few sentences about what you're building.", { fields: { description: "Write a few sentences about what you're building." } }) : { ok: true })),
     );
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /No code yet/ }));
     await user.click(screen.getByRole("button", { name: "Start the map" }));
     expect(await screen.findByText("Write a few sentences about what you're building.")).toBeTruthy();
-    expect(server.sent("POST /api/app/projects/AA/onboarding/concept")[0].body).toEqual({ description: "" });
+    expect(server.sent("POST /api/app/teams/AA/onboarding/concept")[0].body).toEqual({ description: "" });
     await user.type(screen.getByLabelText(/What are you building/), "A tool that imports invoices.");
     await user.click(screen.getByRole("button", { name: "Start the map" }));
     expect(await screen.findByText("Added to the map.")).toBeTruthy();
-    expect(server.sent("POST /api/app/projects/AA/onboarding/concept")[1].body).toEqual({ description: "A tool that imports invoices." });
-    expect(server.sent("POST /api/app/projects/AA/onboarding/concept")[1].headers["x-csrf-token"]).toBe("csrf-ada");
+    expect(server.sent("POST /api/app/teams/AA/onboarding/concept")[1].body).toEqual({ description: "A tool that imports invoices." });
+    expect(server.sent("POST /api/app/teams/AA/onboarding/concept")[1].headers["x-csrf-token"]).toBe("csrf-ada");
   });
 
   test("the button reads 'Skip for now' until a choice is made, then 'Continue'", async () => {
@@ -71,7 +71,7 @@ describe("the onboarding wizard", () => {
     expect(screen.getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 
-  test("Connect agents shows the setup guide with this project's key, steering to the plugin when there is code", async () => {
+  test("Connect agents shows the setup guide with this team's key, steering to the plugin when there is code", async () => {
     open();
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /Local or another Git host/ }));
@@ -118,7 +118,7 @@ describe("the onboarding wizard", () => {
 
   test("Invite teammates creates a one-time link, and Done goes to the board", async () => {
     const { server, at } = open((s) =>
-      s.on("POST /api/app/invites", { id: "i1", email: "grace@example.test", kind: "join_team", expiresAt: "2026-10-30T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" }),
+      s.on("POST /api/app/invites", { id: "i1", email: "grace@example.test", kind: "join_workspace", expiresAt: "2026-10-30T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" }),
     );
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: /Skip for now Decide later/ }));
@@ -128,22 +128,22 @@ describe("the onboarding wizard", () => {
     await user.type(screen.getByPlaceholderText("Their email"), "grace@example.test");
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
     await waitFor(() => expect(server.sent("POST /api/app/invites")).toHaveLength(1));
-    expect(server.sent("POST /api/app/invites")[0].body).toMatchObject({ kind: "join_team", email: "grace@example.test", role: "member" });
+    expect(server.sent("POST /api/app/invites")[0].body).toMatchObject({ kind: "join_workspace", email: "grace@example.test", role: "member" });
     expect(await screen.findByText(/Invite created for grace@example.test/)).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Done — go to board" }));
-    await waitFor(() => expect(at()).toBe("/p/AA"));
+    await waitFor(() => expect(at()).toBe("/t/AA"));
   });
 
-  test("another team's project, or one that does not exist, is not found", async () => {
-    renderApp("/p/ZZ/onboarding");
+  test("another workspace's team, or one that does not exist, is not found", async () => {
+    renderApp("/t/ZZ/onboarding");
     expect(await screen.findByText(/not found|doesn.t exist|can.t find/i)).toBeTruthy();
   });
 
   test("the repository list in the 'local' step updates when one is added", async () => {
     const { server } = open((s) => {
       let repos = [repo()];
-      s.on("GET /api/app/projects/AA/repositories", () => ({ repositories: repos }));
-      s.on("POST /api/app/projects/AA/repositories", () => {
+      s.on("GET /api/app/teams/AA/repositories", () => ({ repositories: repos }));
+      s.on("POST /api/app/teams/AA/repositories", () => {
         repos = [...repos, repo({ id: "r2", displayName: "Mobile", role: "ios" })];
         return { repository: repos[1] };
       });
@@ -155,6 +155,6 @@ describe("the onboarding wizard", () => {
     await user.type(screen.getByPlaceholderText(/^Role/), "ios");
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(await screen.findByText("Mobile", { selector: ".font-semibold" })).toBeTruthy();
-    expect(server.sent("POST /api/app/projects/AA/repositories")).toHaveLength(1);
+    expect(server.sent("POST /api/app/teams/AA/repositories")).toHaveLength(1);
   });
 });

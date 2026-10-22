@@ -127,6 +127,153 @@
       "when": 1792385313291,
       "tag": "0017_session_active_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792448992227,
+      "tag": "0018_workspaces_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792450561634,
+      "tag": "0019_teams_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792451474768,
+      "tag": "0020_workspace_scoped_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792457034535,
+      "tag": "0021_constraints_and_parents",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792457759397,
+      "tag": "0022_join_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792459007299,
+      "tag": "0023_cycles",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792467216358,
+      "tag": "0024_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792471344907,
+      "tag": "0025_initiatives",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792472732486,
+      "tag": "0026_agent_key_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792525388748,
+      "tag": "0027_team_order",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792526433535,
+      "tag": "0028_team_icon",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792529022978,
+      "tag": "0029_issues_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792530008693,
+      "tag": "0030_statuses_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792530800234,
+      "tag": "0031_issue_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792606117956,
+      "tag": "0032_status_color",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792613599261,
+      "tag": "0033_status_role_required",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792619170777,
+      "tag": "0034_daemon_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792629461468,
+      "tag": "0035_job_base_branch",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792643839095,
+      "tag": "0036_job_continues",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792655782298,
+      "tag": "0037_custom_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792703161086,
+      "tag": "0038_project_priority",
+      "breakpoints": true
     }
   ]
 }

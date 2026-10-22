@@ -15,8 +15,8 @@ import type { Q } from "./db-copy";
  */
 
 export type Rules = {
-  /** The project whose anchors name this repository's paths. Other projects' anchors (other repositories) are never touched. */
-  project: string;
+  /** The team whose anchors name this repository's paths. Other teams' anchors (other repositories) are never touched. */
+  team: string;
   /** Slugs that mean this repository in a repo-qualified anchor ("wheelhouse:**"); qualified anchors of any other repository are left alone. */
   repository?: string[];
   /** An anchor (without its repo qualifier or #symbol) -> the anchors that replace it. One may become several. */
@@ -77,6 +77,12 @@ export function planAnchor(anchor: string, tree: Tree, rules: Rules): AnchorPlan
     const matchedOld = tree.oldFiles.filter((f) => anchorScore(base, f) > 0);
     if (matchedOld.length && matchedOld.every((f) => newSet.has(f))) return { anchor, action: "keep", to: [anchor], note: "everything it matched is where it was" };
     if (!matchedOld.length && matchesAny(base, tree.newFiles)) return { anchor, action: "keep", to: [anchor], note: "matches files in the new tree" };
+    // Files inside it were renamed or removed, but none left it and it still holds files: it describes the same place. (The
+    // baseline of the files that were renamed follows them separately.)
+    const leftIt = matchedOld.some((f) => tree.renames.has(f) && anchorScore(base, tree.renames.get(f)!) === 0);
+    if (matchedOld.length && !leftIt && matchesAny(base, tree.newFiles)) {
+      return { anchor, action: "keep", to: [anchor], note: "the directory is where it was; some files inside it were renamed or removed" };
+    }
     // Moved as a directory: the files that git calls renames all went from the same prefix to the same new prefix.
     const moves = matchedOld.filter((f) => tree.renames.has(f)).map((f) => [f, tree.renames.get(f)!] as const);
     const from = literalPrefix(base);
@@ -93,7 +99,7 @@ export function planAnchor(anchor: string, tree: Tree, rules: Rules): AnchorPlan
 }
 
 export type RowChange = { table: "nodes" | "docs"; id: string; name: string; anchors: AnchorPlan[]; newAnchors: string[]; hashes: { kept: number; moved: number; dropped: number } };
-export type Report = { project: string; changes: RowChange[]; unresolved: { where: string; plan: AnchorPlan }[]; drafts: number; applied: boolean };
+export type Report = { team: string; changes: RowChange[]; unresolved: { where: string; plan: AnchorPlan }[]; drafts: number; applied: boolean };
 
 /** The paths in a sentence ("src/lib/service.ts changed in abc1234"), moved. Only whole paths: one already at its new place is not moved again. */
 export function rewritePaths(text: string, renames: Map<string, string>): string {
@@ -107,12 +113,12 @@ export function rewritePaths(text: string, renames: Map<string, string>): string
 /** Where a described file went: renamed, or where it was. Null when it is gone (the baseline for it is dropped; the node re-baselines at the next landing). */
 const movedPath = (p: string, tree: Tree, newSet: Set<string>) => tree.renames.get(p) ?? (newSet.has(p) ? p : null);
 
-/** Plan (and with `apply`, write) the new anchors and baselines of one project's nodes and docs, and of the drafts waiting on them. */
+/** Plan (and with `apply`, write) the new anchors and baselines of one team's nodes and docs, and of the drafts waiting on them. */
 export async function reanchor(q: Q, tree: Tree, rules: Rules, o: { apply: boolean }): Promise<Report> {
   const newSet = new Set(tree.newFiles);
-  const [project] = await q(`select id from projects where key = $1`, [rules.project]);
-  if (!project) throw new Error(`no project "${rules.project}" in this database`);
-  const report: Report = { project: rules.project, changes: [], unresolved: [], drafts: 0, applied: o.apply };
+  const [team] = await q(`select id from teams where key = $1`, [rules.team]);
+  if (!team) throw new Error(`no team "${rules.team}" in this database`);
+  const report: Report = { team: rules.team, changes: [], unresolved: [], drafts: 0, applied: o.apply };
   const planned = new Map<string, AnchorPlan>();
   const planOf = (a: string) => planned.get(a) ?? planned.set(a, planAnchor(a, tree, rules)).get(a)!;
   const rewriteAnchors = (anchors: string[]) => {
@@ -125,8 +131,8 @@ export async function reanchor(q: Q, tree: Tree, rules: Rules, o: { apply: boole
   for (const table of ["nodes", "docs"] as const) {
     const label = table === "nodes" ? "name" : "title";
     const rows = await q(
-      `select id, ${label} as name, anchors, described_hashes, drift_paths, stale_reason from ${table} where project_id = $1 ${table === "docs" ? "and deleted_at is null" : ""} order by ${label}`,
-      [project.id],
+      `select id, ${label} as name, anchors, described_hashes, drift_paths, stale_reason from ${table} where team_id = $1 ${table === "docs" ? "and deleted_at is null" : ""} order by ${label}`,
+      [team.id],
     );
     for (const r of rows) {
       const anchors = (r.anchors as string[]) ?? [];
@@ -164,7 +170,7 @@ export async function reanchor(q: Q, tree: Tree, rules: Rules, o: { apply: boole
 
   // A draft waiting to be published carries anchors of its own.
   for (const table of ["node_drafts", "doc_drafts"] as const) {
-    const drafts = await q(`select id, patch from ${table} where project_id = $1 and status = 'pending' and patch ? 'anchors'`, [project.id]);
+    const drafts = await q(`select id, patch from ${table} where team_id = $1 and status = 'pending' and patch ? 'anchors'`, [team.id]);
     for (const d of drafts) {
       const patch = d.patch as { anchors?: string[] };
       if (!Array.isArray(patch.anchors)) continue;
@@ -179,7 +185,7 @@ export async function reanchor(q: Q, tree: Tree, rules: Rules, o: { apply: boole
 
 /** The report as text for a person to review. */
 export function formatReport(r: Report): string {
-  const out: string[] = [`Project ${r.project}: ${r.applied ? "APPLIED" : "dry run (nothing written)"}`];
+  const out: string[] = [`Team ${r.team}: ${r.applied ? "APPLIED" : "dry run (nothing written)"}`];
   for (const c of r.changes) {
     out.push(`\n${c.table === "nodes" ? "node" : "doc "} ${c.name}`);
     for (const p of c.anchors) out.push(`   ${p.action.padEnd(8)} ${p.anchor}${p.action === "rewrite" ? `  ->  ${p.to.join(", ")}` : ""}   (${p.note})`);

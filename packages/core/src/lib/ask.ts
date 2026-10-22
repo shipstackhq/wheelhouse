@@ -10,7 +10,7 @@ import { getGraph, ServiceError } from "./service";
 
 const MODEL = "claude-opus-5-5";
 
-const SYSTEM = `You answer questions about a software project using ONLY its knowledge map, provided below in <map>.
+const SYSTEM = `You answer questions about a software team using ONLY its knowledge map, provided below in <map>.
 The map has four linked layers: concept (what the product does), system (what runs where), data (tables, columns, foreign keys), code (files/symbols/endpoints).
 "implements" links connect a lower layer to the higher-level thing it realizes. Flows are ordered walkthroughs. ADRs record decisions.
 
@@ -30,7 +30,7 @@ export function renderMap(g: Graph) {
     const n = byId.get(id);
     return n ? `${n.layer}:${n.name}` : "?";
   };
-  const out: string[] = [`# Project ${g.project.key}: ${g.project.name}`, g.project.description, ""];
+  const out: string[] = [`# Team ${g.team.key}: ${g.team.name}`, g.team.description, ""];
   for (const layer of ["concept", "system", "data", "code"] as const) {
     const ns = g.nodes.filter((n) => n.layer === layer);
     if (!ns.length) continue;
@@ -95,11 +95,11 @@ export function askEnabled() {
 
 let client: Anthropic | null = null;
 
-export async function askMap(actor: Actor, projectRef: string, question: string, focusNodeId?: string) {
+export async function askMap(actor: Actor, teamRef: string, question: string, focusNodeId?: string) {
   if (!askEnabled()) throw new ServiceError("invalid", "Ask is disabled: set ANTHROPIC_API_KEY on the server");
   const q = question.trim();
   if (!q) throw new ServiceError("invalid", "Ask a question");
-  const g = await getGraph(actor, projectRef);
+  const g = await getGraph(actor, teamRef);
   if (!g.nodes.length) throw new ServiceError("invalid", "The map is empty. Map the codebase first.");
   const focus = focusNodeId ? g.nodes.find((n) => n.id === focusNodeId) : undefined;
 

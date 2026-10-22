@@ -1,19 +1,19 @@
 /**
- * The project setup checklist (WH-69): pure status computation from already-fetched data, so the project-page
+ * The team setup checklist (WH-69): pure status computation from already-fetched data, so the team-page
  * banner and the agent briefing can share one source of truth instead of drifting apart. No DB access here —
- * callers (checklistForProject below, or a test) pass in plain rows.
+ * callers (checklistForTeam below, or a test) pass in plain rows.
  */
 
 export type ChecklistInput = {
-  projectKey: string;
+  teamKey: string;
   repositories: { provider: "github" | "local"; lifecycle: "live" | "being_replaced" | "planned" | "retired" }[];
-  /** Work sessions (machines/clients) seen for this project, active or not. */
+  /** Work sessions (machines/clients) seen for this team, active or not. */
   sessionCount: number;
-  /** Active (non-revoked) API keys for the team. */
+  /** Active (non-revoked) API keys for the workspace. */
   activeAgentKeyCount: number;
-  /** Map nodes for this project, any layer. */
+  /** Map nodes for this team, any layer. */
   nodeCount: number;
-  /** Team members (including the creator) + pending join invites. */
+  /** Workspace members (including the creator) + pending join invites. */
   memberCount: number;
   pendingInviteCount: number;
 };
@@ -62,7 +62,7 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
   const teammatesDone = input.memberCount > 1;
 
   const items: ChecklistItem[] = [
-    { id: "repos", label: "Repositories connected", done: repo.done, status: repo.status, href: `/p/${input.projectKey}/repos` },
+    { id: "repos", label: "Repositories connected", done: repo.done, status: repo.status, href: `/settings/integrations/github?team=${encodeURIComponent(input.teamKey)}` },
     {
       id: "machines",
       label: "Machines linked",
@@ -70,14 +70,14 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
       status: machinesDone
         ? `${input.sessionCount} client session${input.sessionCount === 1 ? "" : "s"} seen.`
         : "No machine has connected yet (link one with /wheelhouse:setup or the CLI).",
-      href: `/p/${input.projectKey}/repos`,
+      href: `/settings/integrations/github?team=${encodeURIComponent(input.teamKey)}`,
     },
     {
       id: "agents",
       label: "Agents connected",
       done: agentsDone,
       status: agentsDone
-        ? `${input.activeAgentKeyCount} active API key${input.activeAgentKeyCount === 1 ? "" : "s"} for this team.`
+        ? `${input.activeAgentKeyCount} active API key${input.activeAgentKeyCount === 1 ? "" : "s"} for this workspace.`
         : "No agent API key yet.",
       href: "/agents",
     },
@@ -86,18 +86,18 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
       label: "Map built",
       done: mapDone,
       status: mapDone ? `${input.nodeCount} map node${input.nodeCount === 1 ? "" : "s"} described.` : "The map is empty — nothing described yet.",
-      href: `/p/${input.projectKey}/map`,
+      href: `/t/${input.teamKey}/map`,
     },
     {
       id: "teammates",
       label: "Teammates invited",
       done: teammatesDone,
       status: teammatesDone
-        ? `${input.memberCount} teammate${input.memberCount === 1 ? "" : "s"} on the team${input.pendingInviteCount ? `, ${input.pendingInviteCount} invite${input.pendingInviteCount === 1 ? "" : "s"} pending` : ""}.`
+        ? `${input.memberCount} teammate${input.memberCount === 1 ? "" : "s"} on the workspace${input.pendingInviteCount ? `, ${input.pendingInviteCount} invite${input.pendingInviteCount === 1 ? "" : "s"} pending` : ""}.`
         : input.pendingInviteCount
           ? `${input.pendingInviteCount} invite${input.pendingInviteCount === 1 ? "" : "s"} pending, no one has joined yet.`
           : "Just you so far.",
-      href: "/team",
+      href: "/workspace",
     },
   ];
 

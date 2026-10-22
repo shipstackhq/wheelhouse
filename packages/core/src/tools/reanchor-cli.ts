@@ -7,7 +7,7 @@ import { formatReport, gitTree, reanchor, type Rules } from "./reanchor";
  * pnpm map:reanchor --db <PGlite directory | postgres://…> --from <git ref> --to <git ref> --rules <file> [--repo <git dir>] [--apply]
  *
  * Without --apply it only reports (a PGlite directory is copied first, so even the original is not opened). With --apply it rewrites the anchors
- * and baselines of one project's nodes and docs in that database: run it on the IMPORTED copy, before the new app starts (docs/cutover.md).
+ * and baselines of one team's nodes and docs in that database: run it on the IMPORTED copy, before the new app starts (docs/cutover.md).
  * Exit status is non-zero if any anchor could not be mapped, so it can gate a cutover.
  */
 const args = process.argv.slice(2);

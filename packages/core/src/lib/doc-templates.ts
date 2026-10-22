@@ -3,7 +3,7 @@
  * doc, for humans ("New doc" picker in docs-explorer.tsx) and agents (`list_doc_templates`,
  * or `upsert_doc`'s `template` arg). Each is just a `body` string handed to `createDoc` on
  * creation — no schema, no DB access, nothing persisted here. Keep this list static and
- * small; per-project customization (the ticket's "editable later") can layer on top
+ * small; per-team customization (the issue's "editable later") can layer on top
  * without changing this module's shape.
  */
 
@@ -20,7 +20,7 @@ export const DOC_TEMPLATES: DocTemplate[] = [
   {
     id: "spec",
     name: "Spec / PRD",
-    description: "Problem, users, goals and non-goals, approach, open questions, ticket links.",
+    description: "Problem, users, goals and non-goals, approach, open questions, issue links.",
     body: `# Spec: <title>
 
 ## Problem
@@ -41,8 +41,8 @@ export const DOC_TEMPLATES: DocTemplate[] = [
 ## Open questions
 *What's still unresolved?*
 
-## Related tickets
-*Link the tickets this spec feeds into.*
+## Related issues
+*Link the issues this spec feeds into.*
 `,
   },
   {
@@ -93,7 +93,7 @@ export const DOC_TEMPLATES: DocTemplate[] = [
   {
     id: "meeting-notes",
     name: "Meeting / retro notes",
-    description: "Who, decisions, action items — action items can become tickets in one click.",
+    description: "Who, decisions, action items — action items can become issues in one click.",
     body: `# Meeting notes: <title>
 
 ## Who
@@ -103,7 +103,7 @@ export const DOC_TEMPLATES: DocTemplate[] = [
 *What did we decide?*
 
 ## Action items
-*Unchecked items below can be turned into tickets with one click.*
+*Unchecked items below can be turned into issues with one click.*
 - [ ] *Action item one — owner, by when.*
 - [ ] *Action item two — owner, by when.*
 `,
@@ -111,10 +111,10 @@ export const DOC_TEMPLATES: DocTemplate[] = [
   {
     id: "onboarding",
     name: "Onboarding",
-    description: "What this project is, how to run it, where things are, who to ask.",
+    description: "What this team is, how to run it, where things are, who to ask.",
     body: `# Onboarding: <title>
 
-## What this project is
+## What this team is
 *A short orientation for someone new.*
 
 ## How to run it
@@ -145,7 +145,7 @@ export function listDocTemplates(): Pick<DocTemplate, "id" | "name" | "descripti
 /**
  * Find unchecked GFM task-list items ("- [ ] text") under an "Action items" heading
  * (or similar — matched case-insensitively against common phrasings) in a doc's Markdown
- * body. Used to back the one-click "Create ticket" affordance in the docs UI: this is
+ * body. Used to back the one-click "Create issue" affordance in the docs UI: this is
  * pure text processing, no DOM/markdown-AST dependency, so it's easy to unit test and
  * easy to reason about. Not a full Markdown parser — a heading line starts with one or
  * more "#", and the section ends at the next heading of equal-or-shallower depth.

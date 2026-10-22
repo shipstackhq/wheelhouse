@@ -23,8 +23,8 @@ const pr = (o: { action: string; number: number; title: string; sha?: string; in
   installation: { id: Number(o.installation ?? gh.installationA) },
 });
 
-const ticket = (as: ReturnType<typeof asKey>, ref: string) => v1ok(as, "get_ticket", { ticket: ref });
-const eventTypes = async (as: ReturnType<typeof asKey>, project: string) => JSON.stringify(await v1ok(as, "get_activity", { project, limit: 60 }));
+const issue = (as: ReturnType<typeof asKey>, ref: string) => v1ok(as, "get_issue", { issue: ref });
+const eventTypes = async (as: ReturnType<typeof asKey>, team: string) => JSON.stringify(await v1ok(as, "get_activity", { project: team, limit: 60 }));
 
 describe("POST /api/webhooks/github: signature and framing", () => {
   test("a missing, wrong or malformed signature is one plain 401, and nothing is processed", async () => {
@@ -81,7 +81,7 @@ describe("POST /api/webhooks/github: pushes", () => {
     const r = await deliver("push", push());
     assert.equal(r.status, 200);
     assert.deepEqual(r.json, { status: "handled", matched: 1, detail: "1 file(s)" });
-    assert.match(await eventTypes(A, fx.a.projectKey), /code\.landed/);
+    assert.match(await eventTypes(A, fx.a.teamKey), /code\.landed/);
   });
 
   test("pushes to other branches, branch deletions, unknown repositories and unknown installations are ignored", async () => {
@@ -94,23 +94,23 @@ describe("POST /api/webhooks/github: pushes", () => {
 });
 
 describe("POST /api/webhooks/github: pull requests and CI", () => {
-  const ref = fx.a.webhookTicketRef;
+  const ref = fx.a.webhookIssueRef;
   const headSha = "b".repeat(40);
 
-  test("a pull request naming a ticket opens it in Review, links it, and says who did it", async () => {
-    assert.equal((await ticket(A, ref)).ticket.column, "Backlog");
+  test("a pull request naming an issue opens it in Review, links it, and says who did it", async () => {
+    assert.equal((await issue(A, ref)).issue.status, "Backlog");
     const r = await deliver("pull_request", pr({ action: "opened", number: 7, title: `${ref} contract change`, sha: headSha }));
     assert.deepEqual(r.json, { status: "handled", matched: 1 });
-    const t = await ticket(A, ref);
-    assert.equal(t.ticket.column, "Review");
+    const t = await issue(A, ref);
+    assert.equal(t.issue.status, "Review");
     assert.equal(t.pullRequests.length, 1);
     assert.equal(t.pullRequests[0].number, 7);
     assert.equal(t.pullRequests[0].state, "open");
     assert.ok(t.comments.some((c: { authorName: string; body: string }) => c.authorName === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
-    assert.match(await eventTypes(A, fx.a.projectKey), /ticket\.pull_request/);
+    assert.match(await eventTypes(A, fx.a.teamKey), /issue\.pull_request/);
   });
 
-  test("a failing check on the head commit marks the pull request failed and raises ticket.ci", async () => {
+  test("a failing check on the head commit marks the pull request failed and raises issue.ci", async () => {
     const run = (conclusion: string, sha = headSha) => ({
       action: "completed",
       check_run: { name: "ci", status: "completed", conclusion, head_sha: sha, html_url: "https://github.test/ct/app/runs/1", pull_requests: [{ number: 7 }] },
@@ -121,16 +121,16 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
     assert.equal(stale.json.status, "ignored", "a result for a commit that is not the head is ignored");
     const r = await deliver("check_run", run("failure"));
     assert.deepEqual(r.json, { status: "handled", matched: 1 });
-    const t = await ticket(A, ref);
+    const t = await issue(A, ref);
     assert.equal(t.pullRequests[0].ciState, "failure");
-    assert.match(await eventTypes(A, fx.a.projectKey), /ticket\.ci/);
+    assert.match(await eventTypes(A, fx.a.teamKey), /issue\.ci/);
     assert.ok(t.comments.some((c: { body: string }) => /CI failed on pull request/.test(c.body)));
   });
 
-  test("closing without merging sends a ticket in Review back to In Progress", async () => {
+  test("closing without merging sends an issue in Review back to In Progress", async () => {
     await deliver("pull_request", pr({ action: "closed", number: 7, title: `${ref} contract change`, sha: headSha }));
-    const t = await ticket(A, ref);
-    assert.equal(t.ticket.column, "In Progress");
+    const t = await issue(A, ref);
+    assert.equal(t.issue.status, "In Progress");
     assert.equal(t.pullRequests[0].state, "closed");
   });
 
@@ -141,27 +141,27 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
   });
 });
 
-describe("POST /api/webhooks/github: two teams, one repository id", () => {
-  test("a delivery through team A's installation never touches team B's tickets", async () => {
-    const bRef = fx.b.ticketRef;
-    const before = await ticket(B, bRef);
-    // Team B also holds a forged repository row that points at team A's installation; it must never be reached.
+describe("POST /api/webhooks/github: two workspaces, one repository id", () => {
+  test("a delivery through workspace A's installation never touches workspace B's issues", async () => {
+    const bRef = fx.b.issueRef;
+    const before = await issue(B, bRef);
+    // Workspace B also holds a forged repository row that points at workspace A's installation; it must never be reached.
     const r = await deliver("pull_request", pr({ action: "opened", number: 21, title: `${bRef} sneaking in`, installation: gh.installationA }));
-    assert.equal(r.json.matched, 1, "only team A's own repository matched");
-    const after = await ticket(B, bRef);
-    assert.equal(after.ticket.column, before.ticket.column);
+    assert.equal(r.json.matched, 1, "only workspace A's own repository matched");
+    const after = await issue(B, bRef);
+    assert.equal(after.issue.status, before.issue.status);
     assert.equal(after.pullRequests.length, 0);
-    assert.equal(after.ticket.version, before.ticket.version);
+    assert.equal(after.issue.version, before.issue.version);
   });
 
-  test("a delivery through team B's installation never touches team A's tickets", async () => {
-    const aRef = fx.a.ticketRef;
-    const before = await ticket(A, aRef);
+  test("a delivery through workspace B's installation never touches workspace A's issues", async () => {
+    const aRef = fx.a.issueRef;
+    const before = await issue(A, aRef);
     await deliver("pull_request", pr({ action: "opened", number: 22, title: `${aRef} sneaking in`, installation: gh.installationB }));
-    const after = await ticket(A, aRef);
-    assert.equal(after.ticket.column, before.ticket.column);
+    const after = await issue(A, aRef);
+    assert.equal(after.issue.status, before.issue.status);
     assert.equal(after.pullRequests.length, 0);
-    assert.equal(after.ticket.version, before.ticket.version);
+    assert.equal(after.issue.version, before.issue.version);
   });
 
   test("an installation deleted event removes it, after which its deliveries are ignored", async () => {

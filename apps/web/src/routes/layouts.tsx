@@ -1,19 +1,21 @@
 import { useEffect } from "react";
-import { Navigate, Outlet, useParams } from "react-router";
+import clsx from "clsx";
+import { Navigate, Outlet, useMatches, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
-import { SearchIcon } from "../components/icons";
-import { NotificationsMenu } from "../components/notifications-menu";
 import { ProfileMenu } from "../components/profile-menu";
-import { ProjectQueueMenu } from "../components/project-queue-menu";
+import { AppHeader } from "../components/app-header";
 import { PwaRegister } from "../components/pwa";
-import { ProjectLiveRefresh } from "../components/live-refresh";
+import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
-import { useMe, useProjects } from "../lib/session";
+import { useSidebarCollapsed } from "../components/sidebar-toggle";
+import { PageMenuProvider } from "../components/page-menu";
+import { useRememberAppLocation } from "../lib/app-location";
+import { useMe, useTeams } from "../lib/session";
 import { NotFound } from "./errors";
 
-/** Shown by the router while the first screen's data (who you are, your projects) loads. */
+/** Shown by the router while the first screen's data (who you are, your teams) loads. */
 export function FullPageSkeleton() {
   return (
     <div className="h-dvh">
@@ -80,58 +82,60 @@ export function InviteLayout() {
   );
 }
 
-/** The signed-in app: the sidebar around whichever page the address calls for. */
+/**
+ * A route's `handle`: how wide its page is in the app. `full` (the default) fills the space beside the sidebar; `contained` is a
+ * centred column no wider than Tailwind's 7xl.
+ */
+export type PageWidth = "full" | "contained";
+export interface PageHandle {
+  width?: PageWidth;
+}
+
+/** The signed-in app: the sidebar, the header with its breadcrumbs, and whichever page the address calls for. */
 export function AppLayout() {
   const me = useMe().data;
-  const projects = useProjects().data;
+  const teams = useTeams().data;
+  const matches = useMatches();
+  useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed(); // the sidebar's rail, toggled from the header
+  // The deepest route that names a width wins; a page that names none is full width.
+  const width = matches.map((m) => (m.handle as PageHandle | undefined)?.width).filter(Boolean).at(-1) ?? "full";
   // The session ended while the page was open (signed out in another tab, expired): the cache says so, go and sign in.
   if (me === null) return <Navigate to="/login" replace />;
-  if (!me || !projects) return <FullPageSkeleton />;
+  if (!me || !teams) return <FullPageSkeleton />;
   return (
-    <div className="flex h-dvh">
-      <NavigationProgress />
-      <Sidebar
-        projects={projects.map((p) => ({ key: p.key, name: p.name }))}
-        teamName={me.team.name}
-        isAdmin={me.isInstanceAdmin}
-        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} team={me.team.name} compact={collapsed} />}
-      />
-      <main className="min-w-0 flex-1 overflow-hidden pt-10 md:pt-0">
-        <Outlet />
-      </main>
-    </div>
+    <PageMenuProvider>
+      <div className="flex h-dvh">
+        <NavigationProgress />
+        <Sidebar
+          collapsed={collapsed}
+          teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
+          workspaceName={me.workspace.name}
+          workspaceImageUrl={me.workspace.imageUrl}
+          isAdmin={me.isInstanceAdmin}
+          profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} imageUrl={me.user.avatarUrl} compact={collapsed} />}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+          <main className="min-h-0 flex-1 overflow-hidden">
+            <div className={clsx("h-full", width === "contained" && "mx-auto max-w-7xl")}>
+              <Outlet />
+            </div>
+          </main>
+        </div>
+      </div>
+    </PageMenuProvider>
   );
 }
 
-/** One project: its header, live updates for it, and its page. A project that is not this team's is simply not found. */
-export function ProjectLayout() {
+/** One team: live updates for it, and its page. A team that is not this workspace's is simply not found. */
+export function TeamLayout() {
   const { key = "" } = useParams();
-  const project = useProjects().data?.find((p) => p.key === key);
-  if (!project) return <NotFound />;
+  const team = useTeams().data?.find((p) => p.key === key);
+  if (!team) return <NotFound />;
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-4 border-b border-line bg-panel px-5 py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate font-semibold">{project.name}</h1>
-          </div>
-        </div>
-        {/* Dummy for now: the one search across tickets, docs and notes (WH-66) is not wired up yet. */}
-        <div className="relative mx-auto hidden w-full max-w-md sm:block">
-          <input
-            type="search"
-            className="input !rounded-full !border-line !bg-panel-2 !py-1.5 !pl-9 text-sm focus:!border-accent"
-            placeholder="Search docs, tickets, notes"
-            aria-label="Search docs, tickets, notes"
-          />
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted" />
-        </div>
-        <div className="ml-auto flex items-center gap-2 sm:ml-0">
-          <NotificationsMenu />
-          <ProjectQueueMenu projectKey={project.key} />
-        </div>
-      </header>
-      <ProjectLiveRefresh projectKey={project.key} />
+      <TeamLiveRefresh teamKey={team.key} />
       <div className="min-h-0 flex-1">
         <Outlet />
       </div>

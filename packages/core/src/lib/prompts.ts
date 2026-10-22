@@ -14,7 +14,7 @@ export const prompts: Record<string, Prompt> = {
   brief: {
     description: "Load the Wheelhouse briefing for this project (what it is, how it's built, work in flight, what changed).",
     arguments: [{ name: "project", description: 'Wheelhouse project key, e.g. "WH"', required: true }],
-    render: ({ project }) => `Call get_briefing for Wheelhouse project ${project} and read it carefully: it is the current state of the project and replaces exploring the codebase from scratch. Then call get_changes and handle anything addressed to you. If you're about to work a ticket, call get_ticket_context for it and start with the files it lists. Summarise in 3–5 lines what you now know and what you'll do next.`,
+    render: ({ project }) => `Call get_briefing for Wheelhouse project ${project} and read it carefully: it is the current state of the project and replaces exploring the codebase from scratch. Then call get_changes and handle anything addressed to you. If you're about to work an issue, call get_issue_context for it and start with the files it lists. Summarise in 3–5 lines what you now know and what you'll do next.`,
   },
 
   map_codebase: {
@@ -54,7 +54,7 @@ Goal: a teammate should understand this codebase at a high level from the map al
    - implements: the concept it stores (create the concept with upsert_node layer "concept" if missing) and the system database node it lives in
    - described_sha: output of \`git rev-parse HEAD\`
 4. Re-check the \`unresolved\` lists returned; every FK target should end up mapped.
-5. Add glossary terms (upsert_term) for domain words that appear as table or column names, and an ADR for any notable modelling choice (e.g. soft deletes, multi-tenancy by team_id, JSONB over tables).
+5. Add glossary terms (upsert_term) for domain words that appear as table or column names, and an ADR for any notable modelling choice (e.g. soft deletes, multi-tenancy by workspace_id, JSONB over tables).
 Report the number of tables and relationships mapped and anything you couldn't resolve.`,
   },
 

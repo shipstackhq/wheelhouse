@@ -1,5 +1,5 @@
 {
-  "project": "WH",
+  "team": "WH",
   "repository": ["wheelhouse"],
   "anchors": {
     "public/sw.js": ["apps/web/public/sw.js"],
@@ -9,7 +9,7 @@
     "src/app/(app)/p/[key]/board.tsx": ["apps/web/src/pages/board/board.tsx"],
     "src/app/(app)/p/[key]/column-controls.tsx": ["apps/web/src/pages/board/column-controls.tsx"],
     "src/app/(app)/p/[key]/thread.tsx": ["apps/web/src/pages/board/thread.tsx"],
-    "src/app/(app)/p/[key]/ticket-dialog.tsx": ["apps/web/src/pages/board/ticket-dialog.tsx"],
+    "src/app/(app)/p/[key]/ticket-dialog.tsx": ["apps/web/src/pages/board/issue-dialog.tsx"],
     "src/app/(app)/p/[key]/map/**": ["apps/web/src/pages/map/**"],
     "src/components/bots-menu.tsx": ["apps/web/src/components/bots-menu.tsx"],
     "src/components/description-editor.tsx": ["apps/web/src/components/description-editor.tsx"],
@@ -18,6 +18,6 @@
     "src/components/session-remove-button.tsx": ["apps/web/src/components/session-remove-button.tsx"],
     "src/components/session-row.tsx": ["apps/web/src/components/session-row.tsx"],
     "src/lib/markdown-editor.ts": ["apps/web/src/lib/markdown-editor.ts"],
-    "src/lib/ticket-nav.ts": ["apps/web/src/lib/ticket-nav.ts"]
+    "src/lib/ticket-nav.ts": ["apps/web/src/lib/issue-nav.ts"]
   }
 }

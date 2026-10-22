@@ -8,8 +8,8 @@ import { bad, finite, oneOf, rateLimited, text, textList, textOrNull, whole } fr
 
 /**
  * What the web app's map, decisions, glossary and activity pages read and write (WH-97), as functions of the signed-in person.
- * The API's controllers call these and nothing else. Everything is scoped by the actor's team through the service layer, so another
- * team's project, node, edge, flow, decision or term is "not found". Answers carry only what the screens use, never raw rows.
+ * The API's controllers call these and nothing else. Everything is scoped by the actor's workspace through the service layer, so another
+ * workspace's team, node, edge, flow, decision or term is "not found". Answers carry only what the screens use, never raw rows.
  */
 
 type Body = Record<string, unknown>;
@@ -80,7 +80,7 @@ type FlowRow = typeof schema.flows.$inferSelect;
 export type FlowView = { id: string; name: string; description: string; steps: schema.FlowStep[]; version: number };
 export const flowView = (f: FlowRow): FlowView => ({ id: f.id, name: f.name, description: f.description, steps: f.steps, version: f.version });
 
-type DecisionRow = typeof schema.decisions.$inferSelect;
+type DecisionRow = typeof schema.decisions.$inferSelect & { nodeIds: string[] };
 export type DecisionView = {
   id: string;
   number: number;
@@ -118,16 +118,16 @@ export const termView = (t: TermRow): TermView => ({ id: t.id, term: t.term, def
 export type FluxView = Record<
   string,
   {
-    sessions: { id: string; by: string; ticket: string | null; files: string[] }[];
+    sessions: { id: string; by: string; issue: string | null; files: string[] }[];
     drafts: { id: string; authorKind: "human" | "agent"; authorName: string; confirm: boolean; patch: Record<string, unknown> }[];
   }
 >;
 
 export type GraphView = {
-  project: { id: string; key: string; name: string; description: string };
+  team: { id: string; key: string; name: string; description: string };
   nodes: NodeView[];
   edges: EdgeView[];
-  ticketLinks: { nodeId: string; ticketId: string; number: number; title: string; columnId: string; ref: string }[];
+  issueLinks: { nodeId: string; issueId: string; number: number; title: string; statusId: string; ref: string }[];
   flows: FlowView[];
   decisions: DecisionView[];
   terms: TermView[];
@@ -136,14 +136,14 @@ export type GraphView = {
   askEnabled: boolean;
 };
 
-/** The whole map of a project in one read: what the map, decisions and glossary pages draw. */
-export async function graphView(actor: Actor, projectKey: string): Promise<GraphView> {
-  const g = await svc.getGraph(actor, projectKey);
+/** The whole map of a team in one read: what the map, decisions and glossary pages draw. */
+export async function graphView(actor: Actor, teamKey: string): Promise<GraphView> {
+  const g = await svc.getGraph(actor, teamKey);
   return {
-    project: { id: g.project.id, key: g.project.key, name: g.project.name, description: g.project.description },
+    team: { id: g.team.id, key: g.team.key, name: g.team.name, description: g.team.description },
     nodes: g.nodes.map(nodeView),
     edges: g.edges.map(edgeView),
-    ticketLinks: g.ticketLinks.map((l) => ({ nodeId: l.nodeId, ticketId: l.ticketId, number: l.number, title: l.title, columnId: l.columnId, ref: l.ref })),
+    issueLinks: g.issueLinks.map((l) => ({ nodeId: l.nodeId, issueId: l.issueId, number: l.number, title: l.title, statusId: l.statusId, ref: l.ref })),
     flows: g.flows.map(flowView),
     decisions: g.decisions.map(decisionView),
     terms: g.terms.map(termView),
@@ -228,14 +228,14 @@ async function withCurrent<T>(run: () => Promise<T>, view: (raw: never) => unkno
 }
 
 /** Create (no id) or change (id) a node. With `version`, a change made by anyone since is a 409 and nothing is overwritten. */
-export async function upsertNodeAs(actor: Actor, projectKey: string, b: Body & { id?: string }) {
+export async function upsertNodeAs(actor: Actor, teamKey: string, b: Body & { id?: string }) {
   const input = nodeInput(b);
   const id = text(b, "id");
   if (id !== undefined) input.id = id;
   const version = whole(b, "version");
   if (version !== undefined) input.expectedVersion = version;
   if (!id && !input.name) bad("name", "name is required to create a node");
-  const n = await withCurrent(() => svc.upsertNode(actor, projectKey, input), nodeView as (raw: never) => unknown);
+  const n = await withCurrent(() => svc.upsertNode(actor, teamKey, input), nodeView as (raw: never) => unknown);
   return nodeView(n as svc.NodeRow);
 }
 
@@ -255,24 +255,24 @@ export function layoutInput(b: Body): { positions: { id: string; x: number; y: n
   return { positions, placed: b.placed as boolean | undefined };
 }
 
-export async function saveLayoutAs(actor: Actor, projectKey: string, b: Body) {
+export async function saveLayoutAs(actor: Actor, teamKey: string, b: Body) {
   const { positions, placed } = layoutInput(b);
-  await svc.saveLayout(actor, projectKey, positions, placed === undefined ? undefined : { placed });
+  await svc.saveLayout(actor, teamKey, positions, placed === undefined ? undefined : { placed });
   return { ok: true as const };
 }
 
 /** A connection between two nodes, by id (or name). `depends` within a layer, `implements` from a lower layer to a higher one. */
-export async function connectAs(actor: Actor, projectKey: string, b: Body): Promise<EdgeView> {
+export async function connectAs(actor: Actor, teamKey: string, b: Body): Promise<EdgeView> {
   const from = text(b, "from", { required: true });
   const to = text(b, "to", { required: true });
   const kind = oneOf(b, "kind", ["depends", "implements"] as const) ?? "depends";
   const label = text(b, "label", { max: 200 });
-  return edgeView(await svc.upsertEdge(actor, projectKey, { from: from!, to: to!, label, kind }));
+  return edgeView(await svc.upsertEdge(actor, teamKey, { from: from!, to: to!, label, kind }));
 }
 
 // ───────── flows, decisions, terms ─────────
 
-export async function upsertFlowAs(actor: Actor, projectKey: string, b: Body): Promise<FlowView> {
+export async function upsertFlowAs(actor: Actor, teamKey: string, b: Body): Promise<FlowView> {
   const name = text(b, "name", { required: true, max: 200, trim: true })!;
   let steps: svc.FlowInput["steps"];
   if (b.steps !== undefined) {
@@ -286,10 +286,10 @@ export async function upsertFlowAs(actor: Actor, projectKey: string, b: Body): P
   const input: svc.FlowInput = { name, description: text(b, "description", { max: 5000 }), steps, expectedVersion: whole(b, "version") };
   const id = text(b, "id");
   if (id !== undefined) input.id = id;
-  return flowView(await withCurrent(() => svc.upsertFlow(actor, projectKey, input), flowView as (raw: never) => unknown));
+  return flowView(await withCurrent(() => svc.upsertFlow(actor, teamKey, input), flowView as (raw: never) => unknown));
 }
 
-export async function upsertDecisionAs(actor: Actor, projectKey: string, b: Body): Promise<DecisionView> {
+export async function upsertDecisionAs(actor: Actor, teamKey: string, b: Body): Promise<DecisionView> {
   const input: svc.DecisionInput = {
     number: whole(b, "number"),
     title: text(b, "title", { max: 300 }),
@@ -300,13 +300,13 @@ export async function upsertDecisionAs(actor: Actor, projectKey: string, b: Body
     nodes: textList(b, "nodes"),
     expectedVersion: whole(b, "version"),
   };
-  return decisionView(await withCurrent(() => svc.upsertDecision(actor, projectKey, input), decisionView as (raw: never) => unknown));
+  return decisionView(await withCurrent(() => svc.upsertDecision(actor, teamKey, input), decisionView as (raw: never) => unknown));
 }
 
-export async function upsertTermAs(actor: Actor, projectKey: string, term: string, b: Body): Promise<TermView> {
+export async function upsertTermAs(actor: Actor, teamKey: string, term: string, b: Body): Promise<TermView> {
   const definition = text(b, "definition", { required: true, max: 5000 })!;
   const node = textOrNull(b, "node");
-  return termView(await svc.upsertTerm(actor, projectKey, { term, definition, node }));
+  return termView(await svc.upsertTerm(actor, teamKey, { term, definition, node }));
 }
 
 // ───────── Ask the map ─────────
@@ -315,17 +315,17 @@ export async function upsertTermAs(actor: Actor, projectKey: string, term: strin
 export const ASK_LIMIT = { count: 20, windowMs: 10 * 60_000 };
 
 /**
- * Ask a question of the map. Order matters: the project is resolved first (another team's is a 404 before anything else happens),
+ * Ask a question of the map. Order matters: the team is resolved first (another workspace's is a 404 before anything else happens),
  * then the limit is counted, and only then does the server call Claude. The API key is read from the server's environment by
  * `askMap` and is in no answer.
  */
-export async function askAs(actor: Actor, projectKey: string, b: Body) {
-  await svc.getProject(actor, projectKey);
+export async function askAs(actor: Actor, teamKey: string, b: Body) {
+  await svc.requireTeam(actor, teamKey);
   const question = text(b, "question", { required: true, max: 4000, trim: true })!;
   const focus = text(b, "focus");
   const hit = rateLimit(`ask:${actor.id}`, ASK_LIMIT.count, ASK_LIMIT.windowMs);
   if (!hit.ok) throw rateLimited(hit.retryAfter);
-  return askMap(actor, projectKey, question, focus || undefined);
+  return askMap(actor, teamKey, question, focus || undefined);
 }
 
 // ───────── activity ─────────
@@ -342,10 +342,10 @@ export type ActivityEvent = {
   createdAt: Date;
 };
 
-/** The project's recent events, newest first, optionally only by agents or only by people. `data` carries only what the page links with. */
-export async function activityView(actor: Actor, projectKey: string, who?: string): Promise<ActivityEvent[]> {
+/** The team's recent events, newest first, optionally only by agents or only by people. `data` carries only what the page links with. */
+export async function activityView(actor: Actor, teamKey: string, who?: string): Promise<ActivityEvent[]> {
   const actorKind = who === "agent" || who === "human" ? who : undefined;
-  const events = await svc.listEvents(actor, projectKey, { limit: 200, actorKind });
+  const events = await svc.listEvents(actor, teamKey, { limit: 200, actorKind });
   return events.map((e) => {
     const d = (e.data ?? {}) as Record<string, unknown>;
     const data: ActivityEvent["data"] = {};

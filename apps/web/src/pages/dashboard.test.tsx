@@ -19,17 +19,17 @@ const widget = (title: string) =>
 const frameNow = async (title: string) => (await screen.findByRole("heading", { name: title })).closest("section") as HTMLElement;
 
 describe("the dashboard", () => {
-  test("greets the person by first name, with their team, and offers a new project", async () => {
+  test("greets the person by first name, with their workspace, and offers a new team", async () => {
     renderApp("/");
     expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy();
-    expect(screen.getByText("How Analytical Engines's projects are moving, and what the agents are up to.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "+ New project" }).getAttribute("href")).toBe("/projects/new");
+    expect(screen.getByText("How Analytical Engines's teams are moving, and what the agents are up to.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "+ New team" }).getAttribute("href")).toBe("/teams/new");
   });
 
   test("every widget is drawn from its own endpoint", async () => {
     const { server } = renderApp("/");
-    for (const title of ["Project progress", "Needs attention", "Throughput", "Who's doing the work", "Agents", "Sync health", "Recent activity"]) await widget(title);
-    await screen.findByText("Open tickets");
+    for (const title of ["Team progress", "Needs attention", "Throughput", "Who's doing the work", "Agents", "Sync health", "Recent activity"]) await widget(title);
+    await screen.findByText("Open issues");
     for (const name of ["kpis", "progress", "attention", "throughput", "activity-split", "agents", "sync", "recent"]) {
       expect(server.sent(`GET /api/app/dashboard/${name}`).length, name).toBe(1);
     }
@@ -38,8 +38,8 @@ describe("the dashboard", () => {
   test("the numbers: counts, the change against the prior week, and the agent share", async () => {
     renderApp("/");
     const tile = async (label: string) => (await screen.findByText(label)).closest(".card") as HTMLElement;
-    expect(within(await tile("Open tickets")).getByText("14")).toBeTruthy();
-    expect(within(await tile("Open tickets")).getByText("across 2 projects")).toBeTruthy();
+    expect(within(await tile("Open issues")).getByText("14")).toBeTruthy();
+    expect(within(await tile("Open issues")).getByText("across 2 teams")).toBeTruthy();
     expect(within(await tile("In progress")).getByText("2 waiting for review")).toBeTruthy();
     const completed = await tile("Completed, last 7 days");
     expect(within(completed).getByText("5")).toBeTruthy();
@@ -53,34 +53,34 @@ describe("the dashboard", () => {
     expect(within((await screen.findByText("Agent share of changes")).closest(".card") as HTMLElement).getByText("—")).toBeTruthy();
   });
 
-  test("project progress: the percentage, the stages, and links into the project", async () => {
+  test("team progress: the percentage, the stages, and links into the team", async () => {
     renderApp("/");
-    const card = await widget("Project progress");
+    const card = await widget("Team progress");
     expect(await within(card).findByText("40%")).toBeTruthy();
     expect(within(card).getByText(/done · 4\/10/)).toBeTruthy();
-    expect(within(card).getByRole("link", { name: /^AA\s*Alpha$/ }).getAttribute("href")).toBe("/p/AA");
-    expect(within(card).getByRole("link", { name: "Overview of Alpha" }).getAttribute("href")).toBe("/p/AA/overview"); // the project's own dashboard
+    expect(within(card).getByRole("link", { name: /^AA\s*Alpha$/ }).getAttribute("href")).toBe("/t/AA");
+    expect(within(card).getByRole("link", { name: "Overview of Alpha" }).getAttribute("href")).toBe("/t/AA/overview"); // the team's own dashboard
     expect(within(card).getByText("2 high/urgent")).toBeTruthy();
     expect(within(card).getByText("1 AI-ready")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "1 stale" }).getAttribute("href")).toBe("/p/AA/map");
-    expect(within(card).getByRole("link", { name: "1 stale doc" }).getAttribute("href")).toBe("/p/AA/docs");
+    expect(within(card).getByRole("link", { name: "1 stale" }).getAttribute("href")).toBe("/t/AA/map");
+    expect(within(card).getByRole("link", { name: "1 stale doc" }).getAttribute("href")).toBe("/t/AA/docs");
     for (const stage of ["Backlog", "Todo", "In Progress", "Review", "Done"]) expect(within(card).getAllByText(stage).length).toBeGreaterThan(0);
   });
 
-  test("with no projects it points to creating one", async () => {
+  test("with no teams it points to creating one", async () => {
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), progress: [] }));
-    const card = await widget("Project progress");
-    expect(await within(card).findByText(/not in any project yet/)).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "Create one" }).getAttribute("href")).toBe("/projects/new");
+    const card = await widget("Team progress");
+    expect(await within(card).findByText(/not in any team yet/)).toBeTruthy();
+    expect(within(card).getByRole("link", { name: "Create one" }).getAttribute("href")).toBe("/teams/new");
   });
 
   test("needs attention: review, urgent, stale explanations and stale docs each link to the thing", async () => {
     renderApp("/");
     const card = await widget("Needs attention");
-    expect((await within(card).findByRole("link", { name: /AA-7.*Add the login page/ })).getAttribute("href")).toBe("/p/AA?t=AA-7");
-    expect(within(card).getByRole("link", { name: /AA-9.*Fix the crash.*In Progress/ }).getAttribute("href")).toBe("/p/AA?t=AA-9");
-    expect(within(card).getByRole("link", { name: /Service layer/ }).getAttribute("href")).toBe("/p/AA/map?node=n1");
-    expect(within(card).getByRole("link", { name: /Runbook/ }).getAttribute("href")).toBe("/p/AA/docs?doc=d1");
+    expect((await within(card).findByRole("link", { name: /AA-7.*Add the login page/ })).getAttribute("href")).toBe("/t/AA?t=AA-7");
+    expect(within(card).getByRole("link", { name: /AA-9.*Fix the crash.*In Progress/ }).getAttribute("href")).toBe("/t/AA?t=AA-9");
+    expect(within(card).getByRole("link", { name: /Service layer/ }).getAttribute("href")).toBe("/t/AA/map?node=n1");
+    expect(within(card).getByRole("link", { name: /Runbook/ }).getAttribute("href")).toBe("/t/AA/docs?doc=d1");
     expect(within(card).getByTitle("Agent work")).toBeTruthy();
   });
 
@@ -127,41 +127,41 @@ describe("the dashboard", () => {
   });
 
   test("a session can be removed after confirming, and not if the person cancels", async () => {
-    const sessions = [{ id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", ticket: null, projectKey: "AA" }];
+    const sessions = [{ id: "11111111-aaaa-bbbb-cccc-dddddddddddd", pending: 0, lastSeenAt: new Date().toISOString(), bucket: "h6" as const, reading: true, branch: "main", issue: null, teamKey: "AA" }];
     const data = widgets();
     data.agents = [{ ...data.agents[0], sessions }];
     const { server } = renderApp("/", (s) => {
       serveWidgets(s, data);
-      s.on("DELETE /api/app/projects/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd", { ok: true });
+      s.on("DELETE /api/app/teams/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd", { ok: true });
     });
     const user = userEvent.setup();
     const button = await screen.findByRole("button", { name: "Remove session 11111111" });
     vi.spyOn(window, "confirm").mockReturnValueOnce(false);
     await user.click(button);
-    expect(server.sent("DELETE /api/app/projects/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd")).toHaveLength(0);
+    expect(server.sent("DELETE /api/app/teams/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd")).toHaveLength(0);
     vi.spyOn(window, "confirm").mockReturnValueOnce(true);
     await user.click(button);
-    await waitFor(() => expect(server.sent("DELETE /api/app/projects/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd")).toHaveLength(1));
+    await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/sessions/11111111-aaaa-bbbb-cccc-dddddddddddd")).toHaveLength(1));
     await waitFor(() => expect(server.sent("GET /api/app/dashboard/agents").length).toBeGreaterThan(1));
   });
 
-  test("sync health: quiet agents link to their ticket; with nothing drifting it says so", async () => {
+  test("sync health: quiet agents link to their issue; with nothing drifting it says so", async () => {
     renderApp("/");
     const card = await widget("Sync health");
-    expect((await within(card).findByRole("link", { name: /AA-4/ })).getAttribute("href")).toBe("/p/AA?t=AA-4");
+    expect((await within(card).findByRole("link", { name: /AA-4/ })).getAttribute("href")).toBe("/t/AA?t=AA-4");
     expect(within(card).getByText("Agent went quiet")).toBeTruthy();
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), sync: { untracked: [], quiet: [], drafts: [] } }));
     expect((await screen.findAllByText("Board and map match the work in flight.")).length).toBeGreaterThan(0);
   });
 
   test("recent activity: two lines per event, agents marked, and a long list is behind +N more", async () => {
-    const many = Array.from({ length: 8 }, (_, i) => ({ seq: i, projectKey: "AA", actorKind: "human" as const, actorName: "Ada Lovelace", summary: `event ${i}`, createdAt: new Date().toISOString() }));
+    const many = Array.from({ length: 8 }, (_, i) => ({ seq: i, teamKey: "AA", actorKind: "human" as const, actorName: "Ada Lovelace", summary: `event ${i}`, createdAt: new Date().toISOString() }));
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), recent: many }));
     const card = await widget("Recent activity");
     expect(await within(card).findByText("event 0")).toBeTruthy();
     expect(within(card).queryByText("event 3")).toBeNull();
     expect(within(card).getByRole("button", { name: "+5 more" })).toBeTruthy();
-    expect(within(card).getByText("event 0").closest("a")?.getAttribute("href")).toBe("/p/AA/activity");
+    expect(within(card).getByText("event 0").closest("a")?.getAttribute("href")).toBe("/t/AA/activity");
   });
 
   test("agent events are marked with the robot", async () => {
@@ -182,7 +182,7 @@ describe("widgets load and fail on their own", () => {
       });
     });
     expect((await frameNow("Throughput")).getAttribute("aria-busy")).toBe("true");
-    expect(await within(await widget("Project progress")).findByText("40%")).toBeTruthy(); // the others did not wait
+    expect(await within(await widget("Team progress")).findByText("40%")).toBeTruthy(); // the others did not wait
     expect((await frameNow("Throughput")).getAttribute("aria-busy")).toBe("true");
     release();
     expect(await within(await widget("Throughput")).findByText(/Created/)).toBeTruthy();
@@ -193,7 +193,7 @@ describe("widgets load and fail on their own", () => {
     const { server } = renderApp("/", (s) =>
       s.on("GET /api/app/dashboard/sync", () => (healthy ? widgets().sync : apiError(500, "internal", "Internal error"))),
     );
-    expect(await within(await widget("Project progress")).findByText("40%")).toBeTruthy();
+    expect(await within(await widget("Team progress")).findByText("40%")).toBeTruthy();
     const alert = await waitFor(() => within(screen.getByRole("heading", { name: "Sync health" }).closest("section") as HTMLElement).getByRole("alert"), { timeout: 8000 });
     expect(alert.textContent).toContain("Internal error");
     expect(screen.queryByTestId("route-error")).toBeNull(); // not a page error
@@ -205,9 +205,9 @@ describe("widgets load and fail on their own", () => {
 });
 
 describe("staying fresh", () => {
-  test("the team's event stream refreshes every widget, and the person's own identity is not re-read", async () => {
+  test("the workspace's event stream refreshes every widget, and the person's own identity is not re-read", async () => {
     const { server } = renderApp("/");
-    await screen.findByText("Open tickets");
+    await screen.findByText("Open issues");
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));
     const meBefore = server.sent("GET /api/app/me").length;
     act(() => FakeEventSource.open[0].emit("change", { seq: 7 }));

@@ -11,7 +11,7 @@ export function failure(e: unknown): FormState {
   return { error: describeFailure(e) };
 }
 
-/** The same, as a plain message, for places that are not a form (the board, the ticket dialog). Anything unexpected is rethrown. */
+/** The same, as a plain message, for places that are not a form (the board, the issue dialog). Anything unexpected is rethrown. */
 export function describeFailure(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   if (e instanceof TypeError) return "Cannot reach Wheelhouse. Check your connection and try again.";

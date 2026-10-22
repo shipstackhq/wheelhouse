@@ -11,7 +11,7 @@ const renderToStaticMarkup = (el: React.ReactElement) => render(<StaticRouter lo
 const visible = (html: string) => html.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|").replace(/&#x27;/g, "'");
 const ev = (over: Partial<ActivityEvent> = {}): ActivityEvent => ({
   seq: 1,
-  projectKey: "WH",
+  teamKey: "WH",
   actorKind: "human",
   actorName: "Demo",
   summary: "moved WH-47 from In Progress → Review",
@@ -19,10 +19,10 @@ const ev = (over: Partial<ActivityEvent> = {}): ActivityEvent => ({
   ...over,
 });
 
-test("an event is two lines: project and what happened, then who and when", () => {
+test("an event is two lines: team and what happened, then who and when", () => {
   const html = renderToStaticMarkup(<ActivityRow e={ev()} />);
   assert.equal(visible(html), "|WH|moved WH-47 from In Progress → Review|Demo · just now|");
-  assert.match(html, /<a [^>]*href="\/p\/WH\/activity"/, "still links to the project's activity page");
+  assert.match(html, /<a [^>]*href="\/t\/WH\/activity"/, "still links to the team's activity page");
 });
 
 test("an agent is marked with the robot, and a long name sits on the second line, truncated rather than squeezing the summary", () => {

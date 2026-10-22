@@ -4,7 +4,7 @@ import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
 import { SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
 import { clientIp } from "@wheelhouse/core/lib/rate-limit";
 import { ServiceError } from "@wheelhouse/core/lib/service";
-import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "@wheelhouse/core/lib/team-app";
+import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "@wheelhouse/core/lib/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { cookieValue, toHeaders } from "../http/util";
 import { jsonBody, str } from "./body";
@@ -15,24 +15,24 @@ import { requestOrigin } from "./origin";
 @Controller("api/app/invites")
 @AppEndpoints()
 export class InvitesController {
-  /** Pending invites: `?kind=join_team` (owners; the default) or `?kind=new_team` (instance admins; anyone else gets a 404). */
+  /** Pending invites: `?kind=join_workspace` (owners; the default) or `?kind=new_workspace` (instance admins; anyone else gets a 404). */
   @Get()
   @UseGuards(SessionGuard)
   async list(@Req() req: SessionRequest, @Query("kind") kind?: string) {
-    if (kind === "new_team") {
+    if (kind === "new_workspace") {
       if (!isInstanceAdmin(req.human.user.email)) throw new ServiceError("not_found", "Not found");
-      return { invites: await pendingInvites(req.human, "new_team") };
+      return { invites: await pendingInvites(req.human, "new_workspace") };
     }
-    return { invites: await pendingInvites(req.human, "join_team") };
+    return { invites: await pendingInvites(req.human, "join_workspace") };
   }
 
-  /** `{ kind, email, role?, tags?, team? }`. The link is returned once: the token is in its #fragment and is not stored. */
+  /** `{ kind, email, role?, tags?, workspace? }`. The link is returned once: the token is in its #fragment and is not stored. */
   @Post()
   @UseGuards(SessionGuard)
   @HttpCode(201)
   create(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
-    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, team: str(b.team), projects: b.projects }, requestOrigin(req));
+    return createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, workspace: str(b.workspace), teams: b.teams }, requestOrigin(req));
   }
 
   /** Signed in with an existing account: what an invite sent to your own address would add you to. Anything else is the usual invalid-link answer. */

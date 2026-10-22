@@ -11,17 +11,17 @@ export const shortSession = (id: string) => id.split("-")[0].slice(0, 8);
 
 /** What the row's tooltip (and its accessible label) says: everything the one-line row leaves out. */
 export function sessionDetails(s: SessionView) {
-  const where = [s.projectKey, s.branch && `branch ${s.branch}`].filter(Boolean).join(" · ");
+  const where = [s.teamKey, s.branch && `branch ${s.branch}`].filter(Boolean).join(" · ");
   return [
     `Session ${s.id}`,
-    s.ticket && `Working on ${s.ticket}`,
+    s.issue && `Working on ${s.issue}`,
     where,
     `Active ${timeAgo(s.lastSeenAt)}`,
     !s.reading ? "Has not read its queue yet" : s.pending ? `${s.pending} change${s.pending === 1 ? "" : "s"} queued` : "Caught up",
   ].filter((x): x is string => !!x);
 }
 
-/** One line per session: dot, short id, and its queue. Everything else (ticket, project, branch, time) is in the tooltip; the action shows on hover or focus. */
+/** One line per session: dot, short id, and its queue. Everything else (issue, team, branch, time) is in the tooltip; the action shows on hover or focus. */
 export function SessionRow({ s, action, className }: { s: SessionView; action?: React.ReactNode; className?: string }) {
   const [title, ...rest] = sessionDetails(s);
   const status = !s.reading ? "not reading yet" : s.pending ? `${s.pending} queued` : "in sync";

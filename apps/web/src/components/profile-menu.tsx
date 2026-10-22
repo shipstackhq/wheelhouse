@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { useNavigate } from "react-router";
 import type { Role } from "@wheelhouse/api-client";
+import { forgetAppLocation } from "../lib/app-location";
 import { useServices } from "../lib/services";
 import { ThemeSwitch } from "./theme-toggle";
 import { InstallButton, clearOfflineData } from "./pwa";
@@ -24,12 +24,13 @@ function hue(seed: string) {
 /** DiceBear "initials" avatar: initials and background colour are derived from the seed. */
 export const avatarUrl = (seed: string) => `https://api.dicebear.com/10.x/initials/svg?seed=${encodeURIComponent(seed)}`;
 
-export function Avatar({ name, email, size = 32 }: { name: string; email: string; size?: number }) {
+/** `imageUrl`: the person's own uploaded picture; without one (or if it fails to load) the generated initials avatar. */
+export function Avatar({ name, email, size = 32, imageUrl }: { name: string; email: string; size?: number; imageUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
   if (!failed) {
     return (
       <img
-        src={avatarUrl(name.trim() || email)}
+        src={imageUrl || avatarUrl(name.trim() || email)}
         alt=""
         aria-hidden
         width={size}
@@ -54,44 +55,8 @@ export function Avatar({ name, email, size = 32 }: { name: string; email: string
   );
 }
 
-/** The person's other workspaces, when they have any: choosing one moves this session there and drops everything read from the old one. */
-function WorkspaceSwitcher() {
-  const { api, queryClient } = useServices();
-  const navigate = useNavigate();
-  const query = useQuery({ queryKey: ["me", "workspaces"] as const, queryFn: () => api.workspaces.list() });
-  const list = query.data ?? [];
-  if (list.length < 2) return null;
-  const go = async (id: string) => {
-    try {
-      await api.workspaces.switchTo(id);
-    } catch {
-      return; // not offered any more (removed, suspended): the list refreshes on the next open
-    }
-    queryClient.clear();
-    navigate("/", { replace: true });
-  };
-  return (
-    <div className="border-t border-line px-1 py-1" role="group" aria-label="Workspaces">
-      <div className="px-2 py-1 text-xs text-muted">Workspaces</div>
-      {list.map((w) => (
-        <button
-          key={w.id}
-          type="button"
-          disabled={w.active}
-          aria-current={w.active ? "true" : undefined}
-          onClick={() => go(w.id)}
-          className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-panel-2 focus-visible:bg-panel-2 disabled:cursor-default disabled:hover:bg-transparent"
-        >
-          <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
-          <span className="shrink-0 text-xs text-muted">{w.active ? "current" : w.role}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
 /** `compact`: the icon-only sidebar rail (tablet and up), where only the avatar fits; the menu it opens is the same. */
-export function ProfileMenu(props: { name: string; email: string; role: Role; tags: string[]; team: string; compact?: boolean }) {
+export function ProfileMenu(props: { name: string; email: string; role: Role; tags: string[]; workspace: string; imageUrl?: string | null; compact?: boolean }) {
   const compact = !!props.compact;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
@@ -104,6 +69,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
       /* the server could not be reached: the person still leaves; the session expires on its own */
     } finally {
       queryClient.clear(); // nothing from this person's session may linger in memory
+      forgetAppLocation();
       navigate("/login", { replace: true });
     }
   }
@@ -116,7 +82,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
         )}
         aria-label="Account menu"
       >
-        <Avatar name={props.name} email={props.email} />
+        <Avatar name={props.name} email={props.email} imageUrl={props.imageUrl} />
         <span className={clsx("min-w-0 flex-1", compact && "md:hidden")}>
           <span className="block truncate text-sm text-fg">{props.name}</span>
           <span className="block truncate text-xs text-muted">{props.email}</span>
@@ -131,21 +97,20 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
           className="z-50 w-64 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl"
         >
           <div className="flex items-center gap-3 p-3">
-            <Avatar name={props.name} email={props.email} size={40} />
+            <Avatar name={props.name} email={props.email} size={40} imageUrl={props.imageUrl} />
             <div className="min-w-0">
               <div className="truncate font-medium">{props.name}</div>
               <div className="truncate text-xs text-muted">{props.email}</div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1 px-3 pb-3 text-xs">
-            <span className="text-muted">{props.team}</span>
+            <span className="text-muted">{props.workspace}</span>
             <span className="text-muted">·</span>
             <span className={clsx("chip", props.role === "owner" ? "bg-accent/15 text-accent" : "bg-panel-2 text-fg")}>{props.role}</span>
             {props.tags.map((t) => (
               <span key={t} className="chip bg-bg text-muted">{t}</span>
             ))}
           </div>
-          <WorkspaceSwitcher />
           <div className="border-t border-line px-3 py-3">
             <ThemeSwitch />
           </div>

@@ -4,7 +4,7 @@ import type { Actor } from "./access";
 import {
   anchorScore,
   emit,
-  getProject,
+  requireTeam,
   normPath,
   pruneSessions,
   ServiceError,
@@ -25,11 +25,11 @@ import {
  *   - "in flux" nodes: anchored files changed in an active session, not landed
  *   - drafts: map updates written against unlanded code, published on landing
  *   - drift: landed content differs from what a node was described against
- *   - session debt: what a session still owes (ticket update, map updates)
+ *   - session debt: what a session still owes (issue update, map updates)
  * Board state is never deferred; only map explanations wait for landed code.
  */
 
-const { nodes, projectFiles, workSessions, nodeDrafts, docs, docDrafts, events, tickets, projects } = schema;
+const { nodes, teamFiles, workSessions, nodeDrafts, docs, docDrafts, events, issues, teams } = schema;
 
 const ACTIVE_MS = 12 * 3600e3;
 const EXPLAINER_KEYS = ["summary", "purpose", "responsibilities", "interfaces", "gotchas", "details", "columns", "indexes", "anchors", "status"] as const;
@@ -52,19 +52,19 @@ export function bestMatches(ns: NodeRow[], file: string, fileRepo?: string | nul
 
 const anchoredBy = (n: { anchors: string[] }, files: string[], fileRepo?: string | null) => files.filter((f) => n.anchors.some((a) => anchorScore(a, f, fileRepo) > 0));
 
-async function projectNodes(projectId: string) {
+async function teamNodes(teamId: string) {
   const db = await getDb();
-  return db.select().from(nodes).where(eq(nodes.projectId, projectId));
+  return db.select().from(nodes).where(eq(nodes.teamId, teamId));
 }
 
-async function activeSessions(projectId: string, apiKeyId?: string) {
+async function activeSessions(teamId: string, apiKeyId?: string) {
   const db = await getDb();
   return db
     .select()
     .from(workSessions)
     .where(
       and(
-        eq(workSessions.projectId, projectId),
+        eq(workSessions.teamId, teamId),
         isNull(workSessions.endedAt),
         gte(workSessions.lastSeenAt, new Date(Date.now() - ACTIVE_MS)),
         apiKeyId ? eq(workSessions.apiKeyId, apiKeyId) : undefined,
@@ -88,13 +88,13 @@ export type SessionReport = {
 };
 
 /** Record what a session touched. Cheap; called by async PostToolUse hooks and at Stop. */
-export async function sessionSync(actor: Actor, projectRef: string, r: SessionReport) {
+export async function sessionSync(actor: Actor, teamRef: string, r: SessionReport) {
   if (!r.session?.trim()) throw new ServiceError("invalid", "session id is required");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   const [existing] = await db.select().from(workSessions).where(eq(workSessions.id, r.session));
-  if (existing && existing.projectId !== project.id) throw new ServiceError("invalid", "session belongs to another project");
-  const repo = r.repository ? await (await import("./service")).findOrCreateRepository(actor, project.id, r.repository) : null;
+  if (existing && existing.teamId !== team.id) throw new ServiceError("invalid", "session belongs to another team");
+  const repo = r.repository ? await (await import("./service")).findOrCreateRepository(actor, team.id, r.repository) : null;
 
   const reported: Record<string, string | null> = Array.isArray(r.files)
     ? Object.fromEntries(r.files.map((f) => [normPath(f), null]))
@@ -102,7 +102,7 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   const paths = Object.keys(reported).filter(Boolean);
   // A file whose hash equals what's landed on the default branch isn't a change (never edited, or reverted).
   const landed = paths.length
-    ? await db.select().from(projectFiles).where(and(eq(projectFiles.projectId, project.id), inArray(projectFiles.path, paths)))
+    ? await db.select().from(teamFiles).where(and(eq(teamFiles.teamId, team.id), inArray(teamFiles.path, paths)))
     : [];
   const landedHash = new Map(landed.map((f) => [f.path, f.hash]));
 
@@ -121,7 +121,8 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   }
   const hasChanges = Object.keys(files).length > 0;
   const values = {
-    projectId: project.id,
+    teamId: team.id,
+    workspaceId: team.workspaceId,
     apiKeyId: actor.kind === "agent" ? actor.id : null,
     actorName: actor.name,
     client: r.client ?? existing?.client ?? "unknown",
@@ -137,7 +138,7 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   // Drafts whose code this session no longer has in flux were abandoned (e.g. reverted).
   const drafts = await db.select().from(nodeDrafts).where(and(eq(nodeDrafts.sessionId, r.session), eq(nodeDrafts.status, "pending")));
   if (drafts.length) {
-    const ns = await projectNodes(project.id);
+    const ns = await teamNodes(team.id);
     const touched = Object.keys(files);
     for (const d of drafts) {
       const n = ns.find((x) => x.id === d.nodeId);
@@ -148,7 +149,7 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   // Same for doc drafts (WH-64).
   const docDraftRows = await db.select().from(docDrafts).where(and(eq(docDrafts.sessionId, r.session), eq(docDrafts.status, "pending")));
   if (docDraftRows.length) {
-    const ds = await projectDocs(project.id);
+    const ds = await teamDocs(team.id);
     const touched = Object.keys(files);
     for (const d of docDraftRows) {
       const doc = ds.find((x) => x.id === d.docId);
@@ -159,24 +160,24 @@ export async function sessionSync(actor: Actor, projectRef: string, r: SessionRe
   return { ok: true, inFlux: Object.keys(files).length };
 }
 
-export async function sessionEnd(actor: Actor, projectRef: string, sessionId: string) {
+export async function sessionEnd(actor: Actor, teamRef: string, sessionId: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   await db
     .update(workSessions)
     .set({ endedAt: new Date() })
-    .where(and(eq(workSessions.id, sessionId), eq(workSessions.projectId, project.id)));
-  await pruneSessions(db, project.id);
+    .where(and(eq(workSessions.id, sessionId), eq(workSessions.teamId, team.id)));
+  await pruneSessions(db, team.id);
   return { ok: true };
 }
 
-/** Called when an agent works a ticket: binds the ticket to its most recent active session. */
-export async function noteTicketActivity(actor: Actor, projectId: string, ticketId: string) {
+/** Called when an agent works an issue: binds the issue to its most recent active session. */
+export async function noteIssueActivity(actor: Actor, teamId: string, issueId: string) {
   if (actor.kind !== "agent") return;
-  const [s] = await activeSessions(projectId, actor.id);
+  const [s] = await activeSessions(teamId, actor.id);
   if (!s) return;
   const db = await getDb();
-  await db.update(workSessions).set({ ticketId, lastSeenAt: new Date() }).where(eq(workSessions.id, s.id));
+  await db.update(workSessions).set({ issueId, lastSeenAt: new Date() }).where(eq(workSessions.id, s.id));
 }
 
 // ───────── drafts ─────────
@@ -184,7 +185,7 @@ export async function noteTicketActivity(actor: Actor, projectId: string, ticket
 /** If this agent has an active session changing the node's anchored files, return it. */
 async function fluxSessionFor(actor: Actor, node: NodeRow) {
   if (actor.kind !== "agent" || !node.anchors.length) return null;
-  const sessions = await activeSessions(node.projectId, actor.id);
+  const sessions = await activeSessions(node.teamId, actor.id);
   return sessions.find((s) => anchoredBy(node, Object.keys(s.files)).length) ?? null;
 }
 
@@ -213,7 +214,8 @@ export async function maybeDraft(actor: Actor, node: NodeRow, input: NodeInput) 
       .where(eq(nodeDrafts.id, d.id));
   } else {
     await db.insert(nodeDrafts).values({
-      projectId: node.projectId,
+      teamId: node.teamId,
+      workspaceId: node.workspaceId,
       nodeId: node.id,
       sessionId: session.id,
       authorName: actor.name,
@@ -222,7 +224,7 @@ export async function maybeDraft(actor: Actor, node: NodeRow, input: NodeInput) 
       confirm,
     });
   }
-  await emit(db, actor, node.projectId, {
+  await emit(db, actor, node.teamId, {
     type: "node.drafted",
     entity: "node",
     entityId: node.id,
@@ -235,26 +237,26 @@ export async function maybeDraft(actor: Actor, node: NodeRow, input: NodeInput) 
   };
 }
 
-export async function listDrafts(actor: Actor, projectRef: string) {
+export async function listDrafts(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   return db
     .select()
     .from(nodeDrafts)
-    .where(and(eq(nodeDrafts.projectId, project.id), eq(nodeDrafts.status, "pending")))
+    .where(and(eq(nodeDrafts.teamId, team.id), eq(nodeDrafts.status, "pending")))
     .orderBy(asc(nodeDrafts.createdAt));
 }
 
 /** Human action: publish or discard a pending draft now. */
-export async function resolveDraft(actor: Actor, projectRef: string, draftId: string, action: "publish" | "discard") {
+export async function resolveDraft(actor: Actor, teamRef: string, draftId: string, action: "publish" | "discard") {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const [d] = await db
     .select()
     .from(nodeDrafts)
-    .where(and(eq(nodeDrafts.id, draftId), eq(nodeDrafts.projectId, project.id), eq(nodeDrafts.status, "pending")));
+    .where(and(eq(nodeDrafts.id, draftId), eq(nodeDrafts.teamId, team.id), eq(nodeDrafts.status, "pending")));
   if (!d) throw new ServiceError("not_found", "Draft not found or already resolved");
-  if (action === "publish") await applyDraft(actor, project.id, d);
+  if (action === "publish") await applyDraft(actor, team.id, d);
   await db
     .update(nodeDrafts)
     .set({ status: action === "publish" ? "published" : "discarded", updatedAt: new Date() })
@@ -262,8 +264,8 @@ export async function resolveDraft(actor: Actor, projectRef: string, draftId: st
   return { ok: true };
 }
 
-async function applyDraft(actor: Actor, projectId: string, d: typeof nodeDrafts.$inferSelect, hashes?: Record<string, string>) {
-  await upsertNode(actor, projectId, { id: d.nodeId, ...(d.patch as NodeInput), markFresh: true, forcePublish: true, describedHashes: hashes });
+async function applyDraft(actor: Actor, teamId: string, d: typeof nodeDrafts.$inferSelect, hashes?: Record<string, string>) {
+  await upsertNode(actor, teamId, { id: d.nodeId, ...(d.patch as NodeInput), markFresh: true, forcePublish: true, describedHashes: hashes });
 }
 
 // ───────── doc drafts (WH-64) ─────────
@@ -271,15 +273,15 @@ async function applyDraft(actor: Actor, projectId: string, d: typeof nodeDrafts.
 // files are in flux (changed in that session, not yet landed) gets the edit stored as
 // a draft, published when land() processes those files.
 
-async function projectDocs(projectId: string) {
+async function teamDocs(teamId: string) {
   const db = await getDb();
-  return db.select().from(docs).where(and(eq(docs.projectId, projectId), isNull(docs.deletedAt)));
+  return db.select().from(docs).where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt)));
 }
 
 /** If this agent has an active session changing the doc's anchored files, return it. */
 async function fluxSessionForDoc(actor: Actor, doc: DocRow) {
   if (actor.kind !== "agent" || !doc.anchors.length) return null;
-  const sessions = await activeSessions(doc.projectId, actor.id);
+  const sessions = await activeSessions(doc.teamId, actor.id);
   return sessions.find((s) => anchoredBy(doc, Object.keys(s.files)).length) ?? null;
 }
 
@@ -307,7 +309,8 @@ export async function maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateI
       .where(eq(docDrafts.id, d.id));
   } else {
     await db.insert(docDrafts).values({
-      projectId: doc.projectId,
+      teamId: doc.teamId,
+      workspaceId: doc.workspaceId,
       docId: doc.id,
       sessionId: session.id,
       authorName: actor.name,
@@ -316,7 +319,7 @@ export async function maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateI
       confirm,
     });
   }
-  await emit(db, actor, doc.projectId, {
+  await emit(db, actor, doc.teamId, {
     type: "doc.drafted",
     entity: "doc",
     entityId: doc.id,
@@ -329,26 +332,26 @@ export async function maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateI
   };
 }
 
-export async function listDocDrafts(actor: Actor, projectRef: string) {
+export async function listDocDrafts(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   return db
     .select()
     .from(docDrafts)
-    .where(and(eq(docDrafts.projectId, project.id), eq(docDrafts.status, "pending")))
+    .where(and(eq(docDrafts.teamId, team.id), eq(docDrafts.status, "pending")))
     .orderBy(asc(docDrafts.createdAt));
 }
 
 /** Human action: publish or discard a pending doc draft now. */
-export async function resolveDocDraft(actor: Actor, projectRef: string, draftId: string, action: "publish" | "discard") {
+export async function resolveDocDraft(actor: Actor, teamRef: string, draftId: string, action: "publish" | "discard") {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const [d] = await db
     .select()
     .from(docDrafts)
-    .where(and(eq(docDrafts.id, draftId), eq(docDrafts.projectId, project.id), eq(docDrafts.status, "pending")));
+    .where(and(eq(docDrafts.id, draftId), eq(docDrafts.teamId, team.id), eq(docDrafts.status, "pending")));
   if (!d) throw new ServiceError("not_found", "Draft not found or already resolved");
-  if (action === "publish") await applyDocDraft(actor, project.id, d);
+  if (action === "publish") await applyDocDraft(actor, team.id, d);
   await db
     .update(docDrafts)
     .set({ status: action === "publish" ? "published" : "discarded", updatedAt: new Date() })
@@ -356,8 +359,8 @@ export async function resolveDocDraft(actor: Actor, projectRef: string, draftId:
   return { ok: true };
 }
 
-async function applyDocDraft(actor: Actor, projectId: string, d: typeof docDrafts.$inferSelect, hashes?: Record<string, string>) {
-  await updateDoc(actor, projectId, d.docId, { ...(d.patch as DocUpdateInput), markFresh: true, forcePublish: true, describedHashes: hashes });
+async function applyDocDraft(actor: Actor, teamId: string, d: typeof docDrafts.$inferSelect, hashes?: Record<string, string>) {
+  await updateDoc(actor, teamId, d.docId, { ...(d.patch as DocUpdateInput), markFresh: true, forcePublish: true, describedHashes: hashes });
 }
 
 // ───────── landing ─────────
@@ -369,7 +372,7 @@ export type LandReport = {
   files: Record<string, string | null>;
   /** Initial import: record hashes as the described baseline without flagging anything. */
   baseline?: boolean;
-  /** wheelhouse.json's repository name/slug (WH-68). Omitted = old client / no repo info: falls back to the project's unqualified default repo, so single-repo projects keep working unchanged. */
+  /** wheelhouse.json's repository name/slug (WH-68). Omitted = old client / no repo info: falls back to the team's unqualified default repo, so single-repo teams keep working unchanged. */
   repository?: string;
 };
 
@@ -378,16 +381,16 @@ export type LandReport = {
  * of the branch, publishes drafts for the affected nodes, and flags drift where
  * no draft exists. Reverting a file to its described content clears its drift.
  *
- * Repository qualification (WH-68): a monorepo connected to several projects reports changes to
- * all of them, but each project's `repositories` row carries its own `pathLimit` (a directory such
- * as "packages/billing/"); files outside this project's path limit are ignored here so each project
+ * Repository qualification (WH-68): a monorepo connected to several teams reports changes to
+ * all of them, but each team's `repositories` row carries its own `pathLimit` (a directory such
+ * as "packages/billing/"); files outside this team's path limit are ignored here so each team
  * only sees the slice of the monorepo it owns.
  */
-export async function land(actor: Actor, projectRef: string, r: LandReport) {
+export async function land(actor: Actor, teamRef: string, r: LandReport) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const { findOrCreateRepository } = await import("./service");
-  const repo = await findOrCreateRepository(actor, project.id, r.repository);
+  const repo = await findOrCreateRepository(actor, team.id, r.repository);
   const limit = repo?.pathLimit?.trim().replace(/^\/+/, "").replace(/\/*$/, "/") || null;
   const changed = Object.entries(r.files ?? {})
     .map(([p, h]) => [normPath(p), h] as const)
@@ -397,18 +400,18 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
   for (const [path, hash] of changed) {
     if (hash) {
       await db
-        .insert(projectFiles)
-        .values({ projectId: project.id, path, hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null })
+        .insert(teamFiles)
+        .values({ teamId: team.id, workspaceId: team.workspaceId, path, hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null })
         .onConflictDoUpdate({
-          target: [projectFiles.projectId, projectFiles.path],
+          target: [teamFiles.teamId, teamFiles.path],
           set: { hash, sha: r.sha ?? null, repositoryId: repo?.id ?? null, updatedAt: new Date() },
         });
     } else {
-      await db.delete(projectFiles).where(and(eq(projectFiles.projectId, project.id), eq(projectFiles.path, path)));
+      await db.delete(teamFiles).where(and(eq(teamFiles.teamId, team.id), eq(teamFiles.path, path)));
     }
   }
 
-  const ns = await projectNodes(project.id);
+  const ns = await teamNodes(team.id);
   const affected = new Map<string, { node: NodeRow; files: [string, string | null][] }>();
   for (const [path, hash] of changed) {
     for (const n of r.baseline ? ns.filter((x) => anchoredBy(x, [path], repo?.slug).length) : bestMatches(ns, path, repo?.slug)) {
@@ -419,7 +422,7 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
   }
 
   // Same for docs (WH-64): no per-layer grouping, so any doc anchored to a changed path is affected.
-  const ds = await projectDocs(project.id);
+  const ds = await teamDocs(team.id);
   const affectedDocs = new Map<string, { doc: DocRow; files: [string, string | null][] }>();
   for (const [path, hash] of changed) {
     for (const d of ds.filter((x) => anchoredBy(x, [path], repo?.slug).length)) {
@@ -462,7 +465,7 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
     if (drafts.length && !r.baseline) {
       // The work that was in flux has landed: publish what the agent wrote against it.
       for (const d of drafts) {
-        await applyDraft(actor, project.id, d, landedHashes);
+        await applyDraft(actor, team.id, d, landedHashes);
         await db.update(nodeDrafts).set({ status: "published", updatedAt: new Date() }).where(eq(nodeDrafts.id, d.id));
       }
       published.push(`${node.layer}:${node.name}`);
@@ -512,7 +515,7 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
     if (drafts.length && !r.baseline) {
       // The work that was in flux has landed: publish what the agent wrote against it.
       for (const d of drafts) {
-        await applyDocDraft(actor, project.id, d, landedHashes);
+        await applyDocDraft(actor, team.id, d, landedHashes);
         await db.update(docDrafts).set({ status: "published", updatedAt: new Date() }).where(eq(docDrafts.id, d.id));
       }
       publishedDocs.push(doc.slug);
@@ -554,7 +557,7 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
 
   // Sessions whose in-flux files just landed (same content, or unknown) are no longer in flux for them.
   const landedMap = new Map(changed);
-  for (const s of await activeSessions(project.id)) {
+  for (const s of await activeSessions(team.id)) {
     let dirty = false;
     const files = { ...s.files };
     for (const [p, f] of Object.entries(files)) {
@@ -573,10 +576,10 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
   }
 
   if (!r.baseline) {
-    await emit(db, actor, project.id, {
+    await emit(db, actor, team.id, {
       type: "code.landed",
-      entity: "project",
-      entityId: project.id,
+      entity: "team",
+      entityId: team.id,
       summary: `landed ${changed.length} file(s)${short ? ` (${short})` : ""}${published.length ? `; published ${published.length} map draft(s)` : ""}${stale.length ? `; ${stale.length} node(s) drifted` : ""}${fresh.length ? `; ${fresh.length} back in sync` : ""}${publishedDocs.length ? `; published ${publishedDocs.length} doc draft(s)` : ""}${staleDocs.length ? `; ${staleDocs.length} doc(s) drifted` : ""}${freshDocs.length ? `; ${freshDocs.length} doc(s) back in sync` : ""}`,
       data: { sha: r.sha, branch: r.branch, published, stale, fresh, publishedDocs, staleDocs, freshDocs },
     });
@@ -587,54 +590,54 @@ export async function land(actor: Actor, projectRef: string, r: LandReport) {
 // ───────── debt ─────────
 
 /**
- * What a session still owes before it should end a turn: a ticket that reflects
+ * What a session still owes before it should end a turn: an issue that reflects
  * the work, and map updates (drafts, edits or confirmations) for the nodes whose
  * files it changed. `clean` means nothing is owed.
  */
-export async function sessionStatus(actor: Actor, projectRef: string, sessionId: string) {
+export async function sessionStatus(actor: Actor, teamRef: string, sessionId: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  const [s] = await db.select().from(workSessions).where(and(eq(workSessions.id, sessionId), eq(workSessions.projectId, project.id)));
+  const team = await requireTeam(actor, teamRef);
+  const [s] = await db.select().from(workSessions).where(and(eq(workSessions.id, sessionId), eq(workSessions.teamId, team.id)));
   // Only the agent's own changes create debt; external (human) edits are just in flux.
   const touched = s ? Object.entries(s.files).filter(([, f]) => !f.external).map(([p]) => p) : [];
-  if (!s || !touched.length) return { clean: true, files: [], ticket: null, nodes: [], unmapped: [], message: "" };
+  if (!s || !touched.length) return { clean: true, files: [], issue: null, nodes: [], unmapped: [], message: "" };
 
   const since = s.firstChangeAt ?? s.startedAt;
   const keyId = s.apiKeyId;
 
-  // Ticket: the one bound to this session, else the latest ticket this key worked on since the session started.
-  let ticket = s.ticketId ? (await db.select().from(tickets).where(eq(tickets.id, s.ticketId)))[0] : undefined;
-  if (!ticket && keyId) {
+  // Issue: the one bound to this session, else the latest issue this key worked on since the session started.
+  let issue = s.issueId ? (await db.select().from(issues).where(eq(issues.id, s.issueId)))[0] : undefined;
+  if (!issue && keyId) {
     const [e] = await db
       .select()
       .from(events)
-      .where(and(eq(events.projectId, project.id), eq(events.actorId, keyId), eq(events.entity, "ticket"), gte(events.createdAt, s.startedAt)))
+      .where(and(eq(events.teamId, team.id), eq(events.actorId, keyId), eq(events.entity, "issue"), gte(events.createdAt, s.startedAt)))
       .orderBy(desc(events.seq))
       .limit(1);
-    if (e) ticket = (await db.select().from(tickets).where(eq(tickets.id, e.entityId)))[0];
-    if (ticket) await db.update(workSessions).set({ ticketId: ticket.id }).where(eq(workSessions.id, s.id));
+    if (e) issue = (await db.select().from(issues).where(eq(issues.id, e.entityId)))[0];
+    if (issue) await db.update(workSessions).set({ issueId: issue.id }).where(eq(workSessions.id, s.id));
   }
-  const [proj] = await db.select().from(projects).where(eq(projects.id, project.id));
-  const ref = ticket ? `${proj.key}-${ticket.number}` : null;
-  let ticketOk = false;
-  if (ticket && keyId) {
+  const [proj] = await db.select().from(teams).where(eq(teams.id, team.id));
+  const ref = issue ? `${proj.key}-${issue.number}` : null;
+  let issueOk = false;
+  if (issue && keyId) {
     const [upd] = await db
       .select({ seq: events.seq })
       .from(events)
       .where(
         and(
-          eq(events.entityId, ticket.id),
+          eq(events.entityId, issue.id),
           eq(events.actorId, keyId),
-          inArray(events.type, ["comment.created", "ticket.moved", "ticket.updated"]),
+          inArray(events.type, ["comment.created", "issue.moved", "issue.updated"]),
           gt(events.createdAt, since),
         ),
       )
       .limit(1);
-    ticketOk = !!upd;
+    issueOk = !!upd;
   }
 
   // Map: affected nodes must have a draft/confirmation from this session, or an edit by this key since the change.
-  const ns = await projectNodes(project.id);
+  const ns = await teamNodes(team.id);
   const affected = new Map<string, { node: NodeRow; files: string[] }>();
   const unmapped: string[] = [];
   for (const f of touched) {
@@ -672,17 +675,17 @@ export async function sessionStatus(actor: Actor, projectRef: string, sessionId:
     .map((a) => ({ name: a.node.name, layer: a.node.layer, files: a.files }));
 
   const lines: string[] = [];
-  if (!ticket) lines.push(`- No ticket is tracking this work. Claim or create a ticket in ${proj.key} and move it to In Progress (claim_ticket / create_ticket + move_ticket).`);
-  else if (!ticketOk) lines.push(`- ${ref} hasn't been updated since you started changing files. Comment what you changed, and move it to Review if the work is done.`);
+  if (!issue) lines.push(`- No issue is tracking this work. Claim or create an issue in ${proj.key} and move it to In Progress (claim_issue / create_issue + move_issue).`);
+  else if (!issueOk) lines.push(`- ${ref} hasn't been updated since you started changing files. Comment what you changed, and move it to Review if the work is done.`);
   for (const o of owed)
     lines.push(
       `- Map node ${o.layer}:${o.name} covers files you changed (${o.files.slice(0, 3).join(", ")}${o.files.length > 3 ? "…" : ""}). Update its explanation with upsert_node${o.layer === "data" ? "/upsert_table" : ""}, or call mark_fresh if it's still accurate.`,
     );
-  const clean = !!ticket && ticketOk && !owed.length;
+  const clean = !!issue && issueOk && !owed.length;
   return {
     clean,
     files: touched,
-    ticket: ticket ? { ref, title: ticket.title, updated: ticketOk } : null,
+    issue: issue ? { ref, title: issue.title, updated: issueOk } : null,
     nodes: owed,
     unmapped,
     message: clean
@@ -694,17 +697,17 @@ export async function sessionStatus(actor: Actor, projectRef: string, sessionId:
 // ───────── read models for the UI / briefing ─────────
 
 /** Per-node in-flux info: which active sessions are changing its files, and pending drafts. */
-export async function fluxForProject(projectId: string) {
+export async function fluxForTeam(teamId: string) {
   const db = await getDb();
-  const [sessions, drafts, ns, keyTickets] = await Promise.all([
-    activeSessions(projectId),
-    db.select().from(nodeDrafts).where(and(eq(nodeDrafts.projectId, projectId), eq(nodeDrafts.status, "pending"))),
-    projectNodes(projectId),
-    db.select({ id: tickets.id, number: tickets.number }).from(tickets).where(eq(tickets.projectId, projectId)),
+  const [sessions, drafts, ns, keyIssues] = await Promise.all([
+    activeSessions(teamId),
+    db.select().from(nodeDrafts).where(and(eq(nodeDrafts.teamId, teamId), eq(nodeDrafts.status, "pending"))),
+    teamNodes(teamId),
+    db.select({ id: issues.id, number: issues.number }).from(issues).where(eq(issues.teamId, teamId)),
   ]);
-  const [proj] = await db.select({ key: projects.key }).from(projects).where(eq(projects.id, projectId));
-  const tnum = new Map(keyTickets.map((t) => [t.id, `${proj?.key}-${t.number}`]));
-  const out: Record<string, { sessions: { id: string; by: string; ticket: string | null; files: string[] }[]; drafts: typeof drafts }> = {};
+  const [proj] = await db.select({ key: teams.key }).from(teams).where(eq(teams.id, teamId));
+  const tnum = new Map(keyIssues.map((t) => [t.id, `${proj?.key}-${t.number}`]));
+  const out: Record<string, { sessions: { id: string; by: string; issue: string | null; files: string[] }[]; drafts: typeof drafts }> = {};
   for (const s of sessions) {
     const files = Object.keys(s.files);
     if (!files.length) continue;
@@ -712,15 +715,15 @@ export async function fluxForProject(projectId: string) {
     for (const f of files) for (const n of bestMatches(ns, f)) hit.add(n.id);
     for (const id of hit) {
       const n = ns.find((x) => x.id === id)!;
-      (out[id] ??= { sessions: [], drafts: [] }).sessions.push({ id: s.id, by: s.actorName, ticket: s.ticketId ? (tnum.get(s.ticketId) ?? null) : null, files: anchoredBy(n, files) });
+      (out[id] ??= { sessions: [], drafts: [] }).sessions.push({ id: s.id, by: s.actorName, issue: s.issueId ? (tnum.get(s.issueId) ?? null) : null, files: anchoredBy(n, files) });
     }
   }
   for (const d of drafts) (out[d.nodeId] ??= { sessions: [], drafts: [] }).drafts.push(d);
   return out;
 }
 
-export async function sessionsForProject(projectId: string) {
-  return activeSessions(projectId);
+export async function sessionsForTeam(teamId: string) {
+  return activeSessions(teamId);
 }
 
 export type { Session };

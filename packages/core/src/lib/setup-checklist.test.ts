@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { checklistStatus, checklistBriefingLine } from "./setup-checklist";
 
 const base = {
-  projectKey: "WH",
+  teamKey: "WH",
   repositories: [],
   sessionCount: 0,
   activeAgentKeyCount: 0,
@@ -12,7 +12,7 @@ const base = {
   pendingInviteCount: 0,
 };
 
-test("a fresh no-code project has nothing connected", () => {
+test("a fresh no-code team has nothing connected", () => {
   const s = checklistStatus(base);
   assert.equal(s.done, false);
   assert.equal(s.doneCount, 0);
@@ -22,9 +22,9 @@ test("a fresh no-code project has nothing connected", () => {
   assert.match(s.items.find((i) => i.id === "teammates")!.status, /Just you so far/);
 });
 
-test("a fully set up project is all green", () => {
+test("a fully set up team is all green", () => {
   const s = checklistStatus({
-    projectKey: "WH",
+    teamKey: "WH",
     repositories: [{ provider: "github", lifecycle: "live" }],
     sessionCount: 2,
     activeAgentKeyCount: 1,
@@ -39,9 +39,9 @@ test("a fully set up project is all green", () => {
   assert.match(s.items.find((i) => i.id === "teammates")!.status, /3 teammates.*1 invite pending/);
 });
 
-test("a partially set up project mixes done and not-done, and retired repos don't count", () => {
+test("a partially set up team mixes done and not-done, and retired repos don't count", () => {
   const s = checklistStatus({
-    projectKey: "WH",
+    teamKey: "WH",
     repositories: [{ provider: "local", lifecycle: "live" }, { provider: "github", lifecycle: "retired" }],
     sessionCount: 1,
     activeAgentKeyCount: 0,
@@ -82,7 +82,7 @@ test("the briefing line mirrors the same done/not-done flags for every item", ()
   for (const item of s.items) assert.ok(line.includes(`${item.label.toLowerCase()} ${item.done ? "✓" : "✗"}`));
 });
 
-test("every unmet item links to the project it belongs to", () => {
+test("every unmet item links to the team it belongs to", () => {
   const s = checklistStatus(base);
-  for (const item of s.items) assert.ok(item.href.startsWith("/p/WH") || item.href === "/agents" || item.href === "/team");
+  for (const item of s.items) assert.ok(item.href.startsWith("/t/WH") || item.href === "/settings/integrations/github?team=WH" || item.href === "/agents" || item.href === "/workspace");
 });

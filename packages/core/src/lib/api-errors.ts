@@ -2,7 +2,7 @@ import { AuthError } from "./access";
 import { AccountError } from "./accounts";
 import { InviteError, InviteFailure, INVITE_INVALID } from "./invites";
 import { ServiceError } from "./service";
-import { AdminError } from "./teams-admin";
+import { AdminError } from "./workspaces-admin";
 
 /** How a failure is answered over HTTP: shared by every host so the REST and MCP error shapes cannot drift apart. */
 export type Failure = { status: number; body: unknown; headers?: Record<string, string> };
@@ -41,10 +41,10 @@ export function appFailure(e: unknown): Failure {
       body: { error: { code: e.code, message: e.message, details: e.fields ? { fields: e.fields } : undefined } },
       headers: e.retryAfter ? { "Retry-After": String(e.retryAfter) } : undefined,
     };
-  // Invites and the instance admin's team controls have their own error classes (the Next actions show their messages).
+  // Invites and the instance admin's workspace controls have their own error classes (the Next actions show their messages).
   if (e instanceof InviteError) {
-    const status = { invalid: 400, weak_password: 400, forbidden: 403, conflict: 409, team_full: 409, not_found: 404 }[e.code];
-    const code = e.code === "weak_password" ? "invalid" : e.code === "team_full" ? "conflict" : e.code;
+    const status = { invalid: 400, weak_password: 400, forbidden: 403, conflict: 409, workspace_full: 409, not_found: 404 }[e.code];
+    const code = e.code === "weak_password" ? "invalid" : e.code === "workspace_full" ? "conflict" : e.code;
     const details = e.code === "weak_password" ? { fields: { password: e.message } } : undefined;
     return { status, body: { error: { code, message: e.message, details } } };
   }

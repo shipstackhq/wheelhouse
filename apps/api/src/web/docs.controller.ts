@@ -5,12 +5,12 @@ import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-/** The docs page. A project, doc or map node of another team is a 404. A doc is addressed by its id. */
-@Controller("api/app/projects")
+/** The docs page. A team, doc or map node of another workspace is a 404. A doc is addressed by its id. */
+@Controller("api/app/teams")
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class DocsController {
-  /** The tree, and what the page's side panels offer: map nodes to link, decisions to link, the team's members. */
+  /** The tree, and what the page's side panels offer: map nodes to link, decisions to link, the workspace's members. */
   @Get(":key/docs")
   index(@Req() req: SessionRequest, @Param("key") key: string) {
     return docsIndex(req.human, key);

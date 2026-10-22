@@ -31,7 +31,7 @@ ok "health through Caddy: $(curl -fsS "$BASE/api/health")"
 check "the container's own health check passes" bash -c "for _ in \$(seq 1 20); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' \$(docker compose -p whsmoke -f docker-compose.standalone.yml ps -q app))\" = healthy ] && exit 0; sleep 3; done; exit 1"
 
 echo "==> the React app"
-HTML="$(curl -fsS "$BASE/p/WH/map")"
+HTML="$(curl -fsS "$BASE/t/WH/map")"
 check "any page address returns the app shell" grep -q '<div id="root">' <<<"$HTML"
 ASSET="$(grep -o '/assets/[^"]*\.js' <<<"$HTML" | head -1)"
 check "its script is served with a year's cache ($ASSET)" bash -c "curl -fsSI '$BASE$ASSET' | tr -d '\r' | grep -qi 'cache-control: public, max-age=31536000, immutable'"
@@ -46,19 +46,19 @@ check "the webhook refuses an unsigned delivery (503 with no GitHub App)" bash -
 
 echo "==> sign up, then a live stream through Caddy"
 SIGNUP="$(curl -fsS -c "$WORK/jar" -H "Origin: $BASE" -H "X-CSRF-Token: anonymous" -H 'content-type: application/json' \
-  -d '{"name":"Smoke","email":"smoke@example.test","password":"a-long-enough-password","team":"Smoke team"}' "$BASE/api/app/auth/signup")"
+  -d '{"name":"Smoke","email":"smoke@example.test","password":"a-long-enough-password","workspace":"Smoke workspace"}' "$BASE/api/app/auth/signup")"
 CSRF="$(sed -E 's/.*"csrfToken":"([^"]+)".*/\1/' <<<"$SIGNUP")"
 post() { curl -fsS -b "$WORK/jar" -H "Origin: $BASE" -H "X-CSRF-Token: $CSRF" -H 'content-type: application/json' -d "$2" "$BASE$1"; }
-post /api/app/projects '{"name":"Smoke","key":"SMK"}' >/dev/null
-ok "signed up and created a project"
-curl -sN -m 12 -b "$WORK/jar" "$BASE/api/projects/SMK/stream" > "$WORK/stream" 2>/dev/null &
+post /api/app/teams '{"name":"Smoke","key":"SMK"}' >/dev/null
+ok "signed up and created a team"
+curl -sN -m 12 -b "$WORK/jar" "$BASE/api/teams/SMK/stream" > "$WORK/stream" 2>/dev/null &
 SSE=$!
 sleep 3
 check "the stream said 'ready' while still open (not held back by the proxy)" grep -q 'event: ready' "$WORK/stream"
-post /api/app/projects/SMK/tickets '{"title":"live"}' >/dev/null
+post /api/app/teams/SMK/issues '{"title":"live"}' >/dev/null
 sleep 3
 check "a change arrived on the open stream within seconds" grep -q 'event: change' "$WORK/stream"
-check "the stream is not compressed" bash -c "! grep -qi 'content-encoding' <(curl -sNI -m 3 -H 'Accept-Encoding: gzip' -b '$WORK/jar' '$BASE/api/projects/SMK/stream' 2>/dev/null | head -20)"
+check "the stream is not compressed" bash -c "! grep -qi 'content-encoding' <(curl -sNI -m 3 -H 'Accept-Encoding: gzip' -b '$WORK/jar' '$BASE/api/teams/SMK/stream' 2>/dev/null | head -20)"
 kill "$SSE" 2>/dev/null || true; wait "$SSE" 2>/dev/null || true
 
 echo "==> sign-in rate limiting cannot be dodged by a forged X-Forwarded-For"
@@ -82,7 +82,7 @@ printf 'PG_CONTAINER=%s\nPG_DUMP_USER=wheelhouse\nPG_DB=wheelhouse\n' "$PGNAME" 
 DUMP="$(ls -1 "$WORK"/ops/backups/nightly-*.sql.gz | head -1)"
 RESULT="$(cd "$WORK/ops" && ./restore.sh "$DUMP" 2>&1)" && ok "restore.sh restored it into a scratch database" || { bad "restore.sh"; echo "$RESULT"; }
 EXPECTED="$(node -p "require('./packages/core/drizzle/meta/_journal.json').entries.length")"
-check "the restored database has the user, the ticket and all $EXPECTED migrations" bash -c "grep -q '^users 1' <<<'$RESULT' && grep -q '^tickets 1' <<<'$RESULT' && grep -q '^migrations $EXPECTED' <<<'$RESULT'"
+check "the restored database has the user, the issue and all $EXPECTED migrations" bash -c "grep -q '^users 1' <<<'$RESULT' && grep -q '^issues 1' <<<'$RESULT' && grep -q '^migrations $EXPECTED' <<<'$RESULT'"
 check "restore refuses to restore over a database that has tables" bash -c "cd '$WORK/ops' && ! ./restore.sh '$DUMP' >/dev/null 2>&1"
 
 echo "==> shutdown"

@@ -19,7 +19,7 @@ export function DescriptionEditor({
 }: {
   value: string;
   onChange: (markdown: string) => void;
-  /** "compact" (default, ticket descriptions) or "full" (long-form docs: more vertical room). */
+  /** "compact" (default, issue descriptions) or "full" (long-form docs: more vertical room). */
   size?: "compact" | "full";
 }) {
   const [mode, setMode] = useState<Mode>("rich");

@@ -56,16 +56,16 @@ test("three or fewer rows: no '+N more' and no scroller; none at all: nothing is
 });
 
 test("a row is two lines: lead and title, then the muted who/when; long text is left to the tooltip", () => {
-  const html = renderToStaticMarkup(<TwoLineRow lead="WH-12" title="A long ticket title" meta="Laptop · 3h ago" tip={<span>full details</span>} />);
-  assert.equal(visible(html), "|WH-12|A long ticket title|Laptop · 3h ago|");
+  const html = renderToStaticMarkup(<TwoLineRow lead="WH-12" title="A long issue title" meta="Laptop · 3h ago" tip={<span>full details</span>} />);
+  assert.equal(visible(html), "|WH-12|A long issue title|Laptop · 3h ago|");
   assert.ok(html.includes("truncate"), "text truncates instead of wrapping or overflowing");
   assert.ok(html.includes('tabindex="0"'), "a non-link row is focusable so keyboard users can reach the tooltip");
   assert.ok(!html.includes("full details"), "tooltip content stays out of the page until hovered or focused");
 });
 
 test("a row with a destination is a link", () => {
-  const html = renderToStaticMarkup(<TwoLineRow href="/p/WH?t=WH-12" lead="WH-12" title="x" meta="y" tip="z" />);
-  assert.match(html, /<a [^>]*href="\/p\/WH\?t=WH-12"/);
+  const html = renderToStaticMarkup(<TwoLineRow href="/t/WH?t=WH-12" lead="WH-12" title="x" meta="y" tip="z" />);
+  assert.match(html, /<a [^>]*href="\/t\/WH\?t=WH-12"/);
 });
 
 test("the lists on the dashboard are striped lists: compact rows that run edge to edge of the card", () => {

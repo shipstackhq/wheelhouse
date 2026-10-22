@@ -27,14 +27,14 @@
     }
   },
   {
-    "name": "claim_ticket",
+    "name": "claim_issue",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "ticket": {
+        "issue": {
           "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
+          "description": "Issue ref like \"WH-12\" (or id)"
         },
         "session": {
           "type": "string",
@@ -42,7 +42,7 @@
         }
       },
       "required": [
-        "ticket"
+        "issue"
       ],
       "additionalProperties": false
     }
@@ -53,9 +53,9 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "ticket": {
+        "issue": {
           "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
+          "description": "Issue ref like \"WH-12\" (or id)"
         },
         "body": {
           "type": "string",
@@ -67,8 +67,67 @@
         }
       },
       "required": [
-        "ticket",
+        "issue",
         "body"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_issue",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Project key (e.g. \"WH\") or id"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "status": {
+          "description": "Status name, default Backlog",
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent": {
+          "description": "Make it a sub-issue of this issue (a ref like WH-12 in the same team)",
+          "type": "string"
+        },
+        "link_nodes": {
+          "description": "Graph node names/ids this issue touches",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "project",
+        "title"
       ],
       "additionalProperties": false
     }
@@ -96,60 +155,6 @@
       },
       "required": [
         "name"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "create_ticket",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "title": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string"
-        },
-        "column": {
-          "description": "Column name, default Backlog",
-          "type": "string"
-        },
-        "priority": {
-          "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high",
-            "urgent"
-          ]
-        },
-        "labels": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "link_nodes": {
-          "description": "Graph node names/ids this ticket touches",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "title"
       ],
       "additionalProperties": false
     }
@@ -436,6 +441,54 @@
     }
   },
   {
+    "name": "get_issue",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "type": "string",
+          "description": "Issue ref like \"WH-12\" (or id)"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_issue_context",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "issue": {
+          "type": "string",
+          "description": "Issue ref like \"WH-12\" (or id)"
+        },
+        "max_chars": {
+          "description": "Default 8000",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "get_node",
     "readOnly": true,
     "inputSchema": {
@@ -524,54 +577,6 @@
     }
   },
   {
-    "name": "get_ticket",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "ticket": {
-          "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "ticket"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_ticket_context",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "ticket": {
-          "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
-        },
-        "max_chars": {
-          "description": "Default 8000",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "ticket"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
     "name": "link_doc_node",
     "readOnly": false,
     "inputSchema": {
@@ -605,14 +610,14 @@
     }
   },
   {
-    "name": "link_ticket_node",
+    "name": "link_issue_node",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "ticket": {
+        "issue": {
           "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
+          "description": "Issue ref like \"WH-12\" (or id)"
         },
         "node": {
           "type": "string"
@@ -626,7 +631,7 @@
         }
       },
       "required": [
-        "ticket",
+        "issue",
         "node"
       ],
       "additionalProperties": false
@@ -848,26 +853,26 @@
     }
   },
   {
-    "name": "move_ticket",
+    "name": "move_issue",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "ticket": {
+        "issue": {
           "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
+          "description": "Issue ref like \"WH-12\" (or id)"
         },
-        "column": {
+        "status": {
           "type": "string"
         },
         "index": {
-          "description": "Position in column, default end",
+          "description": "Position within the status, default end",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
         },
         "expected_version": {
-          "description": "Ticket version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
+          "description": "Issue version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -878,8 +883,8 @@
         }
       },
       "required": [
-        "ticket",
-        "column"
+        "issue",
+        "status"
       ],
       "additionalProperties": false
     }
@@ -1049,14 +1054,14 @@
     }
   },
   {
-    "name": "update_ticket",
+    "name": "update_issue",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "ticket": {
+        "issue": {
           "type": "string",
-          "description": "Ticket ref like \"WH-12\" (or id)"
+          "description": "Issue ref like \"WH-12\" (or id)"
         },
         "title": {
           "type": "string"
@@ -1067,6 +1072,7 @@
         "priority": {
           "type": "string",
           "enum": [
+            "none",
             "low",
             "medium",
             "high",
@@ -1079,8 +1085,15 @@
             "type": "string"
           }
         },
+        "parent": {
+          "description": "Move it under this issue (a ref like WH-12 in the same team), or null to make it a top-level issue",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "expected_version": {
-          "description": "Ticket version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
+          "description": "Issue version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -1091,7 +1104,7 @@
         }
       },
       "required": [
-        "ticket"
+        "issue"
       ],
       "additionalProperties": false
     }

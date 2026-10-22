@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
 import { listWorkspaces, SESSION_COOKIE, switchWorkspace } from "@wheelhouse/core/lib/auth-core";
 import { ServiceError } from "@wheelhouse/core/lib/service";
-import { changePasswordAs } from "@wheelhouse/core/lib/team-app";
+import { changePasswordAs } from "@wheelhouse/core/lib/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { cookieValue } from "../http/util";
 import { jsonBody, str } from "./body";
@@ -11,7 +11,7 @@ import { meView } from "./me";
 @Controller("api/app/me")
 @AppEndpoints()
 export class MeController {
-  /** The signed-in person, their team and role, and the CSRF token to send on state-changing requests. 401 when signed out. */
+  /** The signed-in person, their workspace and role, and the CSRF token to send on state-changing requests. 401 when signed out. */
   @Get()
   @UseGuards(SessionGuard)
   me(@Req() req: SessionRequest) {
@@ -22,17 +22,17 @@ export class MeController {
   @Get("workspaces")
   @UseGuards(SessionGuard)
   async workspaces(@Req() req: SessionRequest) {
-    return { workspaces: await listWorkspaces(req.human.user.id, req.human.team.id) };
+    return { workspaces: await listWorkspaces(req.human.user.id, req.human.workspace.id) };
   }
 
-  /** `{ teamId }`: work in another of your workspaces. Only this session changes. Not one of yours, or suspended, is a 404. */
+  /** `{ workspaceId }`: work in another of your workspaces. Only this session changes. Not one of yours, or suspended, is a 404. */
   @Post("workspace")
   @UseGuards(SessionGuard)
   @HttpCode(200)
   async switchTo(@Req() req: SessionRequest & RawTextRequest) {
-    const team = await switchWorkspace(cookieValue(req.headers.cookie, SESSION_COOKIE)!, req.human.user.id, str(jsonBody(req).teamId));
-    if (!team) throw new ServiceError("not_found", "Workspace not found");
-    return { team };
+    const workspace = await switchWorkspace(cookieValue(req.headers.cookie, SESSION_COOKIE)!, req.human.user.id, str(jsonBody(req).workspaceId));
+    if (!workspace) throw new ServiceError("not_found", "Workspace not found");
+    return { workspace };
   }
 
   /** Change your own password: `{ current, next }`. The current one must be right; the new one must be strong enough. */

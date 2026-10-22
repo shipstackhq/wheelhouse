@@ -4,6 +4,12 @@ import type { IconPair } from "./icons";
 import { LinkPending, useLinkPending } from "./link-pending";
 import { Tip } from "./tip";
 
+/** The one size of a sidebar item (links, team rows): padding, gap and icon, as the full row and as the icon-only rail. */
+export const NAV_ITEM = "flex items-center gap-2.5 rounded-md px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
+export const NAV_ITEM_RAIL = "md:justify-center md:px-0 md:py-1.5";
+export const NAV_ICON = "shrink-0 text-base";
+export const NAV_ICON_RAIL = "md:text-lg";
+
 /**
  * A sidebar link. With an `icon` pair, the place you are on shows the solid icon and the others the outline one. `collapsed` is
  * the icon-only rail (tablet and up): the label stays for screen readers, and a tooltip names the place. On a phone the drawer is
@@ -19,12 +25,12 @@ export function NavLink({ href, prefix, icon, collapsed = false, children }: { h
       to={href}
       aria-current={active ? "page" : undefined}
       className={clsx(
-        "flex items-center gap-2.5 rounded-md px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
-        collapsed && "md:justify-center md:px-0 md:py-2",
+        NAV_ITEM,
+        collapsed && NAV_ITEM_RAIL,
         active ? "bg-panel-2 text-fg" : "text-muted hover:bg-panel-2 hover:text-fg",
       )}
     >
-      {Icon && <Icon className={clsx("shrink-0 text-lg", collapsed && "md:text-xl", active && "text-accent")} />}
+      {Icon && <Icon className={clsx(NAV_ICON, collapsed && NAV_ICON_RAIL, active && "text-accent")} />}
       <span className={clsx("min-w-0 flex-1 truncate", collapsed && "md:sr-only")}>{children}</span>
       <LinkPending pending={pending} className={collapsed ? "h-3 w-3 md:hidden" : undefined} />
     </Link>

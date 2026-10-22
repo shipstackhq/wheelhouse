@@ -1,8 +1,8 @@
 import type { Actor } from "./access";
-import { getBoard, getChanges, getGraph, listRepositories, resolveTicket, getTicket, checklistForProject, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
+import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
 import { timeAgo } from "./time";
 import { checklistBriefingLine } from "./setup-checklist";
-
+import { CLOSED_ROLES } from "./status-roles";
 /**
  * Context for agents, so a fresh session starts warm instead of re-reading the
  * codebase. Both renderers produce compact markdown: an overview with pointers,
@@ -32,21 +32,21 @@ function budgeted(sections: (string | null)[], max: number) {
 
 // ───────── session briefing ─────────
 
-export async function briefing(actor: Actor, projectRef: string, opts: { maxChars?: number } = {}) {
+export async function briefing(actor: Actor, teamRef: string, opts: { maxChars?: number } = {}) {
   const max = Math.min(Math.max(opts.maxChars ?? 6000, 1500), 20000);
   const [g, board, repos, checklist, docsIndex, staleDocs] = await Promise.all([
-    getGraph(actor, projectRef),
-    getBoard(actor, projectRef),
-    listRepositories(actor, projectRef),
-    checklistForProject(actor, projectRef),
-    listDocsIndex(actor, projectRef),
-    listStaleDocs(actor, projectRef),
+    getGraph(actor, teamRef),
+    getBoard(actor, teamRef),
+    listRepositories(actor, teamRef),
+    checklistForTeam(actor, teamRef),
+    listDocsIndex(actor, teamRef),
+    listStaleDocs(actor, teamRef),
   ]);
-  const p = g.project;
+  const p = g.team;
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const top = (layer: string) => g.nodes.filter((n) => n.layer === layer && !n.parentId).sort((a, b) => a.name.localeCompare(b.name));
-  const colName = new Map(board.columns.map((c) => [c.id, c.name]));
-  const colRole = new Map(board.columns.map((c) => [c.id, c.role]));
+  const colName = new Map(board.statuses.map((c) => [c.id, c.name]));
+  const colRole = new Map(board.statuses.map((c) => [c.id, c.role]));
 
   const header = `# ${p.key}: ${p.name}\n${p.description ? p.description + "\n" : ""}_Wheelhouse briefing generated ${new Date().toISOString()}. The map explains intent; the code is the source of truth._\n`;
 
@@ -76,14 +76,14 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
       : null;
 
   // Your work + board state
-  const open = board.tickets.filter((t) => colRole.get(t.columnId) !== "done");
+  const open = board.issues.filter((t) => !CLOSED_ROLES.some((r) => r === colRole.get(t.statusId)));
   const mine = actor.kind === "agent" ? open.filter((t) => t.claimedByKeyId === actor.id) : open.filter((t) => t.assigneeId === actor.id);
-  const inProgress = open.filter((t) => colRole.get(t.columnId) === "in_progress");
-  const review = open.filter((t) => colRole.get(t.columnId) === "review");
+  const inProgress = open.filter((t) => colRole.get(t.statusId) === "in_progress");
+  const review = open.filter((t) => colRole.get(t.statusId) === "review");
   const urgent = open.filter((t) => t.priority === "urgent" || t.priority === "high");
-  const busy = (t: (typeof open)[number]) => ["in_progress", "review"].includes(colRole.get(t.columnId) ?? "");
+  const busy = (t: (typeof open)[number]) => ["in_progress", "review"].includes(colRole.get(t.statusId) ?? "");
   const ready = open.filter((t) => t.agentClaimable && !t.claimedByKeyId && !busy(t));
-  const tl = (t: (typeof open)[number]) => `${t.ref} ${t.title} [${colName.get(t.columnId)}${t.priority !== "medium" ? `, ${t.priority}` : ""}]`;
+  const tl = (t: (typeof open)[number]) => `${t.ref} ${t.title} [${colName.get(t.statusId)}${t.priority !== "none" ? `, ${t.priority}` : ""}]`;
   const work = [
     "## Work",
     mine.length ? `Yours: ${mine.slice(0, 6).map(tl).join("; ")}` : actor.kind === "agent" ? "Yours: nothing claimed." : null,
@@ -99,7 +99,7 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
   // The agent is never asked to handle the session id: the plugin hooks attach it to every call (ADR-5).
   let since: string | null = null;
   if (actor.kind === "agent") {
-    const q = await getChanges(actor, projectRef, 10);
+    const q = await getChanges(actor, teamRef, 10);
     if (q.total) {
       const types: Record<string, number> = q.summary?.byType ?? q.changes.reduce<Record<string, number>>((m, c) => ((m[c.type] = (m[c.type] ?? 0) + 1), m), {});
       since = `## Since you last looked\n${q.total} change(s): ${Object.entries(types)
@@ -124,7 +124,7 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
     staleDocs.length ? `Docs possibly out of date: ${staleDocs.map((d) => d.slug).join(", ")}` : null,
     flux.length
       ? `In flux (unlanded changes): ${flux
-          .map(([id, f]) => `${byId.get(id)?.name} by ${f.sessions[0]?.by ?? f.drafts[0]?.authorName}${f.sessions[0]?.ticket ? ` (${f.sessions[0].ticket})` : ""}`)
+          .map(([id, f]) => `${byId.get(id)?.name} by ${f.sessions[0]?.by ?? f.drafts[0]?.authorName}${f.sessions[0]?.issue ? ` (${f.sessions[0].issue})` : ""}`)
           .join("; ")}`
       : null,
   ]
@@ -139,7 +139,7 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
   const flows = g.flows.length ? `## Flows\n${g.flows.map((f) => `- ${f.name} (${f.steps.length} steps)`).join("\n")}\nUse get_flows for steps.\n` : null;
   const terms = g.terms.length ? `## Glossary\n${g.terms.slice(0, 15).map((t) => `- **${t.term}**: ${clip(t.definition, 120)}`).join("\n")}\n` : null;
   const deeper =
-    "## Go deeper\nget_ticket_context(ticket) for everything about one ticket, including which files to read first. get_node(node) for one part. get_schema for the data model.\n";
+    "## Go deeper\nget_issue_context(issue) for everything about one issue, including which files to read first. get_node(node) for one part. get_schema for the data model.\n";
 
   // Where the code comes from and how much to trust "what landed" (ADR-7): said plainly, never left to be guessed.
   const live = repos.filter((r) => r.lifecycle !== "retired");
@@ -153,29 +153,29 @@ export async function briefing(actor: Actor, projectRef: string, opts: { maxChar
         .join("\n")}\n`
     : `## Repositories\nNone connected: what landed and stale map nodes are not tracked.\n`;
 
-  // Setup checklist (WH-69): same computation as the project-page banner, so the two can't drift.
+  // Setup checklist (WH-69): same computation as the team-page banner, so the two can't drift.
   const setupLine = checklist.done ? null : `## Setup\n${checklistBriefingLine(checklist)}\n`;
 
   const markdown = budgeted([header, work + "\n", since, what, built, repoSection, setupLine, watch ? watch + "\n" : null, flows, docsSection, deeper, terms], max);
   return {
     markdown,
-    stats: { nodes: g.nodes.length, openTickets: open.length, stale: g.nodes.filter((n) => n.stale).length, staleDocs: staleDocs.length, inFlux: Object.keys(g.flux).length },
+    stats: { nodes: g.nodes.length, openIssues: open.length, stale: g.nodes.filter((n) => n.stale).length, staleDocs: staleDocs.length, inFlux: Object.keys(g.flux).length },
   };
 }
 
-// ───────── ticket context pack ─────────
+// ───────── issue context pack ─────────
 
-export async function ticketContext(actor: Actor, ticketRef: string, opts: { maxChars?: number } = {}) {
+export async function issueContext(actor: Actor, issueRef: string, opts: { maxChars?: number } = {}) {
   const max = Math.min(Math.max(opts.maxChars ?? 8000, 1500), 30000);
-  const { project } = await resolveTicket(actor, ticketRef);
-  const [t, g] = await Promise.all([getTicket(actor, ticketRef), getGraph(actor, project.id)]);
+  const { team } = await resolveIssue(actor, issueRef);
+  const [t, g] = await Promise.all([getIssue(actor, issueRef), getGraph(actor, team.id)]);
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
 
-  // Linked nodes, or a keyword guess when the ticket isn't linked yet.
+  // Linked nodes, or a keyword guess when the issue isn't linked yet.
   let linked: NodeRow[] = t.nodes.map((n) => byId.get(n.id)!).filter(Boolean);
   let guessed = false;
   if (!linked.length) {
-    const words = `${t.ticket.title} ${t.ticket.body}`
+    const words = `${t.issue.title} ${t.issue.body}`
       .toLowerCase()
       .split(/[^a-z0-9_]+/)
       .filter((w) => w.length > 3);
@@ -223,8 +223,8 @@ export async function ticketContext(actor: Actor, ticketRef: string, opts: { max
       .filter(Boolean)
       .join("\n");
 
-  const tk = t.ticket;
-  const head = `# ${tk.ref}: ${tk.title}\nStatus: ${tk.column} · priority ${tk.priority} · version ${tk.version}${tk.labels.length ? ` · labels ${tk.labels.join(", ")}` : ""}\n\n${tk.body || "_No description._"}\n`;
+  const tk = t.issue;
+  const head = `# ${tk.ref}: ${tk.title}\nStatus: ${tk.status} · priority ${tk.priority} · version ${tk.version}${tk.labels.length ? ` · labels ${tk.labels.join(", ")}` : ""}\n\n${tk.body || "_No description._"}\n`;
   const thread = t.comments.length
     ? `## Discussion (latest ${Math.min(5, t.comments.length)} of ${t.comments.length})\n${t.comments
         .slice(-5)
@@ -236,8 +236,8 @@ export async function ticketContext(actor: Actor, ticketRef: string, opts: { max
     : null;
   const read = files.length ? `## Read these files first\n${files.map((f) => `- ${f}`).join("\n")}\n` : null;
   const parts = linked.length
-    ? `## ${guessed ? "Possibly related parts of the system (ticket isn't linked to the map yet; link with link_ticket_node)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
-    : `## Map\nNothing on the map matches this ticket yet. After the work, add or link nodes (upsert_node, link_ticket_node).\n`;
+    ? `## ${guessed ? "Possibly related parts of the system (issue isn't linked to the map yet; link with link_issue_node)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
+    : `## Map\nNothing on the map matches this issue yet. After the work, add or link nodes (upsert_node, link_issue_node).\n`;
   const near = neighbours.length
     ? `## Connected across layers\n${neighbours.map((n) => `- ${n.layer}:${n.name}${n.summary ? `: ${n.summary}` : ""}`).join("\n")}\n`
     : null;

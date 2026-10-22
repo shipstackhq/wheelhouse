@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { EMPTY_VIEW, applyView, describeFilter, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
-import { ticket } from "../../test/data";
+import { issue } from "../../test/data";
 
 /** A column's filter and sort: filters combine with AND, several values inside one filter with OR, and the choice is remembered per column. */
-const t1 = ticket({ number: 1, title: "Banana", priority: "high", labels: ["bug"], assigneeId: "u1", agentClaimable: true, commentCount: 3, createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-05T00:00:00Z" });
-const t2 = ticket({ number: 2, title: "apple", priority: "low", labels: ["docs"], assigneeId: null, createdByKind: "agent", createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-03T00:00:00Z" });
-const t3 = ticket({ number: 3, title: "Cherry", priority: "urgent", labels: ["bug", "docs"], assigneeId: "u2", claimedByKeyId: "k1", nodeIds: ["n1"], createdAt: "2026-10-03T00:00:00Z", updatedAt: "2026-10-04T00:00:00Z" });
+const t1 = issue({ number: 1, title: "Banana", priority: "high", labels: ["bug"], assigneeId: "u1", agentClaimable: true, commentCount: 3, createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-05T00:00:00Z" });
+const t2 = issue({ number: 2, title: "apple", priority: "low", labels: ["docs"], assigneeId: null, createdByKind: "agent", createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-03T00:00:00Z" });
+const t3 = issue({ number: 3, title: "Cherry", priority: "urgent", labels: ["bug", "docs"], assigneeId: "u2", claimedByKeyId: "k1", nodeIds: ["n1"], createdAt: "2026-10-03T00:00:00Z", updatedAt: "2026-10-04T00:00:00Z" });
 const all = [t1, t2, t3];
 const view = (over: Partial<View>): View => ({ ...EMPTY_VIEW, ...over });
 const refs = (list: typeof all) => list.map((t) => t.number);
@@ -42,11 +42,11 @@ describe("filters", () => {
     expect(refs(applyView(all, view({ flags: ["aiReady", "byAgent"] })))).toEqual([]);
   });
 
-  test("a ticket the filter hides can be kept showing (a ticket just added stays visible)", () => {
+  test("an issue the filter hides can be kept showing (an issue just added stays visible)", () => {
     expect(refs(applyView(all, view({ priority: ["urgent"] }), (t) => t.number === 2))).toEqual([2, 3]);
   });
 
-  test("matches says the same thing for one ticket", () => {
+  test("matches says the same thing for one issue", () => {
     expect(matches(t1, view({ priority: ["high"] }))).toBe(true);
     expect(matches(t1, view({ priority: ["low"] }))).toBe(false);
   });
@@ -106,7 +106,7 @@ describe("remembering a column's view", () => {
     expect(localStorage.getItem("wh:view:AA:c1")).toBeNull();
     expect(loadView("wh:view:AA:c1")).toEqual(EMPTY_VIEW);
   });
-  test("views are kept apart per project and column", () => {
+  test("views are kept apart per team and column", () => {
     saveView("wh:view:AA:c1", view({ label: ["bug"] }));
     expect(loadView("wh:view:AA:c2")).toEqual(EMPTY_VIEW);
     expect(loadView("wh:view:BB:c1")).toEqual(EMPTY_VIEW);

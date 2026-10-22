@@ -1,5 +1,5 @@
 /**
- * Two edits made from the same version: exactly one is applied, the other is a conflict, and nothing is overwritten (tickets, docs,
+ * Two edits made from the same version: exactly one is applied, the other is a conflict, and nothing is overwritten (issues, docs,
  * map nodes, flows, decisions). This only means something on a real Postgres, where two transactions really do run at once
  * (`TEST_DATABASE_URL=postgres://... --test-force-exit`, as in CI): on the embedded single-connection database they queue up and
  * the check passes whether or not the rows are locked. It once did not: both edits were applied and one silently replaced the other.
@@ -23,11 +23,11 @@ const ROUNDS = 6;
 
 before(async () => {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Lock team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Lock workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: `lock-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Lena", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  actor = { kind: "human", id: user.id, name: user.name, teamId: team.id };
-  await svc.createProject(actor, { name: "Lock", key: "LK" });
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
+  await svc.createTeam(actor, { name: "Lock", key: "LK" });
 });
 
 /** Run both at once; report which were applied and which were refused as conflicts. */
@@ -41,19 +41,19 @@ async function race(a: () => Promise<unknown>, b: () => Promise<unknown>) {
 }
 
 describe("two edits from the same version", () => {
-  test("tickets: one is applied, one is a conflict", async () => {
+  test("issues: one is applied, one is a conflict", async () => {
     for (let i = 0; i < ROUNDS; i++) {
-      const t = await svc.createTicket(actor, "LK", { title: `t${i}` });
-      const r = await race(() => svc.updateTicket(actor, t.id, { title: "A" }, t.version), () => svc.updateTicket(actor, t.id, { title: "B" }, t.version));
+      const t = await svc.createIssue(actor, "LK", { title: `t${i}` });
+      const r = await race(() => svc.updateIssue(actor, t.id, { title: "A" }, t.version), () => svc.updateIssue(actor, t.id, { title: "B" }, t.version));
       assert.deepEqual(r, { applied: 1, refused: 1 }, `round ${i}`);
-      assert.equal((await svc.getTicket(actor, t.id)).ticket.version, t.version + 1);
+      assert.equal((await svc.getIssue(actor, t.id)).issue.version, t.version + 1);
     }
   });
 
-  test("moving a ticket: one is applied, one is a conflict", async () => {
+  test("moving an issue: one is applied, one is a conflict", async () => {
     for (let i = 0; i < ROUNDS; i++) {
-      const t = await svc.createTicket(actor, "LK", { title: `m${i}` });
-      const r = await race(() => svc.moveTicket(actor, t.id, "In Progress", undefined, t.version), () => svc.moveTicket(actor, t.id, "Review", undefined, t.version));
+      const t = await svc.createIssue(actor, "LK", { title: `m${i}` });
+      const r = await race(() => svc.moveIssue(actor, t.id, "In Progress", undefined, t.version), () => svc.moveIssue(actor, t.id, "Review", undefined, t.version));
       assert.deepEqual(r, { applied: 1, refused: 1 }, `round ${i}`);
     }
   });
