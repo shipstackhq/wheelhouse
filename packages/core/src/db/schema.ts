@@ -1147,7 +1147,7 @@ export const deviceMessages = table(
   (t) => [index("device_messages_device_seq_idx").on(t.deviceId, t.seq)],
 );
 
-export const DEVICE_JOB_STATES = ["offered", "accepted", "running", "succeeded", "failed", "canceled", "rejected", "expired", "lost"] as const;
+export const DEVICE_JOB_STATES = ["offered", "accepted", "running", "unreachable", "succeeded", "failed", "canceled", "rejected", "expired", "lost"] as const;
 export type DeviceJobState = (typeof DEVICE_JOB_STATES)[number];
 
 /**
@@ -1177,6 +1177,11 @@ export const deviceJobs = table(
     createdBy: uuid("created_by"),
     offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }).notNull(),
     cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    // Set while the device has gone quiet (state `unreachable`): when the server noticed. Nothing is guessed from silence; a run only
+    // becomes `lost` on the daemon's word, a revoked device, or a person marking it.
+    unreachableSince: timestamp("unreachable_since", { withTimezone: true }),
+    // Who marked an unreachable run lost by hand. Null for a run lost on evidence, so a late report from the device can tell the two apart.
+    markedLostBy: uuid("marked_lost_by").references(() => users.id, { onDelete: "set null" }),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),

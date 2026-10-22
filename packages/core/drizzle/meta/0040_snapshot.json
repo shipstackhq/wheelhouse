@@ -1,6 +1,6 @@
 {
-  "id": "6d62fed7-1092-4c75-b810-fb7d8b0415b7",
-  "prevId": "2dc2b791-64b5-4935-a364-8147f90ba101",
+  "id": "c696d7c1-e371-483a-818d-6d3715840365",
+  "prevId": "fa611bdf-71f4-4d6f-ac16-a2c2f6ffb8bf",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1064,6 +1064,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "unreachable_since": {
+          "name": "unreachable_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "marked_lost_by": {
+          "name": "marked_lost_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "accepted_at": {
           "name": "accepted_at",
           "type": "timestamp with time zone",
@@ -1162,6 +1174,19 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
+        "device_jobs_marked_lost_by_users_id_fk": {
+          "name": "device_jobs_marked_lost_by_users_id_fk",
+          "tableFrom": "device_jobs",
+          "tableTo": "users",
+          "columnsFrom": [
+            "marked_lost_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "device_jobs_team_fk": {
           "name": "device_jobs_team_fk",
           "tableFrom": "device_jobs",
@@ -1214,7 +1239,7 @@
       "checkConstraints": {
         "device_jobs_state_check": {
           "name": "device_jobs_state_check",
-          "value": "\"state\" in ('offered', 'accepted', 'running', 'succeeded', 'failed', 'canceled', 'rejected', 'expired', 'lost')"
+          "value": "\"state\" in ('offered', 'accepted', 'running', 'unreachable', 'succeeded', 'failed', 'canceled', 'rejected', 'expired', 'lost')"
         }
       },
       "isRLSEnabled": false

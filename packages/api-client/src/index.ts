@@ -537,6 +537,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<{ job: JobView; events: JobEvent[] }>("GET", `/api/app/jobs/${encodeURIComponent(id)}/events${after !== undefined ? `?after=${after}` : ""}`),
       /** An offer ends at once; a run in progress is asked to stop. */
       cancel: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/cancel`, {})).job,
+      /** Mark a run that cannot be reached lost. If the device reports it after all, it comes back. */
+      markLost: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/mark-lost`, {})).job,
     },
 
     dashboard: {

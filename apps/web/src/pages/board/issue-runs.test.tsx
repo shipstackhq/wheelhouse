@@ -20,6 +20,9 @@ const job = (id: string, over: Partial<JobView> = {}): JobView => ({
   continuesJobId: null,
   error: null,
   cancelRequested: false,
+  unreachableSince: null,
+  lastHeardAt: null,
+  markedLost: false,
   createdAt: new Date().toISOString(),
   acceptedAt: null,
   startedAt: null,
@@ -70,12 +73,41 @@ describe("runs on a device", () => {
     ]);
   });
 
-  test("a run that pushed nothing can only start over; a continuation says so", async () => {
-    mount([job("n1", { delivery: "none", result: { pushed: false } }), job("n2", { continuesJobId: "n0" })]);
+  test("a run that pushed nothing can only start over, unless it was stopped or lost; a continuation says so", async () => {
+    mount([
+      job("n1", { delivery: "none", result: { pushed: false } }),
+      job("n2", { continuesJobId: "n0" }),
+      job("n3", { state: "canceled", delivery: "none", result: {} }),
+      job("n4", { state: "lost", delivery: "none", result: {}, error: "The device stopped reporting" }),
+    ]);
     const items = within(await screen.findByRole("list", { name: "Runs" })).getAllByRole("listitem");
     expect(within(items[0]).queryByRole("button", { name: "Continue" })).toBeNull();
     expect(within(items[0]).getByRole("button", { name: "Start over" })).toBeTruthy();
     expect(within(items[1]).getByText(/continues an earlier run/)).toBeTruthy();
+    expect(within(items[2]).getByRole("button", { name: "Continue" })).toBeTruthy();
+    expect(within(items[3]).getByRole("button", { name: "Continue" })).toBeTruthy();
+  });
+
+  test("an unreachable run says it is not lost, offers Stop and Mark as lost, and marking asks first", async () => {
+    const { server } = mount([job("u1", { state: "unreachable", delivery: null, result: {}, unreachableSince: new Date().toISOString(), lastHeardAt: new Date().toISOString() })], (s) =>
+      s.on("POST /api/app/jobs/u1/mark-lost", { job: job("u1", { state: "lost", markedLost: true, error: "Marked lost by Atharva" }) }),
+    );
+    const item = within(await screen.findByRole("list", { name: "Runs" })).getByRole("listitem");
+    expect(within(item).getByText("unreachable")).toBeTruthy();
+    expect(within(item).getByText(/not lost/)).toBeTruthy();
+    expect(within(item).getByRole("button", { name: "Stop" })).toBeTruthy();
+    expect(within(item).queryByRole("button", { name: "Continue" })).toBeNull();
+    await userEvent.click(within(item).getByRole("button", { name: "Mark as lost" }));
+    expect(server.sent("POST /api/app/jobs/u1/mark-lost")).toHaveLength(0);
+    expect(screen.getByText(/the old run is stopped when the machine comes back/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Mark as lost" }));
+    await screen.findByRole("list", { name: "Runs" });
+    expect(server.sent("POST /api/app/jobs/u1/mark-lost")).toHaveLength(1);
+  });
+
+  test("a run that finished after a newer run took its branch says no pull request was opened", async () => {
+    mount([job("s1", { state: "canceled", delivery: "pushed", result: { pushed: true, supersededBy: "s2" } })]);
+    expect(await screen.findByText(/took over this branch/)).toBeTruthy();
   });
 
   test("a run in progress offers Stop, not a rerun; a refusal from the server is shown", async () => {

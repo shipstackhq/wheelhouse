@@ -403,6 +403,15 @@ describe("jobs", () => {
     await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: empty.id }), code("invalid"));
     const other = await svc.createIssue(owner, "DM", { title: "other" });
     await assert.rejects(d.runOnDevice(owner, other.ref, { deviceId: device.id, model: "opus", continuesJobId: first.id }), code("invalid"));
+
+    // A stopped or lost run can be continued even though it pushed nothing: the new run keeps its branch and starts from its base.
+    const { job: stopped } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
+    await d.acceptJob(device, stopped.id);
+    await d.finishJob(device, stopped.id, { state: "canceled", pushed: false });
+    const { job: resumed } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: stopped.id });
+    assert.equal(resumed.branch, stopped.branch);
+    const offers2 = await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id));
+    assert.equal(offers2.map((o) => o.message as Offer).find((m) => m.jobId === resumed.id)!.startFrom, "staging");
   });
 
   test("a fresh run starts from its base", async () => {
@@ -427,7 +436,7 @@ describe("jobs", () => {
     await assert.rejects(d.jobEvents(stranger, job.id), code("not_found"));
   });
 
-  test("an offer nobody takes expires; a silent device's job is lost; a restart that forgot a job loses it", async () => {
+  test("an offer nobody takes expires; a silent device's job turns unreachable, never lost; a restart that forgot a job loses it", async () => {
     const { device } = await paired();
     await online(device);
     const issue = await svc.createIssue(owner, "DM", { title: "z" });
@@ -440,14 +449,129 @@ describe("jobs", () => {
     await d.acceptJob(device, running.id);
     await d.sweepDeviceJobs(new Date(Date.now() + 10_000));
     assert.equal((await d.jobEvents(owner, running.id)).job.state, "accepted", "still heard from");
-    await d.sweepDeviceJobs(new Date(Date.now() + d.LOST_AFTER_MS + 1000));
-    assert.equal((await d.jobEvents(owner, running.id)).job.state, "lost");
+    await d.sweepDeviceJobs(new Date(Date.now() + d.UNREACHABLE_AFTER_MS + 1000));
+    const quiet = (await d.jobEvents(owner, running.id)).job;
+    assert.equal(quiet.state, "unreachable");
+    assert.ok(quiet.unreachableSince && quiet.lastHeardAt);
+    await d.sweepDeviceJobs(new Date(Date.now() + 30 * 24 * 3600e3));
+    assert.equal((await d.jobEvents(owner, running.id)).job.state, "unreachable", "no amount of silence loses it");
 
     await online(device);
     const { job: forgotten } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     await d.acceptJob(device, forgotten.id);
     await d.deviceHello(device, { version: "0.1.0", capabilities: {}, jobs: [] });
     assert.equal((await d.jobEvents(owner, forgotten.id)).job.state, "lost");
+  });
+
+  test("an unreachable run comes back when the daemon reports it, and is lost when the daemon says it no longer has it", async () => {
+    const { device } = await paired();
+    await online(device);
+    const issue = await svc.createIssue(owner, "DM", { title: "back" });
+    const start = async () => {
+      const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
+      await d.acceptJob(device, job.id);
+      await d.recordJobEvents(device, job.id, { events: [{ seq: 0, type: "started" }] });
+      return job;
+    };
+    const quiet = async () => void (await d.sweepDeviceJobs(new Date(Date.now() + d.UNREACHABLE_AFTER_MS + 1000)));
+    const state = async (id: string) => (await d.jobEvents(owner, id)).job.state;
+
+    const a = await start();
+    await quiet();
+    assert.equal(await state(a.id), "unreachable");
+    await d.deviceHeartbeat(device, { running: [a.id], free: 0 });
+    assert.equal(await state(a.id), "running", "a heartbeat that lists it");
+
+    await quiet();
+    await d.deviceHello(device, { version: "0.1.0", capabilities: {}, jobs: [{ id: a.id, state: "running" }] });
+    assert.equal(await state(a.id), "running", "a hello that lists it");
+
+    await quiet();
+    await d.deviceHeartbeat(device, { running: [], free: 1 });
+    const gone = (await d.jobEvents(owner, a.id)).job;
+    assert.equal(gone.state, "lost", "a heartbeat that leaves it out");
+    assert.equal(gone.markedLost, false);
+
+    // Progress from the device is proof of life too, and an unreachable run can still finish with its real outcome.
+    const b = await start();
+    await quiet();
+    await d.recordJobEvents(device, b.id, { events: [{ seq: 1, type: "tool" }] });
+    assert.equal(await state(b.id), "running");
+    await quiet();
+    await d.finishJob(device, b.id, { state: "succeeded", pushed: false }, null);
+    assert.equal(await state(b.id), "succeeded");
+  });
+
+  test("marking an unreachable run lost: only unreachable, by someone who may; the device reporting it brings it back", async () => {
+    const { device } = await paired();
+    await online(device);
+    const issue = await svc.createIssue(owner, "DM", { title: "mark" });
+    const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
+    await d.acceptJob(device, job.id);
+    await d.recordJobEvents(device, job.id, { events: [{ seq: 0, type: "started" }] });
+    await assert.rejects(d.markJobLost(owner, job.id), code("conflict"), "a run that is running is not unreachable");
+    await d.sweepDeviceJobs(new Date(Date.now() + d.UNREACHABLE_AFTER_MS + 1000));
+    await assert.rejects(d.markJobLost(stranger, job.id), code("not_found"));
+    const lost = (await d.markJobLost(owner, job.id)).job;
+    assert.equal(lost.state, "lost");
+    assert.equal(lost.markedLost, true);
+    assert.match(lost.error ?? "", /Marked lost by/);
+
+    // Nobody took the branch over: the device reporting the run brings it back to running.
+    await d.deviceHeartbeat(device, { running: [job.id], free: 0 });
+    const back = (await d.jobEvents(owner, job.id)).job;
+    assert.equal(back.state, "running");
+    assert.equal(back.markedLost, false);
+    assert.equal(back.error, null);
+
+    // Marked again, then its progress arrives: also back.
+    await d.sweepDeviceJobs(new Date(Date.now() + d.UNREACHABLE_AFTER_MS + 1000));
+    await d.markJobLost(owner, job.id);
+    await d.recordJobEvents(device, job.id, { events: [{ seq: 1, type: "tool" }] });
+    assert.equal((await d.jobEvents(owner, job.id)).job.state, "running");
+
+    // Marked again, and it finishes: the real outcome replaces lost, and the pull request opens as for any run.
+    await d.sweepDeviceJobs(new Date(Date.now() + d.UNREACHABLE_AFTER_MS + 1000));
+    await d.markJobLost(owner, job.id);
+    await d.finishJob(device, job.id, { state: "failed", pushed: true, commit: "abc1234", diffStats: { files: 1 }, error: "tests failed" }, null);
+    const done = (await d.jobEvents(owner, job.id)).job;
+    assert.equal(done.state, "failed");
+    assert.equal(done.result.pushed, true);
+    assert.equal(done.markedLost, false);
+  });
+
+  test("a marked-lost run that was continued meanwhile is stopped, not revived, and keeps its result without a pull request", async () => {
+    const { device } = await paired();
+    await online(device);
+    const issue = await svc.createIssue(owner, "DM", { title: "takeover" });
+    const { job: old } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
+    await d.acceptJob(device, old.id);
+    await d.recordJobEvents(device, old.id, { events: [{ seq: 0, type: "started" }] });
+    await d.sweepDeviceJobs(new Date(Date.now() + d.UNREACHABLE_AFTER_MS + 1000));
+    await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: old.id }), code("conflict"), "cannot continue what may still be running");
+    await d.markJobLost(owner, old.id);
+    await online(device);
+    const { job: next } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: old.id });
+    assert.equal(next.branch, old.branch);
+
+    const db = await getDb();
+    const cancels = async () => (await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id))).map((m) => m.message as { type: string; jobId: string; superseded?: boolean }).filter((m) => m.type === "job.cancel" && m.jobId === old.id);
+    await d.deviceHeartbeat(device, { running: [old.id], free: 0 });
+    assert.equal((await d.jobEvents(owner, old.id)).job.state, "lost", "not revived");
+    assert.deepEqual((await cancels()).map((m) => m.superseded), [true], "told to stop");
+    await d.deviceHeartbeat(device, { running: [old.id], free: 0 });
+    await assert.rejects(d.recordJobEvents(device, old.id, { events: [{ seq: 1, type: "tool" }] }), code("conflict"));
+    assert.equal((await cancels()).length, 1, "asked once");
+
+    // It stops and reports what it did: recorded, marked as superseded, no pull request.
+    let opened = 0;
+    const gh = { api: { openPullRequest: async () => (opened++, { number: 1, url: "https://github.com/x/y/pull/1" }) } } as never;
+    await d.finishJob(device, old.id, { state: "canceled", pushed: true, commit: "abc1234", diffStats: { files: 2 }, error: "Superseded" }, gh);
+    const view = (await d.jobEvents(owner, old.id)).job;
+    assert.equal(view.state, "canceled");
+    assert.equal(view.result.supersededBy, next.id);
+    assert.equal(view.result.pullRequest, undefined);
+    assert.equal(opened, 0);
   });
 
   test("cancel: an offer ends at once; a running job is asked to stop with a signed cancel and ends when the daemon says so", async () => {
