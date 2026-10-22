@@ -14,7 +14,7 @@ describe("the projects list", () => {
         projects: [
           projectSummary({ id: "p1", name: "Launch SSO", total: 10, done: 4, teamCount: 2 }),
           projectSummary({ id: "p2", name: "Old migration", status: "completed", health: { derived: null, override: null, value: null }, leadUser: null, teamCount: 1, total: 3, done: 3, startDate: null, targetDate: "2026-09-30" }),
-          projectSummary({ id: "p3", name: "Shaky", health: { derived: "on_track", override: "at_risk", value: "at_risk" } }),
+          projectSummary({ id: "p3", name: "Shaky", priority: "urgent", health: { derived: "on_track", override: "at_risk", value: "at_risk" } }),
         ],
       }),
     );
@@ -25,6 +25,8 @@ describe("the projects list", () => {
     expect(sso.textContent).toContain("Led by Ada Lovelace · 2 teams");
     expect(within(sso).getByLabelText("4 of 10 issues done")).toBeTruthy();
     expect(sso.getAttribute("href")).toBe("/projects/p1");
+    expect(sso.querySelector("[data-priority-chip]")).toBeNull(); // no priority is not worth a chip on the list
+    expect((await card("Shaky")).querySelector("[data-priority-chip]")!.textContent).toBe("Urgent");
     const old = await card("Old migration");
     expect(within(old).getByText("completed", { selector: ".chip" })).toBeTruthy();
     expect(within(old).queryByText(/On track|At risk|Off track/)).toBeNull();
@@ -47,11 +49,10 @@ describe("the projects list", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ New project" }));
     await user.type(screen.getByRole("textbox", { name: "Name" }), "Launch");
-    await user.type(screen.getByRole("textbox", { name: "Description" }), "Ship it");
     await user.click(screen.getByLabelText("Beta"));
     await user.click(screen.getByRole("button", { name: "Create project" }));
     await waitFor(() => expect(server.sent("POST /api/app/projects")).toHaveLength(1));
-    expect(server.sent("POST /api/app/projects")[0].body).toEqual({ name: "Launch", description: "Ship it", status: "planned", startDate: null, targetDate: null, leadTeam: "AA", teams: ["BB"] });
+    expect(server.sent("POST /api/app/projects")[0].body).toEqual({ name: "Launch", description: "", status: "planned", priority: "none", startDate: null, targetDate: null, leadTeam: "AA", teams: ["BB"] });
     await waitFor(() => expect(router.state.location.pathname).toBe("/projects/new1"));
   });
 
@@ -114,15 +115,63 @@ describe("one project", () => {
     page();
     await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
     expect(screen.getByText("Single sign-on for everyone")).toBeTruthy();
-    expect(screen.getByText(/Led by Ada Lovelace/).textContent).toContain("3 teams");
+    const props = screen.getByRole("region", { name: "Properties" });
+    expect(within(props).getByText("Ada Lovelace")).toBeTruthy();
+    expect(within(props).getByText("Primary team: Alpha")).toBeTruthy();
+    expect(within(props).getByText("2 of 6 issues done")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Resources" }).textContent).toContain("Alpha");
     const ms = screen.getByRole("region", { name: "Milestones" });
     expect(within(ms).getAllByRole("listitem").map((li) => li.textContent?.replace(/UpDownRenameDelete/g, ""))).toEqual(["BetaNov 20, 20261 of 3 done", "GA0 of 1 done"]);
     const teams = screen.getByRole("region", { name: "Teams" });
     expect(within(teams).getByText("lead team")).toBeTruthy();
     expect(within(teams).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/t/AA?t=AA-2");
     expect(within(teams).getAllByText("Beta").length).toBeGreaterThan(0); // a milestone chip on the issue in it
-    expect(teams.querySelector("[data-others]")!.textContent).toBe("2 teams you are not in: 1 of 4 issues done.");
+    expect(screen.getByRole("region", { name: "Resources" }).querySelector("[data-others]")!.textContent).toBe("2 teams you are not in: 1 of 4 issues done.");
     expect(teams.textContent).not.toMatch(/BB|Beta team/);
+  });
+
+  test("the priority is a pill in the properties, with no priority shown as such", async () => {
+    const { unmount } = page(detail({ priority: "high" }));
+    await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
+    expect(within(screen.getByRole("region", { name: "Properties" })).getByText("High")).toBeTruthy();
+    unmount();
+    page(detail());
+    await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
+    expect(within(screen.getByRole("region", { name: "Properties" })).getByText("No priority")).toBeTruthy();
+  });
+
+  test("priority: the pill opens a menu, and a pick is saved with the version the page was read at", async () => {
+    const { server } = page(detail({ priority: "low" }), (s) => s.on("PATCH /api/app/projects/p1", { project: detail({ priority: "urgent" }) }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Priority: Low" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Urgent" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/projects/p1")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/projects/p1")[0].body).toEqual({ priority: "urgent", version: 1 });
+  });
+
+  test("picking the priority it already has sends nothing", async () => {
+    const { server } = page(detail({ priority: "high" }), (s) => s.on("PATCH /api/app/projects/p1", { project: detail() }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Priority: High" }));
+    await user.click(await screen.findByRole("menuitem", { name: "High" }));
+    expect(server.sent("PATCH /api/app/projects/p1")).toHaveLength(0);
+  });
+
+  test("the edit form does not carry the priority, so saving it cannot overwrite a change made from the pill", async () => {
+    const { server } = page(detail({ priority: "high" }), (s) => s.on("PATCH /api/app/projects/p1", { project: detail() }));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "More actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    expect(screen.queryByRole("combobox", { name: "Priority" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/projects/p1")).toHaveLength(1));
+    expect("priority" in (server.sent("PATCH /api/app/projects/p1")[0].body as object)).toBe(false);
+  });
+
+  test("an unassigned lead is a pill with a person icon and the words Lead not assigned", async () => {
+    page(detail({ leadUser: null }));
+    await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
+    expect(within(screen.getByRole("region", { name: "Properties" })).getByText("Lead not assigned")).toBeTruthy();
   });
 
   test("with one other team it says so in the singular; with none there is no line", async () => {
@@ -138,15 +187,17 @@ describe("one project", () => {
   test("someone who cannot edit sees no edit, delete, milestone or team controls", async () => {
     page(detail({ canEdit: false, canAdmin: false, addableTeams: [], teams: [{ key: "AA", name: "Alpha", role: "viewer", lead: true, total: 0, done: 0, issues: [] }] }));
     await screen.findByRole("heading", { level: 2, name: "Launch SSO" });
-    for (const name of ["Edit", "Delete", "Add milestone", "Bring in"]) expect(screen.queryByRole("button", { name }), name).toBeNull();
+    for (const name of ["More actions", "Edit", "Delete", "Add milestone", "Bring in"]) expect(screen.queryByRole("button", { name }), name).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Health" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Priority/ })).toBeNull(); // the priority is shown, not a menu
     expect(screen.queryByRole("textbox", { name: "New milestone" })).toBeNull();
   });
 
   test("editing saves the fields with the version the page was read at; a stale version shows the server's refusal", async () => {
     const { server } = page(detail(), (s) => s.on("PATCH /api/app/projects/p1", apiError(409, "conflict", "The project was changed (version 2, you had 1). Re-read and retry.")));
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Edit" }));
+    await user.click(await screen.findByRole("button", { name: "More actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Edit" }));
     await user.clear(screen.getByRole("textbox", { name: "Name" }));
     await user.type(screen.getByRole("textbox", { name: "Name" }), "Launch SSO v2");
     await user.click(screen.getByRole("button", { name: "Save" }));
@@ -227,7 +278,8 @@ describe("one project", () => {
       s.on("GET /api/app/projects", { projects: [] });
     });
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    await user.click(await screen.findByRole("button", { name: "More actions" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     const confirm = await screen.findByRole("alertdialog");
     expect(confirm.textContent).toContain("Its 6 issues stay on their boards, in no project.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));

@@ -88,6 +88,18 @@ describe("making a project", () => {
     assert.deepEqual(p.teams.map((t) => [t.key, t.lead]), [[ta.key, true], [tb.key, false]]);
   });
 
+  test("a project has a priority, the same five levels as an issue: none until set, changed by an edit, and refused when it is not one of them", async () => {
+    const plain = await project();
+    assert.equal(plain.priority, "none");
+    const urgent = await project({ priority: "urgent" });
+    assert.equal(urgent.priority, "urgent");
+    const changed = await pr.updateProject(ada, plain.id, { priority: "high", version: plain.version });
+    assert.deepEqual([changed.priority, changed.version], ["high", plain.version + 1]);
+    assert.equal((await pr.updateProject(ada, plain.id, { name: "renamed", version: changed.version })).priority, "high"); // an edit that does not name it leaves it
+    await assert.rejects(project({ priority: "critical" }), code("invalid"));
+    await assert.rejects(pr.updateProject(ada, plain.id, { priority: "whenever" }), code("invalid"));
+  });
+
   test("it is refused without a lead team, with a team you cannot edit, a bad date, a bad status or a guest as lead", async () => {
     await assert.rejects(pr.createProject(ada, { name: "No team" }), code("invalid"));
     await assert.rejects(pr.createProject(bob, { name: "Not mine", leadTeam: tb.key }), code("not_found")); // bob is not on B: it is not there for him

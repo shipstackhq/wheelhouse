@@ -1,7 +1,8 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { ProjectHealth, ProjectStatus, TeamRole } from "../db/schema";
+import type { Priority, ProjectHealth, ProjectStatus, TeamRole } from "../db/schema";
 import type { Actor } from "./access";
+import { avatarUrl } from "./images";
 import { emit, requireTeam, type Q, type Tx } from "./service";
 import { ServiceError } from "./service-error";
 import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "./team-access";
@@ -133,10 +134,11 @@ export type ProjectSummary = {
   name: string;
   description: string;
   status: ProjectStatus;
+  priority: Priority;
   health: HealthView;
   startDate: string | null;
   targetDate: string | null;
-  leadUser: { id: string; name: string } | null;
+  leadUser: { id: string; name: string; avatarUrl: string | null } | null;
   /** Named only for someone on the lead team: others are told nothing about teams they are not on. */
   leadTeam: { key: string; name: string } | null;
   /** Every issue in the project, across all the teams, and how many are done. */
@@ -169,7 +171,7 @@ async function summarise(q: Q, actor: Actor, rows: ProjectRow[], now: Date): Pro
   const progress = await progressOf(q, ids);
   const roles = (await teamRoleMap(q, actor)) ?? new Map<string, TeamRole>();
   const leadIds = [...new Set(rows.map((r) => r.leadUserId).filter((x): x is string => !!x))];
-  const lead = new Map((leadIds.length ? await q.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, leadIds)) : []).map((u) => [u.id, u.name]));
+  const lead = new Map((leadIds.length ? await q.select({ id: users.id, name: users.name, avatarKey: users.avatarKey }).from(users).where(inArray(users.id, leadIds)) : []).map((u) => [u.id, u]));
   const teamRows = await q.select({ id: teams.id, key: teams.key, name: teams.name }).from(teams).where(inArray(teams.id, [...new Set(rows.map((r) => r.leadTeamId))]));
   const teamById = new Map(teamRows.map((t) => [t.id, t]));
   const counts = await q.select({ projectId: projectTeams.projectId, n: sql<number>`count(*)::int` }).from(projectTeams).where(inArray(projectTeams.projectId, ids)).groupBy(projectTeams.projectId);
@@ -183,10 +185,11 @@ async function summarise(q: Q, actor: Actor, rows: ProjectRow[], now: Date): Pro
       name: p.name,
       description: p.description,
       status: p.status,
+      priority: p.priority,
       health: healthOf(p, pr, now),
       startDate: p.startDate,
       targetDate: p.targetDate,
-      leadUser: p.leadUserId && lead.has(p.leadUserId) ? { id: p.leadUserId, name: lead.get(p.leadUserId)! } : null,
+      leadUser: p.leadUserId && lead.has(p.leadUserId) ? { id: p.leadUserId, name: lead.get(p.leadUserId)!.name, avatarUrl: avatarUrl(p.leadUserId, lead.get(p.leadUserId)!.avatarKey) } : null,
       leadTeam: t ? { key: t.key, name: t.name } : null,
       total: pr.total,
       done: pr.done,
@@ -293,6 +296,7 @@ export type ProjectInput = {
   name?: unknown;
   description?: unknown;
   status?: unknown;
+  priority?: unknown;
   startDate?: unknown;
   targetDate?: unknown;
   /** The person who leads it (a member of the workspace, not a guest); null for nobody. */
@@ -355,6 +359,7 @@ export async function createProject(actor: Actor, input: ProjectInput, now = new
   const name = text(input.name, "name", 120, true)!;
   const description = text(input.description, "description", 20_000) ?? "";
   const status = oneOf(input.status, schema.PROJECT_STATUSES, "status") ?? "planned";
+  const priority = oneOf(input.priority, schema.PRIORITIES, "priority") ?? "none";
   const startDate = day(input.startDate, "startDate") ?? null;
   const targetDate = day(input.targetDate, "targetDate") ?? null;
   if (startDate && targetDate && targetDate < startDate) bad("targetDate", "The target date is before the start date");
@@ -370,7 +375,7 @@ export async function createProject(actor: Actor, input: ProjectInput, now = new
   }
   const leadUser = (await leadMember(db, actor, input.leadUser)) ?? actor.id;
   const created = await db.transaction(async (tx) => {
-    const [p] = await tx.insert(projects).values({ workspaceId: actor.workspaceId, name, description, status, startDate, targetDate, healthOverride, leadUserId: leadUser, leadTeamId: lead.id }).returning();
+    const [p] = await tx.insert(projects).values({ workspaceId: actor.workspaceId, name, description, status, priority, startDate, targetDate, healthOverride, leadUserId: leadUser, leadTeamId: lead.id }).returning();
     await tx.insert(projectTeams).values([lead, ...extra].map((t) => ({ projectId: p.id, teamId: t.id, workspaceId: actor.workspaceId })));
     await workspaceEvent(tx, actor, { type: "project.created", entityId: p.id, summary: `created project "${p.name}"`, data: { lead: lead.key, teams: [lead, ...extra].map((t) => t.key) } });
     await teamEvents(tx, actor, [lead, ...extra].map((t) => t.id), { type: "project.created", entityId: p.id, summary: `took part in new project "${p.name}"`, data: { name: p.name } });
@@ -386,6 +391,7 @@ export async function updateProject(actor: Actor, id: string, patch: ProjectInpu
   const name = text(patch.name, "name", 120, patch.name !== undefined);
   const description = text(patch.description, "description", 20_000);
   const status = oneOf(patch.status, schema.PROJECT_STATUSES, "status");
+  const priority = oneOf(patch.priority, schema.PRIORITIES, "priority");
   const startDate = day(patch.startDate, "startDate");
   const targetDate = day(patch.targetDate, "targetDate");
   const healthOverride = patch.healthOverride === null ? null : oneOf(patch.healthOverride, schema.PROJECT_HEALTH, "healthOverride");
@@ -396,6 +402,7 @@ export async function updateProject(actor: Actor, id: string, patch: ProjectInpu
     if (name !== undefined && name !== cur.name) set.name = name;
     if (description !== undefined && description !== cur.description) set.description = description;
     if (status !== undefined && status !== cur.status) set.status = status;
+    if (priority !== undefined && priority !== cur.priority) set.priority = priority;
     if (startDate !== undefined && startDate !== cur.startDate) set.startDate = startDate;
     if (targetDate !== undefined && targetDate !== cur.targetDate) set.targetDate = targetDate;
     if (healthOverride !== undefined && healthOverride !== cur.healthOverride) set.healthOverride = healthOverride;

@@ -285,6 +285,7 @@ export const statuses = table("statuses", {
 ]);
 
 export const PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;
+export type Priority = (typeof PRIORITIES)[number];
 
 export const issues = table(
   "issues",
@@ -389,6 +390,8 @@ export const projects = table(
     leadUserId: uuid("lead_user_id"),
     leadTeamId: uuid("lead_team_id").notNull(),
     status: text("status", { enum: PROJECT_STATUSES }).notNull().default("planned"),
+    // The same five levels as an issue's, "none" until someone says.
+    priority: text("priority", { enum: PRIORITIES }).notNull().default("none"),
     startDate: date("start_date", { mode: "string" }),
     targetDate: date("target_date", { mode: "string" }),
     healthOverride: text("health_override", { enum: PROJECT_HEALTH }),

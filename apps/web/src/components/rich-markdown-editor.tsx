@@ -48,6 +48,15 @@ import { BoldIcon, BulletListIcon, ChevronDownIcon, ClearFormattingIcon, CodeBlo
 type Block = "paragraph" | "h1" | "h2" | "h3" | "quote" | "code" | "bullet" | "number" | "check";
 type ListKind = "bullet" | "number" | "check";
 
+/** How the editor's nodes look. Shared by every Lexical editor in the app, so the same Markdown looks the same wherever it is edited. */
+export const EDITOR_THEME = {
+  text: { code: "rounded bg-bg px-1 py-0.5 font-mono text-[12px]" },
+  link: "text-accent underline",
+  table: "my-3 w-full border-collapse text-sm",
+  tableCell: "min-w-16 border border-line px-2 py-1 align-top",
+  tableCellHeader: "bg-panel-2 font-semibold",
+};
+
 /**
  * A rich-text editor for a Markdown string. Markdown stays the stored format: `onChange` only fires after
  * the person edits (never on load), so opening and saving an untouched description writes back exactly what was there.
@@ -92,13 +101,7 @@ export function RichMarkdownEditor({
         nodes: EDITOR_NODES,
         editorState: () => $markdownToEditor(value),
         onError: (e) => console.error("[rich editor]", e),
-        theme: {
-          text: { code: "rounded bg-bg px-1 py-0.5 font-mono text-[12px]" },
-          link: "text-accent underline",
-          table: "my-3 w-full border-collapse text-sm",
-          tableCell: "min-w-16 border border-line px-2 py-1 align-top",
-          tableCellHeader: "bg-panel-2 font-semibold",
-        },
+        theme: EDITOR_THEME,
       }}
     >
       <div

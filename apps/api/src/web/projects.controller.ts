@@ -30,7 +30,7 @@ export class ProjectsController {
     return { projects: await listProjectsAs(req.human.actor) };
   }
 
-  /** `{ name, leadTeam, description?, status?, startDate?, targetDate?, leadUser?, healthOverride?, teams? }`; 201. The lead team is a team you can edit. */
+  /** `{ name, leadTeam, description?, status?, priority?, startDate?, targetDate?, leadUser?, healthOverride?, teams? }`; 201. The lead team is a team you can edit. */
   @Post()
   async create(@Req() req: SessionRequest & RawTextRequest) {
     return { project: await createProjectAs(req.human.actor, jsonBody(req)) };

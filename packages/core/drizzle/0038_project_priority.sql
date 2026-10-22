@@ -1,0 +1,2 @@
+ALTER TABLE "projects" ADD COLUMN "priority" text DEFAULT 'none' NOT NULL;--> statement-breakpoint
+ALTER TABLE "projects" ADD CONSTRAINT "projects_priority_check" CHECK ("priority" in ('none', 'low', 'medium', 'high', 'urgent'));

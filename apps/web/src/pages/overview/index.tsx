@@ -17,7 +17,7 @@ export function TeamOverviewPage() {
     <DashboardScopeProvider value={key}>
       <div className="h-full overflow-y-auto">
         <DashboardRefresh stream={false} />
-        <div className="mx-auto max-w-[1400px] px-6 py-6">
+        <div className="px-6 py-6">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold">Overview{name ? ` of ${name}` : ""}</h1>

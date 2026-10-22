@@ -27,7 +27,7 @@ import { NewTeamPage } from "../pages/new-team";
 import { WorkspacePage } from "../pages/workspace";
 import { NotFound, RouteError } from "./errors";
 import { redirectIfSignedIn, requireSignedIn } from "./guards";
-import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, TeamLayout, RequireAdmin, RootLayout } from "./layouts";
+import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, TeamLayout, RequireAdmin, RootLayout, type PageHandle } from "./layouts";
 import { OfflinePage } from "./offline";
 
 /**
@@ -74,12 +74,12 @@ export function buildRoutes(services: Services): RouteObject[] {
           Component: AppLayout,
           loader: requireSignedIn(services),
           children: [
-            { index: true, Component: Dashboard },
+            { index: true, Component: Dashboard, handle: { width: "contained" } satisfies PageHandle },
             { path: "teams/new", Component: NewTeamPage },
             { path: "initiatives", Component: InitiativesPage },
             { path: "initiatives/:id", Component: InitiativePage },
-            { path: "projects", Component: ProjectsPage },
-            { path: "projects/:id", Component: ProjectPage },
+            { path: "projects", Component: ProjectsPage, handle: { width: "contained" } satisfies PageHandle },
+            { path: "projects/:id", Component: ProjectPage, handle: { width: "contained" } satisfies PageHandle },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
             { path: "devices/pair", Component: DevicePairPage },
@@ -96,7 +96,7 @@ export function buildRoutes(services: Services): RouteObject[] {
               Component: TeamLayout,
               children: [
                 { index: true, Component: BoardPage },
-                { path: "overview", Component: TeamOverviewPage },
+                { path: "overview", Component: TeamOverviewPage, handle: { width: "contained" } satisfies PageHandle },
                 { path: "activity", Component: ActivityPage },
                 { path: "map", Component: MapPage },
                 { path: "docs", Component: DocsPage },

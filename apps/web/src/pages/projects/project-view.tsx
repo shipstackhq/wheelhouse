@@ -1,14 +1,58 @@
 import { useState, useTransition } from "react";
 import { Link, useNavigate } from "react-router";
 import clsx from "clsx";
-import { ApiError, type ProjectDetail, type ProjectHealthValue } from "@wheelhouse/api-client";
-import { CheckIcon } from "../../components/icons";
+import { DropdownMenu } from "radix-ui";
+import { ApiError, type Priority, type ProjectDetail, type ProjectHealthValue } from "@wheelhouse/api-client";
+import { CheckIcon, ChevronDownIcon, UserIcon } from "../../components/icons";
+import { Avatar } from "../../components/avatar";
+import { PRIORITY_LABEL, PRIORITY_ORDER, PriorityIcon } from "../../components/priority-icon";
+import { RichTextField } from "../../components/rich-text-field";
+import { usePageMenu } from "../../components/page-menu";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { Progress } from "../cycles/cycle-bits";
 import { day, dateRange, draftOf, HEALTHS, healthLabel, HealthChip, inputOf, ProjectForm, statusChip, type ProjectDraft } from "./project-bits";
+
+/** The pills in the properties and resources strips: all the same height, whatever is in them (an avatar, an icon, plain text). */
+const PILL = "h-6 gap-2 rounded-full px-2 text-xs font-normal";
+
+/** The priority as a pill; for someone who can edit, the pill is the menu that changes it. */
+function PriorityPill({ priority, onChange }: { priority: Priority; onChange?: (priority: Priority) => void }) {
+  const look = clsx("chip inline-flex items-center bg-card text-fg", PILL);
+  const label = (
+    <>
+      <PriorityIcon priority={priority} />
+      {PRIORITY_LABEL[priority]}
+    </>
+  );
+  if (!onChange)
+    return (
+      <span className={look} data-priority-pill>
+        {label}
+      </span>
+    );
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger aria-label={`Priority: ${PRIORITY_LABEL[priority]}`} className={clsx(look, "cursor-pointer outline-none hover:bg-fg/[0.07] focus-visible:ring-2 focus-visible:ring-accent/50")} data-priority-pill>
+        {label}
+        <ChevronDownIcon className="opacity-70" />
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={4} className="z-60 min-w-44 rounded-lg border border-line bg-panel p-1 shadow-lg">
+          {PRIORITY_ORDER.map((p) => (
+            <DropdownMenu.Item key={p} onSelect={() => p !== priority && onChange(p)} className="flex cursor-default items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-fg outline-none data-[highlighted]:bg-fg/[0.07]">
+              <PriorityIcon priority={p} />
+              {PRIORITY_LABEL[p]}
+              {p === priority && <CheckIcon className="ml-auto text-muted" />}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
 
 /** One project: what it is for, how it is going, its milestones, and the teams taking part (the viewer's own with their issues, the others as totals). */
 export function ProjectView(props: { project: ProjectDetail }) {
@@ -45,6 +89,13 @@ export function ProjectView(props: { project: ProjectDetail }) {
     run(() => api.projects.delete(p.id), () => navigate("/projects"));
   };
 
+  // Edit and Delete are in the header's menu, at the end of the breadcrumbs, while this page is open.
+  usePageMenu(
+    p.canEdit && !editing
+      ? [{ label: "Edit", onSelect: () => (setDraft(draftOf(p)), setError(null), setEditing(true)) }, ...(p.canAdmin ? [{ label: "Delete", danger: true, disabled: pending, onSelect: () => void remove() }] : [])]
+      : [],
+  );
+
   const takeOut = (teamKey: string, name: string) =>
     start(async () => {
       try {
@@ -71,53 +122,70 @@ export function ProjectView(props: { project: ProjectDetail }) {
         <Link to="/projects" className="text-xs text-muted hover:text-fg">
           ← All projects
         </Link>
-        <div className="mt-2 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold">{p.name}</h2>
-              {statusChip(p.status)}
-              <HealthChip health={p.health} />
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              {p.leadUser ? `Led by ${p.leadUser.name}` : "No lead"} · {dateRange(p)} · {p.teamCount} team{p.teamCount === 1 ? "" : "s"}
-            </p>
-            {p.description && <p className="mt-2 whitespace-pre-wrap text-sm">{p.description}</p>}
-            <div className="mt-3">
-              <Progress done={p.done} total={p.total} />
-            </div>
-          </div>
-          {p.canEdit && !editing && (
-            <div className="flex shrink-0 gap-2 text-xs">
-              <button className="btn" onClick={() => (setDraft(draftOf(p)), setError(null), setEditing(true))}>
-                Edit
-              </button>
-              {p.canAdmin && (
-                <button className="btn text-danger" disabled={pending} onClick={() => void remove()}>
-                  Delete
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        <h2 className="mt-2 min-w-0 text-2xl font-semibold">{p.name}</h2>
 
+        <section aria-label="Properties" className="mt-3 flex flex-wrap items-center gap-2">
+          <h3 className="label mr-1">Properties</h3>
+          {statusChip(p.status, PILL)}
+          <HealthChip health={p.health} className={PILL} />
+          <PriorityPill priority={p.priority} onChange={p.canEdit ? (priority) => run(() => api.projects.update(p.id, { priority, version: p.version })) : undefined} />
+          {p.leadUser ? (
+            <span className={clsx("chip inline-flex items-center bg-card text-fg", PILL)}>
+              <Avatar name={p.leadUser.name} imageUrl={p.leadUser.avatarUrl} className="size-4 text-[8px]" />
+              {p.leadUser.name}
+            </span>
+          ) : (
+            <span className={clsx("chip inline-flex items-center bg-card text-muted", PILL)}>
+              <UserIcon className="text-base" />
+              Lead not assigned
+            </span>
+          )}
+          <span className={clsx("chip bg-card text-fg", PILL)}>Primary team: {p.leadTeam ? p.leadTeam.name : "none"}</span>
+          <span className={clsx("chip bg-card text-fg", PILL)}>{dateRange(p)}</span>
+          <span className={clsx("chip bg-card text-fg", PILL)}>
+            {p.done} of {p.total} issue{p.total === 1 ? "" : "s"} done
+          </span>
+          {p.canEdit && p.status === "active" && (
+            <Select
+              ariaLabel="Health"
+              triggerClassName="h-6 py-0"
+              value={p.health.override ?? "auto"}
+              options={[{ value: "auto", label: p.health.derived ? `Worked out: ${healthLabel(p.health.derived)}` : "Worked out" }, ...HEALTHS.map((h) => ({ value: h, label: healthLabel(h) }))]}
+              onValueChange={(v) => run(() => api.projects.update(p.id, { healthOverride: v === "auto" ? null : (v as ProjectHealthValue), version: p.version }))}
+            />
+          )}
+        </section>
+
+        <section aria-label="Resources" className="mt-2 flex flex-wrap items-center gap-2">
+          <h3 className="label mr-1">Resources</h3>
+          {p.teams.map((t) => (
+            <Link key={t.key} to={`/t/${t.key}`} className={clsx("chip bg-card text-fg hover:underline", PILL)}>
+              {t.name}
+              {t.lead && <span className="text-accent"> · lead team</span>}
+              <span className="text-muted">
+                {" "}
+                · {t.done} of {t.total}
+              </span>
+            </Link>
+          ))}
+          {p.others.count > 0 && (
+            <span className={clsx("chip border border-dashed border-line text-muted", PILL)} data-others>
+              {p.others.count} team{p.others.count === 1 ? "" : "s"} you are not in: {p.others.done} of {p.others.total} issue{p.others.total === 1 ? "" : "s"} done.
+            </span>
+          )}
+        </section>
+
+        {(p.description || p.canEdit) && (
+          <div className="mt-4">
+            <RichTextField value={p.description} label="Description" readOnly={!p.canEdit} onCommit={(description) => run(() => api.projects.update(p.id, { description, version: p.version }))} />
+          </div>
+        )}
         {editing && (
           <div className="mt-4">
             <ProjectForm draft={draft} onChange={setDraft} onSubmit={save} onCancel={() => (setEditing(false), setError(null))} submitLabel="Save" pending={pending} error={error} />
           </div>
         )}
         {!editing && error && <p className="mt-3 text-sm text-danger" role="alert">{error}</p>}
-
-        {p.canEdit && p.status === "active" && (
-          <div className="mt-4 flex items-center gap-2 text-sm">
-            <span className="label">Health</span>
-            <Select
-              ariaLabel="Health"
-              value={p.health.override ?? "auto"}
-              options={[{ value: "auto", label: p.health.derived ? `Worked out: ${healthLabel(p.health.derived)}` : "Worked out" }, ...HEALTHS.map((h) => ({ value: h, label: healthLabel(h) }))]}
-              onValueChange={(v) => run(() => api.projects.update(p.id, { healthOverride: v === "auto" ? null : (v as ProjectHealthValue), version: p.version }))}
-            />
-          </div>
-        )}
 
         <section className="mt-6" aria-label="Milestones">
           <h3 className="label mb-2">Milestones</h3>

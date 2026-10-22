@@ -3,6 +3,8 @@
 :root {
   /* dark (default): neutral greys */
   --bg: #0f0f10;
+  /* The page behind everything: the same as --bg in dark; plain white in light, where --bg stays a grey for inset things (chips, code, inputs). */
+  --page: var(--bg);
   --panel: #161617;
   --panel-2: #1f1f21;
   /* A board card: a step lighter than its column in dark, plain white in light so it stands out from the grey column. */
@@ -34,6 +36,7 @@
 
 :root[data-theme="light"] {
   --bg: #f6f6f7;
+  --page: #ffffff;
   --panel: #ffffff;
   --panel-2: #f0f0f2;
   --card: #ffffff;
@@ -66,6 +69,7 @@
   --color-panel: var(--panel);
   --color-panel-2: var(--panel-2);
   --color-card: var(--card);
+  --color-page: var(--page);
   --color-line: var(--border);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
@@ -80,7 +84,7 @@
 }
 
 body {
-  background: var(--bg);
+  background: var(--page);
   color: var(--fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }

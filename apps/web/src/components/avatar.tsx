@@ -8,9 +8,10 @@ export function initialsOf(name: string): string {
   return letters.join("").toUpperCase();
 }
 
-/** A person as a small circle of initials; with no name, an empty dashed circle ("nobody"). */
-export function Avatar({ name, className }: { name?: string | null; className?: string }) {
+/** A person as a small circle: their picture when they have one, else their initials; with no name, an empty dashed circle ("nobody"). */
+export function Avatar({ name, imageUrl, className }: { name?: string | null; imageUrl?: string | null; className?: string }) {
   if (!name) return <span aria-hidden className={clsx("inline-block size-5 shrink-0 rounded-full border border-dashed border-muted/60", className)} data-avatar="none" />;
+  if (imageUrl) return <img src={imageUrl} alt="" aria-hidden title={name} className={clsx("size-5 shrink-0 rounded-full object-cover", className)} data-avatar={name} />;
   return (
     <span aria-hidden title={name} className={clsx("inline-grid size-5 shrink-0 place-items-center rounded-full bg-accent/20 text-[10px] font-medium text-accent", className)} data-avatar={name}>
       {initialsOf(name)}

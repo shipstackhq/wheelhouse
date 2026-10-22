@@ -408,7 +408,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   const loadError = selectedId && detailQuery.isError ? (detailQuery.error instanceof ApiError ? detailQuery.error.message : "Could not load this doc.") : null;
 
   return (
-    <div className="confluence-docs flex h-full flex-col overflow-hidden bg-bg">
+    <div className="confluence-docs flex h-full flex-col overflow-hidden bg-page">
       {selectedId === null ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
           <div className="w-full px-4 py-8 sm:px-8 lg:py-12">

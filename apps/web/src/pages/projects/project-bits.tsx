@@ -1,6 +1,8 @@
 import { useState } from "react";
 import clsx from "clsx";
-import type { ProjectHealth, ProjectHealthValue, ProjectInput, ProjectStatus, ProjectSummary, Team } from "@wheelhouse/api-client";
+import type { Priority, ProjectHealth, ProjectHealthValue, ProjectInput, ProjectStatus, ProjectSummary, Team } from "@wheelhouse/api-client";
+import { PRIORITY_LABEL, PRIORITY_ORDER } from "../../components/priority-icon";
+import { RichTextField } from "../../components/rich-text-field";
 import { Select } from "../../components/ui";
 
 export const STATUSES: ProjectStatus[] = ["planned", "active", "paused", "completed", "canceled"];
@@ -16,13 +18,13 @@ export const STATUS_STYLE: Record<ProjectStatus, string> = {
 export const HEALTH_STYLE: Record<ProjectHealthValue, string> = { on_track: "bg-ok/15 text-ok", at_risk: "bg-warn/15 text-warn", off_track: "bg-danger/15 text-danger" };
 export const healthLabel = (h: ProjectHealthValue) => ({ on_track: "On track", at_risk: "At risk", off_track: "Off track" })[h];
 
-export const statusChip = (s: ProjectStatus) => <span className={clsx("chip", STATUS_STYLE[s])}>{s}</span>;
+export const statusChip = (s: ProjectStatus, className?: string) => <span className={clsx("chip", STATUS_STYLE[s], className)}>{s}</span>;
 
 /** The health to show, and a note when someone set it by hand. Nothing for a project with no health. */
-export function HealthChip({ health }: { health: ProjectHealth }) {
+export function HealthChip({ health, className }: { health: ProjectHealth; className?: string }) {
   if (!health.value) return null;
   return (
-    <span className={clsx("chip", HEALTH_STYLE[health.value])} title={health.override ? "Set by hand" : "Worked out from the issues and dates"}>
+    <span className={clsx("chip", HEALTH_STYLE[health.value], className)} title={health.override ? "Set by hand" : "Worked out from the issues and dates"}>
       {healthLabel(health.value)}
       {health.override && <span className="opacity-70"> (set)</span>}
     </span>
@@ -36,15 +38,18 @@ export const day = fmt;
 
 // ───────── the form ─────────
 
-export type ProjectDraft = { name: string; description: string; status: ProjectStatus; startDate: string; targetDate: string; leadTeam: string; teams: string[] };
-export const newDraft = (leadTeam = ""): ProjectDraft => ({ name: "", description: "", status: "planned", startDate: "", targetDate: "", leadTeam, teams: [] });
-export const draftOf = (p: ProjectSummary): ProjectDraft => ({ name: p.name, description: p.description, status: p.status, startDate: p.startDate ?? "", targetDate: p.targetDate ?? "", leadTeam: p.leadTeam?.key ?? "", teams: [] });
+export type ProjectDraft = { name: string; description: string; status: ProjectStatus; priority: Priority; startDate: string; targetDate: string; leadTeam: string; teams: string[] };
+export const newDraft = (leadTeam = ""): ProjectDraft => ({ name: "", description: "", status: "planned", priority: "none", startDate: "", targetDate: "", leadTeam, teams: [] });
+export const draftOf = (p: ProjectSummary): ProjectDraft => ({ name: p.name, description: p.description, status: p.status, priority: p.priority, startDate: p.startDate ?? "", targetDate: p.targetDate ?? "", leadTeam: p.leadTeam?.key ?? "", teams: [] });
 
 /** What is sent: empty dates are `null` (cleared), and the teams and lead team only for a new project. */
 export function inputOf(d: ProjectDraft, o: { create: boolean; version?: number }): ProjectInput & { name: string; leadTeam: string } {
-  const out: ProjectInput & { name: string; leadTeam: string } = { name: d.name.trim(), description: d.description.trim(), status: d.status, startDate: d.startDate || null, targetDate: d.targetDate || null, leadTeam: d.leadTeam };
+  const out: ProjectInput & { name: string; leadTeam: string } = { name: d.name.trim(), description: d.description.trim(), status: d.status, priority: d.priority, startDate: d.startDate || null, targetDate: d.targetDate || null, leadTeam: d.leadTeam };
   if (o.create) out.teams = d.teams.filter((k) => k !== d.leadTeam);
   else {
+    // A project's description and priority are edited on its page, in place; an edit form sent later must not overwrite them with stale copies.
+    delete (out as Partial<typeof out>).description;
+    delete (out as Partial<typeof out>).priority;
     delete (out as Partial<typeof out>).leadTeam;
     out.version = o.version;
   }
@@ -76,12 +81,25 @@ export function ProjectForm(props: {
       }}
     >
       <input className="input" placeholder="Project name (e.g. Launch SSO)" aria-label="Name" value={draft.name} maxLength={120} onChange={(e) => onChange({ ...draft, name: e.target.value })} autoFocus />
-      <textarea className="input min-h-20" placeholder="What is this project for, and what does done look like?" aria-label="Description" value={draft.description} onChange={(e) => onChange({ ...draft, description: e.target.value })} />
-      <div className="grid gap-2 sm:grid-cols-3">
+      {teams && (
+        <RichTextField
+          label="Description"
+          placeholder="What is this project for, and what does done look like?"
+          value={draft.description}
+          onCommit={(description) => onChange({ ...draft, description })}
+        />
+      )}
+      <div className={clsx("grid gap-2", teams ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
         <label className="block text-xs text-muted">
           Status
           <Select ariaLabel="Status" value={draft.status} options={STATUSES.map((s) => ({ value: s, label: s }))} onValueChange={(v) => onChange({ ...draft, status: v as ProjectStatus })} />
         </label>
+        {teams && (
+          <label className="block text-xs text-muted">
+            Priority
+            <Select ariaLabel="Priority" value={draft.priority} options={PRIORITY_ORDER.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))} onValueChange={(v) => onChange({ ...draft, priority: v as Priority })} />
+          </label>
+        )}
         <label className="block text-xs text-muted">
           Starts
           <input className="input mt-1" type="date" aria-label="Start date" value={draft.startDate} onChange={(e) => onChange({ ...draft, startDate: e.target.value })} />

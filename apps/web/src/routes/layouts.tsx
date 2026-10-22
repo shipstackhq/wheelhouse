@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Navigate, Outlet, useParams } from "react-router";
+import clsx from "clsx";
+import { Navigate, Outlet, useMatches, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
 import { ProfileMenu } from "../components/profile-menu";
@@ -9,6 +10,7 @@ import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
 import { useSidebarCollapsed } from "../components/sidebar-toggle";
+import { PageMenuProvider } from "../components/page-menu";
 import { useRememberAppLocation } from "../lib/app-location";
 import { useMe, useTeams } from "../lib/session";
 import { NotFound } from "./errors";
@@ -80,33 +82,49 @@ export function InviteLayout() {
   );
 }
 
+/**
+ * A route's `handle`: how wide its page is in the app. `full` (the default) fills the space beside the sidebar; `contained` is a
+ * centred column no wider than Tailwind's 7xl.
+ */
+export type PageWidth = "full" | "contained";
+export interface PageHandle {
+  width?: PageWidth;
+}
+
 /** The signed-in app: the sidebar, the header with its breadcrumbs, and whichever page the address calls for. */
 export function AppLayout() {
   const me = useMe().data;
   const teams = useTeams().data;
+  const matches = useMatches();
   useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
   const [collapsed, toggleCollapsed] = useSidebarCollapsed(); // the sidebar's rail, toggled from the header
+  // The deepest route that names a width wins; a page that names none is full width.
+  const width = matches.map((m) => (m.handle as PageHandle | undefined)?.width).filter(Boolean).at(-1) ?? "full";
   // The session ended while the page was open (signed out in another tab, expired): the cache says so, go and sign in.
   if (me === null) return <Navigate to="/login" replace />;
   if (!me || !teams) return <FullPageSkeleton />;
   return (
-    <div className="flex h-dvh">
-      <NavigationProgress />
-      <Sidebar
-        collapsed={collapsed}
-        teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
-        workspaceName={me.workspace.name}
-        workspaceImageUrl={me.workspace.imageUrl}
-        isAdmin={me.isInstanceAdmin}
-        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} imageUrl={me.user.avatarUrl} compact={collapsed} />}
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <Outlet />
-        </main>
+    <PageMenuProvider>
+      <div className="flex h-dvh">
+        <NavigationProgress />
+        <Sidebar
+          collapsed={collapsed}
+          teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
+          workspaceName={me.workspace.name}
+          workspaceImageUrl={me.workspace.imageUrl}
+          isAdmin={me.isInstanceAdmin}
+          profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} imageUrl={me.user.avatarUrl} compact={collapsed} />}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+          <main className="min-h-0 flex-1 overflow-hidden">
+            <div className={clsx("h-full", width === "contained" && "mx-auto max-w-7xl")}>
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </PageMenuProvider>
   );
 }
 

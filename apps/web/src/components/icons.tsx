@@ -277,6 +277,9 @@ export const NAV_ICONS = {
   inviteWorkspace: { line: InviteWorkspaceIcon, fill: InviteWorkspaceFillIcon },
 } satisfies Record<string, IconPair>;
 
+/** A person, for a field that names one. */
+export const UserIcon = icon(RiUserLine);
+
 /** The sections of Settings, in its left panel. */
 export const SETTINGS_ICONS = {
   profile: { line: icon(RiUserLine), fill: icon(RiUserFill) },

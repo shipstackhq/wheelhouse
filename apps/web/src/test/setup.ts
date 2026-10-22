@@ -35,6 +35,12 @@ if (!Element.prototype.hasPointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
 if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+// The rich text editors place their tooltips and menus at the caret, which jsdom cannot measure.
+if (!Range.prototype.getBoundingClientRect) {
+  const empty = () => ({ x: 0, y: 0, top: 0, left: 0, bottom: 0, right: 0, width: 0, height: 0, toJSON() {} });
+  Range.prototype.getBoundingClientRect = empty as () => DOMRect;
+  Range.prototype.getClientRects = (() => []) as unknown as () => DOMRectList;
+}
 
 import { FakeEventSource } from "./fake-event-source";
 import { beforeEach } from "vitest";

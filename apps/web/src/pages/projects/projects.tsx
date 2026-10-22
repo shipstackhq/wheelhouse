@@ -1,6 +1,7 @@
 import { useState, useTransition } from "react";
 import { Link, useNavigate } from "react-router";
 import type { ProjectSummary } from "@wheelhouse/api-client";
+import { PRIORITY_LABEL, PriorityIcon } from "../../components/priority-icon";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
@@ -58,6 +59,12 @@ export function Projects(props: { projects: ProjectSummary[] }) {
                 <span className="font-semibold">{p.name}</span>
                 {statusChip(p.status)}
                 <HealthChip health={p.health} />
+                {p.priority !== "none" && (
+                  <span className="chip gap-1 bg-panel-2 text-muted" data-priority-chip>
+                    <PriorityIcon priority={p.priority} />
+                    {PRIORITY_LABEL[p.priority]}
+                  </span>
+                )}
                 <span className="text-sm text-muted">{dateRange(p)}</span>
               </div>
               <p className="mt-1 text-sm text-muted">

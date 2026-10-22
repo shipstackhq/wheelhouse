@@ -290,10 +290,12 @@ export type ProjectSummary = {
   name: string;
   description: string;
   status: ProjectStatus;
+  priority: Priority;
   health: ProjectHealth;
   startDate: string | null;
   targetDate: string | null;
-  leadUser: { id: string; name: string } | null;
+  /** The lead's name and profile picture (null: initials). */
+  leadUser: { id: string; name: string; avatarUrl: string | null } | null;
   /** Named only to people on the lead team. */
   leadTeam: { key: string; name: string } | null;
   /** Every issue in the project, across all its teams, and how many are done. */
@@ -321,6 +323,7 @@ export type ProjectInput = {
   name?: string;
   description?: string;
   status?: ProjectStatus;
+  priority?: Priority;
   startDate?: string | null;
   targetDate?: string | null;
   leadUser?: string | null;
