@@ -9,7 +9,7 @@ export type AuthedRequest = Request & { actor: Actor };
 
 /**
  * Who is calling: an `Authorization: Bearer wh_...` API key, or a `wh_session` cookie. All of the rules (key hashing, revoked
- * keys, suspended teams, rate limits) are @wheelhouse/core's; this only reads the request. Failures are thrown as
+ * keys, suspended workspaces, rate limits) are @wheelhouse/core's; this only reads the request. Failures are thrown as
  * @wheelhouse/core's AuthError and shaped by the controller's exception filter.
  */
 @Injectable()

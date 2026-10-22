@@ -37,7 +37,7 @@ const SECTIONS = [
 export function NodePanel(props: {
   node: GNode;
   graph: Graph;
-  projectKey: string;
+  teamKey: string;
   onClose: () => void;
   onSelect: (id: string) => void;
   onAddChild: () => void;
@@ -78,7 +78,7 @@ export function NodePanel(props: {
   const usedBy = inc.filter((e) => e.kind === "depends");
   const flows = g.flows.filter((f) => f.steps.some((s) => s.nodeId === n.id));
   const decisions = g.decisions.filter((d) => d.nodeIds.includes(n.id));
-  const tickets = g.ticketLinks.filter((l) => l.nodeId === n.id);
+  const issues = g.issueLinks.filter((l) => l.nodeId === n.id);
   const higher = g.nodes.filter((x) => LAYER_META[x.layer as LayerId].rank < rank && !implementsE.some((e) => e.toNodeId === x.id));
   const lower = g.nodes.filter((x) => LAYER_META[x.layer as LayerId].rank > rank && !implementedByE.some((e) => e.fromNodeId === x.id));
   const hasExplainer = SECTIONS.some((s) => n[s.key]);
@@ -135,7 +135,7 @@ export function NodePanel(props: {
             {g.flux[n.id].sessions.map((s) => (
               <div key={s.id} className="mt-1 text-xs text-muted">
                 {s.by}
-                {s.ticket ? ` on ${s.ticket}` : ""} is changing {s.files.slice(0, 3).join(", ")}
+                {s.issue ? ` on ${s.issue}` : ""} is changing {s.files.slice(0, 3).join(", ")}
                 {s.files.length > 3 ? ` +${s.files.length - 3}` : ""}. Not landed yet.
               </div>
             ))}
@@ -396,7 +396,7 @@ export function NodePanel(props: {
           <section>
             <span className="label">Decisions</span>
             {decisions.map((d) => (
-              <Link key={d.id} to={`/p/${props.projectKey}/decisions#adr-${d.number}`} className="flex gap-2 rounded px-1.5 py-1 hover:bg-panel-2">
+              <Link key={d.id} to={`/t/${props.teamKey}/decisions#adr-${d.number}`} className="flex gap-2 rounded px-1.5 py-1 hover:bg-panel-2">
                 <span className="font-mono text-xs text-muted">ADR-{d.number}</span>
                 <span className={clsx(d.status === "superseded" || d.status === "rejected" ? "text-muted line-through" : "")}>{d.title}</span>
               </Link>
@@ -405,12 +405,12 @@ export function NodePanel(props: {
         )}
 
         <section>
-          <span className="label">Tickets touching this</span>
-          {tickets.length === 0 ? (
+          <span className="label">Issues touching this</span>
+          {issues.length === 0 ? (
             <p className="text-xs text-muted">None linked.</p>
           ) : (
-            tickets.map((t) => (
-              <Link key={t.ticketId} className="block rounded px-1.5 py-1 hover:bg-panel-2" to={`/p/${props.projectKey}?t=${t.ref}`}>
+            issues.map((t) => (
+              <Link key={t.issueId} className="block rounded px-1.5 py-1 hover:bg-panel-2" to={`/t/${props.teamKey}?t=${t.ref}`}>
                 <span className="font-mono text-xs text-muted">{t.ref}</span> {t.title}
               </Link>
             ))

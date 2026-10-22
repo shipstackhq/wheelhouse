@@ -1,8 +1,9 @@
 import { eq, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import { TEAM_SUSPENDED_MESSAGE, userTeamSuspended } from "./access";
+import { WORKSPACE_SUSPENDED_MESSAGE, userWorkspaceSuspended } from "./access";
 import { passwordProblem, signupOpen } from "./auth-policy";
 import { hashPassword, verifyPassword } from "./auth-core";
+import { newWorkspaceSlug } from "./workspace-slug";
 import { minutes, rateLimit, resetRateLimit } from "./rate-limit";
 
 /**
@@ -41,15 +42,15 @@ export async function signupAllowed() {
   return signupOpen({ allowSignup: process.env.ALLOW_SIGNUP, nodeEnv: process.env.NODE_ENV, userCount: n });
 }
 
-/** Create a user and a team they own. Throws AccountError. `ip` only feeds the signup rate limit. */
-export async function signUp(input: { name: string; email: string; password: string; team?: string }, ip: string): Promise<{ userId: string }> {
+/** Create a user and a workspace they own. Throws AccountError. `ip` only feeds the signup rate limit. */
+export async function signUp(input: { name: string; email: string; password: string; workspace?: string }, ip: string): Promise<{ userId: string }> {
   if (!(await signupAllowed())) throw new AccountError("signup_closed", "Signups are closed. Ask a workspace owner to add you.");
   const ipHit = rateLimit(`signup:${ip}`, 10, 60 * 60_000);
   if (!ipHit.ok) throw tooMany(ipHit.retryAfter);
   const name = String(input.name ?? "").trim();
   const email = String(input.email ?? "").trim().toLowerCase();
   const password = String(input.password ?? "");
-  const teamName = String(input.team ?? "").trim() || `${name}'s team`;
+  const workspaceName = String(input.workspace ?? "").trim() || `${name}'s workspace`;
   if (!name || !emailOk(email)) {
     const fields: Record<string, string> = {};
     if (!name) fields.name = "Enter your name";
@@ -66,8 +67,8 @@ export async function signUp(input: { name: string; email: string; password: str
   const passwordHash = await hashPassword(password);
   const userId = await db.transaction(async (tx) => {
     const [u] = await tx.insert(schema.users).values({ email, name, passwordHash }).returning();
-    const [t] = await tx.insert(schema.teams).values({ name: teamName }).returning();
-    await tx.insert(schema.memberships).values({ userId: u.id, teamId: t.id, role: "owner" });
+    const [t] = await tx.insert(schema.workspaces).values({ name: workspaceName, slug: await newWorkspaceSlug(tx, workspaceName) }).returning();
+    await tx.insert(schema.memberships).values({ userId: u.id, workspaceId: t.id, role: "owner" });
     return u.id;
   });
   return { userId };
@@ -86,7 +87,7 @@ export async function logIn(input: { email: string; password: string }, ip: stri
   const [u] = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (!u || !(await verifyPassword(password, u.passwordHash))) throw new AccountError("unauthorized", "Invalid email or password");
   resetRateLimit(`login-email:${email}`);
-  // Only someone who knows the password learns the team is suspended.
-  if (await userTeamSuspended(u.id)) throw new AccountError("team_suspended", TEAM_SUSPENDED_MESSAGE);
+  // Only someone who knows the password learns the workspace is suspended.
+  if (await userWorkspaceSuspended(u.id)) throw new AccountError("team_suspended", WORKSPACE_SUSPENDED_MESSAGE);
   return { userId: u.id };
 }

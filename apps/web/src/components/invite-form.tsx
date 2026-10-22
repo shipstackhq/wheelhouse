@@ -1,7 +1,7 @@
 import { useActionState } from "react";
-import type { ProjectRole, Role } from "@wheelhouse/api-client";
+import type { TeamRole, Role } from "@wheelhouse/api-client";
 import { failure, field, type FormState } from "../lib/form-state";
-import { asRole, PROJECT_ROLES, WORKSPACE_ROLES } from "../lib/roles";
+import { asRole, TEAM_ROLES, WORKSPACE_ROLES } from "../lib/roles";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { SecretBox } from "./secret-box";
@@ -9,7 +9,7 @@ import { SubmitButton } from "./submit-button";
 import { Select } from "./ui";
 
 /** Create an invite link. `kind` decides what the link does; the server decides who may create it. */
-export function InviteForm({ kind, disabled = false, className = "mt-4", roles = WORKSPACE_ROLES.filter((r) => r.value === "member" || r.value === "owner"), projects = [] }: { kind: "join_team" | "new_team"; disabled?: boolean; /** The roles this person may hand out. */ roles?: { value: Role; label: string }[]; /** Projects the person administers, to put the invitee into on accepting. */ projects?: { key: string; name: string }[]; /** Spacing around the form (the default sits it below a heading). */ className?: string }) {
+export function InviteForm({ kind, disabled = false, className = "mt-4", roles = WORKSPACE_ROLES.filter((r) => r.value === "member" || r.value === "owner"), teams = [] }: { kind: "join_workspace" | "new_workspace"; disabled?: boolean; /** The roles this person may hand out. */ roles?: { value: Role; label: string }[]; /** Teams the person administers, to put the invitee into on accepting. */ teams?: { key: string; name: string }[]; /** Spacing around the form (the default sits it below a heading). */ className?: string }) {
   const { api, queryClient } = useServices();
   const [state, action] = useActionState<FormState, FormData>(async (_prev, fd) => {
     try {
@@ -18,9 +18,9 @@ export function InviteForm({ kind, disabled = false, className = "mt-4", roles =
         email: field(fd, "email"),
         role: asRole(field(fd, "role")),
         tags: field(fd, "tags"),
-        team: field(fd, "team"),
-        ...(kind === "join_team" && fd.getAll("project").length
-          ? { projects: fd.getAll("project").map((k) => ({ project: String(k), role: (field(fd, "projectRole") || "editor") as ProjectRole })) }
+        workspace: field(fd, "workspace"),
+        ...(kind === "join_workspace" && fd.getAll("team").length
+          ? { teams: fd.getAll("team").map((k) => ({ team: String(k), role: (field(fd, "teamRole") || "editor") as TeamRole })) }
           : {}),
       });
       void refreshAll(queryClient);
@@ -36,27 +36,27 @@ export function InviteForm({ kind, disabled = false, className = "mt-4", roles =
     <form action={action} className={`grid gap-3 sm:grid-cols-2 ${className}`}>
       <input type="hidden" name="kind" value={kind} />
       <input className="input sm:col-span-2" name="email" type="email" placeholder="Their email" required disabled={disabled} />
-      {kind === "join_team" ? (
+      {kind === "join_workspace" ? (
         <>
           <Select name="role" defaultValue="member" options={roles.map((r) => ({ value: r.value, label: r.label }))} />
           <input className="input" name="tags" placeholder="tags: backend, design" disabled={disabled} />
         </>
       ) : (
-        <input className="input sm:col-span-2" name="team" placeholder="Workspace name (optional)" maxLength={100} />
+        <input className="input sm:col-span-2" name="workspace" placeholder="Workspace name (optional)" maxLength={100} />
       )}
-      {kind === "join_team" && projects.length > 0 && (
+      {kind === "join_workspace" && teams.length > 0 && (
         <fieldset className="sm:col-span-2 rounded-md border border-line p-3">
-          <legend className="px-1 text-xs text-muted">Also add them to these projects (optional)</legend>
+          <legend className="px-1 text-xs text-muted">Also add them to these teams (optional)</legend>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
-            {projects.map((p) => (
+            {teams.map((p) => (
               <label key={p.key} className="flex items-center gap-1.5">
-                <input type="checkbox" name="project" value={p.key} disabled={disabled} /> {p.name} <span className="font-mono text-xs text-muted">{p.key}</span>
+                <input type="checkbox" name="team" value={p.key} disabled={disabled} /> {p.name} <span className="font-mono text-xs text-muted">{p.key}</span>
               </label>
             ))}
           </div>
           <div className="mt-2 flex items-center gap-2 text-sm">
-            <span className="text-muted">Project role</span>
-            <Select name="projectRole" defaultValue="editor" className="w-28" options={PROJECT_ROLES.map((r) => ({ value: r.value, label: r.label }))} />
+            <span className="text-muted">Team role</span>
+            <Select name="teamRole" defaultValue="editor" className="w-28" options={TEAM_ROLES.map((r) => ({ value: r.value, label: r.label }))} />
           </div>
         </fieldset>
       )}

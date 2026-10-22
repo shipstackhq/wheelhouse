@@ -14,12 +14,13 @@ describe("GET /api/app/auth/options", () => {
 });
 
 describe("POST /api/app/auth/login", () => {
-  test("starts a session: the person, their team and role, the CSRF token, and the same cookie the Next app sets", async () => {
+  test("starts a session: the person, their workspace and role, the CSRF token, and the same cookie the Next app sets", async () => {
     const r = await login(fx.a.email);
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json).sort(), ["csrfToken", "isInstanceAdmin", "role", "tags", "team", "user"]);
-    assert.deepEqual(r.json.user, { id: fx.a.userId, name: "Contract A owner", email: fx.a.email });
-    assert.equal(r.json.team.id, fx.a.teamId);
+    assert.deepEqual(Object.keys(r.json).sort(), ["csrfToken", "isInstanceAdmin", "role", "tags", "user", "workspace"]);
+    assert.deepEqual(r.json.user, { id: fx.a.userId, name: "Contract A owner", email: fx.a.email, avatarUrl: null }); // no picture set: null
+    assert.equal(r.json.workspace.id, fx.a.workspaceId);
+    assert.equal(r.json.workspace.imageUrl, null);
     assert.equal(r.json.role, "owner");
     assert.equal(r.json.isInstanceAdmin, false);
     assert.ok(!r.text.includes("passwordHash") && !r.text.includes("password_hash"), "no password hash in the response");
@@ -41,7 +42,7 @@ describe("POST /api/app/auth/login", () => {
     const s = await signIn(fx.a.email);
     const r = await v1({ cookie: s.cookie }, "list_projects");
     assert.equal(r.status, 200);
-    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.projectKey));
+    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.teamKey));
     await app("POST", "/api/app/auth/logout", s);
   });
 
@@ -49,7 +50,7 @@ describe("POST /api/app/auth/login", () => {
     const r = await login(fx.a.memberEmail);
     assert.equal(r.status, 200);
     assert.equal(r.json.role, "member");
-    assert.equal(r.json.team.id, fx.a.teamId);
+    assert.equal(r.json.workspace.id, fx.a.workspaceId);
   });
 
   test("a wrong password and an unknown email are the same answer: 401, no cookie", async () => {
@@ -61,13 +62,13 @@ describe("POST /api/app/auth/login", () => {
     }
   });
 
-  test("a suspended team's member who knows the password is told so; one who does not, is not", async () => {
+  test("a suspended workspace's member who knows the password is told so; one who does not, is not", async () => {
     const wrong = await login(fx.suspended.email, "nope");
     assert.equal(wrong.json.error.message, "Invalid email or password");
     const right = await login(fx.suspended.email);
     assert.equal(right.status, 403);
     assert.equal(right.json.error.code, "team_suspended");
-    assert.equal(right.json.error.message, "This team has been suspended. Contact the administrator.");
+    assert.equal(right.json.error.message, "This workspace has been suspended. Contact the administrator.");
     assert.equal(right.cookies.length, 0);
   });
 
@@ -95,26 +96,26 @@ describe("POST /api/app/auth/login", () => {
 });
 
 describe("POST /api/app/auth/signup", () => {
-  test("creates an account and a team they own, and signs them in (201)", async () => {
+  test("creates an account and a workspace they own, and signs them in (201)", async () => {
     const email = newEmail();
-    const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name: "  Ivy  ", email: email.toUpperCase(), password: "a-long-enough-password", team: "Ivy Inc" } });
+    const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name: "  Ivy  ", email: email.toUpperCase(), password: "a-long-enough-password", workspace: "Ivy Inc" } });
     assert.equal(r.status, 201);
     assert.equal(r.json.user.name, "Ivy");
     assert.equal(r.json.user.email, email, "lower-cased");
-    assert.equal(r.json.team.name, "Ivy Inc");
+    assert.equal(r.json.workspace.name, "Ivy Inc");
     assert.equal(r.json.role, "owner");
     const s = sessionFrom(r);
     const me = await app("GET", "/api/app/me", s);
-    assert.equal(me.json.team.id, r.json.team.id);
-    const projects = await app("GET", "/api/app/projects", s);
-    assert.deepEqual(projects.json, { projects: [] }, "a new team starts empty");
-    assert.notEqual(r.json.team.id, fx.a.teamId);
+    assert.equal(me.json.workspace.id, r.json.workspace.id);
+    const teams = await app("GET", "/api/app/teams", s);
+    assert.deepEqual(teams.json, { teams: [] }, "a new workspace starts empty");
+    assert.notEqual(r.json.workspace.id, fx.a.workspaceId);
     await app("POST", "/api/app/auth/logout", s);
   });
 
-  test("the team is named after the person unless they choose a name", async () => {
+  test("the workspace is named after the person unless they choose a name", async () => {
     const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name: "Jo", email: newEmail(), password: "a-long-enough-password" } });
-    assert.equal(r.json.team.name, "Jo's team");
+    assert.equal(r.json.workspace.name, "Jo's workspace");
     await app("POST", "/api/app/auth/logout", sessionFrom(r));
   });
 
@@ -181,35 +182,35 @@ describe("POST /api/app/auth/logout", () => {
   });
 });
 
-describe("GET /api/app/projects", () => {
-  test("lists only the signed-in person's own team's projects", async () => {
-    const a = await app("GET", "/api/app/projects", await signIn(fx.a.email));
-    const b = await app("GET", "/api/app/projects", await signIn(fx.b.email));
-    assert.deepEqual(a.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey]);
-    assert.deepEqual(b.json.projects.map((p: { key: string }) => p.key), [fx.b.projectKey]);
-    assert.deepEqual(Object.keys(a.json.projects[0]).sort(), ["createdAt", "description", "id", "key", "name", "role"]);
+describe("GET /api/app/teams", () => {
+  test("lists only the signed-in person's own workspace's teams", async () => {
+    const a = await app("GET", "/api/app/teams", await signIn(fx.a.email));
+    const b = await app("GET", "/api/app/teams", await signIn(fx.b.email));
+    assert.deepEqual(a.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
+    assert.deepEqual(b.json.teams.map((p: { key: string }) => p.key), [fx.b.teamKey]);
+    assert.deepEqual(Object.keys(a.json.teams[0]).sort(), ["createdAt", "description", "icon", "iconColor", "id", "key", "name", "role"]);
   });
 
-  test("the team cannot be chosen by the request", async () => {
+  test("the workspace cannot be chosen by the request", async () => {
     const s = await signIn(fx.a.email);
-    for (const path of [`/api/app/projects?teamId=${fx.b.teamId}`, `/api/app/projects?team=${fx.b.teamId}&project=${fx.b.projectKey}`]) {
+    for (const path of [`/api/app/teams?workspaceId=${fx.b.workspaceId}`, `/api/app/teams?workspace=${fx.b.workspaceId}&team=${fx.b.teamKey}`]) {
       const r = await app("GET", path, s);
-      assert.deepEqual(r.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey], path);
+      assert.deepEqual(r.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey], path);
     }
-    const header = await app("GET", "/api/app/projects", s, { headers: { "x-team-id": fx.b.teamId } });
-    assert.deepEqual(header.json.projects.map((p: { key: string }) => p.key), [fx.a.projectKey]);
+    const header = await app("GET", "/api/app/teams", s, { headers: { "x-workspace-id": fx.b.workspaceId } });
+    assert.deepEqual(header.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
   });
 
   test("signed out is a 401", async () => {
-    assert.equal((await app("GET", "/api/app/projects")).status, 401);
+    assert.equal((await app("GET", "/api/app/teams")).status, 401);
   });
 
-  test("a new team sees none of another team's work", async () => {
+  test("a new workspace sees none of another workspace's work", async () => {
     const made = await app("POST", "/api/app/auth/signup", anon(), { body: { name: unique("iso"), email: newEmail(), password: "a-long-enough-password" } });
     const s = sessionFrom(made);
-    const list = await app("GET", "/api/app/projects", s);
-    assert.deepEqual(list.json.projects, []);
-    const board = await v1({ cookie: s.cookie }, "get_board", { project: fx.a.projectKey });
+    const list = await app("GET", "/api/app/teams", s);
+    assert.deepEqual(list.json.teams, []);
+    const board = await v1({ cookie: s.cookie }, "get_board", { project: fx.a.teamKey });
     assert.equal(board.status, 404);
     await app("POST", "/api/app/auth/logout", s);
   });

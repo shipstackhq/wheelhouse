@@ -17,51 +17,78 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
+import type { CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { useServices } from "../../lib/services";
-import { neighbours, parseTicketParam } from "../../lib/ticket-nav";
-import { dragOver, drop, findCol, group, type Items } from "./board-state";
+import { neighbours, parseIssueParam } from "../../lib/issue-nav";
+import { fieldPatch, retagIssue, startingFields, type IssueGroup } from "../../lib/issue-view";
+import type { Relations } from "../../lib/sub-issues";
+import { SubIssueProgress } from "../../components/sub-issue-progress";
+import { dragOver, drop, findCol, itemsOf, type Items } from "./board-state";
 import { ColumnControls, EMPTY_VIEW, applyView, describeSort, isFiltered, loadView, matches, saveView, type View } from "./column-controls";
-import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Ticket } from "./shared";
-import { TicketDialog } from "./ticket-dialog";
-import { AgentIcon, CloseIcon, CommentIcon, NodeIcon } from "../../components/icons";
+import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Issue } from "./shared";
+import { IssueDialog } from "./issue-dialog";
+import { AgentIcon, CloseIcon, CommentIcon, CyclesIcon, NodeIcon, ProjectsIcon } from "../../components/icons";
+import { cycleTitle } from "../cycles/cycle-bits";
 
 /**
- * The kanban board. What is on screen is a local copy of the server's tickets, so a drag can move cards at once. The server's
+ * The kanban board. What is on screen is a local copy of the server's issues, so a drag can move cards at once. The server's
  * copy replaces it whenever nothing is being dragged (that is how a teammate's or an agent's change shows up), and again, with the
  * real positions, when a drop has been saved.
  */
-export function Board(props: { projectKey: string; columns: Col[]; tickets: Ticket[]; nodes: NodeLite[]; members: Member[] }) {
-  const { projectKey, columns, nodes, members } = props;
+const NO_CYCLES: CycleOption[] = [];
+const NO_PROJECTS: TeamProjectOption[] = [];
+
+export function Board(props: {
+  teamKey: string;
+  /** The columns, each with the issues in it: the view's groups (by status, priority, person, project, cycle, or all in one). */
+  groups: IssueGroup[];
+  /** The team's statuses, for the issue dialog's Status field (the columns may be something else). */
+  statuses: Col[];
+  /** True when a column's order is the manual board order, which only a board grouped by status and not sorted has. */
+  manualOrder: boolean;
+  /** Whose sub-issue a card is and how its own sub-issues are getting on. */
+  relations: Relations;
+  nodes: NodeLite[];
+  members: Member[];
+  cycles?: CycleOption[];
+  projects?: TeamProjectOption[];
+}) {
+  const { teamKey, groups, statuses, nodes, members, relations } = props;
+  const columns = useMemo(() => groups.map((g) => ({ id: g.id, name: g.label })), [groups]);
+  const cycles = props.cycles ?? NO_CYCLES;
+  const projects = props.projects ?? NO_PROJECTS;
   const { api, queryClient } = useServices();
   const [search, setSearch] = useSearchParams();
-  const [items, setItems] = useState<Items>(() => group(columns, props.tickets));
+  const [items, setItems] = useState<Items>(() => itemsOf(groups));
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const dragging = useRef(false);
   const dragFrom = useRef<string | null>(null);
   const [views, setViews] = useState<Record<string, View>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const viewKey = (colId: string) => `wh:view:${projectKey}:${colId}`;
+  // A column's own filter and sort are kept under its status id, as they always were; other columns under their group id.
+  const viewKey = (colId: string) => `wh:view:${teamKey}:${colId.replace(/^status:/, "")}`;
+  const whatOf = (colId: string) => groups.find((g) => g.id === colId)?.what;
   const viewOf = (colId: string) => views[colId] ?? EMPTY_VIEW;
-  // ?t= is the source of truth for the open ticket; a value that isn't a ticket ref is ignored.
-  const openRef = parseTicketParam(search.get("t"));
+  // ?t= is the source of truth for the open issue; a value that isn't an issue ref is ignored.
+  const openRef = parseIssueParam(search.get("t"));
 
-  const refreshBoard = () => queryClient.invalidateQueries({ queryKey: ["board", projectKey] });
+  const refreshBoard = () => queryClient.invalidateQueries({ queryKey: ["board", teamKey] });
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {
-    if (!dragging.current) setItems(group(columns, props.tickets));
-  }, [columns, props.tickets]);
+    if (!dragging.current) setItems(itemsOf(groups));
+  }, [groups]);
 
-  // Restore each column's filter/sort when the project or its columns change.
+  // Restore each column's filter/sort when the team or its columns change.
   // Keyed on the column ids, not the array: a refresh hands over a new array, and reloading here would give each Column a fresh
-  // view object and un-pin tickets it just added.
-  const columnIds = columns.map((c) => c.id).join(",");
+  // view object and un-pin issues it just added.
+  const statusIds = columns.map((c) => c.id).join(",");
   useEffect(() => {
     setViews(Object.fromEntries(columns.map((c) => [c.id, loadView(viewKey(c.id))])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectKey, columnIds]);
+  }, [teamKey, statusIds]);
 
   useEffect(() => {
     if (!notice) return;
@@ -74,10 +101,10 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
     saveView(viewKey(colId), v);
   };
 
-  const labels = useMemo(() => [...new Set(props.tickets.flatMap((t) => t.labels))].sort(), [props.tickets]);
+  const labels = useMemo(() => [...new Set(groups.flatMap((g) => g.issues.flatMap((t) => t.labels)))].sort(), [groups]);
 
   const byId = useMemo(() => {
-    const m = new Map<string, Ticket>();
+    const m = new Map<string, Issue>();
     for (const list of Object.values(items)) for (const t of list) m.set(t.id, t);
     return m;
   }, [items]);
@@ -100,27 +127,36 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
   const onDragOver = (e: DragOverEvent) => {
     if (!e.over) return;
     const { active, over } = e;
-    setItems((prev) => dragOver(prev, String(active.id), String(over.id)));
+    setItems((prev) => dragOver(prev, String(active.id), String(over.id), (t, colId) => {
+      const what = whatOf(colId);
+      return what ? retagIssue(what, t) : t;
+    }));
   };
 
   const onDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     setActiveId(null);
-    const result = drop(items, String(active.id), over ? String(over.id) : null, dragFrom.current, (col) => !!viewOf(col).sort);
+    const result = drop(items, String(active.id), over ? String(over.id) : null, dragFrom.current, (col) => !!viewOf(col).sort || !props.manualOrder);
     setItems(result.items);
     if (!result.move) {
       dragging.current = false;
       return;
     }
-    const { columnId, index, crossed } = result.move;
+    const { colId, index, crossed } = result.move;
     const t = byId.get(String(active.id))!;
-    const target = viewOf(columnId);
+    const what = whatOf(colId);
+    const target = viewOf(colId);
     if (crossed && isFiltered(target) && !matches(t, target)) {
-      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === columnId)?.name}, but the column filter hides it.`);
+      setNotice(`${t.ref} moved to ${columns.find((c) => c.id === colId)?.name}, but the column filter hides it.`);
     }
     void (async () => {
       try {
-        await api.tickets.move(t.ref, { column: columnId, index });
+        // A status column is a move (which also says where in the column); any other column is a change to the one field it groups by.
+        if (what?.kind === "status") await api.issues.move(t.ref, { status: what.status.id, index });
+        else {
+          const patch = what && crossed ? fieldPatch(what) : null;
+          if (patch) await api.issues.update(t.ref, { ...patch, version: t.version });
+        }
       } catch (err) {
         setError(describeFailure(err));
       } finally {
@@ -130,7 +166,7 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
     })();
   };
 
-  const openTicket = (ref: string | null) => {
+  const openIssue = (ref: string | null) => {
     const sp = new URLSearchParams(search);
     if (ref) sp.set("t", ref);
     else sp.delete("t");
@@ -139,8 +175,8 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
 
   const active = activeId ? byId.get(activeId) : null;
 
-  // Previous/next in the dialog walk the open ticket's column in the order the board shows it (filter and sort applied);
-  // if a filter hides the open ticket, fall back to the whole column.
+  // Previous/next in the dialog walk the open issue's column in the order the board shows it (filter and sort applied);
+  // if a filter hides the open issue, fall back to the whole column.
   const openCol = openRef ? Object.keys(items).find((c) => items[c].some((t) => t.ref === openRef)) : undefined;
   const nav = (() => {
     if (!openRef || !openCol) return neighbours([], openRef ?? "");
@@ -168,33 +204,39 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
               <Column
                 key={c.id}
                 col={c}
-                tickets={items[c.id] ?? []}
+                issues={items[c.id] ?? []}
                 view={viewOf(c.id)}
                 onViewChange={(v) => changeView(c.id, v)}
                 members={members}
                 labels={labels}
+                cycles={cycles}
+                projects={projects}
                 nodes={nodes}
-                onOpen={openTicket}
+                onOpen={openIssue}
                 selected={openRef}
-                projectKey={projectKey}
+                teamKey={teamKey}
+                relations={relations}
+                starts={startingFields(groups.find((g) => g.id === c.id)!.what)}
                 onCreated={() => void refreshBoard()}
               />
             ))}
           </div>
-          <DragOverlay>{active ? <Card t={active} nodes={nodes} overlay /> : null}</DragOverlay>
+          <DragOverlay>{active ? <Card t={active} nodes={nodes} cycles={cycles} projects={projects} relations={relations} overlay /> : null}</DragOverlay>
         </DndContext>
       </div>
       {openRef && (
-        <TicketDialog
+        <IssueDialog
           key={openRef}
-          ticketRef={openRef}
-          projectKey={projectKey}
-          columns={columns}
+          issueRef={openRef}
+          teamKey={teamKey}
+          columns={statuses}
           nodes={nodes}
           members={members}
+          cycles={cycles}
+          projects={projects}
           nav={nav}
-          onNavigate={openTicket}
-          onClose={() => openTicket(null)}
+          onNavigate={openIssue}
+          onClose={() => openIssue(null)}
         />
       )}
     </div>
@@ -203,25 +245,30 @@ export function Board(props: { projectKey: string; columns: Col[]; tickets: Tick
 
 function Column(props: {
   col: Col;
-  tickets: Ticket[];
+  issues: Issue[];
   view: View;
   onViewChange: (v: View) => void;
   members: Member[];
   labels: string[];
+  cycles: CycleOption[];
+  projects: TeamProjectOption[];
   nodes: NodeLite[];
   selected: string | null;
-  projectKey: string;
+  teamKey: string;
+  relations: Relations;
+  /** What an issue added in this column starts with: its status, or whatever the column groups by. */
+  starts: ReturnType<typeof startingFields>;
   onOpen: (ref: string) => void;
   onCreated: () => void;
 }) {
   const { api } = useServices();
   const { col, view } = props;
   const { setNodeRef, isOver } = useDroppable({ id: col.id });
-  // Tickets that arrive after "+ Add ticket" stay visible despite the filter, so the add doesn't look like it failed.
+  // Issues that arrive after "+ Add issue" stay visible despite the filter, so the add doesn't look like it failed.
   const [pinFrom, setPinFrom] = useState<Set<string> | null>(null);
-  const tickets = useMemo(
-    () => applyView(props.tickets, view, pinFrom ? (t) => !pinFrom.has(t.id) : undefined),
-    [props.tickets, view, pinFrom],
+  const issues = useMemo(
+    () => applyView(props.issues, view, pinFrom ? (t) => !pinFrom.has(t.id) : undefined),
+    [props.issues, view, pinFrom],
   );
   useEffect(() => setPinFrom(null), [view]);
   const [adding, setAdding] = useState(false);
@@ -235,12 +282,12 @@ function Column(props: {
     if (!value) return keepOpen ? undefined : setAdding(false);
     if (submitting.current) return;
     submitting.current = true;
-    if (isFiltered(view)) setPinFrom((prev) => prev ?? new Set(props.tickets.map((t) => t.id)));
+    if (isFiltered(view)) setPinFrom((prev) => prev ?? new Set(props.issues.map((t) => t.id)));
     setTitle("");
     if (!keepOpen) setAdding(false);
     void (async () => {
       try {
-        await api.tickets.create(props.projectKey, { title: value, column: col.id });
+        await api.issues.create(props.teamKey, { title: value, ...props.starts });
         props.onCreated();
       } catch {
         props.onCreated(); // whatever happened, show the board as the server has it
@@ -255,17 +302,17 @@ function Column(props: {
       <div className="group/head flex items-center justify-between gap-2 px-3 py-2.5">
         <span className="text-sm font-medium">{col.name}</span>
         <div className="flex min-w-0 items-center gap-2">
-          <ColumnControls view={view} onChange={props.onViewChange} members={props.members} labels={props.labels} />
+          <ColumnControls view={view} onChange={props.onViewChange} members={props.members} labels={props.labels} cycles={props.cycles} />
           <span className="shrink-0 text-xs text-muted">
-            {tickets.length === props.tickets.length ? tickets.length : `${tickets.length} of ${props.tickets.length}`}
+            {issues.length === props.issues.length ? issues.length : `${issues.length} of ${props.issues.length}`}
           </span>
         </div>
       </div>
       {view.sort && <div className="px-3 pb-1 text-[11px] text-muted">sorted by {describeSort(view)}; drag order is off</div>}
       <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        <SortableContext items={tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {tickets.map((t) => (
-            <SortableCard key={t.id} t={t} nodes={props.nodes} selected={props.selected === t.ref} onOpen={props.onOpen} />
+        <SortableContext items={issues.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          {issues.map((t) => (
+            <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} projects={props.projects} relations={props.relations} selected={props.selected === t.ref} onOpen={props.onOpen} />
           ))}
         </SortableContext>
         {adding ? (
@@ -273,8 +320,8 @@ function Column(props: {
             autoFocus
             className="input resize-none"
             rows={2}
-            aria-label={`New ticket in ${col.name}`}
-            placeholder="Ticket title, Enter to add"
+            aria-label={`New issue in ${col.name}`}
+            placeholder="Issue title, Enter to add"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={() => submit(false)}
@@ -298,7 +345,7 @@ function Column(props: {
               setAdding(true);
             }}
           >
-            + Add ticket
+            + Add issue
           </button>
         )}
       </div>
@@ -306,7 +353,7 @@ function Column(props: {
   );
 }
 
-function SortableCard({ t, nodes, selected, onOpen }: { t: Ticket; nodes: NodeLite[]; selected: boolean; onOpen: (ref: string) => void }) {
+function SortableCard({ t, nodes, cycles, projects, relations, selected, onOpen }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected: boolean; onOpen: (ref: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
     <div
@@ -316,19 +363,23 @@ function SortableCard({ t, nodes, selected, onOpen }: { t: Ticket; nodes: NodeLi
       {...listeners}
       onClick={() => onOpen(t.ref)}
       className={clsx(isDragging && "opacity-30")}
-      data-ticket={t.ref}
+      data-issue={t.ref}
     >
-      <Card t={t} nodes={nodes} selected={selected} />
+      <Card t={t} nodes={nodes} cycles={cycles} projects={projects} relations={relations} selected={selected} />
     </div>
   );
 }
 
-function Card({ t, nodes, selected, overlay }: { t: Ticket; nodes: NodeLite[]; selected?: boolean; overlay?: boolean }) {
+function Card({ t, nodes, cycles, projects, relations, selected, overlay }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected?: boolean; overlay?: boolean }) {
+  const parentRef = relations.parentRef(t);
+  const progress = relations.progress(t);
   const linked = t.nodeIds.map((id) => nodes.find((n) => n.id === id)).filter(Boolean) as NodeLite[];
+  const project = t.projectId ? projects.find((x) => x.id === t.projectId) : undefined;
+  const cycle = t.cycle == null ? null : (cycles.find((c) => c.number === t.cycle) ?? { number: t.cycle, name: "", startsAt: "", endsAt: "", state: "current" as const });
   return (
     <div
       className={clsx(
-        "cursor-grab rounded-md border bg-panel-2 p-2.5 text-sm shadow-sm active:cursor-grabbing",
+        "cursor-grab rounded-md border bg-card p-2.5 text-sm shadow-sm active:cursor-grabbing",
         selected ? "border-accent" : "border-line hover:border-muted/50",
         overlay && "rotate-2 shadow-xl",
       )}
@@ -337,12 +388,28 @@ function Card({ t, nodes, selected, overlay }: { t: Ticket; nodes: NodeLite[]; s
         <span className="font-mono text-[11px] text-muted">{t.ref}</span>
         <div className="flex gap-1">
           {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent"><AgentIcon /></span>}
-          {t.priority !== "medium" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
+          {t.priority !== "none" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
         </div>
       </div>
       <div className="mt-1 leading-snug">{t.title}</div>
-      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable) && (
+      {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle || project || parentRef || progress) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
+          {parentRef && (
+            <span className="chip bg-bg text-muted" title={`Sub-issue of ${parentRef}`} data-parent-chip>
+              ↳ {parentRef}
+            </span>
+          )}
+          {progress && <SubIssueProgress progress={progress} />}
+          {project && (
+            <span className="chip max-w-[10rem] bg-accent/10 text-accent/90" title={`Project: ${project.name}`} data-project-chip>
+              <ProjectsIcon /> <span className="truncate">{project.name}</span>
+            </span>
+          )}
+          {cycle && (
+            <span className="chip bg-ok/10 text-ok" title={cycleTitle(cycle)} data-cycle-chip>
+              <CyclesIcon /> {cycle.number}
+            </span>
+          )}
           {t.labels.map((l) => (
             <span key={l} className="chip bg-bg text-muted">{l}</span>
           ))}

@@ -1,28 +1,32 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import type { Col, Ticket } from "./shared";
+import type { Col, Issue } from "./shared";
 
 /**
- * The board's tickets by column, and what a drag does to them. Kept apart from the component so the rules can be tested
+ * The board's issues by column, and what a drag does to them. Kept apart from the component so the rules can be tested
  * without a pointer: dnd-kit only reports "this id is over that id", and everything below works from those two ids.
  */
-export type Items = Record<string, Ticket[]>;
+export type Items = Record<string, Issue[]>;
 
-/** Tickets by column id, each column in position order. A ticket whose column is not in the list is dropped. */
-export function group(cols: Col[], tickets: Ticket[]): Items {
+/** Issues by column id, each column in position order. An issue whose column is not in the list is dropped. */
+export function group(cols: Col[], issues: Issue[]): Items {
   const m: Items = {};
   for (const c of cols) m[c.id] = [];
-  for (const t of [...tickets].sort((a, b) => a.position - b.position)) m[t.columnId]?.push(t);
+  for (const t of [...issues].sort((a, b) => a.position - b.position)) m[t.statusId]?.push(t);
   return m;
 }
+
+/** Issues by group id, for a board whose columns are groups (by status or anything else), each group's issues as the group has them. */
+export const itemsOf = (groups: { id: string; issues: Issue[] }[]): Items => Object.fromEntries(groups.map((g) => [g.id, g.issues]));
 
 /** The column a draggable id lives in, where the id may also be a column's own id (an empty column is a drop target). */
 export const findCol = (items: Items, id: string) => (items[id] ? id : Object.keys(items).find((c) => items[c].some((t) => t.id === id)));
 
 /**
  * The card is dragged over another card or a column: if that is another column, it moves there at once (in front of the card it
- * is over, or at the end of an empty or column-wide target) so the board shows where it would land.
+ * is over, or at the end of an empty or column-wide target) so the board shows where it would land. `retag` says how the card
+ * looks in its new column (by default its status is the column; a board grouped by something else changes that field).
  */
-export function dragOver(prev: Items, activeId: string, overId: string): Items {
+export function dragOver(prev: Items, activeId: string, overId: string, retag: (t: Issue, colId: string) => Issue = (t, colId) => ({ ...t, statusId: colId })): Items {
   const from = findCol(prev, activeId);
   const to = findCol(prev, overId);
   if (!from || !to || from === to) return prev;
@@ -33,14 +37,14 @@ export function dragOver(prev: Items, activeId: string, overId: string): Items {
   return {
     ...prev,
     [from]: prev[from].filter((t) => t.id !== activeId),
-    [to]: [...prev[to].slice(0, idx), { ...moving, columnId: to }, ...prev[to].slice(idx)],
+    [to]: [...prev[to].slice(0, idx), retag(moving, to), ...prev[to].slice(idx)],
   };
 }
 
 export type DropResult = {
   items: Items;
   /** What to tell the server, or null when nothing changed or the drop does not count. */
-  move: { columnId: string; index: number; crossed: boolean } | null;
+  move: { colId: string; index: number; crossed: boolean } | null;
 };
 
 /**
@@ -61,5 +65,5 @@ export function drop(items: Items, activeId: string, overId: string | null, drag
   }
   const index = list.findIndex((t) => t.id === activeId);
   if (dragFrom === col && oldIdx === index && overIdx < 0) return { items: next, move: null };
-  return { items: next, move: { columnId: col, index, crossed: dragFrom !== col } };
+  return { items: next, move: { colId: col, index, crossed: dragFrom !== col } };
 }

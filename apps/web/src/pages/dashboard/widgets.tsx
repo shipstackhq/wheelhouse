@@ -18,7 +18,7 @@ import { SubmitButton } from "../../components/submit-button";
 import { Tip } from "../../components/tip";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
-import { useDashboardProject } from "../../lib/dashboard-scope";
+import { useDashboardTeam } from "../../lib/dashboard-scope";
 import { useWidget } from "../../lib/queries";
 import { AgentIcon, ArrowRightIcon, FilterIcon, SearchIcon, TrendUpIcon, WarningIcon } from "../../components/icons";
 
@@ -42,13 +42,13 @@ function Failed({ title, query }: { title: string; query: UseQueryResult }) {
 
 export function KpiRow() {
   const q = useWidget("kpis");
-  const project = useDashboardProject();
+  const team = useDashboardTeam();
   if (q.isPending) return <WidgetSkeleton title="Key numbers" height={72} />;
   if (q.isError) return <Failed title="Key numbers" query={q} />;
   const s = q.data;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
-      <StatTile label="Open tickets" value={s.open} hint={project ? "in this project" : `across ${s.projects} project${s.projects === 1 ? "" : "s"}`} />
+      <StatTile label="Open issues" value={s.open} hint={team ? "in this team" : `across ${s.teams} team${s.teams === 1 ? "" : "s"}`} />
       <StatTile label="In progress" value={s.inProgress} hint={`${s.inReview} waiting for review`} />
       <StatTile
         label="Completed, last 7 days"
@@ -60,9 +60,9 @@ export function KpiRow() {
         value={s.agentShare7d === null ? "—" : `${Math.round(s.agentShare7d * 100)}%`}
         hint={`${s.events7d} changes in 7 days`}
       />
-      <StatTile label="Stale map nodes" value={s.staleNodes} hint={`of ${s.mapNodes} described`} href={project ? `/p/${project}/map` : undefined} />
-      <StatTile label="Stale docs" value={s.staleDocs} hint="possibly out of date" href={project ? `/p/${project}/docs` : "/"} />
-      {project ? (
+      <StatTile label="Stale map nodes" value={s.staleNodes} hint={`of ${s.mapNodes} described`} href={team ? `/t/${team}/map` : undefined} />
+      <StatTile label="Stale docs" value={s.staleDocs} hint="possibly out of date" href={team ? `/t/${team}/docs` : "/"} />
+      {team ? (
         <StatTile label="Agents active" value={s.agentsActive7d} hint="changed something in 7 days" />
       ) : (
         <StatTile label="Agents connected" value={s.agents} hint="active API keys" href="/agents" />
@@ -71,30 +71,30 @@ export function KpiRow() {
   );
 }
 
-export function ProjectProgress() {
+export function TeamProgress() {
   const q = useWidget("progress");
-  const project = useDashboardProject();
-  if (q.isPending) return <WidgetSkeleton title="Project progress" height={220} />;
-  if (q.isError) return <Failed title="Project progress" query={q} />;
+  const team = useDashboardTeam();
+  if (q.isPending) return <WidgetSkeleton title="Team progress" height={220} />;
+  if (q.isError) return <Failed title="Team progress" query={q} />;
   const ps = q.data;
   const names = ps.find((p) => p.stages.length)?.stages.map((s) => s.name) ?? [];
   return (
-    <Widget title="Project progress" subtitle="Tickets per column; done = the last column" action={names.length ? <StageLegend names={names} /> : undefined}>
+    <Widget title="Team progress" subtitle="Issues per status; done = the last status" action={names.length ? <StageLegend names={names} /> : undefined}>
       {ps.length === 0 ? (
         <Empty>
-          You are not in any project yet. <Link className="text-accent" to="/projects/new">Create one</Link>, or ask a project admin to add you.
+          You are not in any team yet. <Link className="text-accent" to="/teams/new">Create one</Link>, or ask a team admin to add you.
         </Empty>
       ) : (
         <List inset="card" density="roomy">
           {ps.map((p) => (
             <li key={p.id}>
               <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <Link to={`/p/${p.key}`} className="flex items-center gap-2 hover:text-accent">
+                <Link to={`/t/${p.key}`} className="flex items-center gap-2 hover:text-accent">
                   <span className="chip bg-accent/15 font-mono text-accent">{p.key}</span>
                   <span className="font-medium">{p.name}</span>
                 </Link>
-                {!project && (
-                  <Link to={`/p/${p.key}/overview`} className="text-xs text-muted hover:text-accent" aria-label={`Overview of ${p.name}`}>
+                {!team && (
+                  <Link to={`/t/${p.key}/overview`} className="text-xs text-muted hover:text-accent" aria-label={`Overview of ${p.name}`}>
                     Overview <ArrowRightIcon />
                   </Link>
                 )}
@@ -105,10 +105,10 @@ export function ProjectProgress() {
                   {p.urgent > 0 && <span className="text-danger"><TrendUpIcon /> {p.urgent} high/urgent</span>}
                   {p.agentReady > 0 && <span className="text-agent"><AgentIcon /> {p.agentReady} AI-ready</span>}
                   {p.staleNodes > 0 && (
-                    <Link to={`/p/${p.key}/map`} className="text-warn hover:underline"><WarningIcon /> {p.staleNodes} stale</Link>
+                    <Link to={`/t/${p.key}/map`} className="text-warn hover:underline"><WarningIcon /> {p.staleNodes} stale</Link>
                   )}
                   {p.staleDocs > 0 && (
-                    <Link to={`/p/${p.key}/docs`} className="text-warn hover:underline"><WarningIcon /> {p.staleDocs} stale doc{p.staleDocs === 1 ? "" : "s"}</Link>
+                    <Link to={`/t/${p.key}/docs`} className="text-warn hover:underline"><WarningIcon /> {p.staleDocs} stale doc{p.staleDocs === 1 ? "" : "s"}</Link>
                   )}
                   <span>{p.lastActivity ? `active ${timeAgo(p.lastActivity)}` : "no activity in 4 weeks"}</span>
                 </span>
@@ -127,9 +127,9 @@ export function Throughput() {
   if (q.isPending) return <WidgetSkeleton title="Throughput" height={200} />;
   if (q.isError) return <Failed title="Throughput" query={q} />;
   return (
-    <Widget title="Throughput" subtitle="Tickets created vs completed per day, last 14 days">
+    <Widget title="Throughput" subtitle="Issues created vs completed per day, last 14 days">
       <ColumnChart
-        label="Tickets created and completed per day"
+        label="Issues created and completed per day"
         data={q.data}
         series={[
           { key: "created", label: "Created", color: "var(--series-1)" },
@@ -193,7 +193,7 @@ export function AgentQueues() {
                     {a.sessions.length > 0 && ` · ${a.sessions.length} session${a.sessions.length === 1 ? "" : "s"}`}
                   </div>
                 </Tip>
-                <SessionGroups sessions={a.sessions} action={(x) => <SessionRemoveButton projectKey={x.projectKey ?? ""} sessionId={x.id} />} />
+                <SessionGroups sessions={a.sessions} action={(x) => <SessionRemoveButton teamKey={x.teamKey ?? ""} sessionId={x.id} />} />
               </div>
               <div className="text-right text-xs">
                 {a.pending ? (
@@ -203,7 +203,7 @@ export function AgentQueues() {
                       align="center"
                       content={
                         <div className="space-y-0.5">
-                          {a.byProject.map((p) => (
+                          {a.byTeam.map((p) => (
                             <div key={p.key} className="flex justify-between gap-4">
                               <span>{p.key}</span>
                               <span className="tabular-nums">{p.pending} queued</span>
@@ -270,10 +270,10 @@ export function NeedsAttention() {
   if (q.isError) return <Failed title="Needs attention" query={q} />;
   const a = q.data;
   const items: AttentionItem[] = [
-    ...a.review.map((t) => ({ key: `r-${t.ref}`, kind: "review" as const, to: `/p/${t.projectKey}?t=${t.ref}`, ref: t.ref, text: t.title, byAgent: t.byAgent })),
-    ...a.urgent.map((t) => ({ key: `u-${t.ref}`, kind: "urgent" as const, to: `/p/${t.projectKey}?t=${t.ref}`, ref: t.ref, text: t.title, meta: t.column })),
-    ...a.stale.map((n) => ({ key: `n-${n.id}`, kind: "stale" as const, to: `/p/${n.projectKey}/map?node=${n.id}`, text: n.name, meta: `${n.projectKey} · ${n.layer}`, title: n.reason ?? undefined })),
-    ...a.staleDocs.map((d) => ({ key: `d-${d.id}`, kind: "staleDocs" as const, to: `/p/${d.projectKey}/docs?doc=${d.id}`, text: d.title, meta: d.projectKey, title: d.reason ?? undefined })),
+    ...a.review.map((t) => ({ key: `r-${t.ref}`, kind: "review" as const, to: `/t/${t.teamKey}?t=${t.ref}`, ref: t.ref, text: t.title, byAgent: t.byAgent })),
+    ...a.urgent.map((t) => ({ key: `u-${t.ref}`, kind: "urgent" as const, to: `/t/${t.teamKey}?t=${t.ref}`, ref: t.ref, text: t.title, meta: t.status })),
+    ...a.stale.map((n) => ({ key: `n-${n.id}`, kind: "stale" as const, to: `/t/${n.teamKey}/map?node=${n.id}`, text: n.name, meta: `${n.teamKey} · ${n.layer}`, title: n.reason ?? undefined })),
+    ...a.staleDocs.map((d) => ({ key: `d-${d.id}`, kind: "staleDocs" as const, to: `/t/${d.teamKey}/docs?doc=${d.id}`, text: d.title, meta: d.teamKey, title: d.reason ?? undefined })),
   ];
   const term = search.trim().toLowerCase();
   const shown = items.filter(
@@ -357,7 +357,7 @@ export function RecentActivity() {
   if (q.isPending) return <WidgetSkeleton title="Recent activity" height={160} />;
   if (q.isError) return <Failed title="Recent activity" query={q} />;
   return (
-    <Widget title="Recent activity" subtitle="Across all projects">
+    <Widget title="Recent activity" subtitle="Across all teams">
       {q.data.length === 0 ? (
         <Empty>Nothing in the last 4 weeks.</Empty>
       ) : (
@@ -384,18 +384,18 @@ export function SyncHealth() {
       ) : (
         <div className="space-y-6">
           <LimitedSection
-            title="Work not linked to a ticket"
+            title="Work not linked to an issue"
             items={h.untracked}
             row={(u) => (
               <TwoLineRow
                 key={u.id}
-                lead={u.projectKey}
+                lead={u.teamKey}
                 title={`${u.files.slice(0, 2).join(", ")}${u.files.length > 2 ? ` +${u.files.length - 2}` : ""}`}
                 meta={`${u.by} · ${timeAgo(u.since)}`}
                 tip={
                   <div className="space-y-0.5">
                     <div>
-                      {u.by} changed {u.files.length} file{u.files.length === 1 ? "" : "s"} {timeAgo(u.since)}, with no ticket on the session
+                      {u.by} changed {u.files.length} file{u.files.length === 1 ? "" : "s"} {timeAgo(u.since)}, with no issue on the session
                     </div>
                     <div className="font-mono text-[11px] text-muted">
                       {u.files.slice(0, 8).map((f) => (
@@ -414,7 +414,7 @@ export function SyncHealth() {
             row={(x) => (
               <TwoLineRow
                 key={x.ref}
-                href={`/p/${x.projectKey}?t=${x.ref}`}
+                href={`/t/${x.teamKey}?t=${x.ref}`}
                 lead={x.ref}
                 title={x.title}
                 meta={
@@ -441,7 +441,7 @@ export function SyncHealth() {
             row={(d) => (
               <TwoLineRow
                 key={d.id}
-                href={`/p/${d.projectKey}/map?node=${d.nodeId}`}
+                href={`/t/${d.teamKey}/map?node=${d.nodeId}`}
                 title={d.node}
                 meta={`${d.confirm ? "confirmation" : "update"} · ${d.authorName} · ${timeAgo(d.createdAt)}`}
                 tip={
@@ -465,19 +465,19 @@ export function SyncHealth() {
 const ago = (days: number) => (days === 0 ? "today" : days === 1 ? "1 day" : `${days} days`);
 
 /**
- * What matters most in this project, in the order to look at it: work that has sat longest in progress, what has waited longest
- * for review, agents that went quiet, decisions still only proposed. Only on a project's Overview.
+ * What matters most in this team, in the order to look at it: work that has sat longest in progress, what has waited longest
+ * for review, agents that went quiet, decisions still only proposed. Only on a team's Overview.
  */
-export function ProjectFocus() {
+export function TeamFocus() {
   const q = useWidget("focus");
-  const project = useDashboardProject();
+  const team = useDashboardTeam();
   if (q.isPending) return <WidgetSkeleton title="Focus" height={180} />;
   if (q.isError) return <Failed title="Focus" query={q} />;
   const f = q.data;
   const stuck = f.aging.length + f.waitingReview.length + f.quiet.length;
   const row = (t: { ref: string; title: string }, right: string, agent = false) => (
     <li key={t.ref}>
-      <Link to={`/p/${project}?t=${t.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
+      <Link to={`/t/${team}?t=${t.ref}`} className="flex gap-2 rounded px-1 py-0.5 hover:bg-panel-2">
         <span className="shrink-0 font-mono text-xs text-muted">{t.ref}</span>
         <span className="truncate">{t.title}</span>
         {agent && <span className="shrink-0 text-xs text-agent" title="Agent work"><AgentIcon /></span>}
@@ -486,10 +486,10 @@ export function ProjectFocus() {
     </li>
   );
   return (
-    <Widget title="Focus" subtitle="What to look at first in this project">
-      {f.tickets === 0 ? (
+    <Widget title="Focus" subtitle="What to look at first in this team">
+      {f.issues === 0 ? (
         <Empty>
-          No tickets yet. <Link className="text-accent" to={`/p/${project}`}>Add the first one on the board</Link>, and what needs attention will appear here.
+          No issues yet. <Link className="text-accent" to={`/t/${team}`}>Add the first one on the board</Link>, and what needs attention will appear here.
         </Empty>
       ) : stuck === 0 ? (
         <Empty>Nothing is stuck: no work waiting on review, nothing in progress for long, no agent gone quiet.</Empty>
@@ -507,10 +507,10 @@ export function ProjectFocus() {
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-3 text-xs text-muted">
-        <Link to={`/p/${project}/decisions`} className="hover:text-accent">
+        <Link to={`/t/${team}/decisions`} className="hover:text-accent">
           {f.proposedDecisions} decision{f.proposedDecisions === 1 ? "" : "s"} still proposed
         </Link>
-        <Link to={`/p/${project}/members`} className="hover:text-accent">
+        <Link to={`/t/${team}/members`} className="hover:text-accent">
           {f.members.count} member{f.members.count === 1 ? "" : "s"}{f.members.myRole ? ` · you are ${f.members.myRole}` : ""}
         </Link>
       </div>

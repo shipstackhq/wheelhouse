@@ -7,7 +7,7 @@ export type GlossaryTerm = { term: string; definition: string };
 
 const GlossaryContext = createContext<GlossaryTerm[]>([]);
 
-/** Provide the project glossary so every <Markdown> below highlights its terms. */
+/** Provide the team glossary so every <Markdown> below highlights its terms. */
 export function GlossaryProvider({ terms, children }: { terms: GlossaryTerm[]; children: React.ReactNode }) {
   return <GlossaryContext.Provider value={terms}>{children}</GlossaryContext.Provider>;
 }

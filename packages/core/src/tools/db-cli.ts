@@ -1,9 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
+import { preflight, resolveDangling } from "./preflight";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, type Finding, type Manifest, type Snapshot } from "./db-copy";
 
 /**
  * pnpm db:migrate --to <PGlite directory | postgres://…>                  (bring a database to this code's migrations; do it to a COPY before exporting)
+ * pnpm db:migrate --to <target> --through 0020                           (only up to a migration number: the state a preflight needs)
+ * pnpm db:preflight --to <target>                                          (what migrations 0021 and 0022 would refuse in this data, read only)
+ * pnpm db:preflight --to <target> --resolve                                (first remove the dangling ADR nodes and invite teams it lists, saying each one)
  * pnpm db:export --from <PGlite directory | postgres://…> --out <folder>
  * pnpm db:import --in <folder> --to <PGlite directory | postgres://…>      (the target is migrated first and must then be empty)
  * pnpm db:verify --in <folder> --to <target>                               (the target against what the export said)
@@ -25,7 +29,8 @@ const need = (name: string) => opt(name) ?? usage(`--${name} is required`);
 function usage(problem?: string): never {
   if (problem) console.error(problem + "\n");
   console.error(`usage:
-  db:migrate --to <PGlite dir | postgres url>      (apply this code's migrations to it; run on a copy of the source before exporting)
+  db:preflight --to <PGlite dir | postgres url> [--resolve]      (the rows migrations 0021 and 0022 would refuse; --resolve removes the dangling ones and says which)
+  db:migrate --to <PGlite dir | postgres url> [--through 0020]      (apply this code's migrations to it; run on a copy of the source before exporting)
   db:export --from <PGlite dir | postgres url> --out <folder> [--in-place]
   db:import --in <folder> --to <PGlite dir | postgres url>
   db:verify --in <folder> --to <target>      or      db:verify --from <source> --to <target>   [--json]`);
@@ -46,11 +51,28 @@ async function main() {
     // The export refuses to cross migrations (an import is checked against the export's), so a source made by older code is
     // brought up to this code's first. Never point this at the live database: copy it, and migrate the copy.
     const to = need("to");
-    const conn = await openConn(to, { migrate: true });
+    const conn = await openConn(to, { migrate: true, through: opt("through") });
     const [{ n }] = (await conn.query("select count(*)::int as n from drizzle.__drizzle_migrations")) as { n: number }[];
     await conn.close();
-    log(`${to} is at ${n} migrations (this code's)`);
+    log(`${to} is at ${n} migrations${opt("through") ? ` (through ${opt("through")})` : " (this code's)"}`);
     return 0;
+  }
+  if (command === "preflight") {
+    const conn = await openConn(need("to"));
+    try {
+      if (flag("resolve")) {
+        // Opt in, and said out loud: only the entries the report lists as pointing at nothing, from their arrays.
+        const said = await resolveDangling(conn.query);
+        for (const line of said) log(`  RESOLVED ${line}`);
+        log(said.length ? `removed ${said.length} dangling entr${said.length === 1 ? "y" : "ies"} from ${conn.label}` : `nothing to resolve in ${conn.label}`);
+      }
+      log(`checking ${conn.label} against the constraints of migrations 0021 and 0022`);
+      const failed = report(await preflight(conn.query), flag("json"));
+      log(failed ? "RESULT: fix these rows before migrating" : "RESULT: nothing in this data breaks the new constraints");
+      return failed ? 1 : 0;
+    } finally {
+      await conn.close();
+    }
   }
   if (command === "export") {
     const from = need("from");

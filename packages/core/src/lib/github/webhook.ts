@@ -10,7 +10,7 @@ export type WebhookReply = { status: number; text?: string; json?: unknown };
 
 /**
  * GitHub's webhook (WH-20). The signature is checked against the raw body before anything is parsed or looked up, and a
- * failure is one plain 401. What a delivery may touch is decided in handleDelivery: only repositories that a team's own,
+ * failure is one plain 401. What a delivery may touch is decided in handleDelivery: only repositories that a workspace's own,
  * verified installation has connected. The host reads the body (`readBody`) so the bytes are exactly what GitHub signed.
  */
 export async function receiveWebhook(i: {

@@ -3,13 +3,15 @@
   "isInstanceAdmin": "boolean",
   "role": "string",
   "tags": [],
-  "team": {
+  "user": {
+    "avatarUrl": "null",
+    "email": "string",
     "id": "string",
     "name": "string"
   },
-  "user": {
-    "email": "string",
+  "workspace": {
     "id": "string",
+    "imageUrl": "null",
     "name": "string"
   }
 }

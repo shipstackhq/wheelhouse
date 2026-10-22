@@ -3,8 +3,12 @@
 :root {
   /* dark (default): neutral greys */
   --bg: #0f0f10;
+  /* The page behind everything: the same as --bg in dark; plain white in light, where --bg stays a grey for inset things (chips, code, inputs). */
+  --page: var(--bg);
   --panel: #161617;
   --panel-2: #1f1f21;
+  /* A board card: a step lighter than its column in dark, plain white in light so it stands out from the grey column. */
+  --card: #1f1f21;
   --border: #2c2c2f;
   --fg: #ececee;
   --muted: #8e8e93;
@@ -32,8 +36,10 @@
 
 :root[data-theme="light"] {
   --bg: #f6f6f7;
+  --page: #ffffff;
   --panel: #ffffff;
   --panel-2: #f0f0f2;
+  --card: #ffffff;
   --border: #dedee2;
   --fg: #19191b;
   --muted: #66666d;
@@ -62,6 +68,8 @@
   --color-bg: var(--bg);
   --color-panel: var(--panel);
   --color-panel-2: var(--panel-2);
+  --color-card: var(--card);
+  --color-page: var(--page);
   --color-line: var(--border);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
@@ -76,7 +84,7 @@
 }
 
 body {
-  background: var(--bg);
+  background: var(--page);
   color: var(--fg);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
@@ -98,7 +106,7 @@ body {
     @apply w-full rounded-md border border-line bg-bg px-3 py-2 text-sm text-fg outline-none placeholder:text-muted/60 focus:border-accent;
   }
   .label {
-    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-muted;
+    @apply mb-1 block text-xs font-medium text-muted;
   }
   .card {
     @apply rounded-lg border border-line bg-panel;

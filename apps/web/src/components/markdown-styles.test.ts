@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const css = fs.readFileSync(path.join(process.cwd(), "src/app.css"), "utf8");
-const dialog = fs.readFileSync(path.join(process.cwd(), "src/pages/board/ticket-dialog.tsx"), "utf8");
+const dialog = fs.readFileSync(path.join(process.cwd(), "src/pages/board/issue-dialog.tsx"), "utf8");
 
 /** The text between the braces of the first rule that starts with `selector {`. */
 const rule = (selector: string) => css.match(new RegExp(`(?:^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
@@ -40,6 +40,6 @@ test(".md-quiet comes after .md and outside any @layer, so it actually overrides
   assert.equal(inLayer, false);
 });
 
-test("the ticket description uses it", () => {
+test("the issue description uses it", () => {
   assert.match(dialog, /className="md md-quiet [^"]*"/);
 });

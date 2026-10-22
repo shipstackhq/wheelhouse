@@ -5,11 +5,11 @@ import { apiError, renderApp } from "../../test/harness";
 import { graph, MAP_TERMS } from "../../test/data";
 import { FakeEventSource } from "../../test/fake-event-source";
 
-const open = (setup: Parameters<typeof renderApp>[1] = () => {}, path = "/p/AA/glossary") => renderApp(path, setup);
+const open = (setup: Parameters<typeof renderApp>[1] = () => {}, path = "/t/AA/glossary") => renderApp(path, setup);
 const cards = () => within(screen.getByRole("list")).getAllByRole("link");
 /** One term's own page (t1 is Invoice, t2 is Tenant). */
 const detail = async (id: "t1" | "t2", setup: Parameters<typeof renderApp>[1] = () => {}) => {
-  const app = open(setup, `/p/AA/glossary/${id}`);
+  const app = open(setup, `/t/AA/glossary/${id}`);
   await screen.findByRole("heading", { level: 1, name: id === "t1" ? "Invoice" : "Tenant" });
   return app;
 };
@@ -20,7 +20,7 @@ describe("the glossary home", () => {
     await screen.findByRole("heading", { name: "Glossary" });
     expect(screen.getByRole("list").className).toContain("lg:grid-cols-3");
     const links = cards();
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/p/AA/glossary/t1", "/p/AA/glossary/t2"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/t/AA/glossary/t1", "/t/AA/glossary/t2"]);
     const invoice = screen.getByRole("link", { name: /^Invoice/ });
     expect(within(invoice).getByText("Billing")).toBeTruthy(); // the concept, as a label (the card is the link)
     expect(within(screen.getByRole("link", { name: /^Tenant/ })).queryByText("Billing")).toBeNull();
@@ -28,7 +28,7 @@ describe("the glossary home", () => {
   });
 
   test("with no terms it says so; the filter matches the term or its definition, and says when nothing matches", async () => {
-    const { unmount } = open((s) => s.on("GET /api/app/projects/AA/graph", graph("AA", { terms: [] })));
+    const { unmount } = open((s) => s.on("GET /api/app/teams/AA/graph", graph("AA", { terms: [] })));
     await screen.findByText("No terms yet.");
     unmount();
     open();
@@ -48,12 +48,12 @@ describe("the glossary home", () => {
   test("clicking a card opens that term at its own address", async () => {
     const { at } = open();
     await userEvent.setup().click(await screen.findByRole("link", { name: /^Invoice/ }));
-    await waitFor(() => expect(at()).toBe("/p/AA/glossary/t1"));
+    await waitFor(() => expect(at()).toBe("/t/AA/glossary/t1"));
     expect(await screen.findByText("A bill we send")).toBeTruthy();
   });
 
   test("+ Add term opens a form that needs a term and a definition, and saves them with the chosen concept", async () => {
-    const { server } = open((s) => s.on("PUT /api/app/projects/AA/terms/Runbook", { term: { id: "t9", term: "Runbook", definition: "Steps to follow", nodeId: null } }));
+    const { server } = open((s) => s.on("PUT /api/app/teams/AA/terms/Runbook", { term: { id: "t9", term: "Runbook", definition: "Steps to follow", nodeId: null } }));
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ Add term" }));
     const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
@@ -63,25 +63,25 @@ describe("the glossary home", () => {
     await user.type(screen.getByPlaceholderText(/^Definition/), "Steps to follow");
     expect(save.disabled).toBe(false);
     await user.click(save);
-    await waitFor(() => expect(server.sent("PUT /api/app/projects/AA/terms/Runbook")).toHaveLength(1));
-    expect(server.sent("PUT /api/app/projects/AA/terms/Runbook")[0].body).toEqual({ definition: "Steps to follow", node: null });
-    expect(server.sent("PUT /api/app/projects/AA/terms/Runbook")[0].headers["x-csrf-token"]).toBe("csrf-ada");
+    await waitFor(() => expect(server.sent("PUT /api/app/teams/AA/terms/Runbook")).toHaveLength(1));
+    expect(server.sent("PUT /api/app/teams/AA/terms/Runbook")[0].body).toEqual({ definition: "Steps to follow", node: null });
+    expect(server.sent("PUT /api/app/teams/AA/terms/Runbook")[0].headers["x-csrf-token"]).toBe("csrf-ada");
     await waitFor(() => expect(screen.queryByPlaceholderText("Term")).toBeNull()); // closed
-    await waitFor(() => expect(server.sent("GET /api/app/projects/AA/graph").length).toBeGreaterThan(1)); // read again
+    await waitFor(() => expect(server.sent("GET /api/app/teams/AA/graph").length).toBeGreaterThan(1)); // read again
   });
 
   test("a term with a slash or spaces in its name is sent correctly in the path", async () => {
-    const { server } = open((s) => s.on("PUT /api/app/projects/AA/terms/CI%2FCD%20pipeline", { term: MAP_TERMS[0] }));
+    const { server } = open((s) => s.on("PUT /api/app/teams/AA/terms/CI%2FCD%20pipeline", { term: MAP_TERMS[0] }));
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ Add term" }));
     await user.type(screen.getByPlaceholderText("Term"), "CI/CD pipeline");
     await user.type(screen.getByPlaceholderText(/^Definition/), "How code ships");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(server.sent("PUT /api/app/projects/AA/terms/CI%2FCD%20pipeline")).toHaveLength(1));
+    await waitFor(() => expect(server.sent("PUT /api/app/teams/AA/terms/CI%2FCD%20pipeline")).toHaveLength(1));
   });
 
   test("a refusal is shown in the form, in the server's words, and what was typed is kept", async () => {
-    open((s) => s.on("PUT /api/app/projects/AA/terms/Bad", apiError(404, "not_found", 'Node "x" not found')));
+    open((s) => s.on("PUT /api/app/teams/AA/terms/Bad", apiError(404, "not_found", 'Node "x" not found')));
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ Add term" }));
     await user.type(screen.getByPlaceholderText("Term"), "Bad");
@@ -102,7 +102,7 @@ describe("the glossary home", () => {
 
   test("a term added by someone else appears over the live stream", async () => {
     let terms = [...MAP_TERMS];
-    open((s) => s.on("GET /api/app/projects/AA/graph", () => graph("AA", { terms })));
+    open((s) => s.on("GET /api/app/teams/AA/graph", () => graph("AA", { terms })));
     await screen.findByRole("link", { name: /^Invoice/ });
     await waitFor(() => expect(FakeEventSource.open.length).toBe(1));
     terms = [...terms, { id: "t3", term: "Runbook", definition: "Steps", nodeId: null }];
@@ -116,8 +116,8 @@ describe("one term", () => {
     await detail("t1");
     expect(screen.getByText("A bill we send")).toBeTruthy();
     const article = screen.getByRole("article");
-    expect(within(article).getByRole("link", { name: "Billing" }).getAttribute("href")).toBe("/p/AA/map?node=c-bill");
-    expect(within(screen.getByRole("navigation", { name: "Glossary navigation" })).getByRole("link", { name: /Glossary/ }).getAttribute("href")).toBe("/p/AA/glossary");
+    expect(within(article).getByRole("link", { name: "Billing" }).getAttribute("href")).toBe("/t/AA/map?node=c-bill");
+    expect(within(screen.getByRole("navigation", { name: "Glossary navigation" })).getByRole("link", { name: /Glossary/ }).getAttribute("href")).toBe("/t/AA/glossary");
   });
 
   test("a term without a concept has no concept link", async () => {
@@ -126,12 +126,12 @@ describe("one term", () => {
   });
 
   test("an id that is not a term says so", async () => {
-    open(() => {}, "/p/AA/glossary/nope");
+    open(() => {}, "/t/AA/glossary/nope");
     expect(await screen.findByText("This term is not in the glossary.")).toBeTruthy();
   });
 
   test("Edit changes the definition in place; Cancel puts it back", async () => {
-    const { server } = await detail("t1", (s) => s.on("PUT /api/app/projects/AA/terms/Invoice", { term: MAP_TERMS[0] }));
+    const { server } = await detail("t1", (s) => s.on("PUT /api/app/teams/AA/terms/Invoice", { term: MAP_TERMS[0] }));
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const def = screen.getByPlaceholderText(/^Definition/) as HTMLTextAreaElement;
@@ -144,15 +144,15 @@ describe("one term", () => {
     await user.clear(again);
     await user.type(again, "A bill");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(server.sent("PUT /api/app/projects/AA/terms/Invoice")).toHaveLength(1));
-    expect(server.sent("PUT /api/app/projects/AA/terms/Invoice")[0].body).toEqual({ definition: "A bill", node: "c-bill" });
-    expect(server.sent("DELETE /api/app/projects/AA/terms/t1")).toHaveLength(0); // same name: no delete
+    await waitFor(() => expect(server.sent("PUT /api/app/teams/AA/terms/Invoice")).toHaveLength(1));
+    expect(server.sent("PUT /api/app/teams/AA/terms/Invoice")[0].body).toEqual({ definition: "A bill", node: "c-bill" });
+    expect(server.sent("DELETE /api/app/teams/AA/terms/t1")).toHaveLength(0); // same name: no delete
   });
 
   test("renaming a term removes the old name and defines the new one (terms are keyed by name), then leaves the old address", async () => {
     const { server, at } = await detail("t2", (s) => {
-      s.on("DELETE /api/app/projects/AA/terms/t2", { ok: true });
-      s.on("PUT /api/app/projects/AA/terms/Customer", { term: MAP_TERMS[1] });
+      s.on("DELETE /api/app/teams/AA/terms/t2", { ok: true });
+      s.on("PUT /api/app/teams/AA/terms/Customer", { term: MAP_TERMS[1] });
     });
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Edit" }));
@@ -160,23 +160,23 @@ describe("one term", () => {
     await user.clear(name);
     await user.type(name, "Customer");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(server.sent("PUT /api/app/projects/AA/terms/Customer")).toHaveLength(1));
-    expect(server.sent("DELETE /api/app/projects/AA/terms/t2")).toHaveLength(1);
-    expect(server.requests.indexOf("DELETE /api/app/projects/AA/terms/t2")).toBeLessThan(server.requests.indexOf("PUT /api/app/projects/AA/terms/Customer"));
-    await waitFor(() => expect(at()).toBe("/p/AA/glossary"));
+    await waitFor(() => expect(server.sent("PUT /api/app/teams/AA/terms/Customer")).toHaveLength(1));
+    expect(server.sent("DELETE /api/app/teams/AA/terms/t2")).toHaveLength(1);
+    expect(server.requests.indexOf("DELETE /api/app/teams/AA/terms/t2")).toBeLessThan(server.requests.indexOf("PUT /api/app/teams/AA/terms/Customer"));
+    await waitFor(() => expect(at()).toBe("/t/AA/glossary"));
   });
 
   test("Remove asks first: Cancel does nothing, Remove deletes by id and returns to the glossary", async () => {
-    const { server, at } = await detail("t1", (s) => s.on("DELETE /api/app/projects/AA/terms/t1", { ok: true }));
+    const { server, at } = await detail("t1", (s) => s.on("DELETE /api/app/teams/AA/terms/t1", { ok: true }));
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Remove" }));
     const ask = await screen.findByRole("alertdialog");
     expect(within(ask).getByText("Remove “Invoice”?")).toBeTruthy();
     await user.click(within(ask).getByRole("button", { name: "Cancel" }));
-    expect(server.sent("DELETE /api/app/projects/AA/terms/t1")).toHaveLength(0);
+    expect(server.sent("DELETE /api/app/teams/AA/terms/t1")).toHaveLength(0);
     await user.click(screen.getByRole("button", { name: "Remove" }));
     await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Remove" }));
-    await waitFor(() => expect(server.sent("DELETE /api/app/projects/AA/terms/t1")).toHaveLength(1));
-    await waitFor(() => expect(at()).toBe("/p/AA/glossary"));
+    await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/terms/t1")).toHaveLength(1));
+    await waitFor(() => expect(at()).toBe("/t/AA/glossary"));
   });
 });

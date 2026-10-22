@@ -1,44 +1,87 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { listProjectsWithRole } from "@wheelhouse/core/lib/project-members";
-import { createProject, removeSession, updateProject } from "@wheelhouse/core/lib/service";
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import {
+  addProjectTeamAs,
+  createMilestoneAs,
+  createProjectAs,
+  deleteMilestoneAs,
+  deleteProjectAs,
+  getProjectAs,
+  listProjectsAs,
+  removeProjectTeamAs,
+  updateMilestoneAs,
+  updateProjectAs,
+} from "@wheelhouse/core/lib/projects-app";
 import type { RawTextRequest } from "../http/raw-text";
-import { jsonBody, str } from "./body";
+import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
-const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date; role?: string }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt, ...(p.role ? { role: p.role } : {}) });
-
+/**
+ * Projects (WH-118): outcomes that end and can span teams. They belong to the workspace, and a person sees one only through a team
+ * of theirs that takes part (never as a guest); the teams they are not on are only counted. A project that is not visible to the
+ * caller is a 404, the same as one that does not exist.
+ */
 @Controller("api/app/projects")
 @AppEndpoints()
+@UseGuards(SessionGuard)
 export class ProjectsController {
-  /** The team's projects, oldest first. The team is the signed-in person's own; it is never taken from the request. */
+  /** `{ projects }`: the visible ones, active first, each with its health, lead and how many issues are done. */
   @Get()
-  @UseGuards(SessionGuard)
   async list(@Req() req: SessionRequest) {
-    return { projects: (await listProjectsWithRole(req.human.actor)).map(view) };
+    return { projects: await listProjectsAs(req.human.actor) };
   }
 
-  /** `{ name, key?, description? }`. The key defaults from the name. 201 with the project; a taken key is a 409. */
+  /** `{ name, leadTeam, description?, status?, priority?, startDate?, targetDate?, leadUser?, healthOverride?, teams? }`; 201. The lead team is a team you can edit. */
   @Post()
-  @UseGuards(SessionGuard)
-  @HttpCode(201)
   async create(@Req() req: SessionRequest & RawTextRequest) {
-    const b = jsonBody(req);
-    return { project: view(await createProject(req.human.actor, { name: str(b.name), key: str(b.key) || undefined, description: str(b.description) })) };
+    return { project: await createProjectAs(req.human.actor, jsonBody(req)) };
   }
 
-  /** `{ name?, description? }`: project settings. Project admins only (403 otherwise); the key does not change. */
-  @Patch(":key")
-  @UseGuards(SessionGuard)
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    const b = jsonBody(req);
-    return { project: view(await updateProject(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined })) };
+  /** One project: its milestones, the viewer's own teams with their issues, the totals of the other teams, and the teams they could bring in. */
+  @Get(":id")
+  async one(@Req() req: SessionRequest, @Param("id") id: string) {
+    return { project: await getProjectAs(req.human.actor, id) };
   }
 
-  /** Teammates remove an agent session from a project (soft delete: if it reconnects it starts at the top of the queue). */
-  @Delete(":key/sessions/:sessionId")
-  @UseGuards(SessionGuard)
+  /** Any of the create fields, `healthOverride: null` to clear it, and `version` for the lock. Changing the lead needs the lead or an admin of the lead team. */
+  @Patch(":id")
+  async update(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
+    return { project: await updateProjectAs(req.human.actor, id, jsonBody(req)) };
+  }
+
+  /** Soft delete: its issues stay on their boards, in no project. */
+  @Delete(":id")
+  async remove(@Req() req: SessionRequest, @Param("id") id: string) {
+    return deleteProjectAs(req.human.actor, id);
+  }
+
+  /** `{ team }`: bring in a team you can edit. */
+  @Post(":id/teams")
+  async addTeam(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
+    return { project: await addProjectTeamAs(req.human.actor, id, jsonBody(req)) };
+  }
+
+  /** Take a team out. A team with issues in the project is a 409 unless `?releaseIssues=1`; the lead team cannot go. */
+  @Delete(":id/teams/:key")
+  async removeTeam(@Req() req: SessionRequest, @Param("id") id: string, @Param("key") key: string, @Query("releaseIssues") release?: string) {
+    return removeProjectTeamAs(req.human.actor, id, key, release === "1" || release === "true");
+  }
+
+  /** `{ name, description?, targetDate? }`; 201. */
+  @Post(":id/milestones")
+  async addMilestone(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
+    return { project: await createMilestoneAs(req.human.actor, id, jsonBody(req)) };
+  }
+
+  /** Any of `name`, `description`, `targetDate`, and `index` to move it in the order. */
+  @Patch(":id/milestones/:milestoneId")
+  async patchMilestone(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string, @Param("milestoneId") milestoneId: string) {
+    return { project: await updateMilestoneAs(req.human.actor, id, milestoneId, jsonBody(req)) };
+  }
+
+  /** Its issues stay in the project, in no milestone. */
+  @Delete(":id/milestones/:milestoneId")
   @HttpCode(200)
-  removeSession(@Req() req: SessionRequest, @Param("key") key: string, @Param("sessionId") sessionId: string) {
-    return removeSession(req.human.actor, key, sessionId);
+  async removeMilestone(@Req() req: SessionRequest, @Param("id") id: string, @Param("milestoneId") milestoneId: string) {
+    return { project: await deleteMilestoneAs(req.human.actor, id, milestoneId) };
   }
 }

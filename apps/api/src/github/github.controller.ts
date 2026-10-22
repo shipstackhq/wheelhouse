@@ -19,10 +19,10 @@ const query = (req: HumanRequest) => new URL(req.originalUrl, "http://localhost"
 @UseFilters(SignedOutFilter)
 @UseGuards(HumanGuard)
 export class GithubController {
-  /** Start connecting GitHub for a project: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
+  /** Start connecting GitHub for a team: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
   @Get("install")
   async install(@Req() req: HumanRequest, @Res() res: Response) {
-    send(res, await startConnect(req.human, query(req).get("project") ?? ""));
+    send(res, await startConnect(req.human, query(req).get("team") ?? ""));
   }
 
   /** Where GitHub sends people after they install the App. The checks that make the installation id trustworthy are core's. */

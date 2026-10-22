@@ -5,12 +5,12 @@ export const HOSTED_URL = "https://wheelhouse.shipstack.run";
  * Every command the Agents page asks someone to paste. Kept apart from the page so a test can check them: none may carry
  * an API key (shell history, screen shares), and the project key and server URL must be the real ones.
  */
-export function onboarding({ origin, projectKey }: { origin: string; projectKey?: string | null }) {
-  const key = projectKey?.trim() || "KEY";
+export function onboarding({ origin, teamKey }: { origin: string; teamKey?: string | null }) {
+  const key = teamKey?.trim() || "KEY";
   const url = origin.replace(/\/+$/, "");
   const urlFlag = url === HOSTED_URL ? "" : ` --url ${url}`;
   return {
-    projectKey: key,
+    teamKey: key,
     url,
     /** The terminal's text commands. The VS Code extension has no `/plugin`: it uses the `/plugins` dialog or this link. */
     installPlugin: "/plugin marketplace add shipstackhq/wheelhouse-cli\n/plugin install wheelhouse@shipstack",
@@ -27,6 +27,6 @@ export function onboarding({ origin, projectKey }: { origin: string; projectKey?
     cli: `npm install -g @shipstack/wheelhouse-cli\nwheelhouse login${urlFlag}\nwheelhouse init --project ${key}${urlFlag}`,
     // `read -s` keeps the key out of the terminal and out of shell history; the commands below only name the variable.
     mcp: `read -rs WHEELHOUSE_KEY; export WHEELHOUSE_KEY   # paste the key; nothing is shown\nclaude mcp add --transport http wheelhouse ${url}/mcp --header "Authorization: Bearer $WHEELHOUSE_KEY"`,
-    rest: `curl -X POST ${url}/api/v1/create_ticket \\\n  -H "Authorization: Bearer $WHEELHOUSE_KEY" -H "Content-Type: application/json" \\\n  -d '{"project":"${key}","title":"Fix flaky login test","column":"Todo"}'`,
+    rest: `curl -X POST ${url}/api/v1/create_issue \\\n  -H "Authorization: Bearer $WHEELHOUSE_KEY" -H "Content-Type: application/json" \\\n  -d '{"project":"${key}","title":"Fix flaky login test","status":"Todo"}'`,
   };
 }

@@ -21,6 +21,10 @@ export function Select(props: {
   disabled?: boolean;
   /** The trigger's accessible name, for a select with no visible label. */
   ariaLabel?: string;
+  /** Hide the chevron on the trigger (a compact control with its label beside it). */
+  noChevron?: boolean;
+  /** Smaller items and text in the list, for a compact control. */
+  compact?: boolean;
 }) {
   // "" maps to the sentinel only when it's a real option; otherwise it means "nothing selected" (shows placeholder).
   const hasEmpty = props.options.some((o) => o.value === "");
@@ -45,20 +49,20 @@ export function Select(props: {
         <span className="min-w-0 truncate">
           <RSelect.Value placeholder={props.placeholder} />
         </span>
-        <RSelect.Icon className="text-muted"><ChevronDownIcon /></RSelect.Icon>
+        {!props.noChevron && <RSelect.Icon className="text-muted"><ChevronDownIcon /></RSelect.Icon>}
       </RSelect.Trigger>
       <RSelect.Portal>
         <RSelect.Content
           position="popper"
           sideOffset={4}
-          className="z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-line bg-panel text-sm text-fg shadow-xl"
+          className={clsx("z-50 max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border border-line bg-panel text-fg shadow-xl", props.compact ? "text-xs" : "text-sm")}
         >
           <RSelect.Viewport className="p-1">
             {props.options.map((o) => (
               <RSelect.Item
                 key={o.value}
                 value={enc(o.value)!}
-                className="relative flex cursor-pointer select-none items-center rounded px-2.5 py-1.5 outline-none data-[highlighted]:bg-panel-2 data-[state=checked]:text-accent"
+                className={clsx("relative flex cursor-pointer select-none items-center rounded outline-none data-[highlighted]:bg-panel-2 data-[state=checked]:text-accent", props.compact ? "px-1.5 py-0.5" : "px-2.5 py-1.5")}
               >
                 <RSelect.ItemText>{o.label}</RSelect.ItemText>
               </RSelect.Item>

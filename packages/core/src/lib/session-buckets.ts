@@ -37,7 +37,7 @@ export type SessionView = {
   /** False until the session has read its own queue once: it has no cursor, so "in sync" would be a lie. */
   reading: boolean;
   branch: string | null;
-  ticket: string | null;
-  /** Set when the same key has sessions in several projects, so rows say which. */
-  projectKey?: string;
+  issue: string | null;
+  /** Set when the same key has sessions in several teams, so rows say which. */
+  teamKey?: string;
 };

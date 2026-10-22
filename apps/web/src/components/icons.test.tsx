@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentIcon, CloseIcon, WarningIcon } from "./icons";
+import { AgentIcon, CloseIcon, TEAM_ICONS, WarningIcon } from "./icons";
 
 describe("icons", () => {
   test("an icon is an SVG hidden from screen readers, sized with the text and sitting inline", () => {
@@ -10,6 +10,12 @@ describe("icons", () => {
     expect(html).toMatch(/^<svg /);
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain("inline-block");
+    expect(html).toContain('height="1em"');
+  });
+
+  test("a team's icon is sized with the text too, like the app's icons (not Remix's 24px default)", () => {
+    const RocketIcon = TEAM_ICONS["rocket-2"];
+    const html = renderToStaticMarkup(<RocketIcon />);
     expect(html).toContain('height="1em"');
   });
 
@@ -38,7 +44,8 @@ describe("one icon set", () => {
 
   test("no screen draws a glyph or an emoji as an icon: they come from icons.tsx", () => {
     const glyph = /[✕✎⚠☑❝📖▾▸◇✓⋯⚙📄📁☰⤢○✨🎫💬🎉🗺▶▲▼⇆✦🤖]/u;
-    const offenders = files.filter((f) => glyph.test(readFileSync(f, "utf8")));
+    // The team icon picker offers emoji as something a person chooses (data), not as the app's own icons.
+    const offenders = files.filter((f) => !f.endsWith("team-icon-picker.tsx") && glyph.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
   });
 

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SetupGuide } from "./setup-guide";
 import { HOSTED_URL, onboarding } from "@wheelhouse/core/lib/onboarding";
 
-const html = (origin = HOSTED_URL, projectKey: string | null = "WH") => renderToStaticMarkup(<SetupGuide cmd={onboarding({ origin, projectKey })} />);
+const html = (origin = HOSTED_URL, teamKey: string | null = "WH") => renderToStaticMarkup(<SetupGuide cmd={onboarding({ origin, teamKey })} />);
 /** What a reader sees: tags become spaces, entities are decoded, whitespace is collapsed. */
 const text = (h: string) =>
   h

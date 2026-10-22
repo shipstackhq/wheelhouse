@@ -1,4 +1,4 @@
-import { columnForRole, DEFAULT_COLUMN_DEFS, roleFromText } from "./column-roles";
+import { statusForRole, DEFAULT_STATUS_DEFS, roleFromText } from "./status-roles";
 import { and, asc, desc, eq, gt, inArray, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "../db";
 import type { Actor } from "./access";
@@ -6,23 +6,25 @@ import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "./session-buck
 import { bus, deferPublish } from "./event-bus";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
+import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
 import { ServiceError } from "./service-error";
-import { audit, type Need, roleAllows, roleOnProject, visibleProjectIds, workspaceRoleOf } from "./project-access";
+import { cleanLabels, labelsOf, setDecisionNodes, setIssueLabels, withCycle, withLabels, withNodeIds } from "./links";
+import { audit, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
 
 export { ServiceError };
 
 /**
  * The single write path for Wheelhouse. UI server actions, the REST API and the
- * MCP server all call into here, so every mutation is team-scoped, versioned
+ * MCP server all call into here, so every mutation is workspace-scoped, versioned
  * where it matters, and recorded in `events` (the activity feed + AI queue).
  */
 
-const { projects, columns, tickets, comments, nodes, edges, ticketNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users } = schema;
+const { teams, statuses, issues, comments, nodes, edges, issueNodes, events, agentCursors, flows, decisions, terms, workSessions, repositories, docs, docNodes, apiKeys, users, projects } = schema;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string) => UUID_RE.test(s);
 
-export const DEFAULT_COLUMNS = DEFAULT_COLUMN_DEFS.map((c) => c.name);
+export const DEFAULT_STATUSES = DEFAULT_STATUS_DEFS.map((c) => c.name);
 
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 export type Q = DB | Tx;
@@ -32,7 +34,7 @@ export type Q = DB | Tx;
  * safe if two edits from the same version cannot both read it before either writes; on Postgres (not on the single-connection
  * embedded database the tests use) they can. The second one waits here for the first to commit, then sees its version.
  */
-async function lockRow<T extends { id: string }>(tx: Tx, table: typeof tickets | typeof nodes | typeof docs, row: T): Promise<T> {
+async function lockRow<T extends { id: string }>(tx: Tx, table: typeof issues | typeof nodes | typeof docs, row: T): Promise<T> {
   const [fresh] = await tx.select().from(table).where(eq(table.id, row.id)).for("update");
   return (fresh as unknown as T | undefined) ?? row;
 }
@@ -40,14 +42,14 @@ async function lockRow<T extends { id: string }>(tx: Tx, table: typeof tickets |
 export async function emit(
   q: Q,
   actor: Actor,
-  projectId: string,
+  teamId: string,
   e: { type: string; entity: (typeof events.$inferInsert)["entity"]; entityId: string; summary: string; data?: Record<string, unknown> },
 ) {
   const [row] = await q
     .insert(events)
     .values({
-      teamId: actor.teamId,
-      projectId,
+      workspaceId: actor.workspaceId,
+      teamId,
       actorKind: actor.kind,
       actorId: actor.id,
       actorName: actor.name,
@@ -61,8 +63,8 @@ export async function emit(
     .returning({ seq: events.seq });
   // Tell open browser streams (WH-1). Inside a transaction this waits for the commit, so a watcher never re-reads old data.
   deferPublish(q, {
-    teamId: actor.teamId,
-    projectId,
+    workspaceId: actor.workspaceId,
+    teamId,
     seq: row.seq,
     type: e.type,
     entity: e.entity,
@@ -84,113 +86,124 @@ function diff<T extends Record<string, unknown>>(before: T, patch: Partial<T>) {
   return out;
 }
 
-// ───────────────────────── projects ─────────────────────────
+// ───────────────────────── teams ─────────────────────────
 
-/** The projects the actor can open: a person's own projects, or every project of the workspace for an agent key (ADR-23). */
-export async function listProjects(actor: Actor) {
+/** The teams the actor can open: a person's own teams, or the teams an agent key is scoped to (ADR-23, WH-120). */
+export async function listTeams(actor: Actor) {
   const db = await getDb();
-  const visible = await visibleProjectIds(db, actor);
+  const visible = await visibleTeamIds(db, actor);
   if (visible && !visible.length) return [];
   return db
     .select()
-    .from(projects)
-    .where(and(eq(projects.teamId, actor.teamId), visible ? inArray(projects.id, visible) : undefined))
-    .orderBy(asc(projects.createdAt));
+    .from(teams)
+    .where(and(eq(teams.workspaceId, actor.workspaceId), visible ? inArray(teams.id, visible) : undefined))
+    .orderBy(asc(teams.createdAt));
 }
 
-/** Finds a project of the actor's workspace by uuid or key, WITHOUT checking that the actor may open it. Only access code uses this. */
-export async function findWorkspaceProject(actor: Actor, ref: string, q?: Q) {
+/** Finds a team of the actor's workspace by uuid or key, WITHOUT checking that the actor may open it. Only access code uses this. */
+export async function findWorkspaceTeam(actor: Actor, ref: string, q?: Q) {
   const db = q ?? (await getDb());
   const [p] = await db
     .select()
-    .from(projects)
+    .from(teams)
     .where(
       and(
-        eq(projects.teamId, actor.teamId),
-        isUuid(ref) ? eq(projects.id, ref) : eq(sql`upper(${projects.key})`, ref.toUpperCase()),
+        eq(teams.workspaceId, actor.workspaceId),
+        isUuid(ref) ? eq(teams.id, ref) : eq(sql`upper(${teams.key})`, ref.toUpperCase()),
       ),
     );
   return p;
 }
 
 /**
- * Accepts a project uuid or its key (e.g. "WH"). A project of another workspace and a project the actor is not a member of both
+ * Accepts a team uuid or its key (e.g. "WH"). A team of another workspace and a team the actor is not a member of both
  * answer not_found, so its existence does not leak; a member whose role is too low for `need` gets forbidden (ADR-23).
  */
-export async function getProject(actor: Actor, ref: string, need: Need = "read", q?: Q) {
+export async function requireTeam(actor: Actor, ref: string, need: Need = "read", q?: Q) {
   const db = q ?? (await getDb());
-  const p = await findWorkspaceProject(actor, ref, db);
-  const role = p ? await roleOnProject(db, actor, p.id) : null;
-  if (!p || !role) throw new ServiceError("not_found", `Project ${ref} not found`);
-  if (!roleAllows(role, need)) throw new ServiceError("forbidden", need === "admin" ? "Only a project admin can do that" : "Your role on this project is read only");
+  const p = await findWorkspaceTeam(actor, ref, db);
+  const role = p ? await roleOnTeam(db, actor, p.id) : null;
+  if (!p || !role) throw new ServiceError("not_found", `Team ${ref} not found`);
+  if (!roleAllows(role, need)) throw new ServiceError("forbidden", need === "admin" ? "Only a team admin can do that" : "Your role on this team is read only");
   return p;
 }
 
-/** Rename a project and/or change its description. Project admins only; the key never changes (tickets are named after it). */
-export async function updateProject(actor: Actor, ref: string, input: { name?: string; description?: string }) {
-  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit a project's settings");
+/** Rename a team and/or change its description. Team admins only; the key never changes (issues are named after it). */
+export async function updateTeam(actor: Actor, ref: string, input: { name?: string; description?: string; icon?: unknown; iconColor?: unknown }) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit a team's settings");
   const db = await getDb();
-  const p = await getProject(actor, ref, "admin", db);
+  const p = await requireTeam(actor, ref, "admin", db);
   const name = input.name === undefined ? p.name : input.name.trim();
-  if (!name) throw new ServiceError("invalid", "Project name is required");
+  if (!name) throw new ServiceError("invalid", "Team name is required");
   const description = input.description === undefined ? p.description : input.description.trim();
-  if (name === p.name && description === p.description) return p;
+  const icon = parseTeamIcon(input.icon);
+  const iconColor = parseTeamIconColor(input.iconColor);
+  const next = { name, description, icon: icon === undefined ? p.icon : icon, iconColor: iconColor === undefined ? p.iconColor : iconColor };
+  if (next.name === p.name && next.description === p.description && next.icon === p.icon && next.iconColor === p.iconColor) return p;
   return db.transaction(async (tx) => {
-    const [row] = await tx.update(projects).set({ name, description }).where(eq(projects.id, p.id)).returning();
-    await audit(tx, actor, { action: "project.updated", targetType: "project", targetId: p.id, projectId: p.id, before: { name: p.name }, after: { name } });
-    await emit(tx, actor, p.id, { type: "project.updated", entity: "project", entityId: p.id, summary: `updated the settings of project ${row.name}` });
+    const [row] = await tx.update(teams).set(next).where(eq(teams.id, p.id)).returning();
+    await audit(tx, actor, { action: "team.updated", targetType: "team", targetId: p.id, teamId: p.id, before: { name: p.name, icon: p.icon, iconColor: p.iconColor }, after: { name, icon: next.icon, iconColor: next.iconColor } });
+    await emit(tx, actor, p.id, { type: "team.updated", entity: "team", entityId: p.id, summary: `updated the settings of team ${row.name}` });
     return row;
   });
 }
 
-/** Delete a project and everything in it (tickets, map, flows, drafts, sessions, activity). Teammates only. */
-export async function deleteProject(actor: Actor, ref: string) {
-  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a project");
+/** Delete a team and everything in it (issues, map, flows, drafts, sessions, activity). Teammates only. */
+export async function deleteTeam(actor: Actor, ref: string) {
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a team");
   const db = await getDb();
-  const p = await getProject(actor, ref, "admin");
+  const p = await requireTeam(actor, ref, "admin");
   await db.transaction(async (tx) => {
-    // events has no foreign key to projects, so clear it explicitly; everything else cascades.
-    await tx.delete(events).where(eq(events.projectId, p.id));
-    await tx.delete(projects).where(eq(projects.id, p.id));
+    // A team that leads a live project cannot go until someone else leads it; a deleted project it led goes for good with it.
+    const led = await tx.select({ id: projects.id, name: projects.name, deletedAt: projects.deletedAt }).from(projects).where(eq(projects.leadTeamId, p.id));
+    const live = led.filter((x) => !x.deletedAt);
+    if (live.length) throw new ServiceError("conflict", `${p.name} leads ${live.map((x) => `"${x.name}"`).join(", ")}. Make another team the lead of ${live.length === 1 ? "that project" : "those projects"} first.`);
+    if (led.length) await tx.delete(projects).where(inArray(projects.id, led.map((x) => x.id)));
+    // events has no foreign key to teams, so clear it explicitly; everything else cascades.
+    await tx.delete(events).where(eq(events.teamId, p.id));
+    await tx.delete(teams).where(eq(teams.id, p.id));
   });
   return { ok: true, deleted: p.key };
 }
 
-export async function createProject(actor: Actor, input: { name: string; key?: string; description?: string }) {
+export async function createTeam(actor: Actor, input: { name: string; key?: string; description?: string }) {
   const db = await getDb();
   const name = input.name.trim();
-  if (!name) throw new ServiceError("invalid", "Project name is required");
-  // Workspace Viewers and Guests cannot start projects (ADR-23); agent keys keep creating them as before.
+  if (!name) throw new ServiceError("invalid", "Team name is required");
+  // Workspace Viewers and Guests cannot start teams (ADR-23); agent keys can still create them.
   if (actor.kind === "human") {
-    const ws = await workspaceRoleOf(db, actor.teamId, actor.id);
-    if (ws !== "owner" && ws !== "admin" && ws !== "member") throw new ServiceError("forbidden", "Your workspace role cannot create projects");
+    const ws = await workspaceRoleOf(db, actor.workspaceId, actor.id);
+    if (ws !== "owner" && ws !== "admin" && ws !== "member") throw new ServiceError("forbidden", "Your workspace role cannot create teams");
   }
   const key = (input.key || name.replace(/[^a-zA-Z]/g, "").slice(0, 3) || "PRJ").toUpperCase().slice(0, 6);
   const existing = await db
-    .select({ id: projects.id })
-    .from(projects)
-    .where(and(eq(projects.teamId, actor.teamId), eq(projects.key, key)));
-  if (existing.length) throw new ServiceError("conflict", `Project key ${key} already in use`);
+    .select({ id: teams.id })
+    .from(teams)
+    .where(and(eq(teams.workspaceId, actor.workspaceId), eq(teams.key, key)));
+  if (existing.length) throw new ServiceError("conflict", `Team key ${key} already in use`);
 
   return db.transaction(async (tx) => {
     const [p] = await tx
-      .insert(projects)
-      .values({ teamId: actor.teamId, name, key, description: input.description ?? "" })
+      .insert(teams)
+      .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "" })
       .returning();
-    await tx.insert(columns).values(DEFAULT_COLUMN_DEFS.map((c, i) => ({ projectId: p.id, name: c.name, role: c.role, position: i + 1 })));
-    // The creator becomes the project's first admin: without a row here nobody could open the project they just made.
+    await tx.insert(statuses).values(DEFAULT_STATUS_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, isDefault: true, position: i + 1 })));
+    // The creator becomes the team's first admin: without a row here nobody could open the team they just made.
     if (actor.kind === "human") {
-      await tx.insert(schema.projectMembers).values({ projectId: p.id, userId: actor.id, teamId: actor.teamId, role: "admin", addedBy: actor.id });
-      await audit(tx, actor, { action: "project.created", targetType: "project", targetId: p.id, projectId: p.id, after: { key: p.key, creatorRole: "admin" } });
+      await tx.insert(schema.teamMembers).values({ teamId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
+      await audit(tx, actor, { action: "team.created", targetType: "team", targetId: p.id, teamId: p.id, after: { key: p.key, creatorRole: "admin" } });
+    } else if (!actor.system) {
+      // A key that makes a team is scoped to it, or it could not open what it just made (WH-120).
+      await tx.insert(schema.apiKeyTeams).values({ apiKeyId: actor.id, teamId: p.id, workspaceId: p.workspaceId });
     }
-    await emit(tx, actor, p.id, { type: "project.created", entity: "project", entityId: p.id, summary: `created project ${p.name}` });
+    await emit(tx, actor, p.id, { type: "team.created", entity: "team", entityId: p.id, summary: `created team ${p.name}` });
     return p;
   });
 }
 
-// ───────────────────────── board / tickets ─────────────────────────
+// ───────────────────────── board / issues ─────────────────────────
 
-export type TicketWithLinks = typeof tickets.$inferSelect & { ref: string; nodeIds: string[]; commentCount: number };
+export type IssueWithLinks = typeof issues.$inferSelect & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
 
 const CLAIM_TTL_MS = 24 * 3600e3;
 
@@ -198,12 +211,12 @@ const CLAIM_TTL_MS = 24 * 3600e3;
  * Release agent claims with no activity from the claiming agent for a day, so a
  * crashed or abandoned session doesn't hold work hostage. Logged as an event.
  */
-export async function expireStaleClaims(projectId: string) {
+export async function expireStaleClaims(teamId: string) {
   const db = await getDb();
   const claimed = await db
     .select()
-    .from(tickets)
-    .where(and(eq(tickets.projectId, projectId), sql`${tickets.claimedByKeyId} is not null`));
+    .from(issues)
+    .where(and(eq(issues.teamId, teamId), sql`${issues.claimedByKeyId} is not null`));
   for (const t of claimed) {
     const [last] = await db
       .select({ at: events.createdAt })
@@ -213,17 +226,17 @@ export async function expireStaleClaims(projectId: string) {
       .limit(1);
     const lastAt = new Date(last?.at ?? t.updatedAt).getTime();
     if (Date.now() - lastAt < CLAIM_TTL_MS) continue;
-    const [p] = await db.select().from(projects).where(eq(projects.id, projectId));
+    const [p] = await db.select().from(teams).where(eq(teams.id, teamId));
     await db.transaction(async (tx) => {
-      await tx.update(tickets).set({ claimedByKeyId: null, version: t.version + 1, updatedAt: new Date() }).where(eq(tickets.id, t.id));
+      await tx.update(issues).set({ claimedByKeyId: null, version: t.version + 1, updatedAt: new Date() }).where(eq(issues.id, t.id));
       await tx.insert(events).values({
-        teamId: p.teamId,
-        projectId,
+        workspaceId: p.workspaceId,
+        teamId,
         actorKind: "human",
         actorId: null,
         actorName: "Wheelhouse",
-        type: "ticket.claim_expired",
-        entity: "ticket",
+        type: "issue.claim_expired",
+        entity: "issue",
         entityId: t.id,
         summary: `released ${p.key}-${t.number}: no activity from the claiming agent for 24h`,
         data: { ref: `${p.key}-${t.number}` },
@@ -232,107 +245,114 @@ export async function expireStaleClaims(projectId: string) {
   }
 }
 
-export async function getBoard(actor: Actor, projectRef: string) {
+export async function getBoard(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  await expireStaleClaims(project.id);
-  const cols = await db.select().from(columns).where(eq(columns.projectId, project.id)).orderBy(asc(columns.position));
-  const ts = await db.select().from(tickets).where(eq(tickets.projectId, project.id)).orderBy(asc(tickets.position));
+  const team = await requireTeam(actor, teamRef);
+  await expireStaleClaims(team.id);
+  await (await import("./cycles")).rolloverCycles(team.id);
+  const cols = await db.select().from(statuses).where(eq(statuses.teamId, team.id)).orderBy(asc(statuses.position));
+  const ts = await db.select().from(issues).where(eq(issues.teamId, team.id)).orderBy(asc(issues.position));
   const ids = ts.map((t) => t.id);
-  const links = ids.length ? await db.select().from(ticketNodes).where(inArray(ticketNodes.ticketId, ids)) : [];
+  const links = ids.length ? await db.select().from(issueNodes).where(inArray(issueNodes.issueId, ids)) : [];
+  const labelMap = await labelsOf(db, ids);
+  const cycleOf = new Map((await withCycle(db, ts)).map((t) => [t.id, t.cycle]));
   const counts = ids.length
     ? await db
-        .select({ ticketId: comments.ticketId, n: sql<number>`count(*)::int` })
+        .select({ issueId: comments.issueId, n: sql<number>`count(*)::int` })
         .from(comments)
-        .where(inArray(comments.ticketId, ids))
-        .groupBy(comments.ticketId)
+        .where(inArray(comments.issueId, ids))
+        .groupBy(comments.issueId)
     : [];
-  const countMap = new Map(counts.map((c) => [c.ticketId, Number(c.n)]));
-  const withLinks: TicketWithLinks[] = ts.map((t) => ({
+  const countMap = new Map(counts.map((c) => [c.issueId, Number(c.n)]));
+  const withLinks: IssueWithLinks[] = ts.map((t) => ({
     ...t,
-    ref: `${project.key}-${t.number}`,
-    nodeIds: links.filter((l) => l.ticketId === t.id).map((l) => l.nodeId),
+    ref: `${team.key}-${t.number}`,
+    labels: labelMap.get(t.id) ?? [],
+    cycle: cycleOf.get(t.id) ?? null,
+    nodeIds: links.filter((l) => l.issueId === t.id).map((l) => l.nodeId),
     commentCount: countMap.get(t.id) ?? 0,
   }));
-  return { project, columns: cols, tickets: withLinks };
+  return { team, statuses: cols, issues: withLinks };
 }
 
-/** An assignee must belong to the caller's team: a user id from another team (or a made-up one) is refused. */
+/** An assignee must be a member of the issue's team: a user from another workspace, a workspace member who is not on the team, or a made-up id is refused. */
 async function assertAssignee(q: Q, teamId: string, userId: string | null | undefined) {
   if (!userId) return;
   const [m] = isUuid(userId)
     ? await q
-        .select({ userId: schema.memberships.userId })
-        .from(schema.memberships)
-        .where(and(eq(schema.memberships.teamId, teamId), eq(schema.memberships.userId, userId)))
+        .select({ userId: schema.teamMembers.userId })
+        .from(schema.teamMembers)
+        .where(and(eq(schema.teamMembers.teamId, teamId), eq(schema.teamMembers.userId, userId)))
     : [];
-  if (!m) throw new ServiceError("invalid", "Assignee must be a member of your team");
+  if (!m) throw new ServiceError("invalid", "Assignee must be a member of this team");
 }
 
-async function resolveColumn(q: Q, projectId: string, ref: string) {
-  const cols = await q.select().from(columns).where(eq(columns.projectId, projectId)).orderBy(asc(columns.position));
-  // An id or an exact name wins; otherwise a role ("review") finds the column with that role even if it was renamed.
+async function resolveStatus(q: Q, teamId: string, ref: string) {
+  const cols = await q.select().from(statuses).where(eq(statuses.teamId, teamId)).orderBy(asc(statuses.position));
+  // An id or an exact name wins; otherwise a role ("review") finds the status with that role even if it was renamed.
   const role = roleFromText(ref);
-  const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase()) ?? (role ? columnForRole(cols, role) : undefined);
-  if (!c) throw new ServiceError("invalid", `Unknown column "${ref}". Valid: ${cols.map((c) => c.name).join(", ")}`);
+  const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase()) ?? (role ? statusForRole(cols, role) : undefined);
+  if (!c) throw new ServiceError("invalid", `Unknown status "${ref}". Valid: ${cols.map((c) => c.name).join(", ")}`);
   return c;
 }
 
-/** Accepts a ticket uuid or a ref like "WH-12". A ticket of a project the actor cannot open is not_found; `need` says what the caller will do with it. */
-export async function resolveTicket(actor: Actor, ref: string, q?: Q, need: Need = "read") {
+/** Accepts an issue uuid or a ref like "WH-12". An issue of a team the actor cannot open is not_found; `need` says what the caller will do with it. */
+export async function resolveIssue(actor: Actor, ref: string, q?: Q, need: Need = "read") {
   const db = q ?? (await getDb());
-  let row: { t: typeof tickets.$inferSelect; p: typeof projects.$inferSelect } | undefined;
+  let row: { t: typeof issues.$inferSelect; p: typeof teams.$inferSelect } | undefined;
   if (isUuid(ref)) {
     [row] = await db
-      .select({ t: tickets, p: projects })
-      .from(tickets)
-      .innerJoin(projects, eq(projects.id, tickets.projectId))
-      .where(and(eq(tickets.id, ref), eq(projects.teamId, actor.teamId)));
+      .select({ t: issues, p: teams })
+      .from(issues)
+      .innerJoin(teams, eq(teams.id, issues.teamId))
+      .where(and(eq(issues.id, ref), eq(teams.workspaceId, actor.workspaceId)));
   } else {
     const m = /^([A-Za-z]+)-(\d+)$/.exec(ref.trim());
-    if (!m) throw new ServiceError("invalid", `Bad ticket ref "${ref}" (use uuid or KEY-123)`);
+    if (!m) throw new ServiceError("invalid", `Bad issue ref "${ref}" (use uuid or KEY-123)`);
     [row] = await db
-      .select({ t: tickets, p: projects })
-      .from(tickets)
-      .innerJoin(projects, eq(projects.id, tickets.projectId))
+      .select({ t: issues, p: teams })
+      .from(issues)
+      .innerJoin(teams, eq(teams.id, issues.teamId))
       .where(
-        and(eq(projects.teamId, actor.teamId), eq(projects.key, m[1].toUpperCase()), eq(tickets.number, Number(m[2]))),
+        and(eq(teams.workspaceId, actor.workspaceId), eq(teams.key, m[1].toUpperCase()), eq(issues.number, Number(m[2]))),
       );
   }
-  const role = row ? await roleOnProject(db, actor, row.p.id) : null;
-  if (!row || !role) throw new ServiceError("not_found", `Ticket ${ref} not found`);
-  if (!roleAllows(role, need)) throw new ServiceError("forbidden", "Your role on this project is read only");
-  return { ticket: row.t, project: row.p, ref: `${row.p.key}-${row.t.number}` };
+  const role = row ? await roleOnTeam(db, actor, row.p.id) : null;
+  if (!row || !role) throw new ServiceError("not_found", `Issue ${ref} not found`);
+  if (!roleAllows(role, need)) throw new ServiceError("forbidden", "Your role on this team is read only");
+  return { issue: row.t, team: row.p, ref: `${row.p.key}-${row.t.number}` };
 }
 
-export async function getTicket(actor: Actor, ref: string) {
+export async function getIssue(actor: Actor, ref: string) {
   const db = await getDb();
-  const { ticket, project, ref: r } = await resolveTicket(actor, ref);
-  const [col] = await db.select().from(columns).where(eq(columns.id, ticket.columnId));
-  const cs = await db.select().from(comments).where(eq(comments.ticketId, ticket.id)).orderBy(asc(comments.createdAt));
+  const { issue, team, ref: r } = await resolveIssue(actor, ref);
+  const [col] = await db.select().from(statuses).where(eq(statuses.id, issue.statusId));
+  const cs = await db.select().from(comments).where(eq(comments.issueId, issue.id)).orderBy(asc(comments.createdAt));
   const linked = await db
     .select({ id: nodes.id, name: nodes.name, kind: nodes.kind, parentId: nodes.parentId })
-    .from(ticketNodes)
-    .innerJoin(nodes, eq(nodes.id, ticketNodes.nodeId))
-    .where(eq(ticketNodes.ticketId, ticket.id));
+    .from(issueNodes)
+    .innerJoin(nodes, eq(nodes.id, issueNodes.nodeId))
+    .where(eq(issueNodes.issueId, issue.id));
   const history = await db
     .select()
     .from(events)
-    .where(and(eq(events.projectId, project.id), eq(events.entityId, ticket.id)))
+    .where(and(eq(events.teamId, team.id), eq(events.entityId, issue.id)))
     .orderBy(desc(events.seq))
     .limit(50);
-  // Pull requests GitHub reported against this ticket (WH-20). Loaded lazily: that module imports this one.
-  const { pullRequestsForTicket } = await import("./github/service");
-  const pullRequests = await pullRequestsForTicket(ticket.id);
-  return { ticket: { ...ticket, ref: r, column: col?.name }, project, comments: cs, nodes: linked, history, pullRequests };
+  // Pull requests GitHub reported against this issue (WH-20). Loaded lazily: that module imports this one.
+  const { pullRequestsForIssue } = await import("./github/service");
+  const pullRequests = await pullRequestsForIssue(issue.id);
+  const [withLabel] = await withCycle(db, await withLabels(db, [issue]));
+  const { parent, children } = await (await import("./sub-issues")).relatives(db, team, issue);
+  return { issue: { ...withLabel, ref: r, status: col?.name }, team, comments: cs, nodes: linked, history, pullRequests, parent, children };
 }
 
-async function positionAt(q: Q, columnId: string, index: number | undefined, excludeId?: string) {
+async function positionAt(q: Q, statusId: string, index: number | undefined, excludeId?: string) {
   const siblings = await q
-    .select({ id: tickets.id, position: tickets.position })
-    .from(tickets)
-    .where(and(eq(tickets.columnId, columnId), excludeId ? ne(tickets.id, excludeId) : undefined))
-    .orderBy(asc(tickets.position));
+    .select({ id: issues.id, position: issues.position })
+    .from(issues)
+    .where(and(eq(issues.statusId, statusId), excludeId ? ne(issues.id, excludeId) : undefined))
+    .orderBy(asc(issues.position));
   const i = index === undefined || index < 0 || index > siblings.length ? siblings.length : index;
   const before = siblings[i - 1]?.position;
   const after = siblings[i]?.position;
@@ -342,90 +362,142 @@ async function positionAt(q: Q, columnId: string, index: number | undefined, exc
   return (before + after) / 2;
 }
 
-export type TicketInput = {
+export type IssueInput = {
   title?: string;
   body?: string;
   priority?: (typeof schema.PRIORITIES)[number];
   assigneeId?: string | null;
   agentClaimable?: boolean;
   labels?: string[];
+  /** The number of one of the issue's own team's cycles that has not ended; null takes it out of its cycle. */
+  cycle?: number | null;
+  /**
+   * The id of a project the issue's team takes part in; null takes the issue out of its project (and its milestone). Named
+   * `projectId`, not `project`: the tools pass their own `project` argument (the team) through this same object.
+   */
+  projectId?: string | null;
+  /** The id of a milestone of the issue's project; null clears it. Changing the project clears it unless a new one is named. */
+  milestoneId?: string | null;
+  /** The issue this one is a sub-issue of: a ref ("WH-12") or id of an issue in the same team; null makes it a top-level issue. */
+  parent?: string | null;
 };
 
-export async function createTicket(actor: Actor, projectRef: string, input: TicketInput & { title: string; column?: string }) {
+/** The issue joined or left a project: said to the issue's team, whose agents read that log. */
+async function emitProjectMove(tx: Tx, actor: Actor, teamId: string, ref: string, from: string | null, to: string | null) {
+  if (from === to) return;
+  const ids = [from, to].filter((x): x is string => !!x);
+  const names = new Map((await tx.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, ids))).map((p) => [p.id, p.name]));
+  if (from) await emit(tx, actor, teamId, { type: "project.issue_left", entity: "project", entityId: from, summary: `${ref} left project "${names.get(from) ?? ""}"`, data: { ref, project: names.get(from) ?? null } });
+  if (to) await emit(tx, actor, teamId, { type: "project.issue_joined", entity: "project", entityId: to, summary: `${ref} joined project "${names.get(to) ?? ""}"`, data: { ref, project: names.get(to) ?? null } });
+}
+
+export async function createIssue(actor: Actor, teamRef: string, input: IssueInput & { title: string; status?: string }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   return db.transaction(async (tx) => {
-    await assertAssignee(tx, project.teamId, input.assigneeId);
-    const col = await resolveColumn(tx, project.id, input.column ?? DEFAULT_COLUMNS[0]);
-    const [{ ticketCounter }] = await tx
-      .update(projects)
-      .set({ ticketCounter: sql`${projects.ticketCounter} + 1` })
-      .where(eq(projects.id, project.id))
-      .returning({ ticketCounter: projects.ticketCounter });
+    await assertAssignee(tx, team.id, input.assigneeId);
+    const cycle = input.cycle == null ? null : await (await import("./cycles")).cycleForIssue(tx, team.id, input.cycle);
+    const inProject =
+      input.projectId === undefined && input.milestoneId === undefined
+        ? { projectId: null, milestoneId: null }
+        : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
+    const parentId = input.parent == null ? null : await (await import("./sub-issues")).resolveParent(tx, team, null, input.parent);
+    const col = await resolveStatus(tx, team.id, input.status ?? DEFAULT_STATUSES[0]);
+    const [{ issueCounter }] = await tx
+      .update(teams)
+      .set({ issueCounter: sql`${teams.issueCounter} + 1` })
+      .where(eq(teams.id, team.id))
+      .returning({ issueCounter: teams.issueCounter });
     const position = await positionAt(tx, col.id, undefined);
     const [t] = await tx
-      .insert(tickets)
+      .insert(issues)
       .values({
-        projectId: project.id,
-        columnId: col.id,
-        number: ticketCounter,
+        teamId: team.id,
+        workspaceId: team.workspaceId,
+        statusId: col.id,
+        number: issueCounter,
         title: input.title.trim(),
         body: input.body ?? "",
-        priority: input.priority ?? "medium",
+        priority: input.priority ?? "none",
         assigneeId: input.assigneeId ?? null,
+        cycleId: cycle?.id ?? null,
+        projectId: inProject.projectId,
+        milestoneId: inProject.milestoneId,
+        parentId,
         agentClaimable: input.agentClaimable ?? actor.kind === "agent",
-        labels: input.labels ?? [],
         position,
         createdByKind: actor.kind,
         createdById: actor.id,
       })
       .returning();
-    const ref = `${project.key}-${t.number}`;
-    await emit(tx, actor, project.id, {
-      type: "ticket.created",
-      entity: "ticket",
+    await setIssueLabels(tx, team, t.id, input.labels ?? []);
+    const ref = `${team.key}-${t.number}`;
+    await emitProjectMove(tx, actor, team.id, ref, null, t.projectId);
+    await emit(tx, actor, team.id, {
+      type: "issue.created",
+      entity: "issue",
       entityId: t.id,
       summary: `created ${ref} "${t.title}" in ${col.name}`,
-      data: { ref, column: col.name, title: t.title },
+      data: { ref, status: col.name, title: t.title, ...(parentId ? { parent: input.parent } : {}) },
     });
-    return { ...t, ref, column: col.name };
+    const [withLabel] = await withCycle(tx, await withLabels(tx, [t]));
+    return { ...withLabel, ref, status: col.name };
   });
 }
 
 /**
- * Patch a ticket. Pass `expectedVersion` for optimistic locking: if someone
- * (human or agent) changed the ticket since you read it, you get a 409 with
+ * Patch an issue. Pass `expectedVersion` for optimistic locking: if someone
+ * (human or agent) changed the issue since you read it, you get a 409 with
  * the current state instead of silently overwriting their change.
  */
-export async function updateTicket(actor: Actor, ref: string, patch: TicketInput, expectedVersion?: number) {
-  return bindSession(actor, await updateTicketTx(actor, ref, patch, expectedVersion));
+export async function updateIssue(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
+  return bindSession(actor, await updateIssueTx(actor, ref, patch, expectedVersion));
 }
 
-async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, expectedVersion?: number) {
+async function updateIssueTx(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const resolved = await resolveTicket(actor, ref, tx, "edit");
-    const { project, ref: r } = resolved;
-    const ticket = await lockRow(tx, tickets, resolved.ticket);
-    if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
-      throw new ServiceError("conflict", `${r} was changed (version ${ticket.version}, you had ${expectedVersion}). Re-read and retry.`, {
-        current: ticket,
+    const resolved = await resolveIssue(actor, ref, tx, "edit");
+    const { team, ref: r } = resolved;
+    const locked = await lockRow(tx, issues, resolved.issue);
+    const [issue] = await withCycle(tx, await withLabels(tx, [locked]));
+    if (expectedVersion !== undefined && expectedVersion !== issue.version) {
+      throw new ServiceError("conflict", `${r} was changed (version ${issue.version}, you had ${expectedVersion}). Re-read and retry.`, {
+        current: issue,
       });
     }
-    const clean: TicketInput = {};
+    const clean: IssueInput = {};
     for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
-    await assertAssignee(tx, project.teamId, clean.assigneeId);
-    const changes = diff(ticket as unknown as Record<string, unknown>, clean as Record<string, unknown>);
-    if (!Object.keys(changes).length) return { ...ticket, ref: r };
-    const [t] = await tx
-      .update(tickets)
-      .set({ ...clean, version: ticket.version + 1, updatedAt: new Date() })
-      .where(eq(tickets.id, ticket.id))
+    if (clean.labels) {
+      // Labels are stored once per name in any case and read back alphabetically, so a different order or case is no change.
+      const want = cleanLabels(clean.labels);
+      const key = (xs: string[]) => xs.map((x) => x.toLowerCase()).sort().join("\u0000");
+      if (key(want) === key(issue.labels)) delete clean.labels;
+      else clean.labels = want;
+    }
+    await assertAssignee(tx, team.id, clean.assigneeId);
+    const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, ...cleanRest } = clean;
+    const parentChange = wantParent === undefined ? {} : { parentId: await (await import("./sub-issues")).resolveParent(tx, team, issue.id, wantParent) };
+    const projectChoice =
+      wantProject === undefined && wantMilestone === undefined
+        ? undefined
+        : await (await import("./projects")).resolveIssueProject(tx, team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
+    const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange } as Record<string, unknown>);
+    if (!Object.keys(changes).length) return { ...issue, ref: r };
+    const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
+    const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await (await import("./cycles")).cycleForIssue(tx, team.id, newCycle)).id };
+    const [row] = await tx
+      .update(issues)
+      .set({ ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, version: issue.version + 1, updatedAt: new Date() })
+      .where(eq(issues.id, issue.id))
       .returning();
-    await emit(tx, actor, project.id, {
-      type: "ticket.updated",
-      entity: "ticket",
+    if (newLabels) await setIssueLabels(tx, team, row.id, newLabels);
+    const t = { ...row, labels: newLabels ?? issue.labels, cycle: newCycle === undefined ? issue.cycle : newCycle };
+    await emitProjectMove(tx, actor, team.id, r, issue.projectId, row.projectId);
+    await emit(tx, actor, team.id, {
+      type: "issue.updated",
+      entity: "issue",
       entityId: t.id,
       summary: `updated ${r}: ${Object.keys(changes).join(", ")}`,
       data: { ref: r, changes },
@@ -434,81 +506,84 @@ async function updateTicketTx(actor: Actor, ref: string, patch: TicketInput, exp
   });
 }
 
-export async function moveTicket(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
-  return bindSession(actor, await moveTicketTx(actor, ref, column, index, expectedVersion));
+export async function moveIssue(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
+  return bindSession(actor, await moveIssueTx(actor, ref, status, index, expectedVersion));
 }
 
-async function moveTicketTx(actor: Actor, ref: string, column: string, index?: number, expectedVersion?: number) {
+async function moveIssueTx(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const resolved = await resolveTicket(actor, ref, tx, "edit");
-    const { project, ref: r } = resolved;
-    const ticket = await lockRow(tx, tickets, resolved.ticket);
-    if (expectedVersion !== undefined && expectedVersion !== ticket.version) {
-      throw new ServiceError("conflict", `${r} was changed since you read it`, { current: ticket });
+    const resolved = await resolveIssue(actor, ref, tx, "edit");
+    const { team, ref: r } = resolved;
+    const locked = await lockRow(tx, issues, resolved.issue);
+    const [issue] = await withCycle(tx, await withLabels(tx, [locked]));
+    if (expectedVersion !== undefined && expectedVersion !== issue.version) {
+      throw new ServiceError("conflict", `${r} was changed since you read it`, { current: issue });
     }
-    const to = await resolveColumn(tx, project.id, column);
-    const [from] = await tx.select().from(columns).where(eq(columns.id, ticket.columnId));
-    const position = await positionAt(tx, to.id, index, ticket.id);
-    const [t] = await tx
-      .update(tickets)
-      .set({ columnId: to.id, position, version: ticket.version + 1, updatedAt: new Date() })
-      .where(eq(tickets.id, ticket.id))
+    const to = await resolveStatus(tx, team.id, status);
+    const [from] = await tx.select().from(statuses).where(eq(statuses.id, issue.statusId));
+    const position = await positionAt(tx, to.id, index, issue.id);
+    const [moved] = await tx
+      .update(issues)
+      .set({ statusId: to.id, position, version: issue.version + 1, updatedAt: new Date() })
+      .where(eq(issues.id, issue.id))
       .returning();
+    const t = { ...moved, labels: issue.labels, cycle: issue.cycle };
     if (from.id !== to.id) {
-      await emit(tx, actor, project.id, {
-        type: "ticket.moved",
-        entity: "ticket",
+      await emit(tx, actor, team.id, {
+        type: "issue.moved",
+        entity: "issue",
         entityId: t.id,
         summary: `moved ${r} from ${from.name} → ${to.name}`,
         data: { ref: r, from: from.name, to: to.name, fromRole: from.role, toRole: to.role },
       });
     }
-    return { ...t, ref: r, column: to.name };
+    return { ...t, ref: r, status: to.name };
   });
 }
 
-export async function deleteTicket(actor: Actor, ref: string) {
+export async function deleteIssue(actor: Actor, ref: string) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
-    await tx.delete(tickets).where(eq(tickets.id, ticket.id));
-    await emit(tx, actor, project.id, {
-      type: "ticket.deleted",
-      entity: "ticket",
-      entityId: ticket.id,
-      summary: `deleted ${r} "${ticket.title}"`,
-      data: { ref: r, title: ticket.title },
+    const { issue, team, ref: r } = await resolveIssue(actor, ref, tx, "edit");
+    await tx.delete(issues).where(eq(issues.id, issue.id));
+    await emit(tx, actor, team.id, {
+      type: "issue.deleted",
+      entity: "issue",
+      entityId: issue.id,
+      summary: `deleted ${r} "${issue.title}"`,
+      data: { ref: r, title: issue.title },
     });
     return { ok: true };
   });
 }
 
-/** Agent claims a ticket it's about to work on (only if humans marked it claimable). */
-export async function claimTicket(actor: Actor, ref: string) {
-  if (actor.kind !== "agent") throw new ServiceError("forbidden", "Only agents claim tickets");
+/** Agent claims an issue it's about to work on (only if humans marked it claimable). */
+export async function claimIssue(actor: Actor, ref: string) {
+  if (actor.kind !== "agent") throw new ServiceError("forbidden", "Only agents claim issues");
   const db = await getDb();
   const t = await db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
-    if (!ticket.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the team`);
-    if (ticket.claimedByKeyId && ticket.claimedByKeyId !== actor.id)
+    const { issue, team, ref: r } = await resolveIssue(actor, ref, tx, "edit");
+    if (!issue.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the workspace`);
+    if (issue.claimedByKeyId && issue.claimedByKeyId !== actor.id)
       throw new ServiceError("conflict", `${r} is already claimed by another agent`);
-    const [t] = await tx
-      .update(tickets)
-      .set({ claimedByKeyId: actor.id, version: ticket.version + 1, updatedAt: new Date() })
-      .where(eq(tickets.id, ticket.id))
+    const [claimed] = await tx
+      .update(issues)
+      .set({ claimedByKeyId: actor.id, version: issue.version + 1, updatedAt: new Date() })
+      .where(eq(issues.id, issue.id))
       .returning();
-    await emit(tx, actor, project.id, { type: "ticket.claimed", entity: "ticket", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
+    const [t] = await withCycle(tx, await withLabels(tx, [claimed]));
+    await emit(tx, actor, team.id, { type: "issue.claimed", entity: "issue", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
     return { ...t, ref: r };
   });
   return bindSession(actor, t);
 }
 
-/** An agent working a ticket binds it to its active session (for the reconciliation check). */
-async function bindSession<T extends { id: string; projectId: string }>(actor: Actor, t: T): Promise<T> {
+/** An agent working an issue binds it to its active session (for the reconciliation check). */
+async function bindSession<T extends { id: string; teamId: string }>(actor: Actor, t: T): Promise<T> {
   if (actor.kind === "agent") {
-    const { noteTicketActivity } = await import("./sync");
-    await noteTicketActivity(actor, t.projectId, t.id);
+    const { noteIssueActivity } = await import("./sync");
+    await noteIssueActivity(actor, t.teamId, t.id);
   }
   return t;
 }
@@ -516,22 +591,22 @@ async function bindSession<T extends { id: string; projectId: string }>(actor: A
 export async function addComment(actor: Actor, ref: string, body: string) {
   if (!body?.trim()) throw new ServiceError("invalid", "Comment body is required");
   const db = await getDb();
-  const { c, ticket } = await db.transaction(async (tx) => {
-    const { ticket, project, ref: r } = await resolveTicket(actor, ref, tx, "edit");
+  const { c, issue } = await db.transaction(async (tx) => {
+    const { issue, team, ref: r } = await resolveIssue(actor, ref, tx, "edit");
     const [c] = await tx
       .insert(comments)
-      .values({ ticketId: ticket.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() })
+      .values({ issueId: issue.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() })
       .returning();
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "comment.created",
-      entity: "ticket",
-      entityId: ticket.id,
+      entity: "issue",
+      entityId: issue.id,
       summary: `commented on ${r}`,
       data: { ref: r, commentId: c.id, body: c.body },
     });
-    return { c, ticket };
+    return { c, issue };
   });
-  await bindSession(actor, ticket);
+  await bindSession(actor, issue);
   return c;
 }
 
@@ -547,33 +622,33 @@ type Layer = schema.Layer;
 
 const LAYER_RANK: Record<Layer, number> = { concept: 0, system: 1, data: 2, code: 3 };
 
-export async function getGraph(actor: Actor, projectRef: string) {
+export async function getGraph(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  const ns = await db.select().from(nodes).where(eq(nodes.projectId, project.id));
-  const es = await db.select().from(edges).where(eq(edges.projectId, project.id));
+  const team = await requireTeam(actor, teamRef);
+  const ns = await db.select().from(nodes).where(eq(nodes.teamId, team.id));
+  const es = await db.select().from(edges).where(eq(edges.teamId, team.id));
   const nodeIds = ns.map((n) => n.id);
   const links = nodeIds.length
     ? await db
-        .select({ nodeId: ticketNodes.nodeId, ticketId: tickets.id, number: tickets.number, title: tickets.title, columnId: tickets.columnId })
-        .from(ticketNodes)
-        .innerJoin(tickets, eq(tickets.id, ticketNodes.ticketId))
-        .where(inArray(ticketNodes.nodeId, nodeIds))
+        .select({ nodeId: issueNodes.nodeId, issueId: issues.id, number: issues.number, title: issues.title, statusId: issues.statusId })
+        .from(issueNodes)
+        .innerJoin(issues, eq(issues.id, issueNodes.issueId))
+        .where(inArray(issueNodes.nodeId, nodeIds))
     : [];
-  const fl = await db.select().from(flows).where(eq(flows.projectId, project.id)).orderBy(asc(flows.name));
-  const ds = await db.select().from(decisions).where(eq(decisions.projectId, project.id)).orderBy(asc(decisions.number));
-  const ts = await db.select().from(terms).where(eq(terms.projectId, project.id)).orderBy(asc(terms.term));
+  const fl = await db.select().from(flows).where(eq(flows.teamId, team.id)).orderBy(asc(flows.name));
+  const ds = await db.select().from(decisions).where(eq(decisions.teamId, team.id)).orderBy(asc(decisions.number));
+  const ts = await db.select().from(terms).where(eq(terms.teamId, team.id)).orderBy(asc(terms.term));
   const alive = new Set(nodeIds);
   return {
-    project,
+    team,
     nodes: ns,
     edges: es,
-    ticketLinks: links.map((l) => ({ ...l, ref: `${project.key}-${l.number}` })),
+    issueLinks: links.map((l) => ({ ...l, ref: `${team.key}-${l.number}` })),
     flows: fl.map((f) => ({ ...f, steps: f.steps.filter((s) => alive.has(s.nodeId)) })),
-    decisions: ds.map((d) => ({ ...d, nodeIds: d.nodeIds.filter((id) => alive.has(id)) })),
+    decisions: (await withNodeIds(db, ds)).map((d) => ({ ...d, nodeIds: d.nodeIds.filter((id) => alive.has(id)) })),
     terms: ts,
     // Nodes whose files are being changed in active sessions, and pending drafts.
-    flux: await (await import("./sync")).fluxForProject(project.id),
+    flux: await (await import("./sync")).fluxForTeam(team.id),
   };
 }
 
@@ -582,7 +657,7 @@ export async function getGraph(actor: Actor, projectRef: string) {
  * layers ("Billing" concept vs "billing" service), so pass `layer` or use the
  * "layer:name" form to disambiguate.
  */
-export async function resolveNode(q: Q, projectId: string, ref: string, layer?: Layer) {
+export async function resolveNode(q: Q, teamId: string, ref: string, layer?: Layer) {
   let name = ref.trim();
   const m = /^(concept|system|data|code):(.+)$/i.exec(name);
   if (m) {
@@ -594,7 +669,7 @@ export async function resolveNode(q: Q, projectId: string, ref: string, layer?: 
     .from(nodes)
     .where(
       and(
-        eq(nodes.projectId, projectId),
+        eq(nodes.teamId, teamId),
         isUuid(name) ? eq(nodes.id, name) : eq(sql`lower(${nodes.name})`, name.toLowerCase()),
         layer && !isUuid(name) ? eq(nodes.layer, layer) : undefined,
       ),
@@ -608,11 +683,11 @@ export async function resolveNode(q: Q, projectId: string, ref: string, layer?: 
   return rows[0];
 }
 
-/** Everything about one node: explainer, neighbours on every layer, flows, decisions, tickets. */
-export async function getNode(actor: Actor, projectRef: string, ref: string) {
-  const g = await getGraph(actor, projectRef);
+/** Everything about one node: explainer, neighbours on every layer, flows, decisions, issues. */
+export async function getNode(actor: Actor, teamRef: string, ref: string) {
+  const g = await getGraph(actor, teamRef);
   const db = await getDb();
-  const n = await resolveNode(db, g.project.id, ref);
+  const n = await resolveNode(db, g.team.id, ref);
   const byId = new Map(g.nodes.map((x) => [x.id, x]));
   const brief = (x: NodeRow | undefined) => x && { id: x.id, name: x.name, layer: x.layer, kind: x.kind, summary: x.summary, stale: x.stale };
   const out = g.edges.filter((e) => e.fromNodeId === n.id);
@@ -631,7 +706,7 @@ export async function getNode(actor: Actor, projectRef: string, ref: string) {
     decisions: g.decisions
       .filter((d) => d.nodeIds.includes(n.id))
       .map((d) => ({ number: d.number, title: d.title, status: d.status })),
-    tickets: g.ticketLinks.filter((l) => l.nodeId === n.id).map((l) => ({ ref: l.ref, title: l.title })),
+    issues: g.issueLinks.filter((l) => l.nodeId === n.id).map((l) => ({ ref: l.ref, title: l.title })),
   };
 }
 
@@ -678,15 +753,15 @@ function checkKind(layer: Layer, kind: string) {
 }
 
 /** Create or update a map node. Agents use names, the UI uses ids. */
-export async function upsertNode(actor: Actor, projectRef: string, input: NodeInput) {
+export async function upsertNode(actor: Actor, teamRef: string, input: NodeInput) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
 
   // An agent describing code its own session hasn't landed yet: store a draft
   // instead of rewriting the shared map (published when the code lands).
   if (actor.kind === "agent" && !input.forcePublish && (input.id || input.name)) {
     const ref = input.id ?? input.name!;
-    const found = await resolveNode(db, project.id, ref, input.layer).catch(() => undefined);
+    const found = await resolveNode(db, team.id, ref, input.layer).catch(() => undefined);
     if (found) {
       const { maybeDraft } = await import("./sync");
       const d = await maybeDraft(actor, found, input);
@@ -696,14 +771,14 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
 
   const result = await db.transaction(async (tx) => {
     let existing: NodeRow | undefined;
-    if (input.id) existing = await resolveNode(tx, project.id, input.id, input.layer);
+    if (input.id) existing = await resolveNode(tx, team.id, input.id, input.layer);
     else if (input.name) {
       const rows = await tx
         .select()
         .from(nodes)
         .where(
           and(
-            eq(nodes.projectId, project.id),
+            eq(nodes.teamId, team.id),
             eq(sql`lower(${nodes.name})`, input.name.trim().toLowerCase()),
             input.layer ? eq(nodes.layer, input.layer) : undefined,
           ),
@@ -723,7 +798,7 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
     let parentId: string | null | undefined = undefined;
     if (input.parent === null) parentId = null;
     else if (input.parent) {
-      const p = await resolveNode(tx, project.id, input.parent, layer);
+      const p = await resolveNode(tx, team.id, input.parent, layer);
       if (p.layer !== layer) throw new ServiceError("invalid", `Parent must be on the same layer (${layer})`);
       parentId = p.id;
     }
@@ -767,7 +842,7 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
             staleReason: null,
             staleSource: null,
             driftPaths: [],
-            describedHashes: input.describedHashes ?? (await landedHashesFor(tx, project.id, input.anchors ?? existing.anchors)),
+            describedHashes: input.describedHashes ?? (await landedHashesFor(tx, team.id, input.anchors ?? existing.anchors)),
             describedAt: new Date(),
             describedSha: input.describedSha ?? existing.describedSha,
           }
@@ -785,7 +860,7 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
         .returning();
       const meaningful = Object.keys(changes).filter((k) => !["x", "y", "width", "height"].includes(k));
       if (meaningful.length || (existing.stale && described)) {
-        await emit(tx, actor, project.id, {
+        await emit(tx, actor, team.id, {
           type: "node.updated",
           entity: "node",
           entityId: n.id,
@@ -805,7 +880,7 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
         .from(nodes)
         .where(
           and(
-            eq(nodes.projectId, project.id),
+            eq(nodes.teamId, team.id),
             eq(nodes.layer, layer),
             parentId ? eq(nodes.parentId, parentId) : sql`${nodes.parentId} is null`,
           ),
@@ -816,7 +891,7 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
         const placed = await tx
           .select({ x: nodes.x, y: nodes.y, columns: nodes.columns })
           .from(nodes)
-          .where(and(eq(nodes.projectId, project.id), eq(nodes.layer, "data")));
+          .where(and(eq(nodes.teamId, team.id), eq(nodes.layer, "data")));
         const col = i % 4;
         const inCol = placed.filter((p) => Math.round((p.x - 50) / 320) === col);
         x = 50 + col * 320;
@@ -830,7 +905,8 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
     const [n] = await tx
       .insert(nodes)
       .values({
-        projectId: project.id,
+        teamId: team.id,
+        workspaceId: team.workspaceId,
         parentId: parentId ?? null,
         layer,
         kind,
@@ -845,14 +921,14 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
         anchors: input.anchors ?? [],
         columns: columns ?? [],
         indexes: input.indexes ?? [],
-        describedHashes: input.describedHashes ?? (await landedHashesFor(tx, project.id, input.anchors ?? [])),
+        describedHashes: input.describedHashes ?? (await landedHashesFor(tx, team.id, input.anchors ?? [])),
         describedSha: input.describedSha ?? null,
         describedAt: new Date(),
         x,
         y,
       })
       .returning();
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "node.created",
       entity: "node",
       entityId: n.id,
@@ -863,16 +939,16 @@ export async function upsertNode(actor: Actor, projectRef: string, input: NodeIn
   });
 
   for (const target of input.implements ?? []) {
-    await upsertEdge(actor, project.id, { from: result.node.id, to: target, kind: "implements" });
+    await upsertEdge(actor, team.id, { from: result.node.id, to: target, kind: "implements" });
   }
-  if (result.schemaChanged) await syncReferences(actor, project.id);
+  if (result.schemaChanged) await syncReferences(actor, team.id);
   return result.node;
 }
 
 /** Landed content hashes for files matching these anchors: the baseline an explanation is written against. */
-async function landedHashesFor(q: Q, projectId: string, anchors: string[]) {
+async function landedHashesFor(q: Q, teamId: string, anchors: string[]) {
   if (!anchors.length) return {};
-  const files = await q.select({ path: schema.projectFiles.path, hash: schema.projectFiles.hash }).from(schema.projectFiles).where(eq(schema.projectFiles.projectId, projectId));
+  const files = await q.select({ path: schema.teamFiles.path, hash: schema.teamFiles.hash }).from(schema.teamFiles).where(eq(schema.teamFiles.teamId, teamId));
   return Object.fromEntries(files.filter((f) => anchors.some((a) => anchorScore(a, f.path) > 0)).map((f) => [f.path, f.hash]));
 }
 
@@ -903,12 +979,12 @@ function cleanColumn(c: schema.Column): schema.Column {
  * Columns are the single source of truth: edges are added, updated and removed
  * to match. Returns FK targets that don't exist on the map yet.
  */
-export async function syncReferences(actor: Actor, projectRef: string) {
+export async function syncReferences(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
-  const tables = await db.select().from(nodes).where(and(eq(nodes.projectId, project.id), eq(nodes.layer, "data")));
+  const team = await requireTeam(actor, teamRef, "edit");
+  const tables = await db.select().from(nodes).where(and(eq(nodes.teamId, team.id), eq(nodes.layer, "data")));
   const byName = new Map(tables.map((t) => [t.name.toLowerCase(), t]));
-  const current = (await db.select().from(edges).where(and(eq(edges.projectId, project.id), eq(edges.kind, "references")))).filter(
+  const current = (await db.select().from(edges).where(and(eq(edges.teamId, team.id), eq(edges.kind, "references")))).filter(
     (e) => e.meta?.derived,
   );
   const key = (from: string, col: string) => `${from}:${col.toLowerCase()}`;
@@ -955,7 +1031,8 @@ export async function syncReferences(actor: Actor, projectRef: string) {
     }
     for (const w of want.values()) {
       await tx.insert(edges).values({
-        projectId: project.id,
+        teamId: team.id,
+        workspaceId: team.workspaceId,
         fromNodeId: w.from.id,
         toNodeId: w.to.id,
         kind: "references",
@@ -965,10 +1042,10 @@ export async function syncReferences(actor: Actor, projectRef: string) {
       changed++;
     }
     if (changed) {
-      await emit(tx, actor, project.id, {
+      await emit(tx, actor, team.id, {
         type: "schema.relationships",
-        entity: "project",
-        entityId: project.id,
+        entity: "team",
+        entityId: team.id,
         summary: `updated ${changed} table relationship${changed === 1 ? "" : "s"}`,
         data: { changed },
       });
@@ -978,8 +1055,8 @@ export async function syncReferences(actor: Actor, projectRef: string) {
 }
 
 /** Compact data-layer view for agents: tables, columns, relationships. */
-export async function getSchema(actor: Actor, projectRef: string) {
-  const g = await getGraph(actor, projectRef);
+export async function getSchema(actor: Actor, teamRef: string) {
+  const g = await getGraph(actor, teamRef);
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const tables = g.nodes.filter((n) => n.layer === "data").sort((a, b) => a.name.localeCompare(b.name));
   return {
@@ -1014,30 +1091,30 @@ export async function getSchema(actor: Actor, projectRef: string) {
  */
 export async function saveLayout(
   actor: Actor,
-  projectRef: string,
+  teamRef: string,
   positions: { id: string; x: number; y: number; width?: number; height?: number }[],
   opts?: { placed?: boolean },
 ) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const placed = opts?.placed ?? true;
   await db.transaction(async (tx) => {
     for (const p of positions) {
       await tx
         .update(nodes)
         .set({ x: p.x, y: p.y, ...(p.width ? { width: p.width, height: p.height } : {}), placed })
-        .where(and(eq(nodes.id, p.id), eq(nodes.projectId, project.id)));
+        .where(and(eq(nodes.id, p.id), eq(nodes.teamId, team.id)));
     }
   });
 }
 
-export async function deleteNode(actor: Actor, projectRef: string, ref: string) {
+export async function deleteNode(actor: Actor, teamRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   return db.transaction(async (tx) => {
-    const n = await resolveNode(tx, project.id, ref);
+    const n = await resolveNode(tx, team.id, ref);
     // Remove the subtree (children reference parent_id without an FK).
-    const all = await tx.select({ id: nodes.id, parentId: nodes.parentId }).from(nodes).where(eq(nodes.projectId, project.id));
+    const all = await tx.select({ id: nodes.id, parentId: nodes.parentId }).from(nodes).where(eq(nodes.teamId, team.id));
     const doomed = new Set([n.id]);
     let grew = true;
     while (grew) {
@@ -1048,7 +1125,7 @@ export async function deleteNode(actor: Actor, projectRef: string, ref: string) 
       }
     }
     await tx.delete(nodes).where(inArray(nodes.id, [...doomed]));
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "node.deleted",
       entity: "node",
       entityId: n.id,
@@ -1065,15 +1142,15 @@ export async function deleteNode(actor: Actor, projectRef: string, ref: string) 
  */
 export async function upsertEdge(
   actor: Actor,
-  projectRef: string,
+  teamRef: string,
   input: { from: string; to: string; label?: string; kind?: (typeof schema.EDGE_KINDS)[number] },
 ) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const kind = input.kind ?? "depends";
   return db.transaction(async (tx) => {
-    const from = await resolveNode(tx, project.id, input.from);
-    const to = await resolveNode(tx, project.id, input.to);
+    const from = await resolveNode(tx, team.id, input.from);
+    const to = await resolveNode(tx, team.id, input.to);
     if (from.id === to.id) throw new ServiceError("invalid", "Can't connect a node to itself");
     if (kind === "implements" && LAYER_RANK[from.layer] <= LAYER_RANK[to.layer])
       throw new ServiceError(
@@ -1093,9 +1170,9 @@ export async function upsertEdge(
     }
     const [e] = await tx
       .insert(edges)
-      .values({ projectId: project.id, fromNodeId: from.id, toNodeId: to.id, kind, label: input.label ?? "" })
+      .values({ teamId: team.id, workspaceId: team.workspaceId, fromNodeId: from.id, toNodeId: to.id, kind, label: input.label ?? "" })
       .returning();
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "edge.created",
       entity: "edge",
       entityId: e.id,
@@ -1109,15 +1186,15 @@ export async function upsertEdge(
   });
 }
 
-export async function deleteEdge(actor: Actor, projectRef: string, edgeId: string) {
+export async function deleteEdge(actor: Actor, teamRef: string, edgeId: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   return db.transaction(async (tx) => {
-    const [e] = await tx.delete(edges).where(and(eq(edges.id, edgeId), eq(edges.projectId, project.id))).returning();
+    const [e] = await tx.delete(edges).where(and(eq(edges.id, edgeId), eq(edges.teamId, team.id))).returning();
     if (!e) return { ok: true };
     const names = await tx.select({ id: nodes.id, name: nodes.name }).from(nodes).where(inArray(nodes.id, [e.fromNodeId, e.toNodeId]));
     const name = (id: string) => names.find((n) => n.id === id)?.name ?? "?";
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "edge.deleted",
       entity: "edge",
       entityId: e.id,
@@ -1129,33 +1206,33 @@ export async function deleteEdge(actor: Actor, projectRef: string, edgeId: strin
 }
 
 /** Remove a link by endpoints (agent-friendly). */
-export async function unlinkNodes(actor: Actor, projectRef: string, input: { from: string; to: string; kind?: (typeof schema.EDGE_KINDS)[number] }) {
+export async function unlinkNodes(actor: Actor, teamRef: string, input: { from: string; to: string; kind?: (typeof schema.EDGE_KINDS)[number] }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
-  const from = await resolveNode(db, project.id, input.from);
-  const to = await resolveNode(db, project.id, input.to);
+  const team = await requireTeam(actor, teamRef, "edit");
+  const from = await resolveNode(db, team.id, input.from);
+  const to = await resolveNode(db, team.id, input.to);
   const found = await db
     .select({ id: edges.id })
     .from(edges)
     .where(and(eq(edges.fromNodeId, from.id), eq(edges.toNodeId, to.id), input.kind ? eq(edges.kind, input.kind) : undefined));
-  for (const e of found) await deleteEdge(actor, project.id, e.id); // logged like UI deletes
+  for (const e of found) await deleteEdge(actor, team.id, e.id); // logged like UI deletes
   return { ok: true, removed: found.length };
 }
 
-export async function linkTicketNode(actor: Actor, ticketRef: string, nodeRef: string, unlink = false) {
+export async function linkIssueNode(actor: Actor, issueRef: string, nodeRef: string, unlink = false) {
   const db = await getDb();
   return db.transaction(async (tx) => {
-    const { ticket, project, ref } = await resolveTicket(actor, ticketRef, tx, "edit");
-    const n = await resolveNode(tx, project.id, nodeRef);
+    const { issue, team, ref } = await resolveIssue(actor, issueRef, tx, "edit");
+    const n = await resolveNode(tx, team.id, nodeRef);
     if (unlink) {
-      await tx.delete(ticketNodes).where(and(eq(ticketNodes.ticketId, ticket.id), eq(ticketNodes.nodeId, n.id)));
+      await tx.delete(issueNodes).where(and(eq(issueNodes.issueId, issue.id), eq(issueNodes.nodeId, n.id)));
     } else {
-      await tx.insert(ticketNodes).values({ ticketId: ticket.id, nodeId: n.id }).onConflictDoNothing();
+      await tx.insert(issueNodes).values({ issueId: issue.id, nodeId: n.id }).onConflictDoNothing();
     }
-    await emit(tx, actor, project.id, {
-      type: unlink ? "ticket.unlinked" : "ticket.linked",
-      entity: "ticket",
-      entityId: ticket.id,
+    await emit(tx, actor, team.id, {
+      type: unlink ? "issue.unlinked" : "issue.linked",
+      entity: "issue",
+      entityId: issue.id,
       summary: `${unlink ? "unlinked" : "linked"} ${ref} ${unlink ? "from" : "to"} "${n.name}"`,
       data: { ref, node: n.name },
     });
@@ -1175,15 +1252,15 @@ export type FlowInput = {
 };
 
 /** Create or replace a flow (matched by id, else by name). Steps are replaced wholesale. */
-export async function upsertFlow(actor: Actor, projectRef: string, input: FlowInput) {
+export async function upsertFlow(actor: Actor, teamRef: string, input: FlowInput) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   if (!input.name?.trim()) throw new ServiceError("invalid", "Flow name is required");
   return db.transaction(async (tx) => {
     const steps: schema.FlowStep[] | undefined = input.steps
       ? await Promise.all(
           input.steps.map(async (s) => ({
-            nodeId: (await resolveNode(tx, project.id, s.node)).id,
+            nodeId: (await resolveNode(tx, team.id, s.node)).id,
             title: s.title.trim(),
             detail: s.detail ?? "",
           })),
@@ -1194,7 +1271,7 @@ export async function upsertFlow(actor: Actor, projectRef: string, input: FlowIn
       .from(flows)
       .where(
         and(
-          eq(flows.projectId, project.id),
+          eq(flows.teamId, team.id),
           input.id && isUuid(input.id) ? eq(flows.id, input.id) : eq(sql`lower(${flows.name})`, (input.id ?? input.name).trim().toLowerCase()),
         ),
       )
@@ -1214,28 +1291,28 @@ export async function upsertFlow(actor: Actor, projectRef: string, input: FlowIn
         })
         .where(eq(flows.id, existing.id))
         .returning();
-      await emit(tx, actor, project.id, { type: "flow.updated", entity: "flow", entityId: f.id, summary: `updated flow "${f.name}" (${f.steps.length} steps)`, data: { name: f.name } });
+      await emit(tx, actor, team.id, { type: "flow.updated", entity: "flow", entityId: f.id, summary: `updated flow "${f.name}" (${f.steps.length} steps)`, data: { name: f.name } });
       return f;
     }
     const [f] = await tx
       .insert(flows)
-      .values({ projectId: project.id, name: input.name.trim(), description: input.description ?? "", steps: steps ?? [] })
+      .values({ teamId: team.id, workspaceId: team.workspaceId, name: input.name.trim(), description: input.description ?? "", steps: steps ?? [] })
       .returning();
-    await emit(tx, actor, project.id, { type: "flow.created", entity: "flow", entityId: f.id, summary: `added flow "${f.name}" (${f.steps.length} steps)`, data: { name: f.name } });
+    await emit(tx, actor, team.id, { type: "flow.created", entity: "flow", entityId: f.id, summary: `added flow "${f.name}" (${f.steps.length} steps)`, data: { name: f.name } });
     return f;
   });
 }
 
-export async function deleteFlow(actor: Actor, projectRef: string, ref: string) {
+export async function deleteFlow(actor: Actor, teamRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const [f] = await db
     .select()
     .from(flows)
-    .where(and(eq(flows.projectId, project.id), isUuid(ref) ? eq(flows.id, ref) : eq(sql`lower(${flows.name})`, ref.toLowerCase())));
+    .where(and(eq(flows.teamId, team.id), isUuid(ref) ? eq(flows.id, ref) : eq(sql`lower(${flows.name})`, ref.toLowerCase())));
   if (!f) throw new ServiceError("not_found", `Flow "${ref}" not found`);
   await db.delete(flows).where(eq(flows.id, f.id));
-  await emit(db, actor, project.id, { type: "flow.deleted", entity: "flow", entityId: f.id, summary: `removed flow "${f.name}"` });
+  await emit(db, actor, team.id, { type: "flow.deleted", entity: "flow", entityId: f.id, summary: `removed flow "${f.name}"` });
   return { ok: true };
 }
 
@@ -1265,8 +1342,8 @@ export function statusForLifecycle(lifecycle: (typeof schema.REPO_LIFECYCLES)[nu
   return map[lifecycle];
 }
 
-async function repoSystemNode(actor: Actor, projectId: string, repo: typeof repositories.$inferSelect) {
-  await upsertNode(actor, projectId, {
+async function repoSystemNode(actor: Actor, teamId: string, repo: typeof repositories.$inferSelect) {
+  await upsertNode(actor, teamId, {
     name: repo.displayName,
     layer: "system",
     kind: "service",
@@ -1276,32 +1353,33 @@ async function repoSystemNode(actor: Actor, projectId: string, repo: typeof repo
   });
 }
 
-export async function listRepositories(actor: Actor, projectRef: string) {
+export async function listRepositories(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  return db.select().from(repositories).where(eq(repositories.projectId, project.id)).orderBy(asc(repositories.createdAt));
+  const team = await requireTeam(actor, teamRef);
+  return db.select().from(repositories).where(eq(repositories.teamId, team.id)).orderBy(asc(repositories.createdAt));
 }
 
-async function resolveRepository(q: Q, projectId: string, ref: string) {
-  const [r] = await q.select().from(repositories).where(and(eq(repositories.projectId, projectId), isUuid(ref) ? eq(repositories.id, ref) : eq(repositories.slug, ref)));
+async function resolveRepository(q: Q, teamId: string, ref: string) {
+  const [r] = await q.select().from(repositories).where(and(eq(repositories.teamId, teamId), isUuid(ref) ? eq(repositories.id, ref) : eq(repositories.slug, ref)));
   if (!r) throw new ServiceError("not_found", `Repository "${ref}" not found`);
   return r;
 }
 
-/** Owner-only create/update of a repository's management fields. Owners manage repos; see createTicket for the human/agent split used elsewhere. */
-export async function createRepository(actor: Actor, projectRef: string, input: RepositoryInput) {
+/** Owner-only create/update of a repository's management fields. Owners manage repos; see createIssue for the human/agent split used elsewhere. */
+export async function createRepository(actor: Actor, teamRef: string, input: RepositoryInput) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can add repositories");
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   if (!input.displayName?.trim()) throw new ServiceError("invalid", "displayName is required");
   if (!input.role?.trim()) throw new ServiceError("invalid", "role is required");
   const slug = input.slug?.trim() ? slugify(input.slug) : slugify(input.displayName);
-  const [existing] = await db.select().from(repositories).where(and(eq(repositories.projectId, project.id), eq(repositories.slug, slug)));
-  if (existing) throw new ServiceError("conflict", `A repository with slug "${slug}" already exists on this project`);
+  const [existing] = await db.select().from(repositories).where(and(eq(repositories.teamId, team.id), eq(repositories.slug, slug)));
+  if (existing) throw new ServiceError("conflict", `A repository with slug "${slug}" already exists on this team`);
   const [r] = await db
     .insert(repositories)
     .values({
-      projectId: project.id,
+      teamId: team.id,
+      workspaceId: team.workspaceId,
       displayName: input.displayName.trim(),
       role: input.role.trim(),
       provider: input.provider ?? "local",
@@ -1314,16 +1392,16 @@ export async function createRepository(actor: Actor, projectRef: string, input: 
       lifecycle: input.lifecycle ?? "live",
     })
     .returning();
-  await emit(db, actor, project.id, { type: "repository.created", entity: "project", entityId: r.id, summary: `added repository "${r.displayName}" (${r.role})` });
-  await repoSystemNode(actor, project.id, r);
+  await emit(db, actor, team.id, { type: "repository.created", entity: "team", entityId: r.id, summary: `added repository "${r.displayName}" (${r.role})` });
+  await repoSystemNode(actor, team.id, r);
   return r;
 }
 
-export async function updateRepository(actor: Actor, projectRef: string, ref: string, patch: Partial<RepositoryInput>) {
+export async function updateRepository(actor: Actor, teamRef: string, ref: string, patch: Partial<RepositoryInput>) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can edit repositories");
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
-  const existing = await resolveRepository(db, project.id, ref);
+  const team = await requireTeam(actor, teamRef, "edit");
+  const existing = await resolveRepository(db, team.id, ref);
   const set: Partial<typeof repositories.$inferInsert> = { updatedAt: new Date() };
   if (patch.displayName !== undefined) set.displayName = patch.displayName.trim();
   if (patch.role !== undefined) set.role = patch.role.trim();
@@ -1334,40 +1412,40 @@ export async function updateRepository(actor: Actor, projectRef: string, ref: st
   if (patch.pathLimit !== undefined) set.pathLimit = patch.pathLimit?.trim() || null;
   if (patch.lifecycle !== undefined) set.lifecycle = patch.lifecycle;
   const [r] = await db.update(repositories).set(set).where(eq(repositories.id, existing.id)).returning();
-  await emit(db, actor, project.id, { type: "repository.updated", entity: "project", entityId: r.id, summary: `updated repository "${r.displayName}"` });
-  if (patch.lifecycle !== undefined && patch.lifecycle !== existing.lifecycle) await repoSystemNode(actor, project.id, r);
+  await emit(db, actor, team.id, { type: "repository.updated", entity: "team", entityId: r.id, summary: `updated repository "${r.displayName}"` });
+  if (patch.lifecycle !== undefined && patch.lifecycle !== existing.lifecycle) await repoSystemNode(actor, team.id, r);
   return r;
 }
 
-/** Retire a repository (soft: lifecycle -> retired). Never deletes landed history (project_files rows keep their repositoryId). */
-export async function retireRepository(actor: Actor, projectRef: string, ref: string) {
+/** Retire a repository (soft: lifecycle -> retired). Never deletes landed history (team_files rows keep their repositoryId). */
+export async function retireRepository(actor: Actor, teamRef: string, ref: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can retire repositories");
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
-  const existing = await resolveRepository(db, project.id, ref);
+  const team = await requireTeam(actor, teamRef, "edit");
+  const existing = await resolveRepository(db, team.id, ref);
   const [r] = await db.update(repositories).set({ lifecycle: "retired", updatedAt: new Date() }).where(eq(repositories.id, existing.id)).returning();
-  await emit(db, actor, project.id, { type: "repository.retired", entity: "project", entityId: r.id, summary: `retired repository "${r.displayName}"` });
-  await repoSystemNode(actor, project.id, r);
+  await emit(db, actor, team.id, { type: "repository.retired", entity: "team", entityId: r.id, summary: `retired repository "${r.displayName}"` });
+  await repoSystemNode(actor, team.id, r);
   return r;
 }
 
 /**
  * Find-or-create used by the file-reporting path (wheelhouse.json names its repository on report;
  * a repo linked locally before this change registers automatically on its next report). `ref` is the
- * repo slug/name (or github id) the client sends; omitted falls back to a project-default row so old
+ * repo slug/name (or github id) the client sends; omitted falls back to a team-default row so old
  * CLI versions / repos without wheelhouse.json repo info keep reporting unqualified, as before.
  */
-export async function findOrCreateRepository(actor: Actor, projectId: string, ref?: string | null, role = "default") {
+export async function findOrCreateRepository(actor: Actor, teamId: string, ref?: string | null, role = "default") {
   const db = await getDb();
   const slug = slugify(ref?.trim() || "default");
-  const [existing] = await db.select().from(repositories).where(and(eq(repositories.projectId, projectId), eq(repositories.slug, slug)));
+  const [existing] = await db.select().from(repositories).where(and(eq(repositories.teamId, teamId), eq(repositories.slug, slug)));
   if (existing) return existing;
   const [r] = await db
     .insert(repositories)
-    .values({ projectId, displayName: ref?.trim() || "Default", role, provider: "local", slug, lifecycle: "live", lastEventAt: new Date() })
+    .values({ teamId, workspaceId: actor.workspaceId, displayName: ref?.trim() || "Default", role, provider: "local", slug, lifecycle: "live", lastEventAt: new Date() })
     .returning();
-  await emit(db, actor, projectId, { type: "repository.created", entity: "project", entityId: r.id, summary: `registered repository "${r.displayName}" from a client report` });
-  await repoSystemNode(actor, projectId, r);
+  await emit(db, actor, teamId, { type: "repository.created", entity: "team", entityId: r.id, summary: `registered repository "${r.displayName}" from a client report` });
+  await repoSystemNode(actor, teamId, r);
   return r;
 }
 
@@ -1379,7 +1457,7 @@ export const normPath = (p: string) => p.trim().replace(/^\.\//, "").replace(/\\
  * An anchor may carry an optional repo qualifier, "backend:src/**": only files
  * reported under that repo's slug/role match. A bare anchor ("src/db/**") has
  * no qualifier and matches files from any repository (the backward-compat
- * default — existing single-repo projects keep working with no action).
+ * default — existing single-repo teams keep working with no action).
  *
  * Heuristic: a qualifier is a prefix before the first colon, itself containing
  * no "/" and no glob characters — real anchors are repo-relative paths/globs
@@ -1398,7 +1476,7 @@ export function parseAnchor(anchor: string): { repo: string | null; pattern: str
 /**
  * How specifically `anchor` matches `file` (0 = no match). Longer literal
  * prefix = more specific. `fileRepo` is the repo slug/role the file was
- * reported under (from project_files.repositoryId / the session's file
+ * reported under (from team_files.repositoryId / the session's file
  * tracking); an anchor qualified to a different repo never matches it, and an
  * unqualified anchor matches regardless of `fileRepo` (including when it's
  * unknown/null).
@@ -1434,18 +1512,18 @@ export function anchorScore(anchor: string, file: string, fileRepo?: string | nu
  */
 export async function reportChanges(
   actor: Actor,
-  projectRef: string,
+  teamRef: string,
   input: { files: string[]; sha?: string; summary?: string; repository?: string },
 ) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const files = [...new Set(input.files.map(normPath).filter(Boolean))];
   if (!files.length) throw new ServiceError("invalid", "files is empty");
   // Which repo these files belong to, for repo-qualified anchor matching ("backend:src/**").
-  // Omitted (old CLI / repos without wheelhouse.json repo info) falls back to the project's
+  // Omitted (old CLI / repos without wheelhouse.json repo info) falls back to the team's
   // unqualified default repo, so unqualified anchors (the common case) keep matching regardless.
-  const repo = await findOrCreateRepository(actor, project.id, input.repository);
-  const ns = await db.select().from(nodes).where(eq(nodes.projectId, project.id));
+  const repo = await findOrCreateRepository(actor, team.id, input.repository);
+  const ns = await db.select().from(nodes).where(eq(nodes.teamId, team.id));
   const hits = new Map<string, { node: NodeRow; files: string[] }>();
   for (const f of files) {
     // Most specific match per layer: a change to service.ts flags the
@@ -1473,7 +1551,7 @@ export async function reportChanges(
 
   // Same pipeline for docs (WH-64): a doc anchored to a changed file is flagged, parallel to nodes.
   // No per-layer "most specific" grouping here (docs aren't layered) — any anchor match flags the doc.
-  const allDocs = await db.select().from(docs).where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)));
+  const allDocs = await db.select().from(docs).where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt)));
   const docHits = new Map<string, { doc: DocRow; files: string[] }>();
   for (const f of files) {
     for (const d of allDocs) {
@@ -1499,10 +1577,10 @@ export async function reportChanges(
     }
     const marked = [...hits.values()].map(({ node, files: fs }) => ({ name: node.name, layer: node.layer, files: fs }));
     const docsMarked = [...docHits.values()].map(({ doc: d, files: fs }) => ({ id: d.id, title: d.title, slug: d.slug, files: fs }));
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "code.changed",
-      entity: "project",
-      entityId: project.id,
+      entity: "team",
+      entityId: team.id,
       summary: `reported ${files.length} changed file(s)${short ? ` (${short})` : ""}; ${marked.length} map node(s)${docsMarked.length ? ` and ${docsMarked.length} doc(s)` : ""} need re-describing`,
       data: { sha: input.sha, files: files.slice(0, 50), stale: marked.map((m) => `${m.layer}:${m.name}`), staleDocs: docsMarked.map((m) => m.slug) },
     });
@@ -1519,28 +1597,28 @@ export async function reportChanges(
   });
 }
 
-export async function listStale(actor: Actor, projectRef: string) {
+export async function listStale(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   const rows = await db
     .select({ id: nodes.id, name: nodes.name, layer: nodes.layer, kind: nodes.kind, reason: nodes.staleReason, anchors: nodes.anchors })
     .from(nodes)
-    .where(and(eq(nodes.projectId, project.id), eq(nodes.stale, true)));
+    .where(and(eq(nodes.teamId, team.id), eq(nodes.stale, true)));
   return rows;
 }
 
-export async function markFresh(actor: Actor, projectRef: string, ref: string, sha?: string) {
-  return upsertNode(actor, projectRef, { id: ref, markFresh: true, describedSha: sha });
+export async function markFresh(actor: Actor, teamRef: string, ref: string, sha?: string) {
+  return upsertNode(actor, teamRef, { id: ref, markFresh: true, describedSha: sha });
 }
 
 /** Docs flagged stale (their anchored code changed since last confirmed), with reason and anchors to re-read. */
-export async function listStaleDocs(actor: Actor, projectRef: string) {
+export async function listStaleDocs(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   return db
     .select({ id: docs.id, slug: docs.slug, title: docs.title, reason: docs.staleReason, anchors: docs.anchors })
     .from(docs)
-    .where(and(eq(docs.projectId, project.id), eq(docs.stale, true), isNull(docs.deletedAt)));
+    .where(and(eq(docs.teamId, team.id), eq(docs.stale, true), isNull(docs.deletedAt)));
 }
 
 // ───────── decisions ─────────
@@ -1557,24 +1635,25 @@ export type DecisionInput = {
   expectedVersion?: number;
 };
 
-export async function listDecisions(actor: Actor, projectRef: string) {
+export async function listDecisions(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  return db.select().from(decisions).where(eq(decisions.projectId, project.id)).orderBy(asc(decisions.number));
+  const team = await requireTeam(actor, teamRef);
+  return withNodeIds(db, await db.select().from(decisions).where(eq(decisions.teamId, team.id)).orderBy(asc(decisions.number)));
 }
 
 /** Create (no number) or update (number) an ADR. */
-export async function upsertDecision(actor: Actor, projectRef: string, input: DecisionInput) {
+export async function upsertDecision(actor: Actor, teamRef: string, input: DecisionInput) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   return db.transaction(async (tx) => {
-    const nodeIds = input.nodes ? await Promise.all(input.nodes.map(async (r) => (await resolveNode(tx, project.id, r)).id)) : undefined;
+    const nodeIds = input.nodes ? await Promise.all(input.nodes.map(async (r) => (await resolveNode(tx, team.id, r)).id)) : undefined;
     if (input.number !== undefined) {
-      const [d] = await tx.select().from(decisions).where(and(eq(decisions.projectId, project.id), eq(decisions.number, input.number))).for("update");
+      const [d] = await tx.select().from(decisions).where(and(eq(decisions.teamId, team.id), eq(decisions.number, input.number))).for("update");
       if (!d) throw new ServiceError("not_found", `Decision ADR-${input.number} not found`);
       if (input.expectedVersion !== undefined && input.expectedVersion !== d.version) {
-        throw new ServiceError("conflict", `ADR-${d.number} was changed (version ${d.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: d });
+        throw new ServiceError("conflict", `ADR-${d.number} was changed (version ${d.version}, you had ${input.expectedVersion}). Re-read and retry.`, { current: (await withNodeIds(tx, [d]))[0] });
       }
+      const [current] = await withNodeIds(tx, [d]);
       const patch = {
         title: input.title,
         status: input.status,
@@ -1583,14 +1662,17 @@ export async function upsertDecision(actor: Actor, projectRef: string, input: De
         consequences: input.consequences,
         nodeIds,
       };
-      const changes = diff(d as unknown as Record<string, unknown>, patch as Record<string, unknown>);
-      if (!Object.keys(changes).length) return d;
-      const [u] = await tx
+      const changes = diff(current as unknown as Record<string, unknown>, patch as Record<string, unknown>);
+      if (!Object.keys(changes).length) return current;
+      const { nodeIds: newNodes, ...columnsPatch } = patch;
+      const [row] = await tx
         .update(decisions)
-        .set({ ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)), version: d.version + 1, updatedAt: new Date() })
+        .set({ ...Object.fromEntries(Object.entries(columnsPatch).filter(([, v]) => v !== undefined)), version: d.version + 1, updatedAt: new Date() })
         .where(eq(decisions.id, d.id))
         .returning();
-      await emit(tx, actor, project.id, {
+      if (newNodes) await setDecisionNodes(tx, team, row.id, newNodes);
+      const u = { ...row, nodeIds: newNodes ?? current.nodeIds };
+      await emit(tx, actor, team.id, {
         type: "decision.updated",
         entity: "decision",
         entityId: u.id,
@@ -1603,52 +1685,53 @@ export async function upsertDecision(actor: Actor, projectRef: string, input: De
     const [{ max }] = await tx
       .select({ max: sql<number>`coalesce(max(${decisions.number}), 0)::int` })
       .from(decisions)
-      .where(eq(decisions.projectId, project.id));
+      .where(eq(decisions.teamId, team.id));
     const [d] = await tx
       .insert(decisions)
       .values({
-        projectId: project.id,
+        teamId: team.id,
+        workspaceId: team.workspaceId,
         number: Number(max) + 1,
         title: input.title.trim(),
         status: input.status ?? "accepted",
         context: input.context ?? "",
         decision: input.decision ?? "",
         consequences: input.consequences ?? "",
-        nodeIds: nodeIds ?? [],
         authorKind: actor.kind,
         authorName: actor.name,
       })
       .returning();
-    await emit(tx, actor, project.id, {
+    await setDecisionNodes(tx, team, d.id, nodeIds ?? []);
+    await emit(tx, actor, team.id, {
       type: "decision.created",
       entity: "decision",
       entityId: d.id,
       summary: `recorded ADR-${d.number} "${d.title}"`,
       data: { number: d.number },
     });
-    return d;
+    return { ...d, nodeIds: [...new Set(nodeIds ?? [])] };
   });
 }
 
 // ───────── glossary ─────────
 
-export async function listTerms(actor: Actor, projectRef: string) {
+export async function listTerms(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  return db.select().from(terms).where(eq(terms.projectId, project.id)).orderBy(asc(terms.term));
+  const team = await requireTeam(actor, teamRef);
+  return db.select().from(terms).where(eq(terms.teamId, team.id)).orderBy(asc(terms.term));
 }
 
-export async function upsertTerm(actor: Actor, projectRef: string, input: { term: string; definition: string; node?: string | null }) {
+export async function upsertTerm(actor: Actor, teamRef: string, input: { term: string; definition: string; node?: string | null }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const term = input.term?.trim();
   if (!term || !input.definition?.trim()) throw new ServiceError("invalid", "term and definition are required");
   return db.transaction(async (tx) => {
-    const nodeId = input.node === null ? null : input.node ? (await resolveNode(tx, project.id, input.node)).id : undefined;
+    const nodeId = input.node === null ? null : input.node ? (await resolveNode(tx, team.id, input.node)).id : undefined;
     const [existing] = await tx
       .select()
       .from(terms)
-      .where(and(eq(terms.projectId, project.id), eq(sql`lower(${terms.term})`, term.toLowerCase())));
+      .where(and(eq(terms.teamId, team.id), eq(sql`lower(${terms.term})`, term.toLowerCase())));
     if (existing) {
       if (existing.definition === input.definition.trim() && (nodeId === undefined || nodeId === existing.nodeId) && existing.term === term) return existing;
       const [t] = await tx
@@ -1656,42 +1739,42 @@ export async function upsertTerm(actor: Actor, projectRef: string, input: { term
         .set({ term, definition: input.definition.trim(), ...(nodeId !== undefined ? { nodeId } : {}), updatedAt: new Date() })
         .where(eq(terms.id, existing.id))
         .returning();
-      await emit(tx, actor, project.id, { type: "term.updated", entity: "term", entityId: t.id, summary: `updated glossary term "${t.term}"` });
+      await emit(tx, actor, team.id, { type: "term.updated", entity: "term", entityId: t.id, summary: `updated glossary term "${t.term}"` });
       return t;
     }
     const [t] = await tx
       .insert(terms)
-      .values({ projectId: project.id, term, definition: input.definition.trim(), nodeId: nodeId ?? null })
+      .values({ teamId: team.id, workspaceId: team.workspaceId, term, definition: input.definition.trim(), nodeId: nodeId ?? null })
       .returning();
-    await emit(tx, actor, project.id, { type: "term.created", entity: "term", entityId: t.id, summary: `defined glossary term "${t.term}"` });
+    await emit(tx, actor, team.id, { type: "term.created", entity: "term", entityId: t.id, summary: `defined glossary term "${t.term}"` });
     return t;
   });
 }
 
-export async function deleteTerm(actor: Actor, projectRef: string, term: string) {
+export async function deleteTerm(actor: Actor, teamRef: string, term: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   const [t] = await db
     .select()
     .from(terms)
-    .where(and(eq(terms.projectId, project.id), isUuid(term) ? eq(terms.id, term) : eq(sql`lower(${terms.term})`, term.toLowerCase())));
+    .where(and(eq(terms.teamId, team.id), isUuid(term) ? eq(terms.id, term) : eq(sql`lower(${terms.term})`, term.toLowerCase())));
   if (!t) throw new ServiceError("not_found", `Term "${term}" not found`);
   await db.delete(terms).where(eq(terms.id, t.id));
-  await emit(db, actor, project.id, { type: "term.deleted", entity: "term", entityId: t.id, summary: `removed glossary term "${t.term}"` });
+  await emit(db, actor, team.id, { type: "term.deleted", entity: "term", entityId: t.id, summary: `removed glossary term "${t.term}"` });
   return { ok: true };
 }
 
 // ───────────────────────── events / AI queue ─────────────────────────
 
-export async function listEvents(actor: Actor, projectRef: string, opts: { afterSeq?: number; limit?: number; actorKind?: "human" | "agent" } = {}) {
+export async function listEvents(actor: Actor, teamRef: string, opts: { afterSeq?: number; limit?: number; actorKind?: "human" | "agent" } = {}) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   return db
     .select()
     .from(events)
     .where(
       and(
-        eq(events.projectId, project.id),
+        eq(events.teamId, team.id),
         opts.afterSeq ? gt(events.seq, opts.afterSeq) : undefined,
         opts.actorKind ? eq(events.actorKind, opts.actorKind) : undefined,
       ),
@@ -1701,20 +1784,20 @@ export async function listEvents(actor: Actor, projectRef: string, opts: { after
 }
 
 /**
- * Where an agent's queue starts in a project. With no explicit cursor, a key
+ * Where an agent's queue starts in a team. With no explicit cursor, a key
  * starts at the moment it was created: a new agent doesn't inherit the whole
- * project history as "unread".
+ * team history as "unread".
  */
-async function cursorFor(q: Q, key: { id: string; createdAt: Date }, projectId: string) {
+async function cursorFor(q: Q, key: { id: string; createdAt: Date }, teamId: string) {
   const [cur] = await q
     .select()
     .from(agentCursors)
-    .where(and(eq(agentCursors.apiKeyId, key.id), eq(agentCursors.projectId, projectId)));
+    .where(and(eq(agentCursors.apiKeyId, key.id), eq(agentCursors.teamId, teamId)));
   if (cur) return cur.lastSeq;
   const [row] = await q
     .select({ seq: sql<number>`coalesce(max(${events.seq}), 0)` })
     .from(events)
-    .where(and(eq(events.projectId, projectId), lte(events.createdAt, key.createdAt)));
+    .where(and(eq(events.teamId, teamId), lte(events.createdAt, key.createdAt)));
   return Number(row?.seq ?? 0);
 }
 
@@ -1762,7 +1845,7 @@ export async function touchSession(actor: Actor) {
     const [{ head }] = await db
       .select({ head: sql<number>`coalesce(max(${events.seq}), 0)` })
       .from(events)
-      .where(eq(events.projectId, s.projectId));
+      .where(eq(events.teamId, s.teamId));
     await db
       .update(workSessions)
       .set({
@@ -1788,7 +1871,7 @@ export async function sessionNotice(actor: Actor) {
   const [{ n }] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(events)
-    .where(and(eq(events.projectId, s.projectId), gt(events.seq, s.resumeFromSeq), notMine({ id: actor.id, sessionId: s.id })));
+    .where(and(eq(events.teamId, s.teamId), gt(events.seq, s.resumeFromSeq), notMine({ id: actor.id, sessionId: s.id })));
   return {
     removedAt: s.resumeRemovedAt,
     missedChanges: Number(n),
@@ -1797,28 +1880,28 @@ export async function sessionNotice(actor: Actor) {
 }
 
 /** The agent's answer to session_removed: replay the changes missed while removed, or stay at the top of the queue. */
-export async function resumeSession(actor: Actor, projectRef: string, mode: "replay" | "skip") {
+export async function resumeSession(actor: Actor, teamRef: string, mode: "replay" | "skip") {
   if (actor.kind !== "agent" || !actor.sessionId) throw new ServiceError("invalid", "resume_session is for an agent session");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   const [s] = await db.select().from(workSessions).where(eq(workSessions.id, actor.sessionId));
-  if (!s || s.apiKeyId !== actor.id || s.projectId !== project.id) throw new ServiceError("not_found", "Session not found");
+  if (!s || s.apiKeyId !== actor.id || s.teamId !== team.id) throw new ServiceError("not_found", "Session not found");
   if (s.resumeFromSeq == null) throw new ServiceError("invalid", "Nothing to resume: this session was not removed");
-  const [{ head }] = await db.select({ head: sql<number>`coalesce(max(${events.seq}), 0)` }).from(events).where(eq(events.projectId, project.id));
+  const [{ head }] = await db.select({ head: sql<number>`coalesce(max(${events.seq}), 0)` }).from(events).where(eq(events.teamId, team.id));
   const cursor = mode === "replay" ? s.resumeFromSeq : Number(head);
   await db.update(workSessions).set({ lastSeq: cursor, resumeFromSeq: null, resumeRemovedAt: null }).where(eq(workSessions.id, s.id));
   return { ok: true, mode, cursor };
 }
 
 /** A teammate removes a session from the lists (soft delete: kept 30 days so a reconnect is recognised). */
-export async function removeSession(actor: Actor, projectRef: string, sessionId: string) {
+export async function removeSession(actor: Actor, teamRef: string, sessionId: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can remove a session");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   const removed = await db
     .update(workSessions)
     .set({ removedAt: new Date() })
-    .where(and(eq(workSessions.id, sessionId), eq(workSessions.projectId, project.id), isNull(workSessions.removedAt)))
+    .where(and(eq(workSessions.id, sessionId), eq(workSessions.teamId, team.id), isNull(workSessions.removedAt)))
     .returning({ id: workSessions.id });
   if (!removed.length) throw new ServiceError("not_found", "Session not found");
   return { ok: true };
@@ -1829,11 +1912,11 @@ export async function removeSession(actor: Actor, projectRef: string, sessionId:
  * week are deleted, and removed ones are purged after 30 days. A session a
  * pending map draft still points at is kept.
  */
-export async function pruneSessions(q: Q, projectId: string) {
+export async function pruneSessions(q: Q, teamId: string) {
   const now = Date.now();
   await q.delete(workSessions).where(
     and(
-      eq(workSessions.projectId, projectId),
+      eq(workSessions.teamId, teamId),
       or(
         and(isNull(workSessions.removedAt), lt(workSessions.lastSeenAt, new Date(now - SESSION_IDLE_LIMIT_MS))),
         lt(workSessions.removedAt, new Date(now - REMOVED_KEEP_MS)),
@@ -1848,37 +1931,37 @@ export async function pruneSessions(q: Q, projectId: string) {
  * session starts where its key's cursor is: its briefing covers current state,
  * so it needs changes from now on, not a replay of what other sessions handled.
  */
-async function sessionCursor(q: Q, actor: Actor, projectId: string) {
+async function sessionCursor(q: Q, actor: Actor, teamId: string) {
   const id = actor.sessionId!;
   const [s] = await q.select().from(workSessions).where(eq(workSessions.id, id));
   if (s && s.apiKeyId !== actor.id) throw new ServiceError("forbidden", "That session belongs to another API key");
-  if (s && s.projectId !== projectId) throw new ServiceError("invalid", "That session belongs to another project");
+  if (s && s.teamId !== teamId) throw new ServiceError("invalid", "That session belongs to another team");
   if (s?.lastSeq != null) return s.lastSeq;
-  const start = await cursorFor(q, await keyRow(q, actor.id), projectId);
+  const start = await cursorFor(q, await keyRow(q, actor.id), teamId);
   if (s) await q.update(workSessions).set({ lastSeq: start }).where(eq(workSessions.id, id));
   else
     await q
       .insert(workSessions)
-      .values({ id, projectId, apiKeyId: actor.id, actorName: actor.name, lastSeq: start })
+      .values({ id, teamId, workspaceId: actor.workspaceId, apiKeyId: actor.id, actorName: actor.name, lastSeq: start })
       .onConflictDoNothing();
   return start;
 }
 
 /**
  * The AI queue: changes since this agent's cursor, excluding the agent's own
- * writes. Humans rearranging the board, editing tickets, or commenting show up
+ * writes. Humans rearranging the board, editing issues, or commenting show up
  * here. Call `ackChanges` with the last seq you processed.
  *
  * Large backlogs come back as a summary (counts by type and by who) plus the
  * oldest `limit` changes, so an agent returning after a long break isn't
  * flooded; `latestSeq` lets it ack everything once it has skimmed the summary.
  */
-export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
+export async function getChanges(actor: Actor, teamRef: string, limit = 50) {
   if (actor.kind !== "agent") throw new ServiceError("forbidden", "The change queue is per agent API key");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  const after = actor.sessionId ? await sessionCursor(db, actor, project.id) : await cursorFor(db, await keyRow(db, actor.id), project.id);
-  const pending = and(eq(events.projectId, project.id), gt(events.seq, after), notMine(actor));
+  const team = await requireTeam(actor, teamRef);
+  const after = actor.sessionId ? await sessionCursor(db, actor, team.id) : await cursorFor(db, await keyRow(db, actor.id), team.id);
+  const pending = and(eq(events.teamId, team.id), gt(events.seq, after), notMine(actor));
   const cap = Math.min(Math.max(limit, 1), 200);
   const rows = await db.select().from(events).where(pending).orderBy(asc(events.seq)).limit(cap);
   const [{ total, latest }] = await db
@@ -1914,13 +1997,13 @@ export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
   const stale = await db
     .select({ name: nodes.name, layer: nodes.layer, reason: nodes.staleReason, anchors: nodes.anchors })
     .from(nodes)
-    .where(and(eq(nodes.projectId, project.id), eq(nodes.stale, true)))
+    .where(and(eq(nodes.teamId, team.id), eq(nodes.stale, true)))
     .limit(50);
   // Same, for docs (WH-64): a doc whose anchored files changed since it was last confirmed accurate.
   const staleDocs = await db
     .select({ slug: docs.slug, title: docs.title, reason: docs.staleReason, anchors: docs.anchors })
     .from(docs)
-    .where(and(eq(docs.projectId, project.id), eq(docs.stale, true), isNull(docs.deletedAt)))
+    .where(and(eq(docs.teamId, team.id), eq(docs.stale, true), isNull(docs.deletedAt)))
     .limit(50);
   return {
     session: actor.sessionId ?? null,
@@ -1935,12 +2018,12 @@ export async function getChanges(actor: Actor, projectRef: string, limit = 50) {
   };
 }
 
-export async function ackChanges(actor: Actor, projectRef: string, seq: number) {
+export async function ackChanges(actor: Actor, teamRef: string, seq: number) {
   if (actor.kind !== "agent") throw new ServiceError("forbidden", "The change queue is per agent API key");
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   if (actor.sessionId) {
-    await sessionCursor(db, actor, project.id);
+    await sessionCursor(db, actor, team.id);
     await db
       .update(workSessions)
       .set({ lastSeq: sql`greatest(coalesce(${workSessions.lastSeq}, 0), ${seq})`, lastSeenAt: new Date() })
@@ -1949,46 +2032,46 @@ export async function ackChanges(actor: Actor, projectRef: string, seq: number) 
   // The key-level cursor follows the furthest any session has read: new sessions start there.
   await db
     .insert(agentCursors)
-    .values({ apiKeyId: actor.id, projectId: project.id, lastSeq: seq })
+    .values({ apiKeyId: actor.id, teamId: team.id, workspaceId: team.workspaceId, lastSeq: seq })
     .onConflictDoUpdate({
-      target: [agentCursors.apiKeyId, agentCursors.projectId],
+      target: [agentCursors.apiKeyId, agentCursors.teamId],
       set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${seq})` },
     });
   // An ack is not an event in the log, but it changes the Bots menu's queue counts: tell open browsers (WH-1).
-  bus.publish({ teamId: actor.teamId, projectId: project.id, type: "queue.changed", actorKind: "agent", actorName: actor.name });
+  bus.publish({ workspaceId: actor.workspaceId, teamId: team.id, type: "queue.changed", actorKind: "agent", actorName: actor.name });
   return { ok: true, cursor: seq, session: actor.sessionId ?? null };
 }
 
 /**
  * Human reset: mark everything as seen for one agent key (or every key), in one
- * project or all of the team's projects. Used after demos, long breaks, or when
+ * team or all of the workspace's teams. Used after demos, long breaks, or when
  * a backlog isn't worth replaying.
  */
-export async function markAllSeen(actor: Actor, opts: { keyId?: string; projectRef?: string } = {}) {
+export async function markAllSeen(actor: Actor, opts: { keyId?: string; teamRef?: string } = {}) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can reset an agent's queue");
   const db = await getDb();
   const keys = await db
     .select({ id: schema.apiKeys.id })
     .from(schema.apiKeys)
-    .where(and(eq(schema.apiKeys.teamId, actor.teamId), opts.keyId ? eq(schema.apiKeys.id, opts.keyId) : undefined));
+    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), opts.keyId ? eq(schema.apiKeys.id, opts.keyId) : undefined));
   if (opts.keyId && !keys.length) throw new ServiceError("not_found", "API key not found");
-  const ps = opts.projectRef ? [await getProject(actor, opts.projectRef)] : await listProjects(actor);
+  const ps = opts.teamRef ? [await requireTeam(actor, opts.teamRef)] : await listTeams(actor);
   let reset = 0;
   await db.transaction(async (tx) => {
     for (const p of ps) {
       const [{ head }] = await tx
         .select({ head: sql<number>`coalesce(max(${events.seq}), 0)` })
         .from(events)
-        .where(eq(events.projectId, p.id));
+        .where(eq(events.teamId, p.id));
       for (const k of keys) {
         await tx
           .insert(agentCursors)
-          .values({ apiKeyId: k.id, projectId: p.id, lastSeq: Number(head) })
-          .onConflictDoUpdate({ target: [agentCursors.apiKeyId, agentCursors.projectId], set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${Number(head)})` } });
+          .values({ apiKeyId: k.id, teamId: p.id, workspaceId: p.workspaceId, lastSeq: Number(head) })
+          .onConflictDoUpdate({ target: [agentCursors.apiKeyId, agentCursors.teamId], set: { lastSeq: sql`greatest(${agentCursors.lastSeq}, ${Number(head)})` } });
         await tx
           .update(workSessions)
           .set({ lastSeq: Number(head) })
-          .where(and(eq(workSessions.apiKeyId, k.id), eq(workSessions.projectId, p.id), isNull(workSessions.removedAt)));
+          .where(and(eq(workSessions.apiKeyId, k.id), eq(workSessions.teamId, p.id), isNull(workSessions.removedAt)));
         reset++;
       }
     }
@@ -2002,22 +2085,22 @@ export async function markAllSeen(actor: Actor, opts: { keyId?: string; projectR
  * reports its own depth and the recency bucket it falls into. The key's `pending`
  * counts only sessions active in the last 6 hours, so dead ones don't inflate it.
  */
-export async function queueStatus(actor: Actor, projectRef: string) {
+export async function queueStatus(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  await pruneSessions(db, project.id);
+  const team = await requireTeam(actor, teamRef);
+  await pruneSessions(db, team.id);
   const keys = await db
     .select({ id: schema.apiKeys.id, name: schema.apiKeys.name, lastUsedAt: schema.apiKeys.lastUsedAt, createdAt: schema.apiKeys.createdAt })
     .from(schema.apiKeys)
-    .where(and(eq(schema.apiKeys.teamId, actor.teamId), sql`${schema.apiKeys.revokedAt} is null`));
+    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), sql`${schema.apiKeys.revokedAt} is null`));
   const out = [];
   for (const { createdAt, ...k } of keys) {
-    const after = await cursorFor(db, { id: k.id, createdAt }, project.id);
+    const after = await cursorFor(db, { id: k.id, createdAt }, team.id);
     const depth = async (from: number, who: { id: string; sessionId?: string }) => {
       const [{ n }] = await db
         .select({ n: sql<number>`count(*)::int` })
         .from(events)
-        .where(and(eq(events.projectId, project.id), gt(events.seq, from), notMine(who)));
+        .where(and(eq(events.teamId, team.id), gt(events.seq, from), notMine(who)));
       return Number(n);
     };
     const active = await db
@@ -2026,14 +2109,14 @@ export async function queueStatus(actor: Actor, projectRef: string) {
         lastSeq: workSessions.lastSeq,
         lastSeenAt: workSessions.lastSeenAt,
         branch: workSessions.branch,
-        ticketNumber: tickets.number,
+        issueNumber: issues.number,
       })
       .from(workSessions)
-      .leftJoin(tickets, eq(tickets.id, workSessions.ticketId))
+      .leftJoin(issues, eq(issues.id, workSessions.issueId))
       .where(
         and(
           eq(workSessions.apiKeyId, k.id),
-          eq(workSessions.projectId, project.id),
+          eq(workSessions.teamId, team.id),
           isNull(workSessions.endedAt),
           isNull(workSessions.removedAt),
           gt(workSessions.lastSeenAt, new Date(Date.now() - SESSION_IDLE_LIMIT_MS)),
@@ -2049,7 +2132,7 @@ export async function queueStatus(actor: Actor, projectRef: string) {
         // A session that never read its queue has no cursor of its own; don't pass it off as caught up.
         reading: s.lastSeq != null,
         branch: s.branch,
-        ticket: s.ticketNumber == null ? null : `${project.key}-${s.ticketNumber}`,
+        issue: s.issueNumber == null ? null : `${team.key}-${s.issueNumber}`,
         pending: s.lastSeq == null ? 0 : await depth(s.lastSeq, { id: k.id, sessionId: s.id }),
       });
     sessions.sort((x, y) => y.lastSeenAt.getTime() - x.lastSeenAt.getTime());
@@ -2063,32 +2146,33 @@ export async function queueStatus(actor: Actor, projectRef: string) {
 // ───────── setup checklist (WH-69) ─────────
 
 /**
- * Gathers the rows checklistStatus() needs and computes the project's setup-checklist state. Shared by the
- * project-page banner and the agent briefing so the two can't say different things about what's connected.
+ * Gathers the rows checklistStatus() needs and computes the team's setup-checklist state. Shared by the
+ * team-page banner and the agent briefing so the two can't say different things about what's connected.
  */
-export async function checklistForProject(actor: Actor, projectRef: string): Promise<ChecklistState> {
+export async function checklistForTeam(actor: Actor, teamRef: string): Promise<ChecklistState> {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   const [repos, [{ count: sessionCount }], [{ count: activeAgentKeyCount }], [{ count: nodeCount }], [{ count: memberCount }], [{ count: pendingInviteCount }]] =
     await Promise.all([
-      db.select({ provider: repositories.provider, lifecycle: repositories.lifecycle }).from(repositories).where(eq(repositories.projectId, project.id)),
+      db.select({ provider: repositories.provider, lifecycle: repositories.lifecycle }).from(repositories).where(eq(repositories.teamId, team.id)),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(workSessions)
-        .where(eq(workSessions.projectId, project.id)),
+        .where(eq(workSessions.teamId, team.id)),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.apiKeys)
-        .where(and(eq(schema.apiKeys.teamId, project.teamId), isNull(schema.apiKeys.revokedAt))),
-      db.select({ count: sql<number>`count(*)::int` }).from(nodes).where(eq(nodes.projectId, project.id)),
-      db.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.teamId, project.teamId)),
+        .innerJoin(schema.apiKeyTeams, eq(schema.apiKeyTeams.apiKeyId, schema.apiKeys.id))
+        .where(and(eq(schema.apiKeyTeams.teamId, team.id), isNull(schema.apiKeys.revokedAt))),
+      db.select({ count: sql<number>`count(*)::int` }).from(nodes).where(eq(nodes.teamId, team.id)),
+      db.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.workspaceId, team.workspaceId)),
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.invites)
         .where(
           and(
-            eq(schema.invites.kind, "join_team"),
-            eq(schema.invites.teamId, project.teamId),
+            eq(schema.invites.kind, "join_workspace"),
+            eq(schema.invites.workspaceId, team.workspaceId),
             isNull(schema.invites.usedAt),
             isNull(schema.invites.revokedAt),
             gt(schema.invites.expiresAt, new Date()),
@@ -2096,7 +2180,7 @@ export async function checklistForProject(actor: Actor, projectRef: string): Pro
         ),
     ]);
   return checklistStatus({
-    projectKey: project.key,
+    teamKey: team.key,
     repositories: repos,
     sessionCount,
     activeAgentKeyCount,
@@ -2106,18 +2190,18 @@ export async function checklistForProject(actor: Actor, projectRef: string): Pro
   });
 }
 
-// ───────────────────────── team documentation (WH-51) ─────────────────────────
+// ───────────────────────── workspace documentation (WH-51) ─────────────────────────
 //
 // Markdown docs stored in Wheelhouse, next to the board and map: runbooks, product
 // notes, conventions, onboarding, decisions in prose. A tree via parentId, optimistic
-// locking like tickets, soft delete (30-day purge; history lives in `events`). Reading
+// locking like issues, soft delete (30-day purge; history lives in `events`). Reading
 // is open to any key; writing (upsertDoc/deleteDoc/moveDoc) requires a human actor or
 // a key with the "docs:write" capability — enforced here, and again at the tool layer
 // so a future caller of these functions can't skip the check by mistake.
 
 export const DOC_BODY_MAX_BYTES = 200_000; // 200 KB
 export const DOC_MAX_DEPTH = 4;
-export const DOC_MAX_PER_PROJECT = 500;
+export const DOC_MAX_PER_TEAM = 500;
 
 export type DocRow = typeof docs.$inferSelect;
 
@@ -2135,10 +2219,10 @@ async function assertDocsWritable(actor: Actor, q: Q) {
   }
 }
 
-/** Accepts a doc uuid, or a "slug" / "parent-slug/slug" path, scoped to one project. Never returns a soft-deleted doc. */
-async function resolveDoc(q: Q, projectId: string, ref: string) {
+/** Accepts a doc uuid, or a "slug" / "parent-slug/slug" path, scoped to one team. Never returns a soft-deleted doc. */
+async function resolveDoc(q: Q, teamId: string, ref: string) {
   if (isUuid(ref)) {
-    const [d] = await q.select().from(docs).where(and(eq(docs.id, ref), eq(docs.projectId, projectId), isNull(docs.deletedAt)));
+    const [d] = await q.select().from(docs).where(and(eq(docs.id, ref), eq(docs.teamId, teamId), isNull(docs.deletedAt)));
     if (!d) throw new ServiceError("not_found", `Doc ${ref} not found`);
     return d;
   }
@@ -2151,7 +2235,7 @@ async function resolveDoc(q: Q, projectId: string, ref: string) {
     const [d] = await q
       .select()
       .from(docs)
-      .where(and(eq(docs.projectId, projectId), eq(docs.slug, slug), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId)));
+      .where(and(eq(docs.teamId, teamId), eq(docs.slug, slug), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId)));
     if (!d) throw new ServiceError("not_found", `Doc "${ref}" not found`);
     found = d;
     parentId = d.id;
@@ -2170,11 +2254,11 @@ function slugifyDoc(title: string) {
 }
 
 /** Depth of `parentId` itself (root = 0), by walking up its own ancestor chain. */
-async function depthOf(q: Q, projectId: string, parentId: string | null): Promise<number> {
+async function depthOf(q: Q, teamId: string, parentId: string | null): Promise<number> {
   let depth = 0;
   let cur = parentId;
   while (cur) {
-    const [p] = await q.select({ parentId: docs.parentId }).from(docs).where(and(eq(docs.id, cur), eq(docs.projectId, projectId)));
+    const [p] = await q.select({ parentId: docs.parentId }).from(docs).where(and(eq(docs.id, cur), eq(docs.teamId, teamId)));
     if (!p) break;
     cur = p.parentId;
     if (cur) depth += 1; // only count a hop to another ancestor, not the starting node itself
@@ -2183,7 +2267,7 @@ async function depthOf(q: Q, projectId: string, parentId: string | null): Promis
   return depth;
 }
 
-async function uniqueSlug(q: Q, projectId: string, parentId: string | null, base: string, excludeId?: string) {
+async function uniqueSlug(q: Q, teamId: string, parentId: string | null, base: string, excludeId?: string) {
   let slug = base;
   for (let i = 1; i < 50; i++) {
     const [clash] = await q
@@ -2191,7 +2275,7 @@ async function uniqueSlug(q: Q, projectId: string, parentId: string | null, base
       .from(docs)
       .where(
         and(
-          eq(docs.projectId, projectId),
+          eq(docs.teamId, teamId),
           eq(docs.slug, slug),
           isNull(docs.deletedAt),
           parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId),
@@ -2220,7 +2304,7 @@ export type DocInput = {
  * Markdown — inline code spans (`` `src/lib/x.ts` ``) and bare tokens that look like a
  * repo-relative path (contain a "/" and end in a plausible extension, or end in "/" for
  * a directory). Not an NLP system — a few false negatives/positives are fine, since the
- * ticket says these are SUGGESTIONS the author confirms, never auto-applied.
+ * issue says these are SUGGESTIONS the author confirms, never auto-applied.
  */
 const PATH_TOKEN_RE = /[A-Za-z0-9_.*-]+(?:\/[A-Za-z0-9_.*-]+)+\/?/g;
 const LIKELY_PATH_RE = /^(?:[A-Za-z0-9_.-]+\/)+(?:[A-Za-z0-9_.-]+\.[A-Za-z0-9]{1,8}|\*\*?|[A-Za-z0-9_.*-]+)\/?$/;
@@ -2246,10 +2330,10 @@ export function extractPathTokens(markdown: string): string[] {
  * any map nodes it's linked to. Never applied automatically — surfaced for the author
  * to accept/reject (upsert_doc / the docs UI pass `anchors` explicitly to confirm them).
  */
-export async function suggestDocAnchors(actor: Actor, projectRef: string, ref: string): Promise<string[]> {
+export async function suggestDocAnchors(actor: Actor, teamRef: string, ref: string): Promise<string[]> {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  const d = await resolveDoc(db, project.id, ref);
+  const team = await requireTeam(actor, teamRef);
+  const d = await resolveDoc(db, team.id, ref);
   const fromBody = extractPathTokens(d.body);
   const linkedNodeIds = await db.select({ nodeId: docNodes.nodeId }).from(docNodes).where(eq(docNodes.docId, d.id));
   const fromNodes = linkedNodeIds.length
@@ -2263,11 +2347,11 @@ export function listDocTemplates() {
   return listDocTemplatesStatic();
 }
 
-/** The tree of a project's (non-deleted) docs: id, slug, title, parentId, position, updatedAt. */
-export async function listDocs(actor: Actor, projectRef: string, parentRef?: string) {
+/** The tree of a team's (non-deleted) docs: id, slug, title, parentId, position, updatedAt. */
+export async function listDocs(actor: Actor, teamRef: string, parentRef?: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  const parentId = parentRef ? (await resolveDoc(db, project.id, parentRef)).id : undefined;
+  const team = await requireTeam(actor, teamRef);
+  const parentId = parentRef ? (await resolveDoc(db, team.id, parentRef)).id : undefined;
   const rows = await db
     .select({
       id: docs.id,
@@ -2280,16 +2364,16 @@ export async function listDocs(actor: Actor, projectRef: string, parentRef?: str
       stale: docs.stale,
     })
     .from(docs)
-    .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)))
+    .where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt)))
     .orderBy(asc(docs.position));
   if (parentRef !== undefined) return rows.filter((d) => d.parentId === parentId);
   return rows;
 }
 
-export async function getDoc(actor: Actor, projectRef: string, ref: string) {
+export async function getDoc(actor: Actor, teamRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
-  const d = await resolveDoc(db, project.id, ref);
+  const team = await requireTeam(actor, teamRef);
+  const d = await resolveDoc(db, team.id, ref);
   const linked = await db
     .select({ id: nodes.id, name: nodes.name, kind: nodes.kind, layer: nodes.layer })
     .from(docNodes)
@@ -2300,7 +2384,7 @@ export async function getDoc(actor: Actor, projectRef: string, ref: string) {
   const touched = await db
     .select({ type: events.type, actorKind: events.actorKind, actorId: events.actorId, actorName: events.actorName })
     .from(events)
-    .where(and(eq(events.teamId, project.teamId), eq(events.entity, "doc"), eq(events.entityId, d.id), inArray(events.type, ["doc.created", "doc.updated"])))
+    .where(and(eq(events.workspaceId, team.workspaceId), eq(events.entity, "doc"), eq(events.entityId, d.id), inArray(events.type, ["doc.created", "doc.updated"])))
     .orderBy(asc(events.seq));
   const created = touched.find((e) => e.type === "doc.created");
   const [owner] = d.createdByKind === "human" && d.createdById ? await db.select({ name: users.name }).from(users).where(eq(users.id, d.createdById)) : [];
@@ -2316,9 +2400,9 @@ export async function getDoc(actor: Actor, projectRef: string, ref: string) {
   return { doc: d, nodes: linked, owner: { kind: d.createdByKind, id: d.createdById, name: ownerName }, contributors };
 }
 
-export async function createDoc(actor: Actor, projectRef: string, input: DocInput & { title: string }) {
+export async function createDoc(actor: Actor, teamRef: string, input: DocInput & { title: string }) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   await assertDocsWritable(actor, db);
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
   // WH-65: explicit body always wins; the template is only a convenience default for a blank doc.
@@ -2327,29 +2411,30 @@ export async function createDoc(actor: Actor, projectRef: string, input: DocInpu
   if (bodyBytes > DOC_BODY_MAX_BYTES) throw new ServiceError("invalid", `Doc body is ${bodyBytes} bytes; the limit is ${DOC_BODY_MAX_BYTES} (200 KB)`);
 
   return db.transaction(async (tx) => {
-    const parentId = input.parent === null || input.parent === undefined ? null : (await resolveDoc(tx, project.id, input.parent)).id;
-    const depth = await depthOf(tx, project.id, parentId);
+    const parentId = input.parent === null || input.parent === undefined ? null : (await resolveDoc(tx, team.id, input.parent)).id;
+    const depth = await depthOf(tx, team.id, parentId);
     if (depth + 1 > DOC_MAX_DEPTH) throw new ServiceError("invalid", `Docs can nest at most ${DOC_MAX_DEPTH} levels deep`);
-    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(docs).where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)));
-    if (n >= DOC_MAX_PER_PROJECT) throw new ServiceError("invalid", `This project already has ${DOC_MAX_PER_PROJECT} docs, the limit`);
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(docs).where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt)));
+    if (n >= DOC_MAX_PER_TEAM) throw new ServiceError("invalid", `This team already has ${DOC_MAX_PER_TEAM} docs, the limit`);
 
     const base = slugifyDoc(input.slug ?? input.title);
-    const slug = await uniqueSlug(tx, project.id, parentId, base);
-    const siblings = await tx.select({ position: docs.position }).from(docs).where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId)));
+    const slug = await uniqueSlug(tx, team.id, parentId, base);
+    const siblings = await tx.select({ position: docs.position }).from(docs).where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId)));
     const position = siblings.length ? Math.max(...siblings.map((s) => s.position)) + 1000 : 1000;
 
     const anchors = input.anchors ?? [];
     const [d] = await tx
       .insert(docs)
       .values({
-        projectId: project.id,
+        teamId: team.id,
+        workspaceId: team.workspaceId,
         parentId,
         slug,
         title: input.title.trim(),
         body,
         position,
         anchors,
-        describedHashes: await landedHashesFor(tx, project.id, anchors),
+        describedHashes: await landedHashesFor(tx, team.id, anchors),
         describedSha: input.describedSha ?? null,
         describedAt: new Date(),
         createdByKind: actor.kind,
@@ -2358,7 +2443,7 @@ export async function createDoc(actor: Actor, projectRef: string, input: DocInpu
         updatedById: actor.id,
       })
       .returning();
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "doc.created",
       entity: "doc",
       entityId: d.id,
@@ -2377,7 +2462,7 @@ export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "desc
 
 /**
  * Patch a doc's title/body/anchors, or just confirm it's still accurate (markFresh).
- * Pass `expectedVersion` for optimistic locking, same pattern as updateTicket.
+ * Pass `expectedVersion` for optimistic locking, same pattern as updateIssue.
  *
  * Mirrors upsertNode: an agent session editing a doc whose anchored files are still
  * in flux (changed in that same session, not landed) gets the edit stored as a
@@ -2385,23 +2470,11 @@ export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "desc
  * those files (WH-64 scope E).
  */
 /** Labels as stored: trimmed, no empties or repeats (case-insensitively, first spelling wins), at most 20 of at most 40 characters. */
-export function cleanDocLabels(labels: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of labels) {
-    const l = raw.trim().replace(/\s+/g, " ");
-    if (!l || seen.has(l.toLowerCase())) continue;
-    if (l.length > 40) throw new ServiceError("invalid", `A label is at most 40 characters ("${l.slice(0, 20)}…")`);
-    seen.add(l.toLowerCase());
-    out.push(l);
-  }
-  if (out.length > 20) throw new ServiceError("invalid", "A doc has at most 20 labels");
-  return out;
-}
+export const cleanDocLabels = (labels: string[]) => cleanLabels(labels, "doc");
 
-export async function updateDoc(actor: Actor, projectRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number) {
+export async function updateDoc(actor: Actor, teamRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   await assertDocsWritable(actor, db);
   if (patch.body !== undefined) {
     const bodyBytes = Buffer.byteLength(patch.body, "utf8");
@@ -2409,7 +2482,7 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
   }
 
   if (actor.kind === "agent" && !patch.forcePublish) {
-    const existing = await resolveDoc(db, project.id, ref).catch(() => undefined);
+    const existing = await resolveDoc(db, team.id, ref).catch(() => undefined);
     if (existing) {
       const { maybeDraftDoc } = await import("./sync");
       const d = await maybeDraftDoc(actor, existing, patch);
@@ -2418,7 +2491,7 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
   }
 
   return db.transaction(async (tx) => {
-    const d = await lockRow(tx, docs, await resolveDoc(tx, project.id, ref));
+    const d = await lockRow(tx, docs, await resolveDoc(tx, team.id, ref));
     if (expectedVersion !== undefined && expectedVersion !== d.version) {
       throw new ServiceError("conflict", `Doc "${d.title}" was changed (version ${d.version}, you had ${expectedVersion}). Re-read and retry.`, { current: d });
     }
@@ -2437,7 +2510,7 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
           staleReason: null,
           staleSource: null,
           driftPaths: [],
-          describedHashes: patch.describedHashes ?? (await landedHashesFor(tx, project.id, patch.anchors ?? d.anchors)),
+          describedHashes: patch.describedHashes ?? (await landedHashesFor(tx, team.id, patch.anchors ?? d.anchors)),
           describedAt: new Date(),
           describedSha: patch.describedSha ?? d.describedSha,
         }
@@ -2450,7 +2523,7 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
       .returning();
     const meaningful = Object.keys(changes);
     if (meaningful.length || (d.stale && described)) {
-      await emit(tx, actor, project.id, {
+      await emit(tx, actor, team.id, {
         type: "doc.updated",
         entity: "doc",
         entityId: updated.id,
@@ -2463,21 +2536,21 @@ export async function updateDoc(actor: Actor, projectRef: string, ref: string, p
 }
 
 /** Clear a doc's stale flag after confirming it's still accurate (no edits needed) — mirrors markFresh for nodes. */
-export async function markDocFresh(actor: Actor, projectRef: string, ref: string, sha?: string) {
-  return updateDoc(actor, projectRef, ref, { markFresh: true, describedSha: sha });
+export async function markDocFresh(actor: Actor, teamRef: string, ref: string, sha?: string) {
+  return updateDoc(actor, teamRef, ref, { markFresh: true, describedSha: sha });
 }
 
 /** Move a doc to a new parent and/or position among its siblings. */
-export async function moveDoc(actor: Actor, projectRef: string, ref: string, opts: { parent?: string | null; index?: number }, expectedVersion?: number) {
+export async function moveDoc(actor: Actor, teamRef: string, ref: string, opts: { parent?: string | null; index?: number }, expectedVersion?: number) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   await assertDocsWritable(actor, db);
   return db.transaction(async (tx) => {
-    const d = await lockRow(tx, docs, await resolveDoc(tx, project.id, ref));
+    const d = await lockRow(tx, docs, await resolveDoc(tx, team.id, ref));
     if (expectedVersion !== undefined && expectedVersion !== d.version) {
       throw new ServiceError("conflict", `Doc "${d.title}" was changed since you read it`, { current: d });
     }
-    const parentId = opts.parent === undefined ? d.parentId : opts.parent === null ? null : (await resolveDoc(tx, project.id, opts.parent)).id;
+    const parentId = opts.parent === undefined ? d.parentId : opts.parent === null ? null : (await resolveDoc(tx, team.id, opts.parent)).id;
     if (parentId === d.id) throw new ServiceError("invalid", "A doc cannot be its own parent");
     // Prevent cycles: the new parent can't be one of this doc's own descendants.
     if (parentId) {
@@ -2489,14 +2562,14 @@ export async function moveDoc(actor: Actor, projectRef: string, ref: string, opt
       }
     }
     if (parentId !== d.parentId) {
-      const depth = await depthOf(tx, project.id, parentId);
+      const depth = await depthOf(tx, team.id, parentId);
       if (depth + 1 > DOC_MAX_DEPTH) throw new ServiceError("invalid", `Docs can nest at most ${DOC_MAX_DEPTH} levels deep`);
     }
-    const slug = parentId !== d.parentId ? await uniqueSlug(tx, project.id, parentId, d.slug, d.id) : d.slug;
+    const slug = parentId !== d.parentId ? await uniqueSlug(tx, team.id, parentId, d.slug, d.id) : d.slug;
     const siblings = await tx
       .select({ id: docs.id, position: docs.position })
       .from(docs)
-      .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId), ne(docs.id, d.id)))
+      .where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt), parentId === null ? isNull(docs.parentId) : eq(docs.parentId, parentId), ne(docs.id, d.id)))
       .orderBy(asc(docs.position));
     const i = opts.index === undefined || opts.index < 0 || opts.index > siblings.length ? siblings.length : opts.index;
     const before = siblings[i - 1]?.position;
@@ -2507,7 +2580,7 @@ export async function moveDoc(actor: Actor, projectRef: string, ref: string, opt
       .set({ parentId, slug, position, version: d.version + 1, updatedAt: new Date(), updatedByKind: actor.kind, updatedById: actor.id })
       .where(eq(docs.id, d.id))
       .returning();
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "doc.moved",
       entity: "doc",
       entityId: updated.id,
@@ -2519,12 +2592,12 @@ export async function moveDoc(actor: Actor, projectRef: string, ref: string, opt
 }
 
 /** Soft delete: sets deletedAt (kept 30 days for recovery/purge); history lives in `events`. */
-export async function deleteDoc(actor: Actor, projectRef: string, ref: string) {
+export async function deleteDoc(actor: Actor, teamRef: string, ref: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   await assertDocsWritable(actor, db);
   return db.transaction(async (tx) => {
-    const d = await resolveDoc(tx, project.id, ref);
+    const d = await resolveDoc(tx, team.id, ref);
     await tx.update(docs).set({ deletedAt: new Date() }).where(eq(docs.id, d.id));
     // Soft-delete descendants too, so a deleted branch doesn't linger half-visible.
     const toDelete = [d.id];
@@ -2533,7 +2606,7 @@ export async function deleteDoc(actor: Actor, projectRef: string, ref: string) {
       for (const k of kids) toDelete.push(k.id);
     }
     if (toDelete.length > 1) await tx.update(docs).set({ deletedAt: new Date() }).where(inArray(docs.id, toDelete.slice(1)));
-    await emit(tx, actor, project.id, {
+    await emit(tx, actor, team.id, {
       type: "doc.deleted",
       entity: "doc",
       entityId: d.id,
@@ -2544,12 +2617,12 @@ export async function deleteDoc(actor: Actor, projectRef: string, ref: string) {
   });
 }
 
-export async function linkDocNode(actor: Actor, projectRef: string, docRef: string, nodeRef: string, unlink = false) {
+export async function linkDocNode(actor: Actor, teamRef: string, docRef: string, nodeRef: string, unlink = false) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef, "edit");
+  const team = await requireTeam(actor, teamRef, "edit");
   await assertDocsWritable(actor, db);
-  const d = await resolveDoc(db, project.id, docRef);
-  const n = await resolveNode(db, project.id, nodeRef);
+  const d = await resolveDoc(db, team.id, docRef);
+  const n = await resolveNode(db, team.id, nodeRef);
   if (unlink) {
     await db.delete(docNodes).where(and(eq(docNodes.docId, d.id), eq(docNodes.nodeId, n.id)));
   } else {
@@ -2566,9 +2639,9 @@ export async function linkDocNode(actor: Actor, projectRef: string, docRef: stri
  * `max_tokens` is approximated from characters (~4 chars/token, same rule of
  * thumb the briefing budget uses) so results fit an agent's context budget.
  */
-export async function searchDocs(actor: Actor, projectRef: string, query: string, opts: { maxTokens?: number } = {}) {
+export async function searchDocs(actor: Actor, teamRef: string, query: string, opts: { maxTokens?: number } = {}) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   const q = query.trim();
   if (!q) throw new ServiceError("invalid", "query is required");
   const maxChars = Math.min(Math.max((opts.maxTokens ?? 800) * 4, 400), 80_000);
@@ -2586,7 +2659,7 @@ export async function searchDocs(actor: Actor, projectRef: string, query: string
       snippet: sql<string>`ts_headline('english', ${docs.body}, ${tsq}, 'MaxFragments=2, MinWords=5, MaxWords=25')`,
     })
     .from(docs)
-    .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt), sql`${vector} @@ ${tsq}`))
+    .where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt), sql`${vector} @@ ${tsq}`))
     .orderBy(desc(sql`ts_rank(${vector}, ${tsq})`))
     .limit(50);
 
@@ -2608,12 +2681,12 @@ function clipText(s: string, n: number) {
 }
 
 /** Short index for the briefing: titles + slugs only, never bodies (protects the token budget). */
-export async function listDocsIndex(actor: Actor, projectRef: string) {
+export async function listDocsIndex(actor: Actor, teamRef: string) {
   const db = await getDb();
-  const project = await getProject(actor, projectRef);
+  const team = await requireTeam(actor, teamRef);
   return db
     .select({ slug: docs.slug, title: docs.title, parentId: docs.parentId })
     .from(docs)
-    .where(and(eq(docs.projectId, project.id), isNull(docs.deletedAt)))
+    .where(and(eq(docs.teamId, team.id), isNull(docs.deletedAt)))
     .orderBy(asc(docs.position));
 }

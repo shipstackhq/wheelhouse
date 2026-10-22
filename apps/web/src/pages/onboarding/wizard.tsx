@@ -16,22 +16,22 @@ type CodeLocation = "github" | "local" | "none" | "skip" | null;
 const STEPS = ["Code location", "Connect agents", "First map", "Invite teammates"] as const;
 
 /**
- * The onboarding wizard (WH-69). Step 1 of the ticket (name/description) is covered by the new-project form
+ * The onboarding wizard (WH-69). Step 1 of the issue (name/description) is covered by the new-team form
  * before this page is reached, so the wizard itself starts at "where does your code live" and runs through to
  * inviting teammates. Steps 3 ("first map") and 2 ("code location") are merged for the no-code path, since the
  * no-code placeholder (a short description -> one concept node) covers both at once; every other path keeps them
- * separate as the ticket lays out. Every step can be skipped — "Skip to board" always escapes the wizard.
+ * separate as the issue lays out. Every step can be skipped — "Skip to board" always escapes the wizard.
  */
 export function OnboardingWizard({
-  projectKey,
-  projectName,
+  teamKey,
+  teamName,
   hasRepos,
   cmd,
   githubConnect,
   localRepos,
 }: {
-  projectKey: string;
-  projectName: string;
+  teamKey: string;
+  teamName: string;
   hasRepos: boolean;
   cmd: SetupCommands;
   githubConnect: ReactNode;
@@ -41,7 +41,7 @@ export function OnboardingWizard({
   const [step, setStep] = useState(0);
   const [codeLocation, setCodeLocation] = useState<CodeLocation>(hasRepos ? "github" : null);
 
-  const finish = () => void navigate(`/p/${projectKey}`);
+  const finish = () => void navigate(`/t/${teamKey}`);
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
@@ -49,12 +49,12 @@ export function OnboardingWizard({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl space-y-6 px-6 py-10">
+      <div className="w-full space-y-6 px-6 py-10">
         <div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <span className="chip bg-accent/15 font-mono text-accent">{projectKey}</span>{" "}
-              <span className="font-medium">{projectName}</span>
+              <span className="chip bg-accent/15 font-mono text-accent">{teamKey}</span>{" "}
+              <span className="font-medium">{teamName}</span>
             </div>
             <button className="text-sm text-muted hover:text-fg" onClick={finish}>
               Skip to board <ArrowRightIcon />
@@ -73,7 +73,7 @@ export function OnboardingWizard({
           </ol>
         </div>
 
-        {step === 0 && <CodeLocationStep value={codeLocation} onChange={setCodeLocation} onNext={next} githubConnect={githubConnect} localRepos={localRepos} projectKey={projectKey} />}
+        {step === 0 && <CodeLocationStep value={codeLocation} onChange={setCodeLocation} onNext={next} githubConnect={githubConnect} localRepos={localRepos} teamKey={teamKey} />}
         {step === 1 && <ConnectAgentsStep cmd={cmd} emphasize={emphasize} onBack={back} onNext={next} />}
         {step === 2 && <FirstMapStep codeLocation={codeLocation} cmd={cmd} onBack={back} onNext={next} />}
         {step === 3 && <InviteStep onBack={back} onFinish={finish} />}
@@ -103,19 +103,19 @@ function CodeLocationStep({
   onNext,
   githubConnect,
   localRepos,
-  projectKey,
+  teamKey,
 }: {
   value: CodeLocation;
   onChange: (v: CodeLocation) => void;
   onNext: () => void;
   githubConnect: ReactNode;
   localRepos: ReactNode;
-  projectKey: string;
+  teamKey: string;
 }) {
   const { api, queryClient } = useServices();
   const [noCodeState, noCodeAction] = useActionState<FormState, FormData>(async (_prev, fd) => {
     try {
-      await api.onboarding.startMap(projectKey, field(fd, "description"));
+      await api.onboarding.startMap(teamKey, field(fd, "description"));
     } catch (e) {
       return failure(e);
     }
@@ -126,13 +126,13 @@ function CodeLocationStep({
     { id: "github", label: "Connect GitHub", hint: "One or more repositories; pushes and PRs are reported automatically." },
     { id: "local", label: "Local or another Git host", hint: "Link through Claude Code (/wheelhouse:setup) or the CLI." },
     { id: "none", label: "No code yet", hint: "Just an idea so far — write a few sentences and we'll start the map." },
-    { id: "skip", label: "Skip for now", hint: "Decide later from the project's Repos tab." },
+    { id: "skip", label: "Skip for now", hint: "Decide later from the team's Repos tab." },
   ];
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Where does your code live?</h2>
-        <p className="mt-1 text-sm text-muted">This decides how we track what lands against this project.</p>
+        <p className="mt-1 text-sm text-muted">This decides how we track what lands against this team.</p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {options.map((o) => (
@@ -172,7 +172,7 @@ function ConnectAgentsStep({ cmd, emphasize, onBack, onNext }: { cmd: SetupComma
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Connect your agents</h2>
-        <p className="mt-1 text-sm text-muted">So Claude Code (or any other client) can read the board and map for this project.</p>
+        <p className="mt-1 text-sm text-muted">So Claude Code (or any other client) can read the board and map for this team.</p>
       </div>
       <SetupGuide cmd={cmd} emphasize={emphasize} />
       <StepNav onBack={onBack} onNext={onNext} />
@@ -210,10 +210,10 @@ function InviteStep({ onBack, onFinish }: { onBack: () => void; onFinish: () => 
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold">Invite teammates</h2>
-        <p className="mt-1 text-sm text-muted">Send a one-time invite link. You can always invite more people later from Team settings.</p>
+        <p className="mt-1 text-sm text-muted">Send a one-time invite link. You can always invite more people later from Workspace settings.</p>
       </div>
       <div className="card p-5">
-        <InviteForm kind="join_team" className="" />
+        <InviteForm kind="join_workspace" className="" />
       </div>
       <div className="flex gap-2">
         <button className="btn" onClick={onBack}>

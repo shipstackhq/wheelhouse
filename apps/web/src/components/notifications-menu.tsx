@@ -7,8 +7,8 @@ type Notification = { id: string; title: string; body: string; time: string; rea
 
 /** Placeholder content until notifications have a backend. */
 const SAMPLE: Notification[] = [
-  { id: "1", title: "Ticket moved to Review", body: "An agent finished work on a ticket and moved it to Review.", time: "5m ago", read: false },
-  { id: "2", title: "New comment", body: "A teammate commented on a ticket you follow.", time: "1h ago", read: false },
+  { id: "1", title: "Issue moved to Review", body: "An agent finished work on an issue and moved it to Review.", time: "5m ago", read: false },
+  { id: "2", title: "New comment", body: "A teammate commented on an issue you follow.", time: "1h ago", read: false },
   { id: "3", title: "Invite accepted", body: "A teammate joined the workspace.", time: "Yesterday", read: true },
 ];
 

@@ -31,18 +31,18 @@ function PersonRow({ person }: { person: DocPerson }) {
 }
 
 /**
- * `/p/:key/docs`: a tree on the left (parent/child via `parentId`, same pattern as the map), a rich-text or Markdown editor on the
- * right. Version conflicts surface the way the ticket dialog does: a banner when the doc changed under you, and a refused save that
+ * `/t/:key/docs`: a tree on the left (parent/child via `parentId`, same pattern as the map), a rich-text or Markdown editor on the
+ * right. Version conflicts surface the way the issue dialog does: a banner when the doc changed under you, and a refused save that
  * never overwrites a concurrent edit.
  */
-export function DocsExplorer({ projectKey, index, docId }: { projectKey: string; index: DocsIndex; docId?: string }) {
+export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index: DocsIndex; docId?: string }) {
   const { nodes, decisions, members } = index;
   const tree = index.docs;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
   const selectedId = docId ?? null;
-  const docPath = (id: string) => `/p/${projectKey}/docs/${encodeURIComponent(id)}`;
-  const detailQuery = useQuery({ ...docQuery(api, projectKey, selectedId ?? ""), enabled: !!selectedId });
+  const docPath = (id: string) => `/t/${teamKey}/docs/${encodeURIComponent(id)}`;
+  const detailQuery = useQuery({ ...docQuery(api, teamKey, selectedId ?? ""), enabled: !!selectedId });
   const detail: DocDetail | undefined = selectedId ? detailQuery.data : undefined;
   // The doc being edited, not a flag: moving to another doc (the sheet, the browser's back button) leaves edit mode by itself.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -72,7 +72,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   const [browseError, setBrowseError] = useState<string | null>(null);
   const { confirm, dialogs } = useDialogs();
 
-  const repos = useRepos(projectKey);
+  const repos = useRepos(teamKey);
   const githubRepos = useMemo(() => (repos.data ?? []).filter((r) => r.browsable), [repos.data]);
   useEffect(() => {
     if (githubRepos.length) setBrowseRepoId((id) => id || githubRepos[0].id);
@@ -122,7 +122,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
     const t = templateId ? DOC_TEMPLATES.find((x) => x.id === templateId) : undefined;
     setBusy(true);
     try {
-      const created = await api.docs.create(projectKey, { title: t ? t.name : "Untitled doc", parent: parentId, template: templateId ?? undefined });
+      const created = await api.docs.create(teamKey, { title: t ? t.name : "Untitled doc", parent: parentId, template: templateId ?? undefined });
       void navigate(docPath(created.id));
       setShowTemplatePicker(null);
       setSheetOpen(false);
@@ -141,17 +141,17 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   const linkedIds = new Set((detail?.nodes ?? []).map((n) => n.id));
 
   /**
-   * One-click "Create ticket" for an unchecked action item (WH-65). The ticket goes in the project's default column with the item's
+   * One-click "Create issue" for an unchecked action item (WH-65). The issue goes in the team's default column with the item's
    * text as title — one-shot, no bidirectional sync — then the box is checked in the doc body so it isn't offered twice.
    */
-  const createTicketFromActionItem = async (item: { text: string; line: number }) => {
+  const createIssueFromActionItem = async (item: { text: string; line: number }) => {
     if (!d) return;
     setActionItemBusy(item.line);
     try {
-      await api.tickets.create(projectKey, { title: item.text });
+      await api.issues.create(teamKey, { title: item.text });
       const lines = d.body.split("\n");
       lines[item.line] = lines[item.line].replace(/\[ \]/, "[x]");
-      await api.docs.update(projectKey, d.id, { body: lines.join("\n"), version: d.version });
+      await api.docs.update(teamKey, d.id, { body: lines.join("\n"), version: d.version });
       await refresh();
     } catch (e) {
       setError(describeFailure(e));
@@ -165,14 +165,14 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
     if (!d) return;
     setBusy(true);
     try {
-      await api.map.upsertDecision(projectKey, {
+      await api.map.upsertDecision(teamKey, {
         title: d.title,
         status: "proposed",
         context: sectionOf(d.body, "Context"),
         decision: sectionOf(d.body, "Decision"),
         consequences: sectionOf(d.body, "Consequences"),
       });
-      void navigate(`/p/${projectKey}/decisions`);
+      void navigate(`/t/${teamKey}/decisions`);
     } catch (e) {
       setError(describeFailure(e));
     } finally {
@@ -193,7 +193,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
         return true;
       }
       try {
-        await api.docs.update(projectKey, d.id, { ...patch, version: bodyBase });
+        await api.docs.update(teamKey, d.id, { ...patch, version: bodyBase });
       } catch (e) {
         setError(e instanceof ApiError ? e.message || "Failed" : describeFailure(e));
         await refresh();
@@ -212,7 +212,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
     if (!d) return false;
     setBusy(true);
     try {
-      const saved = await api.docs.update(projectKey, d.id, { labels, version: d.version });
+      const saved = await api.docs.update(teamKey, d.id, { labels, version: d.version });
       // Mid-edit, a label change is not someone else's edit: carry the editor's base version forward so Save is not refused.
       if (editing && bodyBase === d.version) setBodyBase(saved.version);
       setError(null);
@@ -230,7 +230,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
     if (!d) return;
     setBusy(true);
     try {
-      await api.docs.markFresh(projectKey, d.id);
+      await api.docs.markFresh(teamKey, d.id);
       await refresh();
     } catch (e) {
       setError(describeFailure(e));
@@ -242,7 +242,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   const loadTree = async (repoId: string) => {
     setBrowseBusy(true);
     try {
-      setBrowseFiles((await api.repos.tree(projectKey, repoId)).files);
+      setBrowseFiles((await api.repos.tree(teamKey, repoId)).files);
     } catch (e) {
       setBrowseError(describeFailure(e));
     } finally {
@@ -311,7 +311,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   const loadSuggestions = async () => {
     if (!d) return;
     try {
-      setSuggestions(await api.docs.anchorSuggestions(projectKey, d.id));
+      setSuggestions(await api.docs.anchorSuggestions(teamKey, d.id));
     } catch (e) {
       setError(describeFailure(e));
     }
@@ -408,10 +408,10 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
   const loadError = selectedId && detailQuery.isError ? (detailQuery.error instanceof ApiError ? detailQuery.error.message : "Could not load this doc.") : null;
 
   return (
-    <div className="confluence-docs flex h-full flex-col overflow-hidden bg-bg">
+    <div className="confluence-docs flex h-full flex-col overflow-hidden bg-page">
       {selectedId === null ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-8 lg:py-12">
+          <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
             <div className="mb-6 flex items-center justify-between gap-3">
               <h1 className="text-3xl font-bold tracking-tight">Docs</h1>
               <button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
@@ -424,8 +424,8 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
         </section>
       ) : (
         <>
-          <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">
-            <Link to={`/p/${projectKey}/docs`} className="shrink-0 text-muted hover:text-fg">
+          <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-xs sm:px-8 lg:px-12">
+            <Link to={`/t/${teamKey}/docs`} className="shrink-0 text-muted hover:text-fg">
               <ArrowLeftIcon /> Docs
             </Link>
             {ancestors.map((a) => (
@@ -480,9 +480,9 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                     if (!(await confirm({ title: `Delete "${d.title}"?`, description: "This also removes any nested docs underneath it.", confirmLabel: "Delete", danger: true }))) return;
                     setBusy(true);
                     try {
-                      await api.docs.delete(projectKey, d.id);
+                      await api.docs.delete(teamKey, d.id);
                       setEditingId(null);
-                      void navigate(`/p/${projectKey}/docs`);
+                      void navigate(`/t/${teamKey}/docs`);
                       await refresh();
                     } catch (e) {
                       setError(describeFailure(e));
@@ -615,8 +615,8 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                       {actionItems.map((item) => (
                         <li key={item.line} className="flex items-center justify-between gap-2 rounded-md border border-line bg-bg/50 px-3 py-1.5 text-sm">
                           <span>{item.text}</span>
-                          <button className="btn btn-ghost shrink-0 px-2 py-1 text-xs" disabled={actionItemBusy === item.line} onClick={() => void createTicketFromActionItem(item)}>
-                            {actionItemBusy === item.line ? "Creating…" : "Create ticket"}
+                          <button className="btn btn-ghost shrink-0 px-2 py-1 text-xs" disabled={actionItemBusy === item.line} onClick={() => void createIssueFromActionItem(item)}>
+                            {actionItemBusy === item.line ? "Creating…" : "Create issue"}
                           </button>
                         </li>
                       ))}
@@ -636,14 +636,14 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                           options={decisions.map((dd) => ({ value: dd.id, label: `ADR-${dd.number}: ${dd.title}` }))}
                           onValueChange={(v) => {
                             const dd = decisions.find((x) => x.id === v);
-                            if (dd) void navigate(`/p/${projectKey}/decisions#adr-${dd.number}`);
+                            if (dd) void navigate(`/t/${teamKey}/decisions#adr-${dd.number}`);
                           }}
                         />
                       )}
                       <button className="btn px-2 py-1 text-xs" disabled={busy} onClick={() => void createAdrFromDoc()}>
                         + Create ADR from this doc
                       </button>
-                      <Link to={`/p/${projectKey}/decisions`} className="text-xs text-accent hover:underline">
+                      <Link to={`/t/${teamKey}/decisions`} className="text-xs text-accent hover:underline">
                         View all decisions <ArrowRightIcon />
                       </Link>
                     </div>
@@ -671,7 +671,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                     onValueChange={async (v) => {
                       setBusy(true);
                       try {
-                        await api.docs.move(projectKey, d.id, { parent: v || null, version: d.version });
+                        await api.docs.move(teamKey, d.id, { parent: v || null, version: d.version });
                         setError(null);
                       } catch (e) {
                         setError(describeFailure(e));
@@ -694,7 +694,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                           aria-label={`Unlink ${n.name}`}
                           onClick={async () => {
                             try {
-                              await api.docs.unlinkNode(projectKey, d.id, n.id);
+                              await api.docs.unlinkNode(teamKey, d.id, n.id);
                             } catch (e) {
                               setError(describeFailure(e));
                             }
@@ -714,7 +714,7 @@ export function DocsExplorer({ projectKey, index, docId }: { projectKey: string;
                         onValueChange={async (v) => {
                           if (!v) return;
                           try {
-                            await api.docs.linkNode(projectKey, d.id, v);
+                            await api.docs.linkNode(teamKey, d.id, v);
                           } catch (e) {
                             setError(describeFailure(e));
                           }

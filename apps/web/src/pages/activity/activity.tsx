@@ -7,7 +7,7 @@ import { activityQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 import { AgentIcon } from "../../components/icons";
 
-/** What happened in the project, newest first: everything, only agents, or only the team. Each line links to the thing it is about. */
+/** What happened in the team, newest first: everything, only agents, or only the workspace. Each line links to the thing it is about. */
 export function ActivityPage() {
   const { key = "" } = useParams();
   const [search] = useSearchParams();
@@ -22,11 +22,11 @@ export function ActivityPage() {
   );
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-6 py-6">
+      <div className="w-full px-6 py-6">
         <div className="mb-4 flex gap-1">
           {tab(undefined, "Everything")}
           {tab("agent", <><AgentIcon /> Agents</>)}
-          {tab("human", "Team")}
+          {tab("human", "Workspace")}
         </div>
         <Loaded query={query} label="Loading the activity">
           {(events) => (
@@ -44,15 +44,15 @@ export function ActivityPage() {
                       </span>
                       <span className="min-w-0 flex-1 text-muted">
                         {ref ? (
-                          <Link to={`/p/${key}?t=${ref}`} className="hover:text-fg">{e.summary}</Link>
+                          <Link to={`/t/${key}?t=${ref}`} className="hover:text-fg">{e.summary}</Link>
                         ) : e.entity === "node" ? (
-                          <Link to={`/p/${key}/map?node=${e.entityId}`} className="hover:text-fg">{e.summary}</Link>
+                          <Link to={`/t/${key}/map?node=${e.entityId}`} className="hover:text-fg">{e.summary}</Link>
                         ) : e.entity === "edge" || e.entity === "flow" || e.type === "code.changed" ? (
-                          <Link to={`/p/${key}/map${e.entity === "flow" ? `?flow=${e.entityId}` : ""}`} className="hover:text-fg">{e.summary}</Link>
+                          <Link to={`/t/${key}/map${e.entity === "flow" ? `?flow=${e.entityId}` : ""}`} className="hover:text-fg">{e.summary}</Link>
                         ) : e.entity === "decision" ? (
-                          <Link to={`/p/${key}/decisions#adr-${e.data.number ?? ""}`} className="hover:text-fg">{e.summary}</Link>
+                          <Link to={`/t/${key}/decisions#adr-${e.data.number ?? ""}`} className="hover:text-fg">{e.summary}</Link>
                         ) : e.entity === "term" ? (
-                          <Link to={`/p/${key}/glossary`} className="hover:text-fg">{e.summary}</Link>
+                          <Link to={`/t/${key}/glossary`} className="hover:text-fg">{e.summary}</Link>
                         ) : (
                           e.summary
                         )}

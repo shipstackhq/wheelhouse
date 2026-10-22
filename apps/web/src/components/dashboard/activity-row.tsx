@@ -2,11 +2,11 @@ import { timeAgo } from "@wheelhouse/core/lib/time";
 import { TwoLineRow } from "./limited-list";
 import { AgentIcon } from "../icons";
 
-export type ActivityEvent = { seq: number; projectKey: string; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date | string };
+export type ActivityEvent = { seq: number; teamKey: string; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date | string };
 
 const when = (d: Date | string) => new Date(d).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
-/** One event in two lines: project and what happened, then who and how long ago. Full text and the exact time are in the tooltip. */
+/** One event in two lines: team and what happened, then who and how long ago. Full text and the exact time are in the tooltip. */
 export function ActivityRow({ e }: { e: ActivityEvent }) {
   const who = (
     <>
@@ -17,8 +17,8 @@ export function ActivityRow({ e }: { e: ActivityEvent }) {
   );
   return (
     <TwoLineRow
-      href={`/p/${e.projectKey}/activity`}
-      lead={e.projectKey}
+      href={`/t/${e.teamKey}/activity`}
+      lead={e.teamKey}
       title={e.summary}
       meta={
         <>

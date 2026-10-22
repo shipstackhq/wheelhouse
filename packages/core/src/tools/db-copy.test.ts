@@ -1,5 +1,5 @@
 /**
- * The data tools (WH-100). They move a database between PGlite and Postgres; a mistake here loses or corrupts what the team wrote, so the
+ * The data tools (WH-100). They move a database between PGlite and Postgres; a mistake here loses or corrupts what the workspace wrote, so the
  * tests are about exactness (nothing rounded, reformatted or reordered), about refusing to make a mess, and about noticing one when it is made.
  * The Postgres cases run when TEST_DATABASE_URL is set (a scratch database is created and dropped), as in CI.
  */
@@ -14,11 +14,12 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb, schema } from "../db";
 import type { Actor } from "../lib/access";
 import * as svc from "../lib/service";
+import { createMilestone, createProject } from "../lib/projects";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";
 
 const require = createRequire(import.meta.url);
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "wh-dbcopy-"));
-const BIG = "9007199254740993"; // 2^53 + 1: a JavaScript number cannot hold it, a bigint column can
+const BIG = "9007199254740993"; // 2^53 + 1: a JavaScript number cannot hold it, a bigint status can
 const TRICKY = "emoji 🧭, quote \" backslash \\ newline\nand a tab\t, nul-free unicode ñ 漢字, <script>";
 let source = ""; // the PGlite directory with the seeded data
 let exportDir = "";
@@ -34,12 +35,12 @@ before(async () => {
   process.env.PGLITE_DIR = source;
   delete process.env.DATABASE_URL;
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name: "Move team" }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name: "Move workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: "move@example.test", name: "Mo", passwordHash: "x" }).returning();
-  await db.insert(schema.memberships).values({ userId: user.id, teamId: team.id, role: "owner" });
-  const actor: Actor = { kind: "human", id: user.id, name: user.name, teamId: team.id };
-  await svc.createProject(actor, { name: "Move", key: "MV", description: TRICKY });
-  const t = await svc.createTicket(actor, "MV", { title: TRICKY, body: "body" });
+  await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
+  const actor: Actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
+  await svc.createTeam(actor, { name: "Move", key: "MV", description: TRICKY });
+  const t = await svc.createIssue(actor, "MV", { title: TRICKY, body: "body" });
   await svc.addComment(actor, t.id, "a comment");
   const a = await svc.upsertNode(actor, "MV", { name: "API", layer: "system", summary: TRICKY, anchors: ["src/a.ts"] });
   const b = await svc.upsertNode(actor, "MV", { name: "DB", layer: "data", summary: "s" });
@@ -48,18 +49,22 @@ before(async () => {
   await svc.upsertDecision(actor, "MV", { title: "Use it", context: TRICKY });
   await svc.upsertTerm(actor, "MV", { term: "Thing", definition: "a thing" });
   await svc.upsertFlow(actor, "MV", { name: "Go", steps: [{ node: a.id, title: "start" }] });
-  const [key] = await db.insert(schema.apiKeys).values({ teamId: team.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
-  const [project] = await db.select().from(schema.projects);
-  await db.insert(schema.agentCursors).values({ apiKeyId: key.id, projectId: project.id, lastSeq: 3 });
+  // A project with its milestone and an issue in it: projects and project_teams point at each other (the lead team), so the order of the load matters.
+  const prj = await createProject(actor, { name: TRICKY, leadTeam: "MV", status: "active", targetDate: "2026-12-31" });
+  const ms = (await createMilestone(actor, prj.id, { name: "First" })).milestones[0];
+  await svc.updateIssue(actor, t.id, { projectId: prj.id, milestoneId: ms.id });
+  const [key] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "k", prefix: "wh_abc", keyHash: "a".repeat(64), createdBy: user.id }).returning();
+  const [team] = await db.select().from(schema.teams);
+  await db.insert(schema.agentCursors).values({ apiKeyId: key.id, teamId: team.id, workspaceId: workspace.id, lastSeq: 3 });
   await db.insert(schema.sessions).values({ id: "b".repeat(64), userId: user.id, expiresAt: new Date(Date.now() + 864e5) });
-  await db.insert(schema.githubInstallations).values({ installationId: "4242", teamId: team.id, accountLogin: "acme", accountType: "Organization", connectedBy: user.id });
-  await db.insert(schema.repositories).values({ projectId: project.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
-  await db.insert(schema.workSessions).values({ id: "sess-1", projectId: project.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
+  await db.insert(schema.githubInstallations).values({ installationId: "4242", workspaceId: workspace.id, accountLogin: "acme", accountType: "Organization", connectedBy: user.id });
+  await db.insert(schema.repositories).values({ teamId: team.id, workspaceId: workspace.id, displayName: "repo", role: "app", provider: "github", slug: "acme/repo", githubRepoId: "99", githubInstallationId: "4242", githubFullName: "acme/repo", defaultBranch: "main" });
+  await db.insert(schema.workSessions).values({ id: "sess-1", teamId: team.id, workspaceId: workspace.id, apiKeyId: key.id, actorName: "Claude", lastSeq: 2, files: { "a.ts": { hash: "h" } } as never });
   // Values that a careless copy gets wrong: the newest event's number past 2^53, a double that is not exact, a microsecond timestamp, an empty string beside a null.
   await db.execute(sql`update work_sessions set resume_from_seq = 2, resume_removed_at = '2026-10-17T12:34:56.789123+00:00' where id = 'sess-1'`);
   await db.execute(sql`update events set seq = ${BIG}::bigint where seq = (select max(seq) from events)`); // the newest event's number is past 2^53
   await db.execute(sql`update docs set position = 0.1 + 0.2`);
-  await db.execute(sql`update tickets set body = ''`);
+  await db.execute(sql`update issues set body = ''`);
   await db.execute(sql`select setval('events_seq_seq', ${BIG}::bigint + 10, true)`); // a sequence ahead of the newest event, as after rolled-back inserts
   await closeDb();
   exportDir = path.join(work, "export");
@@ -79,7 +84,7 @@ describe("export and import between PGlite directories", () => {
   test("the target ends up identical: every table's rows and checksum, the sequence, the migrations", async () => {
     const dst = await fresh("dst-1");
     const r = await importData(dst, exportDir);
-    assert.ok(r.tables.find((t) => t.name === "tickets")!.rows === 1);
+    assert.ok(r.tables.find((t) => t.name === "issues")!.rows === 1);
     const manifest = JSON.parse(fs.readFileSync(path.join(exportDir, "manifest.json"), "utf8"));
     const findings = compare(manifest.snapshot, await snapshot(dst.query));
     assert.deepEqual(findings.filter((f) => f.level === "error"), []);
@@ -93,8 +98,8 @@ describe("export and import between PGlite directories", () => {
     assert.equal(s.seq, BIG);
     assert.equal(s.at, "2026-10-17 12:34:56.789123+00");
     assert.equal((await dst.query(`select position = 0.1 + 0.2 as same from docs`))[0].same, true);
-    assert.equal((await dst.query(`select title from tickets`))[0].title, TRICKY);
-    assert.equal((await dst.query(`select body from tickets`))[0].body, "");
+    assert.equal((await dst.query(`select title from issues`))[0].title, TRICKY);
+    assert.equal((await dst.query(`select body from issues`))[0].body, "");
     assert.equal((await dst.query(`select count(*)::int as n from work_sessions where branch is null`))[0].n, 1);
     assert.deepEqual((await dst.query(`select files from work_sessions`))[0].files, { "a.ts": { hash: "h" } });
   });
@@ -131,7 +136,7 @@ describe("export and import between PGlite directories", () => {
   test("a failure part-way leaves the target empty, so the import can simply be run again", async () => {
     const broken = path.join(work, "export-broken");
     fs.cpSync(exportDir, broken, { recursive: true });
-    fs.appendFileSync(path.join(broken, "tickets.ndjson"), '{"id":"not-a-uuid"}\n'); // users, teams, projects… load first; this fails later
+    fs.appendFileSync(path.join(broken, "issues.ndjson"), '{"id":"not-a-uuid"}\n'); // users, workspaces, teams… load first; this fails later
     const dst = await fresh("dst-7");
     await assert.rejects(importData(dst, broken));
     assert.equal((await snapshot(dst.query)).tables.every((t) => t.rows === 0), true);
@@ -143,10 +148,10 @@ describe("export and import between PGlite directories", () => {
     await assert.rejects(exportData(src.query, exportDir, "again"), /already holds an export/);
   });
 
-  test("tables come parents-first, and the app's own 31 tables are all there", async () => {
+  test("tables come parents-first, and the app's own 50 tables are all there", async () => {
     const src = await track(openConn(copyDirToTemp(source)));
     const order = await tablesInOrder(src.query);
-    assert.equal(order.length, 31);
+    assert.equal(order.length, 50);
     const at = (n: string) => order.findIndex((t) => t.name === n);
     for (const t of order) for (const p of t.parents) assert.ok(at(p) < at(t.name), `${p} before ${t.name}`);
   });
@@ -161,16 +166,16 @@ describe("verification notices a mistake", () => {
   };
   const errors = async (dst: Conn) => compare(manifest().snapshot, await snapshot(dst.query)).filter((f) => f.level === "error");
 
-  test("an edited ticket, a deleted API key, a changed hash, an extra row and a moved sequence are each found, by table", async () => {
+  test("an edited issue, a deleted API key, a changed hash, an extra row and a moved sequence are each found, by table", async () => {
     const dst = await imported("v-1");
     assert.deepEqual(await errors(dst), []);
-    await dst.query(`update tickets set title = title || ' (edited)'`);
-    assert.match((await errors(dst)).map((e) => `${e.check}: ${e.detail}`).join("\n"), /table tickets: same row count \(1\) but the content differs/);
+    await dst.query(`update issues set title = title || ' (edited)'`);
+    assert.match((await errors(dst)).map((e) => `${e.check}: ${e.detail}`).join("\n"), /table issues: same row count \(1\) but the content differs/);
     await dst.query(`update api_keys set key_hash = repeat('c', 64)`);
     assert.ok((await errors(dst)).some((e) => e.check === "table api_keys"));
     await dst.query(`delete from agent_cursors`);
     assert.ok((await errors(dst)).some((e) => e.check === "table agent_cursors" && /1 rows expected, 0 found/.test(e.detail)));
-    await dst.query(`insert into terms (project_id, term, definition) select id, 'extra', 'x' from projects`);
+    await dst.query(`insert into terms (team_id, workspace_id, term, definition) select id, workspace_id, 'extra', 'x' from teams`);
     assert.ok((await errors(dst)).some((e) => e.check === "table terms" && /expected, .* found/.test(e.detail)));
     await dst.query(`select setval('events_seq_seq', 5)`);
     assert.ok((await errors(dst)).some((e) => e.check === "sequence events_seq_seq"));
@@ -180,7 +185,7 @@ describe("verification notices a mistake", () => {
     const dst = await imported("v-2");
     assert.deepEqual((await integrity(dst.query)).filter((f) => f.level === "error"), []);
     await dst.query(`set session_replication_role = replica`); // switches the foreign key triggers off, so a row can be written that the constraint would refuse
-    await dst.query(`insert into comments (ticket_id, author_kind, author_name, body) values (gen_random_uuid(), 'human', 'x', 'orphan')`);
+    await dst.query(`insert into comments (issue_id, author_kind, author_name, body) values (gen_random_uuid(), 'human', 'x', 'orphan')`);
     await dst.query(`set session_replication_role = origin`);
     await dst.query(`update agent_cursors set last_seq = (select max(seq) + 10 from events)`);
     await dst.query(`update api_keys set key_hash = 'plaintext-secret'`);
@@ -201,7 +206,7 @@ describe("the command line", () => {
     const out = path.join(work, "cli-export");
     const e = cli("export", "--from", source, "--out", out);
     assert.equal(e.status, 0, e.stderr + e.stdout);
-    assert.match(e.stdout, /exported 31 tables/);
+    assert.match(e.stdout, /exported 50 tables/);
     const after = fs.readdirSync(source, { recursive: true }).map(String).sort().map((f) => `${f}:${fs.statSync(path.join(source, f)).mtimeMs}`);
     assert.deepEqual(after, before, "the source was only copied, never opened");
     const target = path.join(work, "cli-target");
@@ -222,11 +227,11 @@ describe("the command line", () => {
     assert.match(again.stderr, /target is not empty/);
     fs.appendFileSync(path.join(out, "manifest.json"), "");
     const m = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
-    m.snapshot.tables.find((t: { name: string }) => t.name === "tickets").md5 = "0".repeat(32);
+    m.snapshot.tables.find((t: { name: string }) => t.name === "issues").md5 = "0".repeat(32);
     fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(m));
     const v = cli("verify", "--in", out, "--to", target);
     assert.equal(v.status, 1);
-    assert.match(v.stdout, /FAIL table tickets/);
+    assert.match(v.stdout, /FAIL table issues/);
     assert.match(v.stdout, /DISCREPANCIES FOUND/);
   });
 

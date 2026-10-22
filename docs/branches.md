@@ -27,13 +27,19 @@ wh/WH-n-slug ──PR──▶ staging ──promote──▶ production
 
 CI (`ci.yml`) runs on every pull request and on every push to `staging` and `production`.
 
-## What still has to be set on GitHub
+## Guards in place today
 
-These are repository settings, not files, and are changed by the owner:
+This repository is private on a GitHub plan without branch protection, so GitHub cannot stop a push to a branch. What stands in for it:
 
-- **Default branch.** New pull requests target the default branch. Recommended: `staging`. This is also the branch the Wheelhouse GitHub App treats as "default" (the push that lands changes and flags stale map nodes and docs), so it decides where the map follows the code. If `production` were the default, the map would only catch up at each promotion.
-- **Protection.** `production`: no direct pushes, no force pushes, require the CI checks. `staging`: no force pushes, require the CI checks and a pull request.
-- **The Wheelhouse repository record** (`default_branch`, now `main`) must be changed to the same branch.
+- **`main` is guarded locally.** A `pre-push` hook in the shared `.git/hooks` refuses any push to `refs/heads/main` from this machine. It is not versioned, so it protects only clones that have it; a new clone needs it copied (`pre-push` is four lines: read the pushed refs, exit 1 on `refs/heads/main`).
+- **The Deploy workflow is disabled on GitHub** (`gh workflow disable Deploy`), so nothing can run it, by push or by hand, whichever branch's copy of the file is used. Switching it back on is deliberate: `gh workflow enable Deploy`. The old copy of `deploy.yml` on `main` still triggers after CI on `main`, which is why disabling the workflow, not just editing the file, is what makes this safe.
+- The edits to `deploy.yml` on `staging` and `production` (no automatic trigger, manual runs only from `production`) apply once it is enabled again.
+
+## GitHub settings
+
+- **Default branch: `staging`** (set 2026-10-19). New pull requests target it, and it is the branch the Wheelhouse GitHub App treats as "default": the push that lands changes and flags stale map nodes and docs. So the map follows the code as it lands on `staging`, not only at each promotion to `production`.
+- **The Wheelhouse repository record** (Repositories page, the `wheelhouse` repository's *default branch*) must say `staging` too, or pushes to `staging` are ignored as "not a connected repository's default branch". `wheelhouse.json` says `staging` for the same reason.
+- **Protection**, if the plan is upgraded or the repository made public. `production`: no direct pushes, no force pushes, require the CI checks. `staging`: no force pushes, require the CI checks and a pull request. `main`: lock it.
 
 ## Why this shape
 

@@ -4,7 +4,7 @@ import { refreshAll } from "../lib/refresh";
 import { shortSession } from "./session-row";
 
 /** Teammates remove a session from Wheelhouse (soft delete: if it reconnects it starts at the top of the queue). */
-export function SessionRemoveButton({ projectKey, sessionId }: { projectKey: string; sessionId: string }) {
+export function SessionRemoveButton({ teamKey, sessionId }: { teamKey: string; sessionId: string }) {
   const { api, queryClient } = useServices();
   const [pending, start] = useTransition();
   return (
@@ -18,7 +18,7 @@ export function SessionRemoveButton({ projectKey, sessionId }: { projectKey: str
         if (!window.confirm(`Remove session ${shortSession(sessionId)} from Wheelhouse?\n\nIf it connects again it starts at the latest changes.`)) return;
         start(async () => {
           try {
-            await api.projects.removeSession(projectKey, sessionId);
+            await api.teams.removeSession(teamKey, sessionId);
           } finally {
             await refreshAll(queryClient); // gone already, or just removed: either way the list is read again
           }

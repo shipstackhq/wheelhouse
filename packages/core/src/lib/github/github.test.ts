@@ -1,6 +1,6 @@
 /**
- * The GitHub integration against a real database (WH-20): what a delivery may touch, what it does, and that one team's
- * repository can never reach another team. Runs on in-memory PGlite, or real Postgres with TEST_DATABASE_URL.
+ * The GitHub integration against a real database (WH-20): what a delivery may touch, what it does, and that one workspace's
+ * repository can never reach another workspace. Runs on in-memory PGlite, or real Postgres with TEST_DATABASE_URL.
  */
 if (process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -17,11 +17,11 @@ import type { Actor } from "../access";
 import * as svc from "../service";
 import { land } from "../sync";
 import type { GithubApi } from "./api";
-import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForTicket, registerInstallation, targetsFor } from "./service";
+import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
 
-type Team = { owner: Actor; member: Actor; installation: string; repoSlug: string; repoRowId: string };
-let A: Team;
-let B: Team;
+type Workspace = { owner: Actor; member: Actor; installation: string; repoSlug: string; repoRowId: string };
+let A: Workspace;
+let B: Workspace;
 
 /** A fake GitHub the service talks to. `repos` is what each installation can see; `changed` is what a compare returns. */
 const fakeGithub = (() => {
@@ -52,28 +52,28 @@ const fakeGithub = (() => {
 let seed = 0;
 const uniq = () => `${Date.now().toString(36)}${(seed++).toString(36)}`;
 
-async function makeTeam(name: string, key: string, installation: string, githubRepoId: string): Promise<Team> {
+async function makeWorkspace(name: string, key: string, installation: string, githubRepoId: string): Promise<Workspace> {
   const db = await getDb();
-  const [team] = await db.insert(schema.teams).values({ name }).returning();
+  const [workspace] = await db.insert(schema.workspaces).values({ name }).returning();
   const mkUser = async (role: "owner" | "member", label: string) => {
     const [u] = await db.insert(schema.users).values({ email: `${label}-${uniq()}@example.com`, name: label, passwordHash: "x" }).returning();
-    await db.insert(schema.memberships).values({ userId: u.id, teamId: team.id, role });
-    return { kind: "human", id: u.id, name: label, teamId: team.id } satisfies Actor;
+    await db.insert(schema.memberships).values({ userId: u.id, workspaceId: workspace.id, role });
+    return { kind: "human", id: u.id, name: label, workspaceId: workspace.id } satisfies Actor;
   };
   const owner = await mkUser("owner", `${name} owner`);
   const member = await mkUser("member", `${name} member`);
-  await svc.createProject(owner, { name: `${name} project`, key });
+  await svc.createTeam(owner, { name: `${name} team`, key });
   fakeGithub.state.repos.set(installation, [{ id: githubRepoId, fullName: `acme/${key.toLowerCase()}-app`, defaultBranch: "main", private: true }]);
   await registerInstallation(owner, { installationId: installation, accountLogin: "acme", accountType: "Organization" });
   const repo = await connectGithubRepository(owner, key, { installationId: installation, githubRepoId, role: "backend" }, fakeGithub.api);
   return { owner, member, installation, repoSlug: repo.slug, repoRowId: repo.id };
 }
 
-const SAME_GITHUB_REPO = "424242"; // both teams connect "the same" GitHub repository id, each through its own installation
+const SAME_GITHUB_REPO = "424242"; // both workspaces connect "the same" GitHub repository id, each through its own installation
 
 before(async () => {
-  A = await makeTeam("Alpha", "AA", "9001", SAME_GITHUB_REPO);
-  B = await makeTeam("Beta", "BB", "9002", SAME_GITHUB_REPO);
+  A = await makeWorkspace("Alpha", "AA", "9001", SAME_GITHUB_REPO);
+  B = await makeWorkspace("Beta", "BB", "9002", SAME_GITHUB_REPO);
 });
 
 const push = (installation: string, over: Record<string, unknown> = {}) => ({
@@ -87,22 +87,22 @@ const push = (installation: string, over: Record<string, unknown> = {}) => ({
 });
 const deliver = (event: string, payload: Record<string, unknown>, id = `d-${uniq()}`) => handleDelivery({ event, deliveryId: id, payload }, fakeGithub.api);
 
-/** A ticket in `column`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
-async function ticketIn(team: Team, key: string, title: string, column: string) {
-  const t = await svc.createTicket(team.owner, key, { title });
-  if (column !== "Backlog") await svc.moveTicket(team.owner, t.ref, column);
+/** An issue in `status`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
+async function issueIn(workspace: Workspace, key: string, title: string, status: string) {
+  const t = await svc.createIssue(workspace.owner, key, { title });
+  if (status !== "Backlog") await svc.moveIssue(workspace.owner, t.ref, status);
   const db = await getDb();
-  await db.update(schema.events).set({ createdAt: new Date(Date.now() - 2 * 3600_000) }).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "ticket.moved")));
+  await db.update(schema.events).set({ createdAt: new Date(Date.now() - 2 * 3600_000) }).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "issue.moved")));
   return t;
 }
-async function columnOf(team: Team, ref: string) {
-  return (await svc.getTicket(team.owner, ref)).ticket.column;
+async function columnOf(workspace: Workspace, ref: string) {
+  return (await svc.getIssue(workspace.owner, ref)).issue.status;
 }
-const prPayload = (team: Team, action: string, over: Record<string, unknown> = {}, pr: Record<string, unknown> = {}) => ({
+const prPayload = (workspace: Workspace, action: string, over: Record<string, unknown> = {}, pr: Record<string, unknown> = {}) => ({
   action,
   number: 7,
   repository: { id: Number(SAME_GITHUB_REPO) },
-  installation: { id: Number(team.installation) },
+  installation: { id: Number(workspace.installation) },
   pull_request: { number: 7, title: "AA-1 something", html_url: "https://github.com/acme/aa-app/pull/7", user: { login: "dev" }, state: "open", merged: false, draft: false, head: { ref: "feature/x", sha: "c".repeat(40) }, ...pr },
   ...over,
 });
@@ -113,12 +113,12 @@ describe("connecting", () => {
     await assert.rejects(connectGithubRepository(A.member, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /Only workspace owners/);
   });
 
-  test("an installation belongs to one team: another team cannot register it", async () => {
+  test("an installation belongs to one workspace: another workspace cannot register it", async () => {
     await assert.rejects(registerInstallation(B.owner, { installationId: A.installation, accountLogin: "acme", accountType: "Organization" }), /already connected to another workspace/);
     assert.equal((await listInstallations(B.owner)).some((i) => i.installationId === A.installation), false);
   });
 
-  test("a team cannot connect a repository through an installation that is not its own", async () => {
+  test("a workspace cannot connect a repository through an installation that is not its own", async () => {
     await assert.rejects(connectGithubRepository(B.owner, "BB", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /not connected to your workspace/);
   });
 
@@ -130,18 +130,18 @@ describe("connecting", () => {
     assert.equal(row.provider, "github");
   });
 
-  test("the same repository cannot be connected twice to a project, and connecting needs the App to be configured", async () => {
+  test("the same repository cannot be connected twice to a team, and connecting needs the App to be configured", async () => {
     await assert.rejects(connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /already connected/);
     await assert.rejects(connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, null), /not configured/);
   });
 });
 
 describe("who a webhook can reach", () => {
-  test("it resolves through the installation and repository id to exactly the team that owns that installation", async () => {
+  test("it resolves through the installation and repository id to exactly the workspace that owns that installation", async () => {
     const a = await targetsFor(A.installation, SAME_GITHUB_REPO);
     const b = await targetsFor(B.installation, SAME_GITHUB_REPO);
-    assert.deepEqual(a.map((t) => t.project.key), ["AA"]);
-    assert.deepEqual(b.map((t) => t.project.key), ["BB"]);
+    assert.deepEqual(a.map((t) => t.team.key), ["AA"]);
+    assert.deepEqual(b.map((t) => t.team.key), ["BB"]);
   });
 
   test("an unknown installation or repository reaches nothing", async () => {
@@ -149,14 +149,14 @@ describe("who a webhook can reach", () => {
     assert.deepEqual(await targetsFor(A.installation, "1"), []);
   });
 
-  test("a repository row that claims another team's installation is never reached, even if someone forged it", async () => {
+  test("a repository row that claims another workspace's installation is never reached, even if someone forged it", async () => {
     const db = await getDb();
-    // Team B's project gets a row pointing at TEAM A's installation, as an owner editing the fields by hand could try.
+    // Workspace B's team gets a row pointing at WORKSPACE A's installation, as an owner editing the fields by hand could try.
     const [forged] = await db
       .insert(schema.repositories)
-      .values({ projectId: (await svc.getProject(B.owner, "BB")).id, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
+      .values({ teamId: (await svc.requireTeam(B.owner, "BB")).id, workspaceId: B.owner.workspaceId, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
       .returning();
-    assert.deepEqual(await targetsFor(A.installation, "31337"), [], "the join on the installation's owning team excludes it");
+    assert.deepEqual(await targetsFor(A.installation, "31337"), [], "the join on the installation's owning workspace excludes it");
     await db.delete(schema.repositories).where(eq(schema.repositories.id, forged.id));
   });
 
@@ -174,11 +174,11 @@ describe("who a webhook can reach", () => {
 });
 
 describe("pushes", () => {
-  async function describedNode(team: Team, key: string, name: string, file: string, hash: string) {
-    await land(team.owner, key, { baseline: true, files: { [file]: hash }, repository: team.repoSlug });
-    await svc.upsertNode(team.owner, key, { name, layer: "code", kind: "file", anchors: [file], describedHashes: { [file]: hash }, markFresh: true, summary: name });
+  async function describedNode(workspace: Workspace, key: string, name: string, file: string, hash: string) {
+    await land(workspace.owner, key, { baseline: true, files: { [file]: hash }, repository: workspace.repoSlug });
+    await svc.upsertNode(workspace.owner, key, { name, layer: "code", kind: "file", anchors: [file], describedHashes: { [file]: hash }, markFresh: true, summary: name });
   }
-  const nodeOf = async (team: Team, key: string, name: string) => (await svc.getNode(team.owner, key, name)).node;
+  const nodeOf = async (workspace: Workspace, key: string, name: string) => (await svc.getNode(workspace.owner, key, name)).node;
 
   test("a push to the default branch lands the changed files and flags the node whose code changed, with no plugin involved", async () => {
     await describedNode(A, "AA", "Core", "src/core.ts", "hash-1");
@@ -194,11 +194,11 @@ describe("pushes", () => {
     assert.equal(ev.actorId, GITHUB_ACTOR_ID);
   });
 
-  test("the same push for another team's installation does not touch this team's map", async () => {
+  test("the same push for another workspace's installation does not touch this workspace's map", async () => {
     await describedNode(B, "BB", "Core", "src/core.ts", "hash-1");
     fakeGithub.state.changed = [{ path: "src/core.ts", hash: "hash-9" }];
     await deliver("push", push(A.installation));
-    assert.equal((await nodeOf(B, "BB", "Core")).stale, false, "team B's node is untouched by team A's push");
+    assert.equal((await nodeOf(B, "BB", "Core")).stale, false, "workspace B's node is untouched by workspace A's push");
     await deliver("push", push(B.installation));
     assert.equal((await nodeOf(B, "BB", "Core")).stale, true, "and does react to its own installation's push");
   });
@@ -246,31 +246,31 @@ describe("pushes", () => {
 });
 
 describe("pull requests", () => {
-  test("opening one for AA-1 moves the ticket to Review and says so on the ticket", async () => {
-    const t = await ticketIn(A, "AA", "Pull request target", "In Progress");
+  test("opening one for AA-1 moves the issue to Review and says so on the issue", async () => {
+    const t = await issueIn(A, "AA", "Pull request target", "In Progress");
     const num = t.ref.split("-")[1];
     const r = await deliver("pull_request", prPayload(A, "opened", {}, { title: `AA-${num} do it`, number: 11 }));
     assert.equal(r.status, "handled");
     assert.equal(await columnOf(A, t.ref), "Review");
-    const detail = await svc.getTicket(A.owner, t.ref);
+    const detail = await svc.getIssue(A.owner, t.ref);
     assert.ok(detail.comments.some((c) => c.authorName === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
-    assert.ok(detail.history.some((e) => e.type === "ticket.pull_request"));
-    const prs = await pullRequestsForTicket(t.id);
+    assert.ok(detail.history.some((e) => e.type === "issue.pull_request"));
+    const prs = await pullRequestsForIssue(t.id);
     assert.equal(prs.length, 1);
     assert.equal(prs[0].number, 11);
-    assert.equal(detail.pullRequests.length, 1, "getTicket carries them for the ticket view and agents");
+    assert.equal(detail.pullRequests.length, 1, "getIssue carries them for the issue view and agents");
   });
 
-  test("the branch name links a ticket too, and another project's key in the same title does not", async () => {
-    const t = await ticketIn(A, "AA", "Linked by branch", "Todo");
+  test("the branch name links an issue too, and another team's key in the same title does not", async () => {
+    const t = await issueIn(A, "AA", "Linked by branch", "Todo");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 12, title: "Unrelated words BB-1 and API-9", head: { ref: `feature/aa-${num}-by-branch`, sha: "e".repeat(40) } }));
     assert.equal(await columnOf(A, t.ref), "Review");
-    assert.equal((await pullRequestsForTicket(t.id)).length, 1);
+    assert.equal((await pullRequestsForIssue(t.id)).length, 1);
   });
 
   test("a draft does not move anything until it is ready", async () => {
-    const t = await ticketIn(A, "AA", "Draft work", "In Progress");
+    const t = await issueIn(A, "AA", "Draft work", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 13, draft: true, title: `AA-${num} wip` }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
@@ -278,49 +278,49 @@ describe("pull requests", () => {
     assert.equal(await columnOf(A, t.ref), "Review");
   });
 
-  test("closed without merging puts a ticket in Review back to In Progress, with a comment", async () => {
-    const t = await ticketIn(A, "AA", "Abandoned", "In Progress");
+  test("closed without merging puts an issue in Review back to In Progress, with a comment", async () => {
+    const t = await issueIn(A, "AA", "Abandoned", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 14, title: `AA-${num} x` }));
     assert.equal(await columnOf(A, t.ref), "Review");
-    // The ticket moved a moment ago (by GitHub itself), which must not count as "someone else moved it".
+    // The issue moved a moment ago (by GitHub itself), which must not count as "someone else moved it".
     await deliver("pull_request", prPayload(A, "closed", {}, { number: 14, title: `AA-${num} x`, state: "closed", merged: false }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
-    assert.ok((await svc.getTicket(A.owner, t.ref)).comments.some((c) => /closed without merging/.test(c.body)));
+    assert.ok((await svc.getIssue(A.owner, t.ref)).comments.some((c) => /closed without merging/.test(c.body)));
   });
 
-  test("merged leaves a ticket in Review for a person to close", async () => {
-    const t = await ticketIn(A, "AA", "Merged work", "In Progress");
+  test("merged leaves an issue in Review for a person to close", async () => {
+    const t = await issueIn(A, "AA", "Merged work", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 15, title: `AA-${num} y` }));
     await deliver("pull_request", prPayload(A, "closed", {}, { number: 15, title: `AA-${num} y`, state: "closed", merged: true }));
     assert.equal(await columnOf(A, t.ref), "Review");
-    const prs = await pullRequestsForTicket(t.id);
+    const prs = await pullRequestsForIssue(t.id);
     assert.equal(prs[0].state, "merged");
   });
 
-  test("a person or agent who moved the ticket a moment ago is not overruled, and the comment says so", async () => {
-    const t = await ticketIn(A, "AA", "Just moved", "Todo");
+  test("a person or agent who moved the issue a moment ago is not overruled, and the comment says so", async () => {
+    const t = await issueIn(A, "AA", "Just moved", "Todo");
     const num = t.ref.split("-")[1];
-    await svc.moveTicket(A.owner, t.ref, "In Progress"); // by a person, seconds ago
+    await svc.moveIssue(A.owner, t.ref, "In Progress"); // by a person, seconds ago
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 16, title: `AA-${num} z` }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
-    assert.ok((await svc.getTicket(A.owner, t.ref)).comments.some((c) => c.authorName === "GitHub" && /moved it 1 minute ago, so the pull request \(opened\) did not move it/.test(c.body)));
+    assert.ok((await svc.getIssue(A.owner, t.ref)).comments.some((c) => c.authorName === "GitHub" && /moved it 1 minute ago, so the pull request \(opened\) did not move it/.test(c.body)));
   });
 
-  test("a ticket in Done is never moved", async () => {
-    const t = await ticketIn(A, "AA", "Already done", "Done");
+  test("an issue in Done is never moved", async () => {
+    const t = await issueIn(A, "AA", "Already done", "Done");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 17, title: `AA-${num} done` }));
     assert.equal(await columnOf(A, t.ref), "Done");
   });
 
-  test("a pull request on team A's repository never touches team B's tickets, even with a matching ref", async () => {
-    const t = await ticketIn(B, "BB", "Team B ticket", "In Progress");
+  test("a pull request on workspace A's repository never touches workspace B's issues, even with a matching ref", async () => {
+    const t = await issueIn(B, "BB", "Workspace B issue", "In Progress");
     const num = t.ref.split("-")[1];
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 18, title: `BB-${num} sneaky` }));
     assert.equal(await columnOf(B, t.ref), "In Progress");
-    assert.equal((await pullRequestsForTicket(t.id)).length, 0);
+    assert.equal((await pullRequestsForIssue(t.id)).length, 0);
   });
 
   test("a pull request from a repository nobody connected reaches nothing", async () => {
@@ -330,51 +330,51 @@ describe("pull requests", () => {
 });
 
 describe("checks", () => {
-  const runPayload = (team: Team, name: string, status: string, conclusion: string | null, sha: string, number: number) => ({
+  const runPayload = (workspace: Workspace, name: string, status: string, conclusion: string | null, sha: string, number: number) => ({
     action: "completed",
     repository: { id: Number(SAME_GITHUB_REPO) },
-    installation: { id: Number(team.installation) },
+    installation: { id: Number(workspace.installation) },
     check_run: { name, status, conclusion, head_sha: sha, html_url: `https://ci.example/${name}`, pull_requests: [{ number }] },
   });
 
   test("a failing check is recorded, flagged with an event and a comment, and a later pass clears it", async () => {
-    const t = await ticketIn(A, "AA", "Has CI", "In Progress");
+    const t = await issueIn(A, "AA", "Has CI", "In Progress");
     const num = t.ref.split("-")[1];
     const sha = "f".repeat(40);
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 21, title: `AA-${num} ci`, head: { ref: "ci", sha } }));
     await deliver("check_run", runPayload(A, "build", "in_progress", null, sha, 21));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, "pending");
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, "pending");
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", sha, 21));
-    let d = await svc.getTicket(A.owner, t.ref);
+    let d = await svc.getIssue(A.owner, t.ref);
     assert.equal(d.pullRequests[0].ciState, "failure");
-    assert.ok(d.history.some((e) => e.type === "ticket.ci" && /CI failed/.test(e.summary)));
+    assert.ok(d.history.some((e) => e.type === "issue.ci" && /CI failed/.test(e.summary)));
     assert.ok(d.comments.some((c) => /CI failed on pull request/.test(c.body) && /tests/.test(c.body)));
     await deliver("check_run", runPayload(A, "tests", "completed", "success", sha, 21));
     await deliver("check_run", runPayload(A, "build", "completed", "success", sha, 21));
-    d = await svc.getTicket(A.owner, t.ref);
+    d = await svc.getIssue(A.owner, t.ref);
     assert.equal(d.pullRequests[0].ciState, "success");
   });
 
   test("a result for an older commit is ignored, and a new commit starts a new round", async () => {
-    const t = await ticketIn(A, "AA", "New commit", "In Progress");
+    const t = await issueIn(A, "AA", "New commit", "In Progress");
     const num = t.ref.split("-")[1];
     const first = "1".repeat(40), second = "2".repeat(40);
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 22, title: `AA-${num} c`, head: { ref: "c", sha: first } }));
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", first, 22));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, "failure");
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, "failure");
     await deliver("pull_request", prPayload(A, "synchronize", {}, { number: 22, title: `AA-${num} c`, head: { ref: "c", sha: second } }));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, null, "the old commit's failure no longer counts");
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, null, "the old commit's failure no longer counts");
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", first, 22)); // a late result for the old commit
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, null);
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, null);
   });
 
-  test("a check on team A's repository never changes a pull request of team B", async () => {
-    const t = await ticketIn(B, "BB", "B has CI", "In Progress");
+  test("a check on workspace A's repository never changes a pull request of workspace B", async () => {
+    const t = await issueIn(B, "BB", "B has CI", "In Progress");
     const num = t.ref.split("-")[1];
     const sha = "9".repeat(40);
     await deliver("pull_request", prPayload(B, "opened", {}, { number: 23, title: `BB-${num} ci`, head: { ref: "b", sha } }));
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", sha, 23));
-    assert.equal((await pullRequestsForTicket(t.id))[0].ciState, null);
+    assert.equal((await pullRequestsForIssue(t.id))[0].ciState, null);
   });
 });
 
@@ -385,22 +385,22 @@ describe("other events", () => {
   });
 
   test("removing the App ends the connection: later pushes reach nothing", async () => {
-    const team = await makeTeam("Gamma", "GG", "9003", "808080");
+    const workspace = await makeWorkspace("Gamma", "GG", "9003", "808080");
     assert.equal((await targetsFor("9003", "808080")).length, 1);
     const r = await deliver("installation", { action: "deleted", installation: { id: 9003 } });
     assert.equal(r.status, "handled");
     assert.equal((await targetsFor("9003", "808080")).length, 0);
-    assert.equal((await listInstallations(team.owner)).length, 0);
+    assert.equal((await listInstallations(workspace.owner)).length, 0);
   });
 
-  test("deleting a project removes its pull requests along with it", async () => {
+  test("deleting a team removes its pull requests along with it", async () => {
     const db = await getDb();
-    const team = await makeTeam("Delta", "DD", "9004", "909090");
-    const t = await ticketIn(team, "DD", "Doomed", "In Progress");
+    const workspace = await makeWorkspace("Delta", "DD", "9004", "909090");
+    const t = await issueIn(workspace, "DD", "Doomed", "In Progress");
     const num = t.ref.split("-")[1];
     await handleDelivery({ event: "pull_request", deliveryId: `d-${uniq()}`, payload: { action: "opened", repository: { id: 909090 }, installation: { id: 9004 }, pull_request: { number: 1, title: `DD-${num} x`, html_url: "u", user: { login: "d" }, state: "open", head: { ref: "x", sha: "7".repeat(40) } } } }, fakeGithub.api);
-    assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, team.repoRowId))).length, 1);
-    await svc.deleteProject(team.owner, "DD");
-    assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, team.repoRowId))).length, 0);
+    assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 1);
+    await svc.deleteTeam(workspace.owner, "DD");
+    assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 0);
   });
 });

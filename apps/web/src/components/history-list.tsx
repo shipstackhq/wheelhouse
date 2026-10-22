@@ -22,7 +22,7 @@ function visibleLines(groups: HistoryGroup<HistoryItem>[], budget: number) {
 }
 
 /**
- * Ticket history, newest first. Consecutive changes by the same doer sit under one heading, so the name is
+ * Issue history, newest first. Consecutive changes by the same doer sit under one heading, so the name is
  * written once instead of on every line. Shows the latest ten changes; "show more" opens a scrollable list of everything.
  * The count beside a doer's name is that run's real total, whether or not all of its lines are showing yet.
  */

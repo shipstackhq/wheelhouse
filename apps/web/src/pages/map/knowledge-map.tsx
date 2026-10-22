@@ -47,7 +47,7 @@ import { NodePanel } from "./node-panel";
 import { FlowEditor, type FlowDraft } from "./flow-editor";
 import { dagreLayout, treeLayout, elkLayout, violatesLeftToRight, breakCycles, type Direction } from "../../lib/map-layout";
 import { collapseKey, seenKey, loadCollapsed, saveCollapsed, remapCollapsedEdges } from "../../lib/map-collapse";
-import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, AskIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, ExpandIcon, MapIcon, PlayIcon, TicketIcon, TidyIcon, WarningIcon } from "../../components/icons";
+import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, AskIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, ExpandIcon, MapIcon, PlayIcon, IssueIcon, TidyIcon, WarningIcon } from "../../components/icons";
 
 export type Graph = GraphView;
 export type GNode = MapNode;
@@ -58,14 +58,14 @@ const LEAF_H = 64;
 type NodeData = {
   n: GNode;
   hasChildren: boolean;
-  tickets: number;
+  issues: number;
   dim: boolean;
   related: boolean;
   flowCurrent: boolean;
   flowVisited: boolean;
   onFocus: (id: string) => void;
   hlCols?: Set<string>; // data layer: highlighted column names
-  flux?: { by: string; ticket: string | null; drafts: number } | null;
+  flux?: { by: string; issue: string | null; drafts: number } | null;
   onColumnClick?: (nodeId: string, column: string) => void;
   /** WH-22: collapse state for a container node (undefined = not a container). */
   collapsed?: boolean;
@@ -80,7 +80,7 @@ function ringClass(d: NodeData) {
 // ───────── node rendering ─────────
 
 const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeData>>) {
-  const { n, hasChildren, tickets, dim, related, flowCurrent, flowVisited } = data;
+  const { n, hasChildren, issues, dim, related, flowCurrent, flowVisited } = data;
   const k = KIND_STYLE[n.kind] ?? KIND_STYLE.service;
   const ring = flowCurrent
     ? "ring-4 ring-accent/70"
@@ -124,7 +124,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
               +{data.hiddenCount} modules
             </span>
           )}
-          {tickets > 0 && <span className="chip bg-bg text-muted">{tickets} <TicketIcon /></span>}
+          {issues > 0 && <span className="chip bg-bg text-muted">{issues} <IssueIcon /></span>}
           {data.onToggleCollapse && (
             <button
               className="nodrag rounded px-1 text-[11px] text-muted hover:bg-panel-2 hover:text-fg"
@@ -163,7 +163,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
       <div className="flex items-center gap-1.5">
         <span className="text-xs" style={{ color: k.color }}>{k.icon}</span>
         <span className={clsx("truncate text-[13px] font-medium", n.layer === "code" && "font-mono text-[12px]")}>{n.name}</span>
-        {tickets > 0 && <span className="ml-auto text-[10px] text-muted">{tickets}<TicketIcon /></span>}
+        {issues > 0 && <span className="ml-auto text-[10px] text-muted">{issues}<IssueIcon /></span>}
       </div>
       {n.summary && <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{n.summary}</div>}
       <div className="mt-1 flex items-center gap-1.5">
@@ -177,7 +177,7 @@ const BoxNode = memo(function BoxNode({ data, selected }: NodeProps<Node<NodeDat
 
 /**
  * ERD card for the data layer: one row per column, with per-column handles for FK edges.
- * Reads like the sentence "one project has many tickets": parents sit left, children right.
+ * Reads like the sentence "one team has many issues": parents sit left, children right.
  * A relationship line leaves the child's FK column on its LEFT edge and enters the
  * parent's referenced column on its RIGHT edge (so drag from a child's left dot to a parent's right dot).
  */
@@ -242,7 +242,7 @@ function FluxBadge({ flux }: { flux: NonNullable<NodeData["flux"]> }) {
   return (
     <span
       className="chip bg-agent/15 text-[9px] text-agent"
-      title={`Being changed by ${flux.by}${flux.ticket ? ` (${flux.ticket})` : ""}; not landed yet${flux.drafts ? ` · ${flux.drafts} pending map update(s)` : ""}`}
+      title={`Being changed by ${flux.by}${flux.issue ? ` (${flux.issue})` : ""}; not landed yet${flux.drafts ? ` · ${flux.drafts} pending map update(s)` : ""}`}
     >
       <EditIcon /> in flux
     </span>
@@ -324,8 +324,8 @@ function toFlow(
   const visible = focusId && byId.get(focusId)?.layer === lens ? subtree(focusId, layerNodes) : new Set(layerNodes.map((n) => n.id));
   const kids = new Map<string, GNode[]>();
   for (const n of layerNodes) if (n.parentId) kids.set(n.parentId, [...(kids.get(n.parentId) ?? []), n]);
-  const ticketCount = new Map<string, number>();
-  for (const l of g.ticketLinks) ticketCount.set(l.nodeId, (ticketCount.get(l.nodeId) ?? 0) + 1);
+  const issueCount = new Map<string, number>();
+  for (const l of g.issueLinks) issueCount.set(l.nodeId, (issueCount.get(l.nodeId) ?? 0) + 1);
 
   // WH-22: collapsed containers hide their whole subtree (but never the focus-drill root itself).
   const collapsedActive = !erd ? [...collapsedIds].filter((id) => id !== focusId && visible.has(id)) : [];
@@ -379,7 +379,7 @@ function toFlow(
       data: {
         n,
         hasChildren,
-        tickets: ticketCount.get(n.id) ?? 0,
+        issues: issueCount.get(n.id) ?? 0,
         dim: !!hl.related && !relatedOrHasRelated(n.id),
         related,
         flowCurrent: hl.current === n.id,
@@ -388,7 +388,7 @@ function toFlow(
         flux: g.flux[n.id]
           ? {
               by: g.flux[n.id].sessions[0]?.by ?? g.flux[n.id].drafts[0]?.authorName ?? "someone",
-              ticket: g.flux[n.id].sessions[0]?.ticket ?? null,
+              issue: g.flux[n.id].sessions[0]?.issue ?? null,
               drafts: g.flux[n.id].drafts.length,
             }
           : null,
@@ -473,7 +473,7 @@ function toFlow(
  * The map. `graph` is the server's copy (it changes when anyone changes anything); the map keeps its own working copy so a drag, a
  * resize or a removed edge shows at once, and takes the server's whenever nothing is being dragged or saved.
  */
-export function KnowledgeMap(props: { projectKey: string; graph: Graph; initialNode?: string; initialFlow?: string; initialLens?: string }) {
+export function KnowledgeMap(props: { teamKey: string; graph: Graph; initialNode?: string; initialFlow?: string; initialLens?: string }) {
   return (
     <ReactFlowProvider>
       <GlossaryProvider terms={props.graph.terms}>
@@ -489,7 +489,7 @@ function pickLens(g: Graph, wanted?: string): LayerId {
   return LAYER_ORDER.find((l) => g.nodes.some((n) => n.layer === l)) ?? "system";
 }
 
-function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, initialLens }: { projectKey: string; graph: Graph; initialNode?: string; initialFlow?: string; initialLens?: string }) {
+function MapInner({ teamKey, graph: serverGraph, initialNode, initialFlow, initialLens }: { teamKey: string; graph: Graph; initialNode?: string; initialFlow?: string; initialLens?: string }) {
   const navigate = useNavigate();
   const { api, queryClient } = useServices();
   const askEnabled = serverGraph.askEnabled;
@@ -525,18 +525,18 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
       setCollapsedIds(new Set());
       return;
     }
-    setCollapsedIds(loadCollapsed(collapseKey(projectKey, lens)));
-  }, [projectKey, lens]);
+    setCollapsedIds(loadCollapsed(collapseKey(teamKey, lens)));
+  }, [teamKey, lens]);
   const toggleCollapse = useCallback(
     (id: string) => {
       setCollapsedIds((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
         else next.add(id);
-        saveCollapsed(collapseKey(projectKey, lens), next);
-        const seen = loadCollapsed(seenKey(projectKey, lens));
+        saveCollapsed(collapseKey(teamKey, lens), next);
+        const seen = loadCollapsed(seenKey(teamKey, lens));
         seen.add(id);
-        saveCollapsed(seenKey(projectKey, lens), seen);
+        saveCollapsed(seenKey(teamKey, lens), seen);
         return next;
       });
       // WH-22: collapsing/expanding changes the lens's footprint (shrinks to a header, or
@@ -546,7 +546,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
       // this intentionally passes `false`, same as a manual Tidy click).
       setTimeout(() => runAutoLayoutRef.current?.(lens, layoutDirRef.current, false), 140);
     },
-    [projectKey, lens],
+    [teamKey, lens],
   );
   // Containers nobody has touched yet default to collapsed; mark them collapsed once per id
   // the first time they're seen in this lens (new node created after a prior visit, etc).
@@ -554,20 +554,20 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
   useEffect(() => {
     if (lens === "data") return;
     const kidsOf = new Set(graph.nodes.filter((n) => n.layer === lens && n.parentId).map((n) => n.parentId!));
-    const seen = loadCollapsed(seenKey(projectKey, lens));
+    const seen = loadCollapsed(seenKey(teamKey, lens));
     const toAdd = [...kidsOf].filter((id) => !seen.has(id) && !defaultedRef.current.has(id));
     if (!toAdd.length) return;
     for (const id of toAdd) defaultedRef.current.add(id);
     setCollapsedIds((prev) => {
       const next = new Set(prev);
       for (const id of toAdd) next.add(id);
-      saveCollapsed(collapseKey(projectKey, lens), next);
-      const seen2 = loadCollapsed(seenKey(projectKey, lens));
+      saveCollapsed(collapseKey(teamKey, lens), next);
+      const seen2 = loadCollapsed(seenKey(teamKey, lens));
       for (const id of toAdd) seen2.add(id);
-      saveCollapsed(seenKey(projectKey, lens), seen2);
+      saveCollapsed(seenKey(teamKey, lens), seen2);
       return next;
     });
-  }, [graph.nodes, lens, projectKey]);
+  }, [graph.nodes, lens, teamKey]);
 
   const [layoutDir, setLayoutDir] = useState<Direction>("LR");
   const [laying, setLaying] = useState(false);
@@ -578,8 +578,8 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
   const runAutoLayoutRef = useRef<((targetLens: LayerId, dir: Direction, onlyUnplaced: boolean) => Promise<void>) | null>(null);
 
   const reload = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ["graph", projectKey] });
-  }, [queryClient, projectKey]);
+    await queryClient.invalidateQueries({ queryKey: ["graph", teamKey] });
+  }, [queryClient, teamKey]);
 
   // The server's copy replaces ours whenever nothing is being dragged or saved: that is how another person's or an agent's change
   // shows up. A copy that arrives mid-drag is remembered, and read again when the drag or save is over.
@@ -695,7 +695,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
       if (resized.length) {
         api.map
           .saveLayout(
-            projectKey,
+            teamKey,
             resized.map((c) => {
               const n = graph.nodes.find((x) => x.id === (c as { id: string }).id)!;
               const d = (c as { dimensions: { width: number; height: number } }).dimensions;
@@ -706,7 +706,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
           .catch((e) => setError(describeFailure(e)));
       }
     },
-    [api, projectKey, graph.nodes, reload],
+    [api, teamKey, graph.nodes, reload],
   );
 
   const onNodeDragStart = () => (busy.current = true);
@@ -739,7 +739,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
   const onNodeDragStop = (_: unknown, __: Node, dragged: Node[]) => {
     const positions = dragged.map((d) => ({ id: d.id, x: Math.round(d.position.x), y: Math.round(d.position.y) }));
     api.map
-      .saveLayout(projectKey, positions)
+      .saveLayout(teamKey, positions)
       .then(() => {
         settle();
         setGraph((g) => ({
@@ -770,10 +770,10 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
         void _o;
         return target ? { ...rest, references: target } : rest;
       });
-      run(() => api.map.upsertNode(projectKey, { id: tableId, columns: columns as MapColumn[], version: t.version }));
+      run(() => api.map.upsertNode(teamKey, { id: tableId, columns: columns as MapColumn[], version: t.version }));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graph.nodes, projectKey],
+    [graph.nodes, teamKey],
   );
 
   const onConnect = (c: Connection) => {
@@ -795,7 +795,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
     }
     const existed = graph.edges.some((e) => e.kind === "depends" && e.fromNodeId === c.source && e.toNodeId === c.target);
     run(async () => {
-      const edge = await api.map.connect(projectKey, { from: c.source!, to: c.target! });
+      const edge = await api.map.connect(teamKey, { from: c.source!, to: c.target! });
       // Offer an undo for brand-new connections (accidental drags are easy on a canvas).
       if (!existed) setUndo({ text: `Connected ${byId.get(c.source!)?.name ?? "?"} → ${byId.get(c.target!)?.name ?? "?"}`, revert: () => removeEdge(edge.id) });
     });
@@ -809,10 +809,10 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
       setGraph((g) => ({ ...g, edges: g.edges.filter((x) => x.id !== edgeId) }));
       // FK edges are derived from the column definition, so clear the column instead.
       if (e?.kind === "references" && e.meta?.derived && e.meta.fromColumn) setColumnReference(e.fromNodeId, e.meta.fromColumn, undefined);
-      else run(() => api.map.deleteEdge(projectKey, edgeId));
+      else run(() => api.map.deleteEdge(teamKey, edgeId));
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projectKey, graph.edges, setColumnReference],
+    [teamKey, graph.edges, setColumnReference],
   );
   const onEdgesDelete = (es: Edge[]) => es.filter((e) => e.id !== "flow-step").forEach((e) => removeEdge(e.id));
 
@@ -849,7 +849,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
       return { id: t.id, x: Math.round(p.x - TABLE_W / 2), y: Math.round(p.y - p.height / 2) };
     });
     setGraph((gr) => ({ ...gr, nodes: gr.nodes.map((n) => ({ ...n, ...(positions.find((p) => p.id === n.id) ?? {}) })) }));
-    api.map.saveLayout(projectKey, positions, { placed: false }).catch((e) => setError(describeFailure(e)));
+    api.map.saveLayout(teamKey, positions, { placed: false }).catch((e) => setError(describeFailure(e)));
     setTimeout(() => rf.fitView({ padding: 0.12, duration: 400 }), 60);
   };
 
@@ -927,7 +927,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
           .filter((p): p is { id: string; x: number; y: number } => !!p);
         if (!positions.length) return;
         setGraph((gr) => ({ ...gr, nodes: gr.nodes.map((n) => ({ ...n, ...(positions.find((p) => p.id === n.id) ?? {}) })) }));
-        await api.map.saveLayout(projectKey, positions, { placed: onlyUnplaced ? true : false });
+        await api.map.saveLayout(teamKey, positions, { placed: onlyUnplaced ? true : false });
         setTimeout(() => rf.fitView({ padding: 0.12, duration: 400 }), 60);
       } catch (e) {
         setError(describeFailure(e));
@@ -935,7 +935,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
         setLaying(false);
       }
     },
-    [api, graph.nodes, graph.edges, measuredSize, projectKey, rf],
+    [api, graph.nodes, graph.edges, measuredSize, teamKey, rf],
   );
   useEffect(() => void (runAutoLayoutRef.current = runAutoLayout), [runAutoLayout]);
 
@@ -1006,12 +1006,12 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
         return true;
       }
       if (href.startsWith("#adr:")) {
-        void navigate(`/p/${projectKey}/decisions#adr-${href.slice(5)}`);
+        void navigate(`/t/${teamKey}/decisions#adr-${href.slice(5)}`);
         return true;
       }
       return false;
     },
-    [graph.nodes, selectNode, navigate, projectKey],
+    [graph.nodes, selectNode, navigate, teamKey],
   );
 
   const addNode = async (parentId: string | null) => {
@@ -1025,7 +1025,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
     });
     if (!name) return;
     run(async () => {
-      const created = await api.map.upsertNode(projectKey, {
+      const created = await api.map.upsertNode(teamKey, {
         name,
         layer,
         parent: parentId,
@@ -1145,7 +1145,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
                 : undefined
             }
             label={selectedEdge.label}
-            onLabel={(label) => run(() => api.map.connect(projectKey, { from: selectedEdge.fromNodeId, to: selectedEdge.toNodeId, label }))}
+            onLabel={(label) => run(() => api.map.connect(teamKey, { from: selectedEdge.fromNodeId, to: selectedEdge.toNodeId, label }))}
             onDelete={() => removeEdge(selectedEdge.id)}
             onClose={() => setSelectedEdgeId(null)}
           />
@@ -1214,7 +1214,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
       <AskDialog
         open={askOpen}
         onOpenChange={setAskOpen}
-        projectKey={projectKey}
+        teamKey={teamKey}
         enabled={askEnabled}
         focus={askFocus}
         onLink={onInternalLink}
@@ -1229,7 +1229,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
           onSave={(f) => {
             setEditor(null);
             run(async () => {
-              const saved = await api.map.upsertFlow(projectKey, {
+              const saved = await api.map.upsertFlow(teamKey, {
                 id: f.id,
                 version: f.version,
                 name: f.name,
@@ -1247,7 +1247,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
                   const id = editor.id!;
                   setEditor(null);
                   if (play?.flowId === id) setPlay(null);
-                  run(() => api.map.deleteFlow(projectKey, id));
+                  run(() => api.map.deleteFlow(teamKey, id));
                 }
               : undefined
           }
@@ -1258,19 +1258,19 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
           key={selected.id + ":" + selected.version}
           node={selected}
           graph={graph}
-          projectKey={projectKey}
+          teamKey={teamKey}
           onClose={() => (setSelectedId(null), setPlay(null))}
           onSelect={selectNode}
           onAddChild={() => addNode(selected.id)}
           onFocus={() => setFocusId(selected.id)}
           onPlayFlow={(flowId, s) => (setFlowsOpen(true), setPlay({ flowId, step: Math.max(0, s) }))}
           onAsk={() => (setAskFocus(selected), setAskOpen(true))}
-          onSave={(patch) => run(() => api.map.upsertNode(projectKey, { id: selected.id, ...patch, version: selected.version } as NodePatch))}
-          onLink={(from, to) => run(() => api.map.connect(projectKey, { from, to, kind: "implements" }))}
-          onUnlink={(edgeId) => run(() => api.map.deleteEdge(projectKey, edgeId))}
-          onMarkFresh={() => run(() => api.map.markFresh(projectKey, selected.id))}
+          onSave={(patch) => run(() => api.map.upsertNode(teamKey, { id: selected.id, ...patch, version: selected.version } as NodePatch))}
+          onLink={(from, to) => run(() => api.map.connect(teamKey, { from, to, kind: "implements" }))}
+          onUnlink={(edgeId) => run(() => api.map.deleteEdge(teamKey, edgeId))}
+          onMarkFresh={() => run(() => api.map.markFresh(teamKey, selected.id))}
           onInternalLink={onInternalLink}
-          onResolveDraft={(draftId, action) => run(() => api.map.resolveDraft(projectKey, draftId, action))}
+          onResolveDraft={(draftId, action) => run(() => api.map.resolveDraft(teamKey, draftId, action))}
           onDelete={async () => {
             const n = subtree(selected.id, graph.nodes).size - 1;
             const ok = await confirm({
@@ -1282,7 +1282,7 @@ function MapInner({ projectKey, graph: serverGraph, initialNode, initialFlow, in
             if (!ok) return;
             setSelectedId(null);
             if (focusId && subtree(selected.id, graph.nodes).has(focusId)) setFocusId(selected.parentId);
-            run(() => api.map.deleteNode(projectKey, selected.id));
+            run(() => api.map.deleteNode(teamKey, selected.id));
           }}
         />
       )}
@@ -1346,7 +1346,7 @@ function FlowsSidebar(props: {
       <div className="flex-1 space-y-1 overflow-y-auto p-2 text-sm">
         {props.graph.flows.length === 0 && (
           <p className="px-2 py-3 text-xs text-muted">
-            Flows are step-by-step walks through the map (“User signs up”, “Agent picks up a ticket”). They&apos;re the fastest way to understand
+            Flows are step-by-step walks through the map (“User signs up”, “Agent picks up an issue”). They&apos;re the fastest way to understand
             how things fit together.
           </p>
         )}

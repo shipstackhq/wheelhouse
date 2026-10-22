@@ -9,11 +9,11 @@ export function stageColor(i: number, n: number) {
 
 export type Stage = { name: string; count: number };
 
-/** Horizontal stacked bar of tickets per kanban column, with hover tooltip. */
+/** Horizontal stacked bar of issues per kanban column, with hover tooltip. */
 export function StageBar({ stages, height = 10 }: { stages: Stage[]; height?: number }) {
   const [hover, setHover] = useState<number | null>(null);
   const total = stages.reduce((a, s) => a + s.count, 0);
-  if (!total) return <div className="rounded bg-panel-2" style={{ height }} aria-label="No tickets" />;
+  if (!total) return <div className="rounded bg-panel-2" style={{ height }} aria-label="No issues" />;
   const shown = stages.map((s, i) => ({ ...s, i })).filter((s) => s.count > 0);
   return (
     <div className="relative" onMouseLeave={() => setHover(null)}>

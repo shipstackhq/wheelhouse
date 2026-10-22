@@ -21,10 +21,10 @@ describe("POST /mcp: authentication", () => {
     }
   });
 
-  test("a suspended team's key gets 403, not 401, so clients stop retrying", async () => {
+  test("a suspended workspace's key gets 403, not 401, so clients stop retrying", async () => {
     const r = await mcp(asKey(fx.suspended.apiKey), "tools/list");
     assert.equal(r.status, 403);
-    assert.equal(r.json.error.message, "This team has been suspended. Contact the administrator.");
+    assert.equal(r.json.error.message, "This workspace has been suspended. Contact the administrator.");
   });
 
   test("repeated bad keys from one address are rate limited with Retry-After", async () => {
@@ -43,7 +43,7 @@ describe("POST /mcp: authentication", () => {
   test("a signed-in person (session cookie) can use it too", async () => {
     const r = await mcp(asCookie(fx.a.sessionToken), "tools/call", { name: "list_projects", arguments: {} });
     assert.equal(r.status, 200);
-    assert.ok(mcpToolResult(r).some((p: { key: string }) => p.key === fx.a.projectKey));
+    assert.ok(mcpToolResult(r).some((p: { key: string }) => p.key === fx.a.teamKey));
   });
 });
 
@@ -113,25 +113,25 @@ describe("POST /mcp: tools and prompts", () => {
     assert.equal(unknown.status, 200);
     assert.equal(unknown.json.result.isError, true);
     assert.match(unknown.json.result.content[0].text, /^not_found: Unknown tool no_such_tool/);
-    const invalid = await mcp(A, "tools/call", { name: "get_ticket", arguments: {} });
+    const invalid = await mcp(A, "tools/call", { name: "get_issue", arguments: {} });
     assert.equal(invalid.json.result.isError, true);
     assert.match(invalid.json.result.content[0].text, /^invalid: /);
-    const other = await mcp(A, "tools/call", { name: "get_board", arguments: { project: fx.b.projectKey } });
-    assert.match(other.json.result.content[0].text, /^not_found: /, "another team's project looks like it does not exist");
+    const other = await mcp(A, "tools/call", { name: "get_board", arguments: { project: fx.b.teamKey } });
+    assert.match(other.json.result.content[0].text, /^not_found: /, "another workspace's project looks like it does not exist");
   });
 
   test("a write through MCP is visible through the REST API", async () => {
     const title = `via mcp ${Date.now()}`;
-    const made = mcpToolResult(await mcp(A, "tools/call", { name: "create_ticket", arguments: { project: fx.a.projectKey, title } }));
-    assert.match(made.ref, new RegExp(`^${fx.a.projectKey}-\\d+$`));
-    const got = (await call("/api/v1/get_ticket", { ...A, body: { ticket: made.ref } })).json.data;
-    assert.equal(got.ticket.title, title);
+    const made = mcpToolResult(await mcp(A, "tools/call", { name: "create_issue", arguments: { project: fx.a.teamKey, title } }));
+    assert.match(made.ref, new RegExp(`^${fx.a.teamKey}-\\d+$`));
+    const got = (await call("/api/v1/get_issue", { ...A, body: { issue: made.ref } })).json.data;
+    assert.equal(got.issue.title, title);
   });
 
   test("prompts: the list is recorded, and a prompt renders messages", async () => {
     const list = await mcp(A, "prompts/list");
     expectGolden("mcp-prompts", [...list.json.result.prompts].map((p: { name: string; arguments?: unknown }) => ({ name: p.name, arguments: p.arguments ?? null })).sort((x, y) => x.name.localeCompare(y.name)));
-    const brief = await mcp(A, "prompts/get", { name: "brief", arguments: { project: fx.a.projectKey } });
+    const brief = await mcp(A, "prompts/get", { name: "brief", arguments: { project: fx.a.teamKey } });
     assert.equal(brief.status, 200);
     assert.ok(Array.isArray(brief.json.result.messages) && brief.json.result.messages.length > 0);
     const missing = await mcp(A, "prompts/get", { name: "no-such-prompt" });

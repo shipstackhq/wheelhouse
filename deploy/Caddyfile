@@ -5,7 +5,7 @@
 {$SITE_ADDRESS::80} {
 	# Live updates are long-lived server-sent events: pass them straight through (no buffering, no compression), and never
 	# time them out here. The app sends a heartbeat every 25 seconds, so an idle timeout in front must be longer than that.
-	@streams path /api/stream /api/projects/*/stream
+	@streams path /api/stream /api/teams/*/stream
 	handle @streams {
 		reverse_proxy {$UPSTREAM:app:3000} {
 			flush_interval -1

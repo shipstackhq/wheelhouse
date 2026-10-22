@@ -4,7 +4,7 @@ import { useLiveStream } from "./use-live-stream";
 
 /**
  * Keeps what is on screen fresh when anyone (a person or an agent) changes something. When the server's event stream (WH-1)
- * reports a change, every query on screen is read again, and the panels that keep their own copy of some data (the ticket
+ * reports a change, every query on screen is read again, and the panels that keep their own copy of some data (the issue
  * dialog, the map, the glossary...) are told with a `wheelhouse:changed` browser event. If the stream is not getting through
  * it falls back to reading again every few seconds.
  */
@@ -23,8 +23,8 @@ export function LiveRefresh({ path }: { path: string }) {
   return null;
 }
 
-/** One project's changes (the project pages). */
-export const ProjectLiveRefresh = ({ projectKey }: { projectKey: string }) => <LiveRefresh path={`/api/projects/${encodeURIComponent(projectKey)}/stream`} />;
+/** One team's changes (the team pages). */
+export const TeamLiveRefresh = ({ teamKey }: { teamKey: string }) => <LiveRefresh path={`/api/teams/${encodeURIComponent(teamKey)}/stream`} />;
 
-/** Everything in the signed-in team (the dashboard). */
-export const TeamLiveRefresh = () => <LiveRefresh path="/api/stream" />;
+/** Everything in the signed-in workspace (the dashboard). */
+export const WorkspaceLiveRefresh = () => <LiveRefresh path="/api/stream" />;

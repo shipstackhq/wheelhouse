@@ -1,6 +1,6 @@
 import { redirect, type LoaderFunction } from "react-router";
 import { ApiError } from "@wheelhouse/api-client";
-import { meQuery, projectsQuery } from "../lib/session";
+import { meQuery, teamsQuery } from "../lib/session";
 import type { Services } from "../lib/services";
 
 /**
@@ -8,7 +8,7 @@ import type { Services } from "../lib/services";
  * and the shell never flashes. They read through the query cache, so moving between pages does not ask again.
  */
 
-/** Everything inside the app shell needs a signed-in person; the sidebar needs their projects. */
+/** Everything inside the app shell needs a signed-in person; the sidebar needs their teams. */
 export const requireSignedIn =
   ({ api, queryClient }: Services): LoaderFunction =>
   async () => {
@@ -16,7 +16,7 @@ export const requireSignedIn =
     const me = await queryClient.fetchQuery({ ...meQuery(api), retry: false });
     if (!me) throw redirect("/login");
     try {
-      await queryClient.fetchQuery({ ...projectsQuery(api), retry: false });
+      await queryClient.fetchQuery({ ...teamsQuery(api), retry: false });
     } catch (e) {
       if (e instanceof ApiError && e.isSignedOut) {
         queryClient.setQueryData(meQuery(api).queryKey, null);

@@ -30,7 +30,8 @@ export const isZeroSha = (s: string | null | undefined) => !s || ZERO_SHA.test(s
 
 /**
  * The little of GitHub's API we use: changed files and their blob hashes (never contents), an installation's
- * repositories, and who may use an installation. The HTTP client is injected so every call can be tested.
+ * repositories, who may use an installation, and opening a pull request for a daemon's branch. The HTTP client is
+ * injected so every call can be tested.
  */
 export class GithubApi {
   private tokens = new Map<string, { token: string; expires: number }>();
@@ -85,6 +86,18 @@ export class GithubApi {
     return { files: r.tree.filter((t) => t.type === "blob").map((t) => ({ path: t.path, hash: t.sha })), truncated: !!r.truncated };
   }
 
+  /** A repository's branch names, 100 a page, at most 1,000. */
+  async branches(installationId: string, repoId: string): Promise<string[]> {
+    const token = await this.installationToken(installationId);
+    const out: string[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const r = await this.call<{ name: string }[]>(`/repositories/${encodeURIComponent(repoId)}/branches?per_page=100&page=${page}`, token);
+      out.push(...r.map((b) => b.name));
+      if (r.length < 100) break;
+    }
+    return out;
+  }
+
   /** The repositories an installation can see. */
   async installationRepositories(installationId: string): Promise<{ id: string; fullName: string; defaultBranch: string; private: boolean }[]> {
     const token = await this.installationToken(installationId);
@@ -95,6 +108,17 @@ export class GithubApi {
       if (r.repositories.length < 100) break;
     }
     return out;
+  }
+
+  /** Open a pull request from `head` into `base`, as the App (it shows as `<slug>[bot]`). Needs "Pull requests: Read and write". */
+  async openPullRequest(installationId: string, repoId: string, pr: { title: string; head: string; base: string; body: string; draft?: boolean }): Promise<{ number: number; url: string }> {
+    const token = await this.installationToken(installationId);
+    const r = await this.call<{ number: number; html_url: string }>(`/repositories/${encodeURIComponent(repoId)}/pulls`, token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: pr.title, head: pr.head, base: pr.base, body: pr.body, draft: pr.draft ?? false }),
+    });
+    return { number: r.number, url: r.html_url };
   }
 
   /** The installation's account (who owns it), for display. */

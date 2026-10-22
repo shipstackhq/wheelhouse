@@ -38,7 +38,7 @@ describe("checkCsrf", () => {
   });
 
   test("without an Origin the Referer decides", () => {
-    assert.deepEqual(verdict({ origin: undefined, referer: "https://wh.example/p/WH/board?x=1" }), { ok: true });
+    assert.deepEqual(verdict({ origin: undefined, referer: "https://wh.example/t/WH/board?x=1" }), { ok: true });
     assert.deepEqual(verdict({ origin: undefined, referer: "https://evil.example/page" }), { ok: false, reason: "origin" });
     assert.deepEqual(verdict({ origin: "https://wh.example", referer: "https://evil.example/" }), { ok: true }, "the Origin wins when both are sent");
   });

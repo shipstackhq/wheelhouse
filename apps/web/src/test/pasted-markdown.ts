@@ -31,7 +31,7 @@ Markdown doesn't have native font-size tags beyond headings, but supports standa
 | API Access | Limited | Standard | Full / Custom |
 | Monthly Price | **$0** | **$19** | **Custom** |
 
-#### 2. Project Task Tracker
+#### 2. Team Task Tracker
 
 | Task ID | Description | Assignee | Status | Due Date |
 | :--- | :--- | :--- | :--- | :--- |

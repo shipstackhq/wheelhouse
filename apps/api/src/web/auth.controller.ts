@@ -28,12 +28,12 @@ export class AuthController {
     return this.begin(userId, res);
   }
 
-  /** Create an account and a team they own. 201 with the signed-in person; the session cookie is set. */
+  /** Create an account and a workspace they own. 201 with the signed-in person; the session cookie is set. */
   @Post("signup")
   @HttpCode(201)
   async signup(@Req() req: RawTextRequest, @Res({ passthrough: true }) res: Response) {
     const b = jsonBody(req);
-    const { userId } = await signUp({ name: str(b.name), email: str(b.email), password: str(b.password), team: str(b.team) }, clientIp(toHeaders(req.headers)));
+    const { userId } = await signUp({ name: str(b.name), email: str(b.email), password: str(b.password), workspace: str(b.workspace) }, clientIp(toHeaders(req.headers)));
     return this.begin(userId, res);
   }
 

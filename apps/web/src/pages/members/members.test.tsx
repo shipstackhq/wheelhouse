@@ -2,16 +2,16 @@ import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiError, renderApp } from "../../test/harness";
-import { projectMembers } from "../../test/data";
+import { teamMembers } from "../../test/data";
 
-const url = "/api/app/projects/AA/members";
-const open = (data = projectMembers(), setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp("/p/AA/members", (s) => (s.on(`GET ${url}`, data), setup(s)));
+const url = "/api/app/teams/AA/members";
+const open = (data = teamMembers(), setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp("/t/AA/members", (s) => (s.on(`GET ${url}`, data), setup(s)));
 const rowOf = async (name: string) => (await within(await screen.findByRole("main")).findByText(name)).closest("li") as HTMLElement;
 
-describe("the project members page", () => {
-  test("lists who can open the project with their roles, marks you, and says whose project it is", async () => {
+describe("the team members page", () => {
+  test("lists who can open the team with their roles, marks you, and says whose team it is", async () => {
     open();
-    await screen.findByRole("heading", { level: 1, name: "Project members" });
+    await screen.findByRole("heading", { level: 1, name: "Team members" });
     expect(screen.getByText(/Only the people listed here can open/)).toBeTruthy();
     const ada = await rowOf("Ada Lovelace");
     expect(within(ada).getByText("(you)")).toBeTruthy();
@@ -28,11 +28,11 @@ describe("the project members page", () => {
     expect(within(await rowOf("Grace Hopper")).getByRole("combobox", { name: "Role of Grace Hopper" })).toBeTruthy();
   });
 
-  test("a project editor only reads: no add button, roles as plain text, and can only leave", async () => {
-    open(projectMembers({ myRole: "editor" }));
-    await screen.findByRole("heading", { level: 1, name: "Project members" });
+  test("a team editor only reads: no add button, roles as plain text, and can only leave", async () => {
+    open(teamMembers({ myRole: "editor" }));
+    await screen.findByRole("heading", { level: 1, name: "Team members" });
     expect(screen.queryByRole("button", { name: "+ Add member" })).toBeNull();
-    expect(screen.getByText(/Ask a project admin/)).toBeTruthy();
+    expect(screen.getByText(/Ask a team admin/)).toBeTruthy();
     const grace = await rowOf("Grace Hopper");
     expect(within(grace).queryByRole("combobox")).toBeNull();
     expect(within(grace).getByText("editor")).toBeTruthy();
@@ -40,8 +40,8 @@ describe("the project members page", () => {
     expect(within(await rowOf("Ada Lovelace")).getByRole("button", { name: "Leave" })).toBeTruthy(); // anyone may leave their own row
   });
 
-  test("+ Add member lists workspace people not in the project; Add sends the chosen role", async () => {
-    const { server } = open(projectMembers(), (s) => {
+  test("+ Add member lists workspace people not in the team; Add sends the chosen role", async () => {
+    const { server } = open(teamMembers(), (s) => {
       s.on(`GET ${url}/addable`, { people: [{ userId: "u9", name: "Edsger Dijkstra", email: "e@example.test", workspaceRole: "member" }] });
       s.on(`POST ${url}`, { member: { userId: "u9", role: "viewer" } });
     });
@@ -56,14 +56,14 @@ describe("the project members page", () => {
     expect(server.sent(`POST ${url}`)[0].body).toEqual({ userId: "u9", role: "viewer" });
   });
 
-  test("when everyone is already in, it says to invite people from the Team page", async () => {
-    open(projectMembers(), (s) => s.on(`GET ${url}/addable`, { people: [] }));
+  test("when everyone is already in, it says to invite people from the Workspace page", async () => {
+    open(teamMembers(), (s) => s.on(`GET ${url}/addable`, { people: [] }));
     await userEvent.setup().click(await screen.findByRole("button", { name: "+ Add member" }));
-    expect(await screen.findByText(/Everyone in the workspace is already in this project/)).toBeTruthy();
+    expect(await screen.findByText(/Everyone in the workspace is already in this team/)).toBeTruthy();
   });
 
   test("changing a role sends a PATCH for that person", async () => {
-    const { server } = open(projectMembers(), (s) => s.on(`PATCH ${url}/u2`, { member: { userId: "u2", role: "viewer" } }));
+    const { server } = open(teamMembers(), (s) => s.on(`PATCH ${url}/u2`, { member: { userId: "u2", role: "viewer" } }));
     const user = userEvent.setup();
     await user.click(within(await rowOf("Grace Hopper")).getByRole("combobox", { name: "Role of Grace Hopper" }));
     await user.click(await screen.findByRole("option", { name: "viewer" }));
@@ -72,7 +72,7 @@ describe("the project members page", () => {
   });
 
   test("Remove asks first, then deletes that person only", async () => {
-    const { server } = open(projectMembers(), (s) => s.on(`DELETE ${url}/u3`, { ok: true }));
+    const { server } = open(teamMembers(), (s) => s.on(`DELETE ${url}/u3`, { ok: true }));
     const user = userEvent.setup();
     await user.click(within(await rowOf("Alan Turing")).getByRole("button", { name: "Remove" }));
     const ask = await screen.findByRole("alertdialog");
@@ -85,15 +85,15 @@ describe("the project members page", () => {
   });
 
   test("a refusal is shown in the server's words", async () => {
-    open(projectMembers(), (s) => s.on(`PATCH ${url}/u2`, apiError(409, "conflict", "A project needs at least one admin. Name another admin first.")));
+    open(teamMembers(), (s) => s.on(`PATCH ${url}/u2`, apiError(409, "conflict", "A team needs at least one admin. Name another admin first.")));
     const user = userEvent.setup();
     await user.click(within(await rowOf("Grace Hopper")).getByRole("combobox", { name: "Role of Grace Hopper" }));
     await user.click(await screen.findByRole("option", { name: "admin" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("A project needs at least one admin. Name another admin first.");
+    expect((await screen.findByRole("alert")).textContent).toBe("A team needs at least one admin. Name another admin first.");
   });
 
-  test("a project you are not in is a plain not found", async () => {
-    renderApp("/p/AA/members", (s) => s.on(`GET ${url}`, apiError(404, "not_found", "Project AA not found")));
+  test("a team you are not in is a plain not found", async () => {
+    renderApp("/t/AA/members", (s) => s.on(`GET ${url}`, apiError(404, "not_found", "Team AA not found")));
     expect(await screen.findByText(/not found/i)).toBeTruthy();
   });
 });

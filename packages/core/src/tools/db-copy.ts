@@ -27,8 +27,25 @@ const require = createRequire(import.meta.url);
 const isUrl = (s: string) => /^postgres(ql)?:\/\//i.test(s);
 const qi = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-/** Open a database: `postgres://…` or the path of a PGlite directory (or `memory://`). With `migrate`, bring it to the current schema first. */
-export async function openConn(target: string, o: { migrate?: boolean; create?: boolean } = {}): Promise<Conn> {
+/**
+ * The migrations folder cut short: only the migrations whose tag starts with a number up to `through` (for example "0020").
+ * A rehearsal uses it to bring a copy to the state just before a migration, so a preflight can look at the real data first.
+ */
+export function migrationsThrough(through: string): string {
+  const src = migrationsFolder();
+  const journal = JSON.parse(fs.readFileSync(path.join(src, "meta", "_journal.json"), "utf8")) as { entries: { tag: string }[] };
+  const entries = journal.entries.filter((e) => e.tag.slice(0, through.length) <= through);
+  if (!entries.length) throw new Error(`no migration is numbered ${through} or lower`);
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wh-migrations-"));
+  fs.mkdirSync(path.join(tmp, "meta"));
+  for (const e of entries) fs.copyFileSync(path.join(src, `${e.tag}.sql`), path.join(tmp, `${e.tag}.sql`));
+  fs.writeFileSync(path.join(tmp, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }, null, 2));
+  return tmp;
+}
+
+/** Open a database: `postgres://…` or the path of a PGlite directory (or `memory://`). With `migrate`, bring it to the current schema first (or only `through` a migration number). */
+export async function openConn(target: string, o: { migrate?: boolean; create?: boolean; through?: string } = {}): Promise<Conn> {
+  const folder = o.migrate && o.through ? migrationsThrough(o.through) : migrationsFolder();
   let conn: Conn;
   if (isUrl(target)) {
     const postgres = require("postgres") as typeof import("postgres");
@@ -44,7 +61,7 @@ export async function openConn(target: string, o: { migrate?: boolean; create?: 
     if (o.migrate) {
       const { drizzle } = require("drizzle-orm/postgres-js") as typeof import("drizzle-orm/postgres-js");
       const { migrate } = await import("drizzle-orm/postgres-js/migrator");
-      await migrate(drizzle(sql, { schema }), { migrationsFolder: migrationsFolder() });
+      await migrate(drizzle(sql, { schema }), { migrationsFolder: folder });
     }
   } else {
     const memory = target.startsWith("memory://");
@@ -65,7 +82,7 @@ export async function openConn(target: string, o: { migrate?: boolean; create?: 
       const { drizzle } = require("drizzle-orm/pglite") as typeof import("drizzle-orm/pglite");
       const { migrate } = await import("drizzle-orm/pglite/migrator");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await migrate(drizzle(client, { schema }) as any, { migrationsFolder: migrationsFolder() });
+      await migrate(drizzle(client, { schema }) as any, { migrationsFolder: folder });
     }
   }
   return conn;
@@ -76,9 +93,14 @@ export async function openConn(target: string, o: { migrate?: boolean; create?: 
 export type TableInfo = { name: string; parents: string[] };
 
 /** The application's tables (every table of the public schema) with the tables each one points at, parents before children. */
+/**
+ * The tables, parents first. A foreign key that is DEFERRABLE does not count: it is checked when the transaction commits, and an
+ * import is one transaction, so two tables that point at each other through one (projects and project_teams: a project's lead team
+ * must be one of its teams) can be loaded in either order.
+ */
 export async function tablesInOrder(q: Q): Promise<TableInfo[]> {
   const names = (await q(`select c.relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' order by c.relname`)).map((r) => String(r.name));
-  const fks = await q(`select conrelid::regclass::text as child, confrelid::regclass::text as parent from pg_constraint where contype = 'f' and connamespace = 'public'::regnamespace`);
+  const fks = await q(`select conrelid::regclass::text as child, confrelid::regclass::text as parent from pg_constraint where contype = 'f' and not condeferrable and connamespace = 'public'::regnamespace`);
   const parents = new Map<string, Set<string>>(names.map((n) => [n, new Set()]));
   for (const f of fks) {
     const child = String(f.child).replaceAll('"', "");
@@ -266,8 +288,8 @@ export async function integrity(q: Q): Promise<Finding[]> {
   const [sess] = await q(`select count(*)::int as n, count(*) filter (where id !~ '^[0-9a-f]{64}$')::int as bad from sessions`);
   if (Number(sess.bad) > 0) err("sessions", `${sess.bad} session id(s) are not a sha256 hex string`);
   else ok("sessions", `${sess.n} session(s), every id a sha256`);
-  const [people] = await q(`select (select count(*) from users)::int as u, (select count(*) from teams)::int as t, (select count(*) from memberships)::int as m`);
-  ok("people", `${people.u} user(s), ${people.t} team(s), ${people.m} membership(s)`);
+  const [people] = await q(`select (select count(*) from users)::int as u, (select count(*) from workspaces)::int as t, (select count(*) from memberships)::int as m`);
+  ok("people", `${people.u} user(s), ${people.t} workspace(s), ${people.m} membership(s)`);
   return out;
 }
 

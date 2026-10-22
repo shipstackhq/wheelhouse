@@ -125,7 +125,7 @@ describe("installing and updating", () => {
 
   test("CLEAR_CACHES (sent before signing out) wipes the pages cache and puts the offline page back", async () => {
     const pages = await sw.caches.open("wh-pages-v2");
-    await pages.put("/p/WH", new Response("a person's page"));
+    await pages.put("/t/WH", new Response("a person's page"));
     await sw.message("CLEAR_CACHES");
     expect(sw.caches.urls).toEqual(["wh-pages-v2 /offline.html"]);
   });
@@ -138,9 +138,9 @@ describe("what it leaves alone", () => {
     ["a DELETE", "/api/app/keys/1", { method: "DELETE" }],
     ["an API read", "/api/app/me", { mode: "cors" }],
     ["the live stream", "/api/stream", {}],
-    ["a project's live stream", "/api/projects/WH/stream", {}],
+    ["a team's live stream", "/api/teams/WH/stream", {}],
     ["MCP", "/mcp", {}],
-    ["a browser navigation to the API (GitHub install, callback)", "/api/github/install?project=WH", { mode: "navigate" }],
+    ["a browser navigation to the API (GitHub install, callback)", "/api/github/install?team=WH", { mode: "navigate" }],
     ["another origin's asset", "https://cdn.example/assets/app.js", {}],
     ["another origin's page", "https://evil.example/", { mode: "navigate" }],
     ["the manifest", "/manifest.webmanifest", {}],
@@ -180,7 +180,7 @@ describe("built files (/assets/)", () => {
 });
 
 describe("pages (navigation)", () => {
-  test.each(["/", "/p/WH", "/p/WH/docs", "/team", "/login"])("%s comes from the network and is never stored", async (url) => {
+  test.each(["/", "/t/WH", "/t/WH/docs", "/workspace", "/login"])("%s comes from the network and is never stored", async (url) => {
     sw.net.respond = () => new Response("<html>a person's page</html>", { headers: { "content-type": "text/html" } });
     const r = await sw.fetch(url, { mode: "navigate" });
     expect(r.intercepted).toBe(true);
@@ -190,22 +190,22 @@ describe("pages (navigation)", () => {
 
   test("redirects and errors pass through untouched and are not stored", async () => {
     sw.net.respond = () => Response.redirect(`${ORIGIN}/login`, 302);
-    expect((await sw.fetch("/p/WH", { mode: "navigate" })).response!.status).toBe(302);
+    expect((await sw.fetch("/t/WH", { mode: "navigate" })).response!.status).toBe(302);
     sw.net.respond = () => new Response("down", { status: 503 });
-    expect((await sw.fetch("/p/WH", { mode: "navigate" })).response!.status).toBe(503);
+    expect((await sw.fetch("/t/WH", { mode: "navigate" })).response!.status).toBe(503);
     expect(sw.caches.urls).toEqual(["wh-pages-v2 /offline.html"]);
   });
 
   test("with no connection, the static offline page is shown", async () => {
     sw.net.respond = () => Promise.reject(new TypeError("Failed to fetch"));
-    const r = await sw.fetch("/p/WH/docs", { mode: "navigate" });
+    const r = await sw.fetch("/t/WH/docs", { mode: "navigate" });
     expect(await r.response!.text()).toBe("<html>offline page</html>");
   });
 
   test("with no connection and no offline page, the browser's own error is shown", async () => {
     sw.caches.stores.clear();
     sw.net.respond = () => Promise.reject(new TypeError("Failed to fetch"));
-    const r = await sw.fetch("/p/WH", { mode: "navigate" });
+    const r = await sw.fetch("/t/WH", { mode: "navigate" });
     expect(r.response!.type).toBe("error");
   });
 });
