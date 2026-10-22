@@ -49,3 +49,5 @@ tests/contract/.work/
 
 # web app build output
 /apps/web/dist
+
+.next
