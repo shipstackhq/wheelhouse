@@ -197,12 +197,18 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
   const status = runStatus(j);
   const [error, setError] = useState<string | null>(null);
   const [again, setAgain] = useState(false);
-  // A new run with the same device, repository, starting branch and model: the old one stays in the list as it was.
-  const runAgain = async () => {
+  // Same device and model. Continue carries on from this run's pushed branch; Start over makes a fresh branch from the same base.
+  // Either way this run stays in the list as it was.
+  const rerun = async (continueThis: boolean) => {
     setAgain(true);
     setError(null);
     try {
-      await api.runs.start(issueRef, { deviceId: j.deviceId, repositoryId: j.repositoryId ?? undefined, model: j.model, baseBranch: j.baseBranch ?? undefined });
+      await api.runs.start(
+        issueRef,
+        continueThis
+          ? { deviceId: j.deviceId, model: j.model, continuesJobId: j.id }
+          : { deviceId: j.deviceId, repositoryId: j.repositoryId ?? undefined, model: j.model, baseBranch: j.baseBranch ?? undefined },
+      );
       await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
     } catch (e) {
       setError(describeFailure(e));
@@ -210,6 +216,8 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
       setAgain(false);
     }
   };
+  // Only a run that pushed something has work to continue from.
+  const canContinue = !active && j.result.pushed === true;
   return (
     <li className="px-3 py-2">
       <div className="flex items-start gap-3">
@@ -224,7 +232,7 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
           >
             {j.branch}
           </button>
-          {j.baseBranch && <div className="truncate text-xs text-muted">from {j.baseBranch}</div>}
+          {j.baseBranch && <div className="truncate text-xs text-muted">{j.continuesJobId ? `continues an earlier run · into ${j.baseBranch}` : `from ${j.baseBranch}`}</div>}
           <div className="truncate text-xs">
             <RunSummary job={j} />
           </div>
@@ -236,9 +244,16 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
           </div>
         </div>
         {!active && (
-          <button type="button" className="btn shrink-0 py-0.5 text-xs" disabled={again} onClick={() => void runAgain()}>
-            Run again
-          </button>
+          <span className="flex shrink-0 gap-1">
+            {canContinue && (
+              <button type="button" className="btn py-0.5 text-xs" disabled={again} onClick={() => void rerun(true)} title="A new run on this branch, from what this run pushed">
+                Continue
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost py-0.5 text-xs" disabled={again} onClick={() => void rerun(false)} title="A new run on a fresh branch from the same starting branch">
+              Start over
+            </button>
+          </span>
         )}
         {active && !j.cancelRequested && (
           <button

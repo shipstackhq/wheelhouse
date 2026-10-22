@@ -17,6 +17,7 @@ const job = (id: string, over: Partial<JobView> = {}): JobView => ({
   repositoryName: "wheelhouse",
   result: { pushed: true, diffStats: { files: 2, insertions: 13, deletions: 2 }, costUsd: 0.02 },
   delivery: "pushed",
+  continuesJobId: null,
   error: null,
   cancelRequested: false,
   createdAt: new Date().toISOString(),
@@ -55,21 +56,34 @@ describe("runs on a device", () => {
     expect(screen.queryByText("done")).toBeNull();
   });
 
-  test("Run again starts a new run with the same device, repository, starting branch and model", async () => {
+  test("Continue carries on from the run's branch; Start over makes a fresh run from the same starting branch", async () => {
     const { server } = mount([job("e5", { delivery: "pr_failed", result: { pushed: true, pullRequestError: "no" }, model: "sonnet", baseBranch: "ui-changes" })], (s) =>
       s.on("POST /api/app/issues/WH-1/jobs", { job: job("f6", { state: "offered" }) }),
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Run again" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start over" }));
     await screen.findByRole("list", { name: "Runs" });
-    expect(server.sent("POST /api/app/issues/WH-1/jobs")[0].body).toEqual({ deviceId: "dev-1", repositoryId: "repo-1", model: "sonnet", baseBranch: "ui-changes" });
+    const sent = server.sent("POST /api/app/issues/WH-1/jobs").map((c) => c.body);
+    expect(sent).toEqual([
+      { deviceId: "dev-1", model: "sonnet", continuesJobId: "e5" },
+      { deviceId: "dev-1", repositoryId: "repo-1", model: "sonnet", baseBranch: "ui-changes" },
+    ]);
   });
 
-  test("a run in progress offers Stop, not Run again; a refusal from the server is shown", async () => {
+  test("a run that pushed nothing can only start over; a continuation says so", async () => {
+    mount([job("n1", { delivery: "none", result: { pushed: false } }), job("n2", { continuesJobId: "n0" })]);
+    const items = within(await screen.findByRole("list", { name: "Runs" })).getAllByRole("listitem");
+    expect(within(items[0]).queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(within(items[0]).getByRole("button", { name: "Start over" })).toBeTruthy();
+    expect(within(items[1]).getByText(/continues an earlier run/)).toBeTruthy();
+  });
+
+  test("a run in progress offers Stop, not a rerun; a refusal from the server is shown", async () => {
     mount([job("g7", { state: "running", delivery: null, result: {} }), job("h8")], (s) => s.on("POST /api/app/issues/WH-1/jobs", apiError(409, "conflict", "Atharva's MacBook Pro is offline.")));
     await screen.findByRole("list", { name: "Runs" });
     expect(screen.getAllByRole("button", { name: "Stop" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Run again" })).toHaveLength(1);
-    await userEvent.click(screen.getByRole("button", { name: "Run again" }));
+    expect(screen.getAllByRole("button", { name: "Continue" })).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("offline");
   });

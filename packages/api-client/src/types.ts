@@ -685,6 +685,8 @@ export type JobView = {
   branch: string;
   /** The branch it started from; null for runs from before this was recorded. */
   baseBranch: string | null;
+  /** The run this one continues (same branch, from its commits); null for a fresh run. */
+  continuesJobId: string | null;
   deviceId: string;
   deviceName: string | null;
   repositoryId: string | null;
