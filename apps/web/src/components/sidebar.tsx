@@ -85,12 +85,14 @@ function currentSection(path: string, key: string): string {
 export function Sidebar({
   teams,
   workspaceName,
+  workspaceImageUrl,
   isAdmin,
   profile,
   collapsed,
 }: {
   teams: TeamItem[];
   workspaceName: string;
+  workspaceImageUrl?: string | null;
   isAdmin: boolean;
   /** The icon-only rail, tablet and up. The app's header holds the toggle. */
   collapsed: boolean;
@@ -197,7 +199,7 @@ export function Sidebar({
     <>
       <SidebarFrame id="app-sidebar" open={open} onOpen={() => setOpen(true)} onClose={() => setOpen(false)} collapsed={collapsed}>
         <div className={clsx("flex items-center justify-between px-3 py-3", collapsed && "md:flex-col md:gap-3 md:px-0")}>
-          <WorkspaceSwitcher name={workspaceName} collapsed={collapsed} />
+          <WorkspaceSwitcher name={workspaceName} imageUrl={workspaceImageUrl} collapsed={collapsed} />
           <SidebarCloseButton onClose={() => setOpen(false)} />
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">

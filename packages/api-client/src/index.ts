@@ -90,8 +90,10 @@ import type {
 export type * from "./types";
 
 export type Me = {
-  user: { id: string; name: string; email: string };
-  workspace: { id: string; name: string };
+  /** `avatarUrl`: the profile picture, or null (show initials). */
+  user: { id: string; name: string; email: string; avatarUrl?: string | null };
+  /** `imageUrl`: the workspace's custom image, or null (show its initial). */
+  workspace: { id: string; name: string; imageUrl?: string | null };
   role: Role;
   /** The person's labels within the workspace (for example "eng"). */
   tags: string[];
@@ -424,7 +426,16 @@ export function createApiClient(options: ApiClientOptions = {}) {
     /** Change your own password. */
     changePassword: (input: { current: string; next: string }) => request<{ ok: true }>("POST", "/api/app/me/password", input),
 
+    /** Your profile picture: `data` is the image, base64 (PNG, JPEG, WebP or GIF, 2 MB at most). */
+    avatar: {
+      set: (data: string) => request<{ avatarUrl: string | null }>("PUT", "/api/app/me/avatar", { data }),
+      remove: () => request<{ avatarUrl: null }>("DELETE", "/api/app/me/avatar"),
+    },
+
     workspace: {
+      /** Owners and admins: the workspace's image, as for `avatar`. */
+      setImage: (data: string) => request<{ imageUrl: string | null }>("PUT", "/api/app/workspace/image", { data }),
+      removeImage: () => request<{ imageUrl: null }>("DELETE", "/api/app/workspace/image"),
       overview: () => request<WorkspaceOverview>("GET", "/api/app/workspace"),
       /** Owners only. `tags` as a list or a comma-separated string. */
       updateMember: async (userId: string, input: { role: Role; tags: string[] | string }) =>

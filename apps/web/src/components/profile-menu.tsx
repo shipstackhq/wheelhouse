@@ -24,12 +24,13 @@ function hue(seed: string) {
 /** DiceBear "initials" avatar: initials and background colour are derived from the seed. */
 export const avatarUrl = (seed: string) => `https://api.dicebear.com/10.x/initials/svg?seed=${encodeURIComponent(seed)}`;
 
-export function Avatar({ name, email, size = 32 }: { name: string; email: string; size?: number }) {
+/** `imageUrl`: the person's own uploaded picture; without one (or if it fails to load) the generated initials avatar. */
+export function Avatar({ name, email, size = 32, imageUrl }: { name: string; email: string; size?: number; imageUrl?: string | null }) {
   const [failed, setFailed] = useState(false);
   if (!failed) {
     return (
       <img
-        src={avatarUrl(name.trim() || email)}
+        src={imageUrl || avatarUrl(name.trim() || email)}
         alt=""
         aria-hidden
         width={size}
@@ -55,7 +56,7 @@ export function Avatar({ name, email, size = 32 }: { name: string; email: string
 }
 
 /** `compact`: the icon-only sidebar rail (tablet and up), where only the avatar fits; the menu it opens is the same. */
-export function ProfileMenu(props: { name: string; email: string; role: Role; tags: string[]; workspace: string; compact?: boolean }) {
+export function ProfileMenu(props: { name: string; email: string; role: Role; tags: string[]; workspace: string; imageUrl?: string | null; compact?: boolean }) {
   const compact = !!props.compact;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
@@ -81,7 +82,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
         )}
         aria-label="Account menu"
       >
-        <Avatar name={props.name} email={props.email} />
+        <Avatar name={props.name} email={props.email} imageUrl={props.imageUrl} />
         <span className={clsx("min-w-0 flex-1", compact && "md:hidden")}>
           <span className="block truncate text-sm text-fg">{props.name}</span>
           <span className="block truncate text-xs text-muted">{props.email}</span>
@@ -96,7 +97,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
           className="z-50 w-64 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl"
         >
           <div className="flex items-center gap-3 p-3">
-            <Avatar name={props.name} email={props.email} size={40} />
+            <Avatar name={props.name} email={props.email} size={40} imageUrl={props.imageUrl} />
             <div className="min-w-0">
               <div className="truncate font-medium">{props.name}</div>
               <div className="truncate text-xs text-muted">{props.email}</div>

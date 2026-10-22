@@ -65,6 +65,8 @@ export const users = table("users", {
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
+  // Object-storage key of the profile picture (lib/storage.ts). Null: initials.
+  avatarKey: text("avatar_key"),
   createdAt: createdAt(),
 }, (t) => [
   // `email` is unique as written; this makes it unique however it is cased, so the code lower-casing it is not what holds it.
@@ -88,6 +90,8 @@ export const workspaces = table("workspaces", {
   // Seats, owner included. Null: the instance default (MAX_WORKSPACE_MEMBERS).
   seatLimit: integer("seat_limit"),
   settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
+  // Object-storage key of the workspace's image (lib/storage.ts). Null: its initial.
+  imageKey: text("image_key"),
   createdAt: createdAt(),
   // Instance-admin suspension (WH-52): a suspended workspace's members cannot sign in and its API keys are refused.
   // Reversible: nothing is deleted, restoring clears these three columns.

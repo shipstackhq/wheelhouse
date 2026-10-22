@@ -808,6 +808,7 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
 
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
 const DB_FILE_AUDIT: Record<string, string> = {
+  "packages/core/src/lib/images.ts": "profile pictures and the workspace image. Writes touch only the caller's own user row, or (owners and admins) the row of the workspace the session is working in; both ids come from the verified session, never from the request. Reads return a workspace's image only for the caller's own workspace, and a person's picture only when that person is a member of the caller's workspace (the join is on the session's workspace id); anything else is not_found (tested in images.test.ts)",
   "packages/core/src/lib/daemon.ts": "the agent daemon. People: devices are selected by owner id AND the caller's workspace id (another person's or another workspace's device is not_found); runs go through resolveIssue(actor), repositories through the issue's own team, a job is read only through its issue's team (tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused). Devices: every request carries a token that names one device, and a device reaches only its own jobs and messages (jobId AND deviceId in every query; another device's job is not_found, tested). Pairing creates the device in the approving person's own workspace",
   "packages/core/src/lib/daemon-crypto.ts": "reads and writes only the instance's own signing key (instance_keys); no workspace data",
   "apps/api/src/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
@@ -860,6 +861,11 @@ describe("new entry points must be audited", () => {
  * "scoped" means: the person or key is resolved first, and everything after is the service layer, which takes the actor.
  */
 const API_ROUTE_AUDIT: Record<string, string> = {
+  "PUT /api/app/me/avatar": "setAvatarAs(human): the caller's own user row, from the session; nothing in the request names whose picture it is",
+  "DELETE /api/app/me/avatar": "setAvatarAs(human, null): the caller's own user row only",
+  "PUT /api/app/workspace/image": "setWorkspaceImageAs(human): the session's workspace only; owners and admins (canManagePeople), others get forbidden",
+  "DELETE /api/app/workspace/image": "setWorkspaceImageAs(human, null): the session's workspace only; owners and admins",
+  "GET /api/app/images/:kind/:id": "readImageAs(human): a workspace image only when :id is the caller's own workspace; a person's picture only when they are a member of the caller's workspace; anything else is not_found",
   // The agent daemon (daemon.ts). /api/daemon is for devices: pairing and the token exchange are the way in and need no session;
   // everything else needs a device token, which names exactly one device, and reaches only that device's own jobs and messages.
   "POST /api/daemon/pair/start": "no workspace data: stores a pending pairing (the machine's public key and name) behind a random code; rate limited per address",

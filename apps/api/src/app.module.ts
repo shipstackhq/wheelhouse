@@ -28,12 +28,13 @@ import { RepositoriesController } from "./web/repositories.controller";
 import { CyclesController } from "./web/cycles.controller";
 import { ProjectsController } from "./web/projects.controller";
 import { InitiativesController } from "./web/initiatives.controller";
+import { ImagesController } from "./web/images.controller";
 import { MeController } from "./web/me.controller";
 import { TeamMembersController } from "./web/team-members.controller";
 import { TeamsController } from "./web/teams.controller";
 
 @Module({
-  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, StatusesController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController, DaemonController, DevicesController],
+  controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ImagesController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, StatusesController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController, DaemonController, DevicesController],
   providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard, DeviceGuard, DaemonSweep],
 })
 export class AppModule {}
