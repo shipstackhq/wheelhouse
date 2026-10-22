@@ -334,14 +334,15 @@ import {
 } from "@remixicon/react";
 import type { TeamIconName } from "@wheelhouse/core/lib/team-icon";
 
-export const TEAM_ICONS: Record<TeamIconName, RemixiconComponentType> = {
-  "rocket-2": RiRocket2Fill, "box-3": RiBox3Fill, "flag-2": RiFlag2Fill, star: RiStarFill, heart: RiHeartFill, flashlight: RiFlashlightFill, fire: RiFireFill, leaf: RiLeafFill, plant: RiPlantFill,
-  global: RiGlobalFill, cloud: RiCloudFill, shield: RiShieldFill, lock: RiLockFill, key: RiKey2Fill, mail: RiMailFill, "chat-1": RiChat1Fill, "bank-card": RiBankCardFill, wallet: RiWalletFill,
-  "shopping-cart": RiShoppingCartFill, "store-2": RiStore2Fill, tools: RiToolsFill, "settings-3": RiSettings3Fill, "code-box": RiCodeBoxFill, "terminal-box": RiTerminalBoxFill, bug: RiBugFill,
-  "database-2": RiDatabase2Fill, server: RiServerFill, cpu: RiCpuFill, palette: RiPaletteFill, brush: RiBrushFill, camera: RiCameraFill, "music-2": RiMusic2Fill, gamepad: RiGamepadFill, book: RiBook2Fill,
-  "graduation-cap": RiGraduationCapFill, stethoscope: RiStethoscopeFill, plane: RiPlaneFill, car: RiCarFill, ship: RiShipFill, home: RiHome2Fill, "building-2": RiBuilding2Fill, "map-pin": RiMapPin2Fill,
-  "compass-3": RiCompass3Fill, lightbulb: RiLightbulbFill, magic: RiMagicFill, trophy: RiTrophyFill, medal: RiMedalFill, "line-chart": RiLineChartFill, "pie-chart": RiPieChartFill, "bar-chart": RiBarChartFill,
-  time: RiTimeFill, calendar: RiCalendarFill, anchor: RiAnchorFill, puzzle: RiPuzzleFill, user: RiUserFill, team: RiTeamFill, "customer-service": RiCustomerService2Fill, megaphone: RiMegaphoneFill, gift: RiGiftFill, sun: RiSunFill,
+// Wrapped like every other icon, so a team's icon sizes with the text it sits in (the sidebar's, the picker's), not Remix's 24px default.
+export const TEAM_ICONS: Record<TeamIconName, ReturnType<typeof icon>> = {
+  "rocket-2": icon(RiRocket2Fill), "box-3": icon(RiBox3Fill), "flag-2": icon(RiFlag2Fill), star: icon(RiStarFill), heart: icon(RiHeartFill), flashlight: icon(RiFlashlightFill), fire: icon(RiFireFill), leaf: icon(RiLeafFill), plant: icon(RiPlantFill),
+  global: icon(RiGlobalFill), cloud: icon(RiCloudFill), shield: icon(RiShieldFill), lock: icon(RiLockFill), key: icon(RiKey2Fill), mail: icon(RiMailFill), "chat-1": icon(RiChat1Fill), "bank-card": icon(RiBankCardFill), wallet: icon(RiWalletFill),
+  "shopping-cart": icon(RiShoppingCartFill), "store-2": icon(RiStore2Fill), tools: icon(RiToolsFill), "settings-3": icon(RiSettings3Fill), "code-box": icon(RiCodeBoxFill), "terminal-box": icon(RiTerminalBoxFill), bug: icon(RiBugFill),
+  "database-2": icon(RiDatabase2Fill), server: icon(RiServerFill), cpu: icon(RiCpuFill), palette: icon(RiPaletteFill), brush: icon(RiBrushFill), camera: icon(RiCameraFill), "music-2": icon(RiMusic2Fill), gamepad: icon(RiGamepadFill), book: icon(RiBook2Fill),
+  "graduation-cap": icon(RiGraduationCapFill), stethoscope: icon(RiStethoscopeFill), plane: icon(RiPlaneFill), car: icon(RiCarFill), ship: icon(RiShipFill), home: icon(RiHome2Fill), "building-2": icon(RiBuilding2Fill), "map-pin": icon(RiMapPin2Fill),
+  "compass-3": icon(RiCompass3Fill), lightbulb: icon(RiLightbulbFill), magic: icon(RiMagicFill), trophy: icon(RiTrophyFill), medal: icon(RiMedalFill), "line-chart": icon(RiLineChartFill), "pie-chart": icon(RiPieChartFill), "bar-chart": icon(RiBarChartFill),
+  time: icon(RiTimeFill), calendar: icon(RiCalendarFill), anchor: icon(RiAnchorFill), puzzle: icon(RiPuzzleFill), user: icon(RiUserFill), team: icon(RiTeamFill), "customer-service": icon(RiCustomerService2Fill), megaphone: icon(RiMegaphoneFill), gift: icon(RiGiftFill), sun: icon(RiSunFill),
 };
 
 // The Claude mark, for naming a Claude model (the run picker and each run's row).
