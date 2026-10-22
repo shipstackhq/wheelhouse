@@ -84,5 +84,5 @@ test("the briefing line mirrors the same done/not-done flags for every item", ()
 
 test("every unmet item links to the team it belongs to", () => {
   const s = checklistStatus(base);
-  for (const item of s.items) assert.ok(item.href.startsWith("/t/WH") || item.href === "/agents" || item.href === "/workspace");
+  for (const item of s.items) assert.ok(item.href.startsWith("/t/WH") || item.href === "/settings/integrations/github?team=WH" || item.href === "/agents" || item.href === "/workspace");
 });

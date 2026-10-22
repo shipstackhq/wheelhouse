@@ -14,7 +14,8 @@ import { OnboardingPage } from "../pages/onboarding";
 import { CyclePage, CyclesPage } from "../pages/cycles";
 import { InitiativePage, InitiativesPage } from "../pages/initiatives";
 import { ProjectPage, ProjectsPage } from "../pages/projects";
-import { ReposPage } from "../pages/repos";
+import { IntegrationsPage } from "../pages/integrations";
+import { GithubIntegrationPage } from "../pages/integrations/github/github-page";
 import { MapPage } from "../pages/map";
 import { TeamMembersPage } from "../pages/members";
 import { TeamOverviewPage } from "../pages/overview";
@@ -64,6 +65,8 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "members", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
             { path: "teams", Component: TeamsSettingsPage },
+            { path: "integrations", Component: IntegrationsPage },
+            { path: "integrations/github", Component: GithubIntegrationPage },
             { path: "*", Component: NotFound },
           ],
         },
@@ -104,7 +107,6 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "glossary/:termId", Component: GlossaryPage },
                 { path: "cycles", Component: CyclesPage },
                 { path: "cycles/:number", Component: CyclePage },
-                { path: "repos", Component: ReposPage },
                 { path: "members", Component: TeamMembersPage },
                 { path: "settings", Component: TeamSettingsPage },
                 { path: "onboarding", Component: OnboardingPage },

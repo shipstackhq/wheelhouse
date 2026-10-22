@@ -20,7 +20,7 @@ describe("settings as a screen of its own", () => {
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
   });
 
-  test("the left panel groups Personal and Workspace sections and marks the one you are in", async () => {
+  test("the left panel groups Personal, Workspace and Integrations sections and marks the one you are in", async () => {
     renderApp("/settings/workspace");
     await screen.findByRole("heading", { level: 1, name: "General" });
     const links = panel().getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]);
@@ -32,11 +32,33 @@ describe("settings as a screen of its own", () => {
       ["Members", "/settings/members"],
       ["Agents & API keys", "/settings/agents"],
       ["Teams", "/settings/teams"],
+      ["GitHub", "/settings/integrations/github"],
     ]);
     expect(panel().getByText("Personal")).toBeTruthy();
     expect(panel().getByText("Workspace")).toBeTruthy();
+    expect(panel().getByText("Integrations")).toBeTruthy();
     expect(panel().getByRole("link", { name: "General" }).getAttribute("aria-current")).toBe("page");
     expect(panel().getByRole("link", { name: "Profile" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  test("Integrations lists what can be connected, and GitHub is the repositories page, inside settings", async () => {
+    const overview = renderApp("/settings/integrations");
+    await screen.findByRole("heading", { level: 1, name: "Integrations" });
+    await userEvent.click(screen.getAllByRole("link", { name: "GitHub" }).at(-1)!); // the card, after the sidebar entry
+    await screen.findByRole("heading", { level: 1, name: "GitHub" });
+    expect(await screen.findByRole("heading", { level: 2, name: "Repositories" })).toBeTruthy();
+    expect(panel().getByRole("link", { name: "GitHub" }).getAttribute("aria-current")).toBe("page");
+    overview.unmount();
+  });
+
+  test("the GitHub page works on the team in the address, else the first team, and the team pages no longer have a Repos entry", async () => {
+    const other = renderApp("/settings/integrations/github?team=BB");
+    await screen.findByRole("heading", { level: 1, name: "GitHub" });
+    expect(await screen.findByRole("combobox", { name: "Team" })).toBeTruthy();
+    other.unmount();
+    renderApp("/t/AA");
+    expect(await screen.findByRole("navigation", { name: "Main" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Repos" })).toBeNull();
   });
 
   test("Members and Agents & API keys are the same pages, inside settings", async () => {

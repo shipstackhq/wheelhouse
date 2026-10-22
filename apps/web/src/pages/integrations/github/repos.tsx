@@ -1,10 +1,10 @@
 import { useState, useTransition } from "react";
 import clsx from "clsx";
 import type { Repository } from "@wheelhouse/api-client";
-import { Select, useDialogs } from "../../components/ui";
-import { describeFailure } from "../../lib/form-state";
-import { refreshAll } from "../../lib/refresh";
-import { useServices } from "../../lib/services";
+import { Select, useDialogs } from "../../../components/ui";
+import { describeFailure } from "../../../lib/form-state";
+import { refreshAll } from "../../../lib/refresh";
+import { useServices } from "../../../lib/services";
 
 const LIFECYCLES = ["live", "being_replaced", "planned", "retired"] as const;
 const PROVIDERS = ["local", "github"] as const;

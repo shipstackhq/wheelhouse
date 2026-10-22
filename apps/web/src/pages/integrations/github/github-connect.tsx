@@ -1,11 +1,11 @@
 import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import type { GithubStatus } from "@wheelhouse/api-client";
-import { SubmitButton } from "../../components/submit-button";
-import { describeFailure } from "../../lib/form-state";
-import { githubQuery } from "../../lib/queries";
-import { refreshAll } from "../../lib/refresh";
-import { useServices } from "../../lib/services";
+import { SubmitButton } from "../../../components/submit-button";
+import { describeFailure } from "../../../lib/form-state";
+import { githubQuery } from "../../../lib/queries";
+import { refreshAll } from "../../../lib/refresh";
+import { useServices } from "../../../lib/services";
 import { useState } from "react";
 
 const MESSAGES: Record<string, string> = {

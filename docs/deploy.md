@@ -265,8 +265,8 @@ Then put these in `/opt/apps/wheelhouse/.env` and redeploy (see `.env.example`):
 | `GITHUB_WEBHOOK_SECRET` | the secret you chose |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | the App's *Client ID* and a generated client secret |
 
-Leave all six empty to keep the integration off. Anyone who is a workspace **owner** then opens a team's
-*Repositories* page, presses *Connect GitHub*, installs the App on the repositories they choose, and picks which of them
+Leave all six empty to keep the integration off. Anyone who is a workspace **owner** then opens
+*Settings → Integrations → GitHub*, picks a team, presses *Connect GitHub*, installs the App on the repositories they choose, and picks which of them
 this team uses (a monorepo can be limited to a path). Push, pull request and CI events then arrive at the webhook.
 
 What to know:

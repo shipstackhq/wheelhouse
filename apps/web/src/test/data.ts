@@ -214,7 +214,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
   projects: [],
   checklist: {
     items: [
-      { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/t/${key}/repos` },
+      { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/settings/integrations/github?team=${key}` },
       { id: "machines", label: "Machines", done: true, status: "linked", href: `/t/${key}` },
       { id: "agents", label: "Agents", done: true, status: "1 key", href: "/agents" },
       { id: "map", label: "Map", done: true, status: "built", href: `/t/${key}/map` },

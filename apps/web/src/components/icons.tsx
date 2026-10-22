@@ -85,12 +85,12 @@ import {
   RiScales3Line,
   RiScales3Fill,
   RiBookmarkFill,
-  RiGitRepositoryLine,
-  RiGitRepositoryFill,
   RiTeamLine,
   RiTeamFill,
   RiSettings3Line,
   RiSettings3Fill,
+  RiGithubLine,
+  RiGithubFill,
   RiGroup2Line,
   RiGroup2Fill,
   RiRobot2Fill,
@@ -206,8 +206,6 @@ export const FileFillIcon = icon(RiFileTextFill);
 export const DecisionsIcon = icon(RiScales3Line);
 export const DecisionsFillIcon = icon(RiScales3Fill);
 export const TermFillIcon = icon(RiBookmarkFill);
-export const ReposIcon = icon(RiGitRepositoryLine);
-export const ReposFillIcon = icon(RiGitRepositoryFill);
 export const TeamMembersIcon = icon(RiTeamLine);
 export const TeamMembersFillIcon = icon(RiTeamFill);
 export const SettingsIcon = icon(RiSettings3Line);
@@ -245,7 +243,6 @@ export const NAV_ICONS = {
   docs: { line: FileIcon, fill: FileFillIcon },
   decisions: { line: DecisionsIcon, fill: DecisionsFillIcon },
   glossary: { line: TermIcon, fill: TermFillIcon },
-  repos: { line: ReposIcon, fill: ReposFillIcon },
   teamMembers: { line: TeamMembersIcon, fill: TeamMembersFillIcon },
   teamSettings: { line: SettingsIcon, fill: SettingsFillIcon },
   settings: { line: SettingsIcon, fill: SettingsFillIcon },
@@ -253,6 +250,11 @@ export const NAV_ICONS = {
   agents: { line: icon(RiRobot3Line), fill: icon(RiRobot3Fill) },
   workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },
   inviteWorkspace: { line: InviteWorkspaceIcon, fill: InviteWorkspaceFillIcon },
+} satisfies Record<string, IconPair>;
+
+/** The services under Settings → Integrations, by integration id. */
+export const INTEGRATION_ICONS = {
+  github: { line: icon(RiGithubLine), fill: icon(RiGithubFill) },
 } satisfies Record<string, IconPair>;
 
 // ───────── team icons ─────────

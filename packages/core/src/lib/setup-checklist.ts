@@ -62,7 +62,7 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
   const teammatesDone = input.memberCount > 1;
 
   const items: ChecklistItem[] = [
-    { id: "repos", label: "Repositories connected", done: repo.done, status: repo.status, href: `/t/${input.teamKey}/repos` },
+    { id: "repos", label: "Repositories connected", done: repo.done, status: repo.status, href: `/settings/integrations/github?team=${encodeURIComponent(input.teamKey)}` },
     {
       id: "machines",
       label: "Machines linked",
@@ -70,7 +70,7 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
       status: machinesDone
         ? `${input.sessionCount} client session${input.sessionCount === 1 ? "" : "s"} seen.`
         : "No machine has connected yet (link one with /wheelhouse:setup or the CLI).",
-      href: `/t/${input.teamKey}/repos`,
+      href: `/settings/integrations/github?team=${encodeURIComponent(input.teamKey)}`,
     },
     {
       id: "agents",

@@ -30,7 +30,7 @@ const WEB = {
   interfaces:
     "PWA: apps/web/public/manifest.webmanifest and sw.js (registered by components/pwa.tsx in production builds only); /offline.html is the static fallback. Built by Vite to apps/web/dist, which the API serves on its own port and origin, so there is no CORS. Development: Vite on 5173 proxies /api and /mcp to the API (VITE_API_TARGET).",
   gotchas:
-    "The service worker caches only /assets/* and /offline.html. It must never cache /api, /mcp, page navigations (the HTML is user-specific) or non-GET requests. jsdom cannot drive dnd-kit or React Flow's edges, so a drag on the board and the map's edges are checked in a real browser. The Repositories page (apps/web/src/pages/repos) has a Connect GitHub card that leaves the app for GitHub and comes back through the API's callback.",
+    "The service worker caches only /assets/* and /offline.html. It must never cache /api, /mcp, page navigations (the HTML is user-specific) or non-GET requests. jsdom cannot drive dnd-kit or React Flow's edges, so a drag on the board and the map's edges are checked in a real browser. The GitHub integration page (Settings → Integrations → GitHub, apps/web/src/pages/integrations) has a Connect GitHub card that leaves the app for GitHub and comes back through the API's callback.",
 };
 
 const API = {

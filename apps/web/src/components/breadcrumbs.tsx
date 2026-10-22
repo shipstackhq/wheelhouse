@@ -12,7 +12,6 @@ const TEAM_SECTIONS: Record<string, string> = {
   decisions: "Decisions",
   glossary: "Glossary",
   cycles: "Cycles",
-  repos: "Repos",
   members: "Team members",
   settings: "Team settings",
   onboarding: "Onboarding",

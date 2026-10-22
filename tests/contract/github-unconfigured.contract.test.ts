@@ -19,11 +19,12 @@ describe("with no GitHub App configured", () => {
     assert.equal((await deliver("ping", { zen: "x" }, { secret: "anything" })).status, 503);
   });
 
-  test("an owner starting the connection is sent back to the repositories page with not_configured", async () => {
+  test("an owner starting the connection is sent back to the GitHub integration page with not_configured", async () => {
     const r = await call(`/api/github/install?team=${fx.a.teamKey}`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 307);
     const to = new URL(r.headers.get("location")!, "http://x");
-    assert.equal(to.pathname, `/t/${fx.a.teamKey}/repos`);
+    assert.equal(to.pathname, `/settings/integrations/github`);
+    assert.equal(to.searchParams.get("team"), fx.a.teamKey);
     assert.equal(to.searchParams.get("github_error"), "not_configured");
   });
 

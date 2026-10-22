@@ -45,7 +45,8 @@ describe("GET /api/github/install", () => {
     const r = await call(`/api/github/install?team=${fx.a.teamKey}`, { cookie: fx.a.memberSessionToken });
     assert.equal(r.status, 307);
     assert.equal(new URL(location(r), "http://x").searchParams.get("github_error"), "owner_only");
-    assert.equal(new URL(location(r), "http://x").pathname, `/t/${fx.a.teamKey}/repos`);
+    assert.equal(new URL(location(r), "http://x").pathname, `/settings/integrations/github`);
+    assert.equal(new URL(location(r), "http://x").searchParams.get("team"), fx.a.teamKey);
   });
 
   test("another workspace's team is a plain 404", async () => {
@@ -87,7 +88,8 @@ describe("GET /api/github/callback", () => {
     const r = await callback(fx.a, { state: s.state, installation_id: gh.connectInstallationId, code: "good" }, s.nonce);
     assert.equal(r.status, 307);
     const to = new URL(location(r), "http://x");
-    assert.equal(to.pathname, `/t/${fx.a.teamKey}/repos`);
+    assert.equal(to.pathname, `/settings/integrations/github`);
+    assert.equal(to.searchParams.get("team"), fx.a.teamKey);
     assert.equal(to.searchParams.get("github"), "connected");
     const cleared = cookieOf(r, "wh_gh_state");
     assert.ok(cleared && /Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(cleared), "the state cookie is deleted");

@@ -3,13 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Loaded } from "../../components/query-state";
 import { onboardingQuery, useRepos } from "../../lib/queries";
 import { useServices } from "../../lib/services";
-import { GithubConnect } from "../repos/github-connect";
-import { Repos } from "../repos/repos";
+import { GithubConnect } from "../integrations/github/github-connect";
+import { Repos } from "../integrations/github/repos";
 import { OnboardingWizard } from "./wizard";
 
 /**
  * `/t/:key/onboarding`: the guided steps after "New team". The wizard never traps anyone: "Skip to board" is always there.
- * The code-location step hosts the same GitHub card and repository list as the Repos page.
+ * The code-location step hosts the same GitHub card and repository list as Settings → Integrations → GitHub.
  */
 export function OnboardingPage() {
   const { key = "" } = useParams();

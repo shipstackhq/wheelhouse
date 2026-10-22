@@ -7,8 +7,10 @@ import { registerInstallation } from "./service";
 
 /**
  * Connecting GitHub for a team (WH-20, ADR-12). Each function returns what the host should send; the host does the
- * redirect and the cookie. Paths are relative to the app (`/t/KEY/repos?...`); the GitHub address is absolute.
+ * redirect and the cookie. Paths are relative to the app (`/settings/integrations/github?team=KEY&...`); the GitHub address is absolute.
  */
+const integrationPage = (team: string, query = "") => `/settings/integrations/github?team=${encodeURIComponent(team)}${query ? `&${query}` : ""}`;
+
 export type ConnectReply = {
   status: number;
   redirect?: string;
@@ -22,7 +24,7 @@ export type ConnectReply = {
 /** Start connecting: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
 export async function startConnect(h: Human, teamKey: string): Promise<ConnectReply> {
   const cfg = githubConfig();
-  const back = (err: string): ConnectReply => ({ status: 307, redirect: `/t/${encodeURIComponent(teamKey)}/repos?github_error=${err}` });
+  const back = (err: string): ConnectReply => ({ status: 307, redirect: integrationPage(teamKey, `github_error=${err}`) });
   if (!cfg) return back("not_configured");
   if (h.membership.role !== "owner") return back("owner_only");
   try {
@@ -52,11 +54,11 @@ export async function finishConnect(h: Human, q: { state: string | null; install
   const back = (err?: string, extra = ""): ConnectReply => ({
     status: 307,
     clearStateCookie: true,
-    redirect: `/t/${encodeURIComponent(team)}/repos${err ? `?github_error=${err}` : extra ? `?${extra}` : ""}`,
+    redirect: integrationPage(team, err ? `github_error=${err}` : extra),
   });
   if (!gh) return { status: 503, text: "The GitHub App is not configured on this server", clearStateCookie: true };
   if (!state || state.user !== h.user.id || !nonce || nonce !== state.nonce)
-    return { status: 400, text: "This connection link is not valid any more. Start again from the team's Repositories page.", clearStateCookie: true };
+    return { status: 400, text: "This connection link is not valid any more. Start again from Settings → Integrations → GitHub.", clearStateCookie: true };
   if (h.membership.role !== "owner") return back("owner_only");
 
   const installationId = q.installationId ?? "";

@@ -1,13 +1,14 @@
 import { Navigate, Outlet, useNavigate } from "react-router";
 import clsx from "clsx";
-import { ArrowLeftIcon } from "../../components/icons";
+import { ArrowLeftIcon, type IconPair } from "../../components/icons";
 import { NavLink } from "../../components/nav-link";
 import { NavigationProgress } from "../../components/navigation-progress";
 import { FullPageSkeleton } from "../../routes/layouts";
 import { lastAppLocation } from "../../lib/app-location";
 import { useMe } from "../../lib/session";
+import { INTEGRATIONS } from "../integrations/integrations";
 
-const ITEMS: { group: string; items: { to: string; label: string }[] }[] = [
+const ITEMS: { group: string; items: { to: string; label: string; icon?: IconPair }[] }[] = [
   {
     group: "Personal",
     items: [
@@ -25,6 +26,7 @@ const ITEMS: { group: string; items: { to: string; label: string }[] }[] = [
       { to: "/settings/teams", label: "Teams" },
     ],
   },
+  { group: "Integrations", items: INTEGRATIONS.map((i) => ({ to: i.to, label: i.label, icon: i.icon })) },
 ];
 
 /**
@@ -56,7 +58,7 @@ export function SettingsLayout() {
             <div key={g.group} className="flex shrink-0 items-center gap-1 md:mt-3 md:block md:space-y-0.5">
               <div className="label hidden px-2 normal-case tracking-normal md:block">{g.group}</div>
               {g.items.map((i) => (
-                <NavLink key={i.to} href={i.to}>
+                <NavLink key={i.to} href={i.to} icon={i.icon}>
                   {i.label}
                 </NavLink>
               ))}

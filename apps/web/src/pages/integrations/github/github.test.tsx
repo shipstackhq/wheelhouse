@@ -1,10 +1,11 @@
 import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { apiError, renderApp } from "../../test/harness";
-import { githubStatus, repo } from "../../test/data";
+import { apiError, renderApp } from "../../../test/harness";
+import { githubStatus, repo } from "../../../test/data";
 
-const open = (path = "/t/AA/repos", setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp(path, setup);
+const PAGE = "/settings/integrations/github?team=AA";
+const open = (path = PAGE, setup: Parameters<typeof renderApp>[1] = () => {}) => renderApp(path, setup);
 const card = async (name: string) => (await screen.findByText(name, { selector: ".font-semibold" })).closest(".card") as HTMLElement;
 /** The card, once it has its answer (it shows "Loading…" until then). */
 const githubCard = async () => {
@@ -15,7 +16,7 @@ const githubCard = async () => {
 
 describe("the repositories", () => {
   test("each repository shows its role, state, provider, branch, path limit and when it last heard from GitHub", async () => {
-    open("/t/AA/repos", (s) =>
+    open(PAGE, (s) =>
       s.on("GET /api/app/teams/AA/repositories", {
         repositories: [
           repo(),
@@ -35,17 +36,17 @@ describe("the repositories", () => {
   });
 
   test("with none it says so; a retired one can no longer be edited", async () => {
-    const { unmount } = open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories", { repositories: [] }));
+    const { unmount } = open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories", { repositories: [] }));
     await screen.findByText("No repositories yet.");
     unmount();
-    open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories", { repositories: [repo({ lifecycle: "retired" })] }));
+    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories", { repositories: [repo({ lifecycle: "retired" })] }));
     const retired = await card("Backend");
     expect(within(retired).queryByRole("button", { name: "Edit" })).toBeNull();
     expect(within(retired).queryByRole("button", { name: "Retire" })).toBeNull();
   });
 
   test("+ Add repository needs a name and a role, and saves what was typed; the list is read again", async () => {
-    const { server } = open("/t/AA/repos", (s) => s.on("POST /api/app/teams/AA/repositories", { repository: repo({ id: "r9" }) }));
+    const { server } = open(PAGE, (s) => s.on("POST /api/app/teams/AA/repositories", { repository: repo({ id: "r9" }) }));
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ Add repository" }));
     const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
@@ -64,7 +65,7 @@ describe("the repositories", () => {
   });
 
   test("a refusal shows the server's words and keeps the form open; Cancel closes it", async () => {
-    open("/t/AA/repos", (s) => s.on("POST /api/app/teams/AA/repositories", apiError(400, "invalid", "Repository \"backend\" already exists")));
+    open(PAGE, (s) => s.on("POST /api/app/teams/AA/repositories", apiError(400, "invalid", "Repository \"backend\" already exists")));
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "+ Add repository" }));
     await user.type(screen.getByPlaceholderText(/^Display name/), "Backend");
@@ -77,7 +78,7 @@ describe("the repositories", () => {
   });
 
   test("Edit starts from what is there, and clearing the path limit sends null", async () => {
-    const { server } = open("/t/AA/repos", (s) => {
+    const { server } = open(PAGE, (s) => {
       s.on("GET /api/app/teams/AA/repositories", { repositories: [repo({ pathLimit: "packages/api/" })] });
       s.on("PATCH /api/app/teams/AA/repositories/r1", { repository: repo() });
     });
@@ -94,7 +95,7 @@ describe("the repositories", () => {
   });
 
   test("Retire asks first", async () => {
-    const { server } = open("/t/AA/repos", (s) => s.on("POST /api/app/teams/AA/repositories/r1/retire", { repository: repo({ lifecycle: "retired" }) }));
+    const { server } = open(PAGE, (s) => s.on("POST /api/app/teams/AA/repositories/r1/retire", { repository: repo({ lifecycle: "retired" }) }));
     const user = userEvent.setup();
     await user.click(within(await card("Backend")).getByRole("button", { name: "Retire" }));
     const ask = await screen.findByRole("alertdialog");
@@ -109,21 +110,21 @@ describe("the repositories", () => {
 
 describe("Connect GitHub", () => {
   test("not set up on this server: an owner is told which settings to set, a member is not", async () => {
-    const { unmount } = open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ configured: false, missing: ["GITHUB_APP_ID", "GITHUB_APP_SLUG"], installations: [] })));
+    const { unmount } = open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ configured: false, missing: ["GITHUB_APP_ID", "GITHUB_APP_SLUG"], installations: [] })));
     const owner = await githubCard();
     expect(owner.textContent).toContain("GitHub is not set up on this server");
     expect(within(owner).getByText("GITHUB_APP_ID")).toBeTruthy();
     expect(within(owner).getByText("GITHUB_APP_SLUG")).toBeTruthy();
     expect(within(owner).queryByRole("link")).toBeNull();
     unmount();
-    open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ configured: false, missing: [], isOwner: false, installations: [] })));
+    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ configured: false, missing: [], isOwner: false, installations: [] })));
     const member = await githubCard();
     expect(member.textContent).toContain("GitHub is not set up on this server");
     expect(member.textContent).not.toContain("GITHUB_");
   });
 
   test("a member is told an owner connects it, and sees no way to", async () => {
-    open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ isOwner: false, installations: [] })));
+    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ isOwner: false, installations: [] })));
     const c = await githubCard();
     expect(c.textContent).toContain("A workspace owner connects GitHub for this team.");
     expect(within(c).queryByRole("link")).toBeNull();
@@ -142,13 +143,13 @@ describe("Connect GitHub", () => {
   });
 
   test("before any installation the button says Connect GitHub; the team key is escaped in the link", async () => {
-    open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ installations: [] })));
+    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ installations: [] })));
     const c = await githubCard();
     expect(within(c).getByRole("link", { name: "Connect GitHub" }).getAttribute("href")).toBe("/api/github/install?team=AA");
   });
 
   test("Connect sends the installation, the repository's GitHub id, and the role and path limit typed; empty ones are left out", async () => {
-    const { server } = open("/t/AA/repos", (s) => s.on("POST /api/app/teams/AA/repositories/github", { repository: repo({ id: "r7" }) }));
+    const { server } = open(PAGE, (s) => s.on("POST /api/app/teams/AA/repositories/github", { repository: repo({ id: "r7" }) }));
     const user = userEvent.setup();
     const c = await githubCard();
     await user.type(within(c).getByLabelText("Role of acme/web"), " frontend ");
@@ -163,13 +164,13 @@ describe("Connect GitHub", () => {
   });
 
   test("a refused connection shows the server's reason on that installation", async () => {
-    open("/t/AA/repos", (s) => s.on("POST /api/app/teams/AA/repositories/github", apiError(409, "conflict", "acme/web is already connected to this team")));
+    open(PAGE, (s) => s.on("POST /api/app/teams/AA/repositories/github", apiError(409, "conflict", "acme/web is already connected to this team")));
     await userEvent.setup().click(within(await githubCard()).getAllByRole("button", { name: "Connect" })[0]);
     expect(await screen.findByText("acme/web is already connected to this team")).toBeTruthy();
   });
 
   test("an installation with nothing left to connect says so; one GitHub would not answer for says that", async () => {
-    open("/t/AA/repos", (s) =>
+    open(PAGE, (s) =>
       s.on(
         "GET /api/app/teams/AA/repositories/github",
         githubStatus({
@@ -194,7 +195,7 @@ describe("Connect GitHub", () => {
     ["?github_error=connect_failed&github_msg=acme%2Fweb%20is%20private", "acme/web is private", true],
     ["?github_error=something_new", "Something went wrong talking to GitHub. Try again in a minute.", true],
   ])("coming back from GitHub with %s says %s", async (query, text, bad) => {
-    open(`/t/AA/repos${query}`);
+    open(`${PAGE}&${query.slice(1)}`);
     await githubCard();
     const note = (await screen.findAllByRole("status")).find((n) => n.tagName === "P") as HTMLElement;
     expect(note.textContent).toBe(text);
@@ -202,7 +203,7 @@ describe("Connect GitHub", () => {
   });
 
   test("when the status cannot be read the card says so instead of hanging", async () => {
-    open("/t/AA/repos", (s) => s.on("GET /api/app/teams/AA/repositories/github", apiError(403, "forbidden", "No")));
+    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", apiError(403, "forbidden", "No")));
     expect(await screen.findByText("Could not load the GitHub connection. Try again in a moment.")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2, name: "Repositories" })).toBeTruthy(); // the page is still there
   });
