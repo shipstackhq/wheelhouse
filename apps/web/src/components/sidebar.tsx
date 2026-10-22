@@ -356,7 +356,7 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
         className={clsx(
           NAV_ITEM,
           "min-w-0 flex-1 text-left",
-          collapsed && ["md:flex-none", NAV_ITEM_RAIL],
+          collapsed && ["md:flex-none md:gap-0", NAV_ITEM_RAIL],
           here && "font-medium",
         )}
       >
