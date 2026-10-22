@@ -7,7 +7,7 @@ import clsx from "clsx";
 import type { ComponentProps } from "react";
 import {
   RiAddLine,
-  RiAnthropicFill,
+  RiClaudeFill,
   RiAlertLine,
   RiArrowDownLine,
   RiArrowDownSLine,
@@ -326,5 +326,5 @@ export const TEAM_ICONS: Record<TeamIconName, RemixiconComponentType> = {
   time: RiTimeFill, calendar: RiCalendarFill, anchor: RiAnchorFill, puzzle: RiPuzzleFill, user: RiUserFill, team: RiTeamFill, "customer-service": RiCustomerService2Fill, megaphone: RiMegaphoneFill, gift: RiGiftFill, sun: RiSunFill,
 };
 
-// Anthropic's mark, for naming a Claude model (the run picker and each run's row).
-export const ClaudeIcon = icon(RiAnthropicFill);
+// The Claude mark, for naming a Claude model (the run picker and each run's row).
+export const ClaudeIcon = icon(RiClaudeFill);
