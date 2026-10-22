@@ -180,28 +180,29 @@ function RunSummary({ job: j }: { job: JobView }) {
   return null;
 }
 
-/** The runs on this issue, newest first: one row per run, click its branch to expand the log. */
+/**
+ * The runs on this issue, newest first, laid out like a table but built as a list: one grid row per run, the same columns in a
+ * header line. Clicking a run's branch expands its log under the row.
+ */
+const RUN_COLUMNS = "grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-x-4";
+
 function RunsTable({ jobs, issueRef }: { jobs: JobView[]; issueRef: string }) {
   const [openId, setOpenId] = useState<string | null>(jobs.find((j) => ACTIVE.includes(j.state))?.id ?? null);
   return (
-    <div className="overflow-hidden rounded-md border border-line">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-line bg-panel-2/50 text-left text-xs text-muted">
-            <th className="px-3 py-2 font-medium">Branch</th>
-            <th className="px-3 py-2 font-medium">Status</th>
-            <th className="px-3 py-2 font-medium">Device</th>
-            <th className="px-3 py-2 font-medium">Model</th>
-            <th className="px-3 py-2 font-medium">When</th>
-            <th className="px-3 py-2 font-medium" />
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((j) => (
-            <RunRow key={j.id} job={j} issueRef={issueRef} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
-          ))}
-        </tbody>
-      </table>
+    <div className="overflow-hidden rounded-md border border-line text-sm" aria-label="Runs">
+      <div role="presentation" className={clsx(RUN_COLUMNS, "border-b border-line bg-panel-2/50 px-3 py-2 text-xs text-muted")}>
+        <span>Branch</span>
+        <span>Status</span>
+        <span>Device</span>
+        <span>Model</span>
+        <span>When</span>
+        <span className="sr-only">Actions</span>
+      </div>
+      <ul>
+        {jobs.map((j) => (
+          <RunRow key={j.id} job={j} issueRef={issueRef} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
+        ))}
+      </ul>
     </div>
   );
 }
@@ -211,9 +212,9 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
   const active = ACTIVE.includes(j.state);
   const [error, setError] = useState<string | null>(null);
   return (
-    <>
-      <tr className="border-b border-line last:border-0 align-top">
-        <td className="max-w-0 px-3 py-2">
+    <li className="border-b border-line last:border-0">
+      <div className={clsx(RUN_COLUMNS, "px-3 py-2")}>
+        <div className="min-w-0">
           <button
             type="button"
             aria-expanded={open}
@@ -224,20 +225,20 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
             {j.branch}
           </button>
           {j.baseBranch && <div className="mt-0.5 truncate text-xs text-muted">from {j.baseBranch}</div>}
-          <div className="mt-0.5">
+          <div className="mt-0.5 truncate text-xs">
             <RunSummary job={j} />
           </div>
           {error && <p className="mt-0.5 text-xs text-danger" role="alert">{error}</p>}
-        </td>
-        <td className="px-3 py-2">
+        </div>
+        <span>
           <span className={clsx("chip", STATE_STYLE[j.state])}>{j.cancelRequested && active ? "stopping" : STATE_LABEL[j.state]}</span>
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap">{j.deviceName ?? "a device"}</td>
-        <td className="px-3 py-2 whitespace-nowrap">
+        </span>
+        <span className="truncate">{j.deviceName ?? "a device"}</span>
+        <span className="truncate">
           <ModelLabel model={j.model} />
-        </td>
-        <td className="px-3 py-2 whitespace-nowrap text-muted">{timeAgo(j.createdAt)}</td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
+        </span>
+        <span className="whitespace-nowrap text-muted">{timeAgo(j.createdAt)}</span>
+        <span className="text-right">
           {active && !j.cancelRequested && (
             <button
               type="button"
@@ -255,16 +256,14 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
               Stop
             </button>
           )}
-        </td>
-      </tr>
+        </span>
+      </div>
       {open && (
-        <tr className="border-b border-line last:border-0">
-          <td colSpan={6} className="bg-bg/40 px-3 py-2">
-            <RunLog id={j.id} active={active} />
-          </td>
-        </tr>
+        <div className="border-t border-line bg-bg/40 px-3 py-2">
+          <RunLog id={j.id} active={active} />
+        </div>
       )}
-    </>
+    </li>
   );
 }
 
