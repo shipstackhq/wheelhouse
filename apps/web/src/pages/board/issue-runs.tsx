@@ -180,30 +180,15 @@ function RunSummary({ job: j }: { job: JobView }) {
   return null;
 }
 
-/**
- * The runs on this issue, newest first, laid out like a table but built as a list: one grid row per run, the same columns in a
- * header line. Clicking a run's branch expands its log under the row.
- */
-const RUN_COLUMNS = "grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-x-4";
-
+/** The runs on this issue, newest first, as a plain list. Clicking a run's branch expands its log under it. */
 function RunsTable({ jobs, issueRef }: { jobs: JobView[]; issueRef: string }) {
   const [openId, setOpenId] = useState<string | null>(jobs.find((j) => ACTIVE.includes(j.state))?.id ?? null);
   return (
-    <div className="overflow-hidden rounded-md border border-line text-sm" aria-label="Runs">
-      <div role="presentation" className={clsx(RUN_COLUMNS, "border-b border-line bg-panel-2/50 px-3 py-2 text-xs text-muted")}>
-        <span>Branch</span>
-        <span>Status</span>
-        <span>Device</span>
-        <span>Model</span>
-        <span>When</span>
-        <span className="sr-only">Actions</span>
-      </div>
-      <ul>
-        {jobs.map((j) => (
-          <RunRow key={j.id} job={j} issueRef={issueRef} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
-        ))}
-      </ul>
-    </div>
+    <ul className="divide-y divide-line overflow-hidden rounded-md border border-line text-sm" aria-label="Runs">
+      {jobs.map((j) => (
+        <RunRow key={j.id} job={j} issueRef={issueRef} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
+      ))}
+    </ul>
   );
 }
 
@@ -212,9 +197,10 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
   const active = ACTIVE.includes(j.state);
   const [error, setError] = useState<string | null>(null);
   return (
-    <li className="border-b border-line last:border-0">
-      <div className={clsx(RUN_COLUMNS, "px-3 py-2")}>
-        <div className="min-w-0">
+    <li className="px-3 py-2">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="truncate font-medium">{j.deviceName ?? "a device"}</div>
           <button
             type="button"
             aria-expanded={open}
@@ -224,42 +210,37 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
           >
             {j.branch}
           </button>
-          {j.baseBranch && <div className="mt-0.5 truncate text-xs text-muted">from {j.baseBranch}</div>}
-          <div className="mt-0.5 truncate text-xs">
+          {j.baseBranch && <div className="truncate text-xs text-muted">from {j.baseBranch}</div>}
+          <div className="truncate text-xs">
             <RunSummary job={j} />
           </div>
-          {error && <p className="mt-0.5 text-xs text-danger" role="alert">{error}</p>}
+          {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
+            <span className={clsx("chip", STATE_STYLE[j.state])}>{j.cancelRequested && active ? "stopping" : STATE_LABEL[j.state]}</span>
+            <ModelLabel model={j.model} />
+            <span className="text-xs text-muted">{timeAgo(j.createdAt)}</span>
+          </div>
         </div>
-        <span>
-          <span className={clsx("chip", STATE_STYLE[j.state])}>{j.cancelRequested && active ? "stopping" : STATE_LABEL[j.state]}</span>
-        </span>
-        <span className="truncate">{j.deviceName ?? "a device"}</span>
-        <span className="truncate">
-          <ModelLabel model={j.model} />
-        </span>
-        <span className="whitespace-nowrap text-muted">{timeAgo(j.createdAt)}</span>
-        <span className="text-right">
-          {active && !j.cancelRequested && (
-            <button
-              type="button"
-              className="btn py-0.5 text-xs"
-              onClick={async () => {
-                setError(null);
-                try {
-                  await api.runs.cancel(j.id);
-                } catch (e) {
-                  setError(describeFailure(e));
-                }
-                await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
-              }}
-            >
-              Stop
-            </button>
-          )}
-        </span>
+        {active && !j.cancelRequested && (
+          <button
+            type="button"
+            className="btn shrink-0 py-0.5 text-xs"
+            onClick={async () => {
+              setError(null);
+              try {
+                await api.runs.cancel(j.id);
+              } catch (e) {
+                setError(describeFailure(e));
+              }
+              await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
+            }}
+          >
+            Stop
+          </button>
+        )}
       </div>
       {open && (
-        <div className="border-t border-line bg-bg/40 px-3 py-2">
+        <div className="mt-2 border-t border-line pt-2">
           <RunLog id={j.id} active={active} />
         </div>
       )}
