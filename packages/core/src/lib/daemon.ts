@@ -4,6 +4,7 @@ import { getDb, schema } from "../db";
 import type { DeviceJobState } from "../db/schema";
 import { sha256, type Actor } from "./access";
 import { randomToken } from "./auth-core";
+import { github } from "./github/runtime";
 import { assertionSubject, publicKeyFromRaw, rawPublicKey, serverSigningKey, signValue, verifyAssertion } from "./daemon-crypto";
 import { bus } from "./event-bus";
 import { rateLimit } from "./rate-limit";
@@ -677,6 +678,7 @@ function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string
     state: j.state,
     model: j.model,
     branch: j.branch,
+    baseBranch: j.baseBranch,
     deviceId: j.deviceId,
     deviceName: extra.deviceName ?? null,
     repositoryId: j.repositoryId,
@@ -722,8 +724,35 @@ export async function issueJobs(actor: Actor, ref: string) {
   };
 }
 
+/** A branch name a run may start from: what git accepts, without the tricks (`..`, a leading `-`, `@{`). */
+export function validBaseBranch(v: unknown): string | null {
+  const s = str(v, 200);
+  if (!s || !/^[A-Za-z0-9._\/-]+$/.test(s) || s.startsWith("-") || s.startsWith("/") || s.endsWith("/") || s.endsWith(".lock") || s.includes("..") || s.includes("//")) return null;
+  return s;
+}
+
 /**
- * "Run on device": `{ deviceId, repositoryId?, model }`. The person must be able to edit the issue and own the device, which must be
+ * The branches a run of the issue can start from, in one of its team's repositories: from GitHub when the server has the App, the
+ * default branch first. Without GitHub (or when it fails) just the default branch, and `listed: false` so the page offers a text box.
+ */
+export async function runBranches(actor: Actor, ref: string, repositoryId: string) {
+  const db = await getDb();
+  const { team } = await resolveIssue(actor, ref, db);
+  const repo = (await runnableRepositories(db, team.id)).find((r) => r.id === repositoryId);
+  if (!repo) throw new ServiceError("not_found", "Repository not found");
+  const def = repo.defaultBranch || "main";
+  const gh = github();
+  if (!gh || !repo.githubInstallationId || !repo.githubRepoId) return { defaultBranch: def, branches: [def], listed: false };
+  try {
+    const names = await gh.api.branches(repo.githubInstallationId, repo.githubRepoId);
+    return { defaultBranch: def, branches: [def, ...names.filter((n) => n !== def).sort()], listed: true };
+  } catch {
+    return { defaultBranch: def, branches: [def], listed: false };
+  }
+}
+
+/**
+ * "Run on device": `{ deviceId, repositoryId?, model, baseBranch? }`. The person must be able to edit the issue and own the device, which must be
  * online. The repository is one of the issue team's GitHub repositories (the only one, if the team has one). The job is offered to
  * the device as a signed message carrying everything it needs, and expires if the device does not take it within a minute.
  */
@@ -745,6 +774,8 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
   const view = deviceView(device);
   const model = str(input.model, 60);
   if (!model || !view.models.includes(model)) throw new ServiceError("invalid", `Pick a model ${device.name} offers: ${view.models.join(", ")}`, { fields: { model: view.models.join(", ") } });
+  const baseBranch = input.baseBranch === undefined || input.baseBranch === "" ? repo.defaultBranch || "main" : validBaseBranch(input.baseBranch);
+  if (!baseBranch) throw new ServiceError("invalid", "That is not a branch name", { fields: { baseBranch: "a branch of the repository" } });
 
   const id = crypto.randomUUID();
   const branch = jobBranch(issueRef, issue.title, id);
@@ -753,13 +784,14 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
   const job = await db.transaction(async (tx) => {
     const [j] = await tx
       .insert(deviceJobs)
-      .values({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, createdBy: actor.id, offerExpiresAt })
+      .values({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, createdBy: actor.id, offerExpiresAt })
       .returning();
     await sendToDevice(tx, key, device.id, "job.offer", {
       jobId: j.id,
       expiresAt: offerExpiresAt.toISOString(),
       model,
       branch,
+      baseBranch,
       // Board writes come with the MCP redesign; until then the agent works only in its worktree.
       boardAccess: "none",
       issue: { id: issue.id, ref: issueRef, title: issue.title, body: issue.body, team: { key: team.key, name: team.name } },

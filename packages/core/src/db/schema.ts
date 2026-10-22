@@ -1151,6 +1151,8 @@ export const deviceJobs = table(
     model: text("model").notNull(),
     state: text("state", { enum: DEVICE_JOB_STATES }).notNull().default("offered"),
     branch: text("branch").notNull(),
+    // The branch the job's branch starts from: chosen when it is run, the repository's default branch unless someone picks another.
+    baseBranch: text("base_branch"),
     // What the daemon reported at the end: commit, diff stats, cost.
     result: jsonb("result").$type<Record<string, unknown>>().notNull().default({}),
     error: text("error"),

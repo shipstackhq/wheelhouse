@@ -84,6 +84,7 @@ import type {
   JobEvent,
   JobView,
   PairingPeek,
+  RunBranches,
 } from "./types";
 
 export type * from "./types";
@@ -487,7 +488,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
     /** Runs of an issue on a device: an agent working on it in a worktree on that machine. */
     runs: {
       forIssue: (ref: string) => request<IssueRuns>("GET", `/api/app/issues/${encodeURIComponent(ref)}/jobs`),
-      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string }) =>
+      /** The branches a run in that repository can start from. */
+      branches: (ref: string, repositoryId: string) =>
+        request<RunBranches>("GET", `/api/app/issues/${encodeURIComponent(ref)}/jobs/branches?repositoryId=${encodeURIComponent(repositoryId)}`),
+      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string; baseBranch?: string }) =>
         (await request<{ job: JobView }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/jobs`, input)).job,
       /** Progress after event number `after`. */
       events: (id: string, after?: number) =>

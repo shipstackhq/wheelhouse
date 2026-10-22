@@ -257,11 +257,12 @@ describe("jobs", () => {
     const db = await getDb();
     const [offer] = await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id));
     assert.equal(offer.type, "job.offer");
-    const msg = offer.message as { jobId: string; repository: { cloneUrl: string }; issue: { body: string }; boardAccess: string };
+    const msg = offer.message as { jobId: string; repository: { cloneUrl: string }; issue: { body: string }; boardAccess: string; baseBranch: string };
     assert.equal(msg.jobId, job.id);
     assert.equal(msg.repository.cloneUrl, "https://github.com/acme/app.git");
     assert.equal(msg.issue.body, "It 500s");
     assert.equal(msg.boardAccess, "none");
+    assert.equal(msg.baseBranch, "main", "the repository's default branch unless another is picked");
     if (poll.status === "approved") assert.ok(verifyValue(publicKeyFromRaw(poll.serverPublicKey)!, msg, offer.signature));
 
     await d.acceptJob(device, job.id);
@@ -291,6 +292,20 @@ describe("jobs", () => {
     await assert.rejects(d.runOnDevice(viewer, issue.ref, { deviceId: device.id, model: "opus" }), code("forbidden"));
     await assert.rejects(d.runOnDevice(stranger, issue.ref, { deviceId: device.id, model: "opus" }), code("not_found"));
     await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", repositoryId: crypto.randomUUID() }), code("invalid"));
+  });
+
+  test("a run can start from another branch; a name that is not a branch is refused", async () => {
+    const { device } = await paired();
+    await online(device);
+    const issue = await svc.createIssue(owner, "DM", { title: "base" });
+    const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
+    assert.equal(job.baseBranch, "staging");
+    const db = await getDb();
+    const [m] = await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id));
+    assert.equal(m.message.baseBranch, "staging");
+    for (const bad of ["../etc", "-x", "a b", "a..b", "x.lock", "a@{1}"]) await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: bad }), code("invalid"), bad);
+    // Without the GitHub App, only the default branch is known.
+    assert.deepEqual(await d.runBranches(owner, issue.ref, repoId), { defaultBranch: "main", branches: ["main"], listed: false });
   });
 
   test("another device cannot touch the job", async () => {

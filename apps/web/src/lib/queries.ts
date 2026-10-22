@@ -78,5 +78,10 @@ export const useTeamMembers = (teamKey: string) => useQuery(teamMembersQuery(use
 /** The person's machines (the agent daemon), an issue's runs on them, and one run's progress. Under "issue" so an issue change refreshes its runs. */
 export const devicesQuery = (api: ApiClient) => ({ queryKey: ["devices"] as const, queryFn: () => api.devices.list() });
 export const issueRunsQuery = (api: ApiClient, ref: string) => ({ queryKey: ["issue", ref, "runs"] as const, queryFn: () => api.runs.forIssue(ref) });
+export const runBranchesQuery = (api: ApiClient, ref: string, repositoryId: string) => ({
+  queryKey: ["run-branches", ref, repositoryId] as const,
+  queryFn: () => api.runs.branches(ref, repositoryId),
+  staleTime: 60_000,
+});
 export const runEventsQuery = (api: ApiClient, id: string) => ({ queryKey: ["run", id] as const, queryFn: () => api.runs.events(id) });
 export const useDevices = () => useQuery(devicesQuery(useServices().api));

@@ -681,6 +681,8 @@ export type JobView = {
   state: JobState;
   model: string;
   branch: string;
+  /** The branch it started from; null for runs from before this was recorded. */
+  baseBranch: string | null;
   deviceId: string;
   deviceName: string | null;
   repositoryId: string | null;
@@ -700,3 +702,5 @@ export type IssueRuns = {
   devices: { id: string; name: string; status: DeviceStatus; models: string[]; poolSize: number; activeJobs: number }[];
   repositories: { id: string; name: string; fullName: string | null; defaultBranch: string }[];
 };
+/** The branches a run can start from. `listed` is false when they could not be read from GitHub: then only the default is known. */
+export type RunBranches = { defaultBranch: string; branches: string[]; listed: boolean };

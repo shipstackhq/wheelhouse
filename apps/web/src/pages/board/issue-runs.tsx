@@ -6,7 +6,7 @@ import type { IssueRuns, JobEvent, JobState, JobView } from "@wheelhouse/api-cli
 import { timeAgo } from "@wheelhouse/core/lib/time";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
-import { issueRunsQuery, runEventsQuery } from "../../lib/queries";
+import { issueRunsQuery, runBranchesQuery, runEventsQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 
 const ACTIVE: JobState[] = ["offered", "accepted", "running"];
@@ -67,6 +67,7 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
   const [deviceId, setDeviceId] = useState("");
   const [repositoryId, setRepositoryId] = useState("");
   const [model, setModel] = useState("");
+  const [base, setBase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -88,7 +89,7 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
     setBusy(true);
     setError(null);
     try {
-      await api.runs.start(issueRef, { deviceId: device.id, repositoryId: repo.id, model: chosenModel });
+      await api.runs.start(issueRef, { deviceId: device.id, repositoryId: repo.id, model: chosenModel, baseBranch: base ?? undefined });
       await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
     } catch (e) {
       setError(describeFailure(e));
@@ -109,8 +110,9 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
           onValueChange={setDeviceId}
         />
         {data.repositories.length > 1 && (
-          <Select className="!w-auto" ariaLabel="Repository" value={repo.id} options={data.repositories.map((r) => ({ value: r.id, label: r.name }))} onValueChange={setRepositoryId} />
+          <Select className="!w-auto" ariaLabel="Repository" value={repo.id} options={data.repositories.map((r) => ({ value: r.id, label: r.name }))} onValueChange={(v) => (setBase(null), setRepositoryId(v))} />
         )}
+        <BaseBranchPicker issueRef={issueRef} repositoryId={repo.id} value={base} onChange={setBase} />
         {models.length > 0 && <Select className="!w-auto" ariaLabel="Model" value={chosenModel} options={models.map((m) => ({ value: m, label: m }))} onValueChange={setModel} />}
         <button type="button" className="btn btn-primary" disabled={busy || !device || !chosenModel} onClick={() => void start()}>
           Run on device
@@ -119,6 +121,37 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
       {!device && <p className="text-xs text-muted">None of your devices is online. Start the daemon on one.</p>}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * Which branch the run starts from: the repository's branches from GitHub, its default branch first and chosen until someone picks
+ * another. When GitHub cannot list them, a text box with the default branch in it. (How runs choose their base will change; this is the
+ * simple version.)
+ */
+function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { issueRef: string; repositoryId: string; value: string | null; onChange: (v: string | null) => void }) {
+  const { api } = useServices();
+  const q = useQuery(runBranchesQuery(api, issueRef, repositoryId));
+  if (!q.data) return null;
+  const current = value ?? q.data.defaultBranch;
+  if (!q.data.listed)
+    return (
+      <label className="flex items-center gap-1 text-muted">
+        from
+        <input className="input w-40 py-1.5 font-mono text-xs" aria-label="Start from branch" value={current} onChange={(e) => onChange(e.target.value.trim() || null)} />
+      </label>
+    );
+  return (
+    <span className="flex items-center gap-1 text-muted">
+      from
+      <Select
+        className="!w-auto"
+        ariaLabel="Start from branch"
+        value={current}
+        options={q.data.branches.map((b) => ({ value: b, label: b === q.data.defaultBranch ? `${b} (default)` : b }))}
+        onValueChange={(v) => onChange(v === q.data.defaultBranch ? null : v)}
+      />
+    </span>
   );
 }
 
@@ -157,7 +190,11 @@ function RunRow({ job: j, issueRef }: { job: JobView; issueRef: string }) {
           </button>
         </span>
       </div>
-      <div className="mt-1 font-mono text-xs text-muted">{j.branch}</div>
+      <div className="mt-1 font-mono text-xs text-muted">
+        {j.branch}
+        {j.baseBranch && <span className="font-sans"> from </span>}
+        {j.baseBranch}
+      </div>
       {j.state === "succeeded" && (
         <div className="mt-1 text-xs text-muted">
           {j.result.pushed ? "Pushed" : "Not pushed"}

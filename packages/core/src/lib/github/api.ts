@@ -85,6 +85,18 @@ export class GithubApi {
     return { files: r.tree.filter((t) => t.type === "blob").map((t) => ({ path: t.path, hash: t.sha })), truncated: !!r.truncated };
   }
 
+  /** A repository's branch names, 100 a page, at most 1,000. */
+  async branches(installationId: string, repoId: string): Promise<string[]> {
+    const token = await this.installationToken(installationId);
+    const out: string[] = [];
+    for (let page = 1; page <= 10; page++) {
+      const r = await this.call<{ name: string }[]>(`/repositories/${encodeURIComponent(repoId)}/branches?per_page=100&page=${page}`, token);
+      out.push(...r.map((b) => b.name));
+      if (r.length < 100) break;
+    }
+    return out;
+  }
+
   /** The repositories an installation can see. */
   async installationRepositories(installationId: string): Promise<{ id: string; fullName: string; defaultBranch: string; private: boolean }[]> {
     const token = await this.installationToken(installationId);

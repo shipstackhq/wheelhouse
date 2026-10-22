@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { approvePairing, cancelJob, denyPairing, issueJobs, jobEvents, listDevices, peekPairing, revokeDevice, runOnDevice, updateDevice } from "@wheelhouse/core/lib/daemon";
+import { approvePairing, cancelJob, denyPairing, issueJobs, jobEvents, listDevices, peekPairing, revokeDevice, runBranches, runOnDevice, updateDevice } from "@wheelhouse/core/lib/daemon";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
@@ -54,7 +54,13 @@ export class DevicesController {
     return issueJobs(req.human.actor, ref);
   }
 
-  /** `{ deviceId, repositoryId?, model }`: Run on device. */
+  /** The branches a run in `repositoryId` can start from (from GitHub, the default branch first). */
+  @Get("issues/:ref/jobs/branches")
+  branches(@Req() req: SessionRequest, @Param("ref") ref: string, @Query("repositoryId") repositoryId: string) {
+    return runBranches(req.human.actor, ref, repositoryId ?? "");
+  }
+
+  /** `{ deviceId, repositoryId?, model, baseBranch? }`: Run on device. */
   @Post("issues/:ref/jobs")
   @HttpCode(201)
   run(@Req() req: SessionRequest & RawTextRequest, @Param("ref") ref: string) {
