@@ -8,7 +8,13 @@ beforeEach(() => {
   localStorage.removeItem("wh:layout:BB");
 });
 
+/** The layout switcher lives in the Display menu, so open that first (and close it again, so the list stays clickable). */
 const toggle = () => within(screen.getByRole("group", { name: "Layout" }));
+const openDisplay = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole("button", { name: "Display options" }));
+  return toggle();
+};
+const closeDisplay = async (user: ReturnType<typeof userEvent.setup>) => user.keyboard("{Escape}");
 const isBoard = () => document.querySelector("[data-column]") !== null;
 const isList = () => screen.queryAllByRole("region").length > 0 && !isBoard();
 
@@ -17,8 +23,10 @@ describe("the team page's layout", () => {
     renderApp("/t/AA");
     await screen.findByText("Write the plan");
     expect(isList()).toBe(true);
-    expect(toggle().getByRole("button", { name: "list" }).getAttribute("aria-pressed")).toBe("true");
-    expect(toggle().getByRole("button", { name: "board" }).getAttribute("aria-pressed")).toBe("false");
+    await openDisplay(userEvent.setup());
+    expect(toggle().getByRole("button", { name: "List" }).getAttribute("aria-pressed")).toBe("true");
+    expect(toggle().getByRole("button", { name: "Board" }).getAttribute("aria-pressed")).toBe("false");
+    await closeDisplay(userEvent.setup());
     expect(screen.getByRole("heading", { level: 1, name: "Alpha" })).toBeTruthy();
   });
 
@@ -26,17 +34,23 @@ describe("the team page's layout", () => {
     const user = userEvent.setup();
     const first = renderApp("/t/AA");
     await screen.findByText("Write the plan");
-    await user.click(toggle().getByRole("button", { name: "board" }));
+    await openDisplay(user);
+    await user.click(toggle().getByRole("button", { name: "Board" }));
+    await closeDisplay(user);
     await waitFor(() => expect(isBoard()).toBe(true));
     for (const title of ["Write the plan", "Build the board", "Fix the crash", "Ship it"]) expect(screen.getByText(title)).toBeTruthy();
-    expect(toggle().getByRole("button", { name: "board" }).getAttribute("aria-pressed")).toBe("true");
+    await openDisplay(user);
+    expect(toggle().getByRole("button", { name: "Board" }).getAttribute("aria-pressed")).toBe("true");
+    await closeDisplay(user);
     expect(localStorage.getItem("wh:layout:AA")).toBe("board");
     first.unmount();
 
     renderApp("/t/AA");
     await screen.findByText("Write the plan");
     expect(isBoard()).toBe(true); // remembered
-    await user.click(toggle().getByRole("button", { name: "list" }));
+    await openDisplay(user);
+    await user.click(toggle().getByRole("button", { name: "List" }));
+    await closeDisplay(user);
     await waitFor(() => expect(isList()).toBe(true));
     expect(localStorage.getItem("wh:layout:AA")).toBe("list");
   });
@@ -45,7 +59,9 @@ describe("the team page's layout", () => {
     const user = userEvent.setup();
     const { router } = renderApp("/t/AA");
     await screen.findByText("Write the plan");
-    await user.click(toggle().getByRole("button", { name: "board" }));
+    await openDisplay(user);
+    await user.click(toggle().getByRole("button", { name: "Board" }));
+    await closeDisplay(user);
     await waitFor(() => expect(isBoard()).toBe(true));
     await router.navigate("/t/BB");
     await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Beta" })).toBeTruthy());

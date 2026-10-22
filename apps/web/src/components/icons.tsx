@@ -76,6 +76,17 @@ import {
   RiHome4Fill,
   RiDashboardLine,
   RiDashboardFill,
+  RiEqualizerLine,
+  RiBardLine,
+  RiFocusFill,
+  RiFocusMode,
+  RiBardFill,
+  RiInboxLine,
+  RiInboxFill,
+  RiLayoutRightLine,
+  RiSortAsc,
+  RiSortDesc,
+  RiStackLine,
   RiLayoutColumnLine,
   RiLayoutColumnFill,
   RiHistoryLine,
@@ -135,6 +146,11 @@ export const MenuIcon = icon(RiMenuLine);
 export const MoreIcon = icon(RiMoreLine);
 export const SearchIcon = icon(RiSearchLine);
 export const FilterIcon = icon(RiFilter3Line);
+export const DisplayIcon = icon(RiEqualizerLine);
+export const SheetIcon = icon(RiLayoutRightLine);
+export const GroupingIcon = icon(RiStackLine);
+export const SortAscIcon = icon(RiSortAsc);
+export const SortDescIcon = icon(RiSortDesc);
 export const MailIcon = icon(RiMailLine);
 export const NotificationsIcon = icon(RiNotification3Line);
 export const LockIcon = icon(RiLockLine);
@@ -253,6 +269,10 @@ export const NAV_ICONS = {
   settings: { line: SettingsIcon, fill: SettingsFillIcon },
   people: { line: PeopleIcon, fill: PeopleFillIcon },
   agents: { line: icon(RiRobot3Line), fill: icon(RiRobot3Fill) },
+  inbox: { line: icon(RiInboxLine), fill: icon(RiInboxFill) },
+  // The Agent placeholder in the sidebar's main section (a bard, not the robot the Agents page uses).
+  agent: { line: icon(RiBardLine), fill: icon(RiBardFill) },
+  myIssues: { line: icon(RiFocusMode), fill: icon(RiFocusFill) },
   workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },
   inviteWorkspace: { line: InviteWorkspaceIcon, fill: InviteWorkspaceFillIcon },
 } satisfies Record<string, IconPair>;

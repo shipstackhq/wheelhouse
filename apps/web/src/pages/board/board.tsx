@@ -379,7 +379,7 @@ function Card({ t, nodes, cycles, projects, relations, selected, overlay }: { t:
   return (
     <div
       className={clsx(
-        "cursor-grab rounded-md border bg-panel-2 p-2.5 text-sm shadow-sm active:cursor-grabbing",
+        "cursor-grab rounded-md border bg-card p-2.5 text-sm shadow-sm active:cursor-grabbing",
         selected ? "border-accent" : "border-line hover:border-muted/50",
         overlay && "rotate-2 shadow-xl",
       )}

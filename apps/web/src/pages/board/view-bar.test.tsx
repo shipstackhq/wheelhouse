@@ -57,7 +57,9 @@ describe("search", () => {
     const first = open();
     await screen.findByText("Fix login bug");
     await user.type(screen.getByRole("searchbox", { name: "Search issues" }), "ship");
-    await user.click(within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "board" }));
+    await user.click(screen.getByRole("button", { name: "Display options" }));
+    await user.click(within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "Board" }));
+    await user.keyboard("{Escape}");
     await waitFor(() => expect(document.querySelectorAll("[data-column]").length).toBe(6));
     expect(screen.queryByText("Fix login bug")).toBeNull();
     expect(screen.getByText("Ship it")).toBeTruthy();
@@ -136,10 +138,16 @@ describe("filters", () => {
   });
 });
 
+/** A Radix dropdown in the Display menu: open it by its name, then choose the option. */
+const pick = async (user: ReturnType<typeof userEvent.setup>, m: ReturnType<typeof within>, name: string, option: string) => {
+  await user.click(m.getByRole("combobox", { name }));
+  await user.click(await screen.findByRole("option", { name: option }));
+};
+
 describe("display: grouping", () => {
   const group = async (user: ReturnType<typeof userEvent.setup>, by: string) => {
     const m = await openMenu(user, "Display options");
-    await user.click(m.getByRole("radio", { name: by }));
+    await pick(user, m, "Grouping", by);
     await user.keyboard("{Escape}");
   };
   test("by priority, assignee, project, cycle or nothing; empty groups are left out, 'none of these' is last", async () => {
@@ -230,7 +238,7 @@ describe("display: grouping", () => {
 describe("display: ordering", () => {
   const order = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
     const m = await openMenu(user, "Display options");
-    await user.selectOptions(m.getByLabelText("Ordering"), label);
+    await pick(user, m, "Ordering", label);
     return m;
   };
   test("inside every group by the chosen field, with a button for the direction", async () => {
@@ -240,7 +248,7 @@ describe("display: ordering", () => {
     expect(titles()).toEqual(["AA-2", "AA-3", "AA-1", "AA-4"]); // manual: the board order
     const m = await order(user, "Title");
     await waitFor(() => expect(titles()).toEqual(["AA-2", "AA-3", "AA-1", "AA-4"])); // grouped by status, so Todo's two are now by title: Bug in billing, Fix login bug
-    await user.click(m.getByRole("radio", { name: "No grouping" }));
+    await pick(user, m, "Grouping", "No grouping");
     await waitFor(() => expect(titles()).toEqual(["AA-3", "AA-1", "AA-4", "AA-2"])); // Bug in billing, Fix login bug, Ship it, Write docs
     await user.click(m.getByRole("button", { name: "Ascending: switch to descending" }));
     await waitFor(() => expect(titles()).toEqual(["AA-2", "AA-4", "AA-1", "AA-3"]));
@@ -252,8 +260,8 @@ describe("display: ordering", () => {
     await screen.findByText("Fix login bug");
     const m = await openMenu(user, "Display options");
     expect((m.getByRole("button", { name: /switch to/ }) as HTMLButtonElement).disabled).toBe(true);
-    await user.click(m.getByRole("radio", { name: "No grouping" }));
-    await user.selectOptions(m.getByLabelText("Ordering"), "Priority");
+    await pick(user, m, "Grouping", "No grouping");
+    await pick(user, m, "Ordering", "Priority");
     await waitFor(() => expect(titles()).toEqual(["AA-3", "AA-1", "AA-4", "AA-2"]));
     expect((m.getByRole("button", { name: /switch to/ }) as HTMLButtonElement).disabled).toBe(false);
   });
@@ -267,6 +275,6 @@ describe("display: ordering", () => {
     open();
     await screen.findByText("Fix login bug");
     const m = await openMenu(userEvent.setup(), "Display options");
-    expect((m.getByLabelText("Ordering") as HTMLSelectElement).value).toBe("number");
+    expect(m.getByRole("combobox", { name: "Ordering" }).textContent).toContain("Number");
   });
 });

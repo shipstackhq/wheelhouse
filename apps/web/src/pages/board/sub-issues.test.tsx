@@ -74,7 +74,7 @@ describe("sub-issues in the list", () => {
       open();
       await screen.findByText("Epic");
       const m = await menu(user, "Display options");
-      await user.click(m.getByRole("checkbox", { name: "Nest under their parent" }));
+      await user.click(m.getByRole("switch", { name: "Nest sub-issues under their parent" }));
       await waitFor(() => expect(row("AA-2").getAttribute("data-depth")).toBe("0"));
       expect(refsIn("Todo")).toEqual(["AA-1", "AA-2", "AA-4", "AA-5"]);
       expect(row("AA-2").querySelector("[data-parent-chip]")?.textContent).toContain("AA-1");
@@ -86,19 +86,19 @@ describe("sub-issues in the list", () => {
       open();
       await screen.findByText("Epic");
       const m = await menu(user, "Display options");
-      await user.click(m.getByRole("checkbox", { name: "Show sub-issues" }));
+      await user.click(m.getByRole("switch", { name: "Show sub-issues" }));
       await waitFor(() => expect(refsIn("Todo")).toEqual(["AA-1", "AA-5"]));
       expect(screen.queryByRole("region", { name: "Done" })).toBeTruthy(); // statuses stay
       expect(refsIn("Done")).toEqual([]);
       expect(within(row("AA-1")).getByRole("img", { name: "1 of 3 sub-issues done" })).toBeTruthy();
-      expect((m.getByRole("checkbox", { name: "Nest under their parent" }) as HTMLInputElement).disabled).toBe(true);
+      expect((m.getByRole("switch", { name: "Nest sub-issues under their parent" }) as HTMLButtonElement).disabled).toBe(true);
     });
     test("the choices are remembered for the team", async () => {
       const user = userEvent.setup();
       const first = open();
       await screen.findByText("Epic");
       const m = await menu(user, "Display options");
-      await user.click(m.getByRole("checkbox", { name: "Show sub-issues" }));
+      await user.click(m.getByRole("switch", { name: "Show sub-issues" }));
       await waitFor(() => expect(JSON.parse(localStorage.getItem("wh:issue-view:AA")!).showSub).toBe(false));
       first.unmount();
       open();

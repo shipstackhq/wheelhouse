@@ -95,9 +95,10 @@ export function IssueList(props: {
           {error}
         </div>
       )}
-      <div className="pb-8">
+      {/* Padded like the board, with each group's header a rounded bar and a little space between groups. */}
+      <div className="space-y-2 px-4 pb-8 pt-3">
         {props.filtered && order.length === 0 && (
-          <div className="px-4 py-10 text-center text-sm text-muted">
+          <div className="py-10 text-center text-sm text-muted">
             <p>No issues match.</p>
             <button type="button" className="mt-2 text-accent hover:underline" onClick={props.onClearFilters}>Clear filters</button>
           </div>
@@ -111,7 +112,7 @@ export function IssueList(props: {
               onAdd={(title) => act(() => api.issues.create(teamKey, { title, ...startingFields(g.what) }))}
             />
             {!folded.has(g.id) && (
-              <ul>
+              <ul className="mt-0.5">
                 {rowsOf(g).map((r) => (
                   <Row
                     key={r.issue.id}
@@ -177,21 +178,22 @@ function GroupHeader(props: { group: IssueGroup; folded: boolean; onToggle: () =
     setTitle("");
   };
   return (
-    <div className="sticky top-0 z-10 border-y border-line bg-panel-2/95 backdrop-blur">
-      <div className="flex items-center gap-2 px-4 py-1.5">
-        <button type="button" aria-expanded={!props.folded} aria-label={`${group.label}, ${count} ${count === 1 ? "issue" : "issues"}`} onClick={props.onToggle} className="flex min-w-0 items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/50">
+    <div className="sticky top-0 z-10 overflow-hidden rounded-lg bg-card/95 backdrop-blur">
+      <div className="flex items-center gap-2">
+        {/* The toggle fills the whole bar, so a click anywhere on it, except the add button, folds or opens the group. */}
+        <button type="button" aria-expanded={!props.folded} aria-label={`${group.label}, ${count} ${count === 1 ? "issue" : "issues"}`} onClick={props.onToggle} className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50">
           {props.folded ? <ChevronRightIcon aria-hidden className="text-muted" /> : <ChevronDownIcon aria-hidden className="text-muted" />}
           <GroupIcon what={group.what} />
           <span className="truncate text-sm font-medium">{group.label}</span>
           <span className="text-xs tabular-nums text-muted">{count}</span>
         </button>
-        <button type="button" aria-label={`Add an issue to ${group.label}`} className="ml-auto rounded p-1 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50" onClick={() => setAdding(true)}>
+        <button type="button" aria-label={`Add an issue to ${group.label}`} className="mr-2 shrink-0 rounded p-1 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50" onClick={() => setAdding(true)}>
           <AddIcon aria-hidden />
         </button>
       </div>
       {adding && (
         <form
-          className="flex items-center gap-2 border-t border-line bg-panel px-4 py-1.5"
+          className="flex items-center gap-2 bg-panel px-3 py-1.5"
           onSubmit={(e) => {
             e.preventDefault();
             const v = title.trim();
@@ -239,7 +241,7 @@ function Row(props: {
   const cycle = t.cycle == null ? null : (props.cycles.find((c) => c.number === t.cycle) ?? { number: t.cycle, name: "", startsAt: "", endsAt: "", state: "current" as const });
   return (
     <li
-      className={clsx("flex items-center gap-1.5 border-b border-line py-1 pr-3 text-sm hover:bg-panel-2/60", props.selected && "bg-accent/10")}
+      className={clsx("flex items-center gap-1.5 rounded-md border-b border-line py-0.5 pr-3 text-sm last:border-b-0 hover:bg-panel-2/60", props.selected && "bg-accent/10")}
       style={{ paddingLeft: 12 + depth * 20 }}
       data-issue={t.ref}
       data-depth={depth}
