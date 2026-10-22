@@ -102,8 +102,23 @@ export type Me = {
   csrfToken: string;
 };
 
-export type Team = { id: string; key: string; name: string; description: string; createdAt: string; /** `ri:<name>` (a Remix icon, drawn in `iconColor`) or one emoji; null for the default. */ icon: string | null; iconColor: string | null; /** The caller's own role in it. */ role?: TeamRole };
-export type CreateTeamInput = { name: string; key?: string; description?: string };
+export type Team = { id: string; key: string; name: string; description: string; createdAt: string; /** `ri:<name>` (a Remix icon, drawn in `iconColor`) or one emoji; null for the default. */ icon: string | null; iconColor: string | null; /** The caller's own role in it. */ role?: TeamRole; /** Retired: read only and kept out of the main sidebar. */ retired?: boolean; /** The parent team's id, when it has one. */ parentId?: string | null };
+export type CreateTeamInput = { name: string; key?: string; description?: string; /** Key of a team you can open to nest this one under. */ parent?: string | null };
+/** Whether a Danger zone action is allowed, and when it is not, the reason the API would answer with. */
+export type TeamGuard = { allowed: boolean; reason: string | null };
+type TeamRef = { key: string; name: string; retired: boolean };
+/** The team settings read: its place in the hierarchy and the state of leave, retire and delete. */
+export type TeamSettings = {
+  team: { id: string; key: string; name: string; retired: boolean; retiredAt: string | null };
+  myRole: TeamRole;
+  parent: TeamRef | null;
+  children: TeamRef[];
+  hiddenChildren: number;
+  canLeave: TeamGuard;
+  canRetire: TeamGuard;
+  canDelete: TeamGuard;
+};
+export type ParentCandidate = { id: string; key: string; name: string; retired: boolean };
 
 export type LoginInput = { email: string; password: string };
 export type SignupInput = { name: string; email: string; password: string; workspace?: string };
@@ -271,6 +286,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
       removeMember: (teamKey: string, userId: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/members/${encodeURIComponent(userId)}`),
       /** A workspace owner or admin joins the team as its admin (audited). */
       join: (teamKey: string) => request<{ team: { id: string; key: string; name: string } }>("POST", `${team(teamKey)}/join`, {}),
+      /** Team settings read: parent, children and, for each Danger zone action, whether it is allowed and why not. */
+      settings: (teamKey: string) => request<TeamSettings>("GET", `${team(teamKey)}/settings`),
+      /** The teams you can open that could be this team's parent (omit the key while creating a team). */
+      parentCandidates: async (teamKey?: string) =>
+        (await request<{ teams: ParentCandidate[] }>("GET", teamKey ? `${team(teamKey)}/parent-candidates` : "/api/app/teams/parent-candidates")).teams,
+      /** Set, change or clear (`null`) the parent (team admins). */
+      setParent: async (teamKey: string, parent: string | null) => (await request<{ team: Team }>("PUT", `${team(teamKey)}/parent`, { parent })).team,
+      /** Retire the team: read only, out of the main sidebar (team admins). */
+      retire: async (teamKey: string) => (await request<{ team: Team }>("POST", `${team(teamKey)}/retire`, {})).team,
+      /** Bring a retired team back (team admins). */
+      restore: async (teamKey: string) => (await request<{ team: Team }>("POST", `${team(teamKey)}/restore`, {})).team,
+      /** Delete the team and everything in it (team admins). `confirm` is the team key, typed. */
+      remove: (teamKey: string, confirm: string) => request<{ ok: true; deleted: string }>("DELETE", team(teamKey), { confirm }),
       /** Teammates remove an agent session from a team. */
       removeSession: (teamKey: string, sessionId: string) =>
         request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/sessions/${encodeURIComponent(sessionId)}`),

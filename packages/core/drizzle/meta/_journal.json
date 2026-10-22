@@ -274,6 +274,13 @@
       "when": 1792703161086,
       "tag": "0038_project_priority",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792789561086,
+      "tag": "0039_team_lifecycle",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,13 @@
 import { useActionState, useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { DangerZone } from "../components/team-danger-zone";
 import { Loaded } from "../components/query-state";
 import { TeamIconPicker } from "../components/team-icon-picker";
 import { StatusesSection } from "./team-statuses";
 import { SubmitButton } from "../components/submit-button";
 import { failure, field, type FormState } from "../lib/form-state";
-import { useTeamMembers } from "../lib/queries";
+import { useTeamMembers, useTeamSettings } from "../lib/queries";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { useTeams } from "../lib/session";
@@ -51,7 +53,64 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
           </p>
           <StatusesSection teamKey={key} canEdit={myRole === "admin"} />
         </div>
+        <div className="card mt-6 p-5">
+          <h2 className="mb-1 font-medium">Parent team</h2>
+          <p className="mb-4 text-sm text-muted">Places the team in a hierarchy. It changes nothing about who can open either team.</p>
+          <ParentSection teamKey={key} canEdit={myRole === "admin"} />
+        </div>
+        <DangerZone teamKey={key} />
       </div>
+    </div>
+  );
+}
+
+function ParentSection({ teamKey, canEdit }: { teamKey: string; canEdit: boolean }) {
+  const { api, queryClient } = useServices();
+  const settings = useTeamSettings(teamKey).data;
+  const options = useQuery({ queryKey: ["members", teamKey, "parent-candidates"], queryFn: () => api.teams.parentCandidates(teamKey), enabled: canEdit }).data;
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  if (!settings) return null;
+  const change = async (parent: string) => {
+    setPending(true);
+    setError(null);
+    try {
+      await api.teams.setParent(teamKey, parent || null);
+      await refreshAll(queryClient);
+    } catch (e) {
+      setError(failure(e)?.error ?? "Could not change the parent");
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <div>
+      {canEdit ? (
+        <>
+          <label className="label" htmlFor="parent">Parent</label>
+          <select className="input" id="parent" value={settings.parent?.key ?? ""} disabled={pending} onChange={(e) => change(e.target.value)}>
+            <option value="">No parent (top level)</option>
+            {settings.parent && !options?.some((o) => o.key === settings.parent!.key) && <option value={settings.parent.key}>{settings.parent.name}</option>}
+            {options?.map((o) => (
+              <option key={o.key} value={o.key}>{o.name}{o.retired ? " (retired)" : ""}</option>
+            ))}
+          </select>
+        </>
+      ) : (
+        <p className="text-sm">{settings.parent ? settings.parent.name : "No parent team."}</p>
+      )}
+      {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
+      {(settings.children.length > 0 || settings.hiddenChildren > 0) && (
+        <div className="mt-4">
+          <h3 className="text-sm font-medium">Child teams</h3>
+          <ul className="mt-1 text-sm text-muted">
+            {settings.children.map((c) => (
+              <li key={c.key}><Link className="hover:text-fg" to={`/t/${c.key}`}>{c.name}</Link>{c.retired ? " (retired)" : ""}</li>
+            ))}
+            {settings.hiddenChildren > 0 && <li>{settings.hiddenChildren} more you cannot open</li>}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

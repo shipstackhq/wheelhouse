@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { TeamRole, WorkspaceRole } from "../db/schema";
 import type { Actor } from "./access";
-import { audit, canManagePeople, isUuid, teamRoleMap, roleOnTeam, workspaceRoleOf } from "./team-access";
+import { audit, canManagePeople, isUuid, leaveBlock, lockWorkspaceTeams, teamRoleMap, roleOnTeam, workspaceRoleOf } from "./team-access";
 import { emit, findWorkspaceTeam, requireTeam, listTeams } from "./service";
 import { ServiceError } from "./service-error";
 
@@ -19,7 +19,8 @@ const { teamMembers: pm, memberships, users } = schema;
  */
 export async function listTeamsWithRole(actor: Actor) {
   const db = await getDb();
-  const [teams, roles] = await Promise.all([listTeams(actor), teamRoleMap(db, actor)]);
+  // Retired teams come back too, flagged `retired`, so the sidebar can group them apart from the active ones.
+  const [teams, roles] = await Promise.all([listTeams(actor, { includeRetired: true }), teamRoleMap(db, actor)]);
   const placed = new Map<string, number>();
   if (actor.kind === "human" && !actor.system) {
     const rows = await db.select({ teamId: pm.teamId, position: pm.position }).from(pm).where(and(eq(pm.userId, actor.id), eq(pm.workspaceId, actor.workspaceId)));
@@ -27,7 +28,7 @@ export async function listTeamsWithRole(actor: Actor) {
   }
   const rank = (id: string) => placed.get(id) ?? Number.POSITIVE_INFINITY;
   return teams
-    .map((p) => ({ ...p, role: (roles?.get(p.id) ?? "editor") as TeamRole }))
+    .map((p) => ({ ...p, role: (roles?.get(p.id) ?? "editor") as TeamRole, retired: !!p.retiredAt }))
     .sort((a, b) => (rank(a.id) === rank(b.id) ? a.createdAt.getTime() - b.createdAt.getTime() : rank(a.id) < rank(b.id) ? -1 : 1));
 }
 
@@ -41,7 +42,7 @@ export async function setTeamOrder(actor: Actor, keys: unknown) {
     throw new ServiceError("invalid", "keys must be a list of team keys", { fields: { keys: "a list of team keys" } });
   }
   const db = await getDb();
-  const mine = await listTeams(actor);
+  const mine = await listTeams(actor, { includeRetired: true });
   const byKey = new Map(mine.map((t) => [t.key.toUpperCase(), t.id]));
   const ids = [...new Set((keys as string[]).map((k) => byKey.get(k.toUpperCase())).filter((x): x is string => !!x))];
   await db.transaction(async (tx) => {
@@ -143,9 +144,15 @@ export async function removeTeamMember(actor: Actor, teamRef: string, userId: st
   const team = await requireTeam(actor, teamRef, userId === actor.id ? "read" : "admin");
   if (!isUuid(userId)) throw new ServiceError("not_found", "They are not in this team");
   return db.transaction(async (tx) => {
+    // Leaving yourself also keeps you on one active team; the lock makes two leaves at once check one after the other.
+    if (userId === actor.id) await lockWorkspaceTeams(tx, team.workspaceId);
     const [cur] = await tx.select({ role: pm.role }).from(pm).where(and(eq(pm.teamId, team.id), eq(pm.userId, userId)));
     if (!cur) throw new ServiceError("not_found", "They are not in this team");
-    if (cur.role === "admin" && (await adminCount(tx, team.id)) <= 1) throw new ServiceError("conflict", "A team needs at least one admin. Name another admin first.");
+    if (userId === actor.id) {
+      const [fresh] = await tx.select().from(schema.teams).where(eq(schema.teams.id, team.id));
+      const why = await leaveBlock(tx, fresh, userId);
+      if (why) throw new ServiceError("conflict", why);
+    } else if (cur.role === "admin" && (await adminCount(tx, team.id)) <= 1) throw new ServiceError("conflict", "A team needs at least one admin. Name another admin first.");
     await tx.delete(pm).where(and(eq(pm.teamId, team.id), eq(pm.userId, userId)));
     await audit(tx, actor, { action: userId === actor.id ? "team.member_left" : "team.member_removed", targetType: "user", targetId: userId, teamId: team.id, before: { role: cur.role } });
     return { ok: true as const };

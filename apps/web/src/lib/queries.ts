@@ -73,6 +73,9 @@ export const teamMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey
 export const addableMembersQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey, "addable"] as const, queryFn: () => api.teams.addableMembers(teamKey) });
 export const workspaceTeamsQuery = (api: ApiClient) => ({ queryKey: ["access", "teams"] as const, queryFn: () => api.access.teams() });
 export const auditQuery = (api: ApiClient) => ({ queryKey: ["access", "audit"] as const, queryFn: () => api.access.audit({ limit: 50 }) });
+/** Team settings: the parent and children, and whether leave, retire and delete are allowed (with the reason when not). Under "members" so a membership change refreshes it. */
+export const teamSettingsQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["members", teamKey, "settings"] as const, queryFn: () => api.teams.settings(teamKey) });
+export const useTeamSettings = (teamKey: string) => useQuery(teamSettingsQuery(useServices().api, teamKey));
 export const useTeamMembers = (teamKey: string) => useQuery(teamMembersQuery(useServices().api, teamKey));
 
 /** The person's machines (the agent daemon), an issue's runs on them, and one run's progress. Under "issue" so an issue change refreshes its runs. */
