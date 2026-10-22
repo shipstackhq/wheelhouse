@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useNavigate } from "react-router";
 import clsx from "clsx";
-import { ArrowLeftIcon, type IconPair } from "../../components/icons";
+import { ArrowLeftIcon, SETTINGS_ICONS, type IconPair } from "../../components/icons";
 import { NavLink } from "../../components/nav-link";
 import { NavigationProgress } from "../../components/navigation-progress";
 import { FullPageSkeleton } from "../../routes/layouts";
@@ -12,18 +12,18 @@ const ITEMS: { group: string; items: { to: string; label: string; icon?: IconPai
   {
     group: "Personal",
     items: [
-      { to: "/settings/profile", label: "Profile" },
-      { to: "/settings/password", label: "Password" },
-      { to: "/settings/devices", label: "Devices" },
+      { to: "/settings/profile", label: "Profile", icon: SETTINGS_ICONS.profile },
+      { to: "/settings/password", label: "Password", icon: SETTINGS_ICONS.password },
+      { to: "/settings/devices", label: "Devices", icon: SETTINGS_ICONS.devices },
     ],
   },
   {
     group: "Workspace",
     items: [
-      { to: "/settings/workspace", label: "General" },
-      { to: "/settings/members", label: "Members" },
-      { to: "/settings/agents", label: "Agents & API keys" },
-      { to: "/settings/teams", label: "Teams" },
+      { to: "/settings/workspace", label: "General", icon: SETTINGS_ICONS.general },
+      { to: "/settings/members", label: "Members", icon: SETTINGS_ICONS.members },
+      { to: "/settings/agents", label: "Agents & API keys", icon: SETTINGS_ICONS.agents },
+      { to: "/settings/teams", label: "Teams", icon: SETTINGS_ICONS.teams },
     ],
   },
   { group: "Integrations", items: INTEGRATIONS.map((i) => ({ to: i.to, label: i.label, icon: i.icon })) },

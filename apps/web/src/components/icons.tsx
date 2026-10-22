@@ -89,6 +89,11 @@ import {
   RiTeamFill,
   RiSettings3Line,
   RiSettings3Fill,
+  RiUserLine,
+  RiLockPasswordLine,
+  RiLockPasswordFill,
+  RiMacbookLine,
+  RiMacbookFill,
   RiGithubLine,
   RiGithubFill,
   RiGroup2Line,
@@ -250,6 +255,17 @@ export const NAV_ICONS = {
   agents: { line: icon(RiRobot3Line), fill: icon(RiRobot3Fill) },
   workspaces: { line: WorkspacesIcon, fill: WorkspacesFillIcon },
   inviteWorkspace: { line: InviteWorkspaceIcon, fill: InviteWorkspaceFillIcon },
+} satisfies Record<string, IconPair>;
+
+/** The sections of Settings, in its left panel. */
+export const SETTINGS_ICONS = {
+  profile: { line: icon(RiUserLine), fill: icon(RiUserFill) },
+  password: { line: icon(RiLockPasswordLine), fill: icon(RiLockPasswordFill) },
+  devices: { line: icon(RiMacbookLine), fill: icon(RiMacbookFill) },
+  general: NAV_ICONS.settings,
+  members: NAV_ICONS.people,
+  agents: NAV_ICONS.agents,
+  teams: { line: icon(RiTeamLine), fill: icon(RiTeamFill) },
 } satisfies Record<string, IconPair>;
 
 /** The services under Settings → Integrations, by integration id. */
