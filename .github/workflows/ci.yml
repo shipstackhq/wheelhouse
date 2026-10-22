@@ -13,8 +13,118 @@ permissions:
   contents: read
 
 jobs:
+  # What this run has to test. A push to staging or production tests everything. A pull request that only touches the web app or
+  # docs skips the server-side suites (core, api, the root tests, Postgres), which cannot be affected and take most of the time.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      server: ${{ steps.diff.outputs.server }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "server=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)
+          echo "$changed"
+          # Anything outside apps/web, docs or Markdown files can affect the server side.
+          if echo "$changed" | grep -qvE '^(apps/web/|docs/)|\.md$'; then server=true; else server=false; fi
+          echo "server=$server" >> "$GITHUB_OUTPUT"
+          echo "server-side suites: $server"
+
   check:
-    name: Lint, types, tests, build
+    name: Lint, types, migrations, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm version comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: Migrations are in sync with the schema
+        run: |
+          pnpm db:generate
+          git status --porcelain packages/core/drizzle
+          test -z "$(git status --porcelain packages/core/drizzle)" || { echo "::error::packages/core/src/db/schema.ts changed without a migration. Run pnpm db:generate and commit packages/core/drizzle/."; exit 1; }
+      - name: The React app builds
+        run: pnpm build
+
+  # The test suites, split so they run at the same time instead of one after another. The runner has 2 cores, so each job runs two
+  # test files at once. Together these run exactly what `pnpm test` runs.
+  core-tests:
+    name: Core tests (${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - working-directory: packages/core
+        run: pnpm exec tsx --test --test-force-exit --test-concurrency=2 --test-shard=${{ matrix.shard }}/3 "src/**/*.test.ts"
+
+  web-tests:
+    name: Web tests (${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - working-directory: apps/web
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/2 --maxWorkers=2
+
+  server-tests:
+    name: API, client and repository tests
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @wheelhouse/api test
+      - run: pnpm --filter @wheelhouse/api-client test
+      - run: pnpm exec tsx --conditions=react-server --test --test-concurrency=2 "tests/*.test.ts"
+
+  postgres-tests:
+    name: Database suites on a real Postgres
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -33,17 +143,13 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-      # pnpm version comes from "packageManager" in package.json.
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - name: Database suites on a real Postgres (queue, invites, admin, isolation, constraints, join tables, cycles, projects)
+      - name: Queue, invites, admin, isolation, constraints, join tables, cycles, projects
         env:
           TEST_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/wheelhouse_test
         run: >-
@@ -51,13 +157,18 @@ jobs:
           packages/core/src/lib/queue.test.ts tests/invites.test.ts packages/core/src/lib/workspaces-admin.test.ts tests/isolation.test.ts
           packages/core/src/lib/version-lock.test.ts packages/core/src/tools/db-copy.test.ts packages/core/src/lib/workspace-scope.test.ts
           packages/core/src/lib/constraints.test.ts packages/core/src/lib/join-tables.test.ts packages/core/src/lib/cycles.test.ts packages/core/src/lib/projects.test.ts packages/core/src/lib/initiatives.test.ts packages/core/src/lib/team-access.test.ts
-      - name: Migrations are in sync with the schema
-        run: |
-          pnpm db:generate
-          git status --porcelain packages/core/drizzle
-          test -z "$(git status --porcelain packages/core/drizzle)" || { echo "::error::packages/core/src/db/schema.ts changed without a migration. Run pnpm db:generate and commit packages/core/drizzle/."; exit 1; }
-      - name: The React app builds
-        run: pnpm build
+
+  # One check that says whether everything above passed, skipped suites counting as passed. Point branch rules here.
+  tests:
+    name: Lint, types, tests, build
+    if: always()
+    needs: [changes, check, core-tests, web-tests, server-tests, postgres-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: |
+          echo '${{ toJSON(needs) }}'
+          if echo '${{ toJSON(needs.*.result) }}' | grep -qE '"(failure|cancelled)"'; then exit 1; fi
 
   image:
     name: Image builds, migrates a fresh Postgres, serves health

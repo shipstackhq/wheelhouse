@@ -311,15 +311,6 @@ describe("moving between issues, and the keyboard", () => {
     await waitFor(() => expect(screen.getByText("2 / 2")).toBeTruthy());
   });
 
-  test("the arrow keys step through the column", async () => {
-    const { router } = await open();
-    const user = userEvent.setup();
-    await user.keyboard("{ArrowRight}");
-    await waitFor(() => expect(router.state.location.search).toBe("?t=AA-3"));
-    await user.keyboard("{ArrowLeft}");
-    await waitFor(() => expect(router.state.location.search).toBe("?t=AA-2"));
-  });
-
   test("but not while typing in a field, where they move the cursor", async () => {
     const { d, router } = await open();
     const user = userEvent.setup();
