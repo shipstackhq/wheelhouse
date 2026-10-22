@@ -18,8 +18,9 @@ describe("POST /api/app/auth/login", () => {
     const r = await login(fx.a.email);
     assert.equal(r.status, 200);
     assert.deepEqual(Object.keys(r.json).sort(), ["csrfToken", "isInstanceAdmin", "role", "tags", "user", "workspace"]);
-    assert.deepEqual(r.json.user, { id: fx.a.userId, name: "Contract A owner", email: fx.a.email });
+    assert.deepEqual(r.json.user, { id: fx.a.userId, name: "Contract A owner", email: fx.a.email, avatarUrl: null }); // no picture set: null
     assert.equal(r.json.workspace.id, fx.a.workspaceId);
+    assert.equal(r.json.workspace.imageUrl, null);
     assert.equal(r.json.role, "owner");
     assert.equal(r.json.isInstanceAdmin, false);
     assert.ok(!r.text.includes("passwordHash") && !r.text.includes("password_hash"), "no password hash in the response");

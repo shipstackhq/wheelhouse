@@ -4,12 +4,14 @@
   "role": "string",
   "tags": [],
   "user": {
+    "avatarUrl": "null",
     "email": "string",
     "id": "string",
     "name": "string"
   },
   "workspace": {
     "id": "string",
+    "imageUrl": "null",
     "name": "string"
   }
 }
