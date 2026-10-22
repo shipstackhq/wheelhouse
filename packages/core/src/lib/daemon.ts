@@ -75,13 +75,15 @@ function signalJob(job: { id: string; workspaceId: string; teamId: string; issue
 // ───────── signed messages to a device ─────────
 
 type MessageType = (typeof schema.DEVICE_MESSAGE_TYPES)[number];
+type SigningKey = Awaited<ReturnType<typeof serverSigningKey>>;
 
 /**
  * Append a signed message to the device's log. The signature covers the whole `message`, which names the device and the time, so a
- * message cannot be replayed to another machine. Returns the device id to wake once the caller's transaction has committed.
+ * message cannot be replayed to another machine. The caller loads `key` before opening its transaction: loading it the first time reads
+ * the database, which inside a transaction on the single-connection embedded database would wait for itself forever.
  */
-async function sendToDevice(q: Q, deviceId: string, type: MessageType, body: Record<string, unknown>) {
-  const { privateKey } = await serverSigningKey();
+async function sendToDevice(q: Q, key: SigningKey, deviceId: string, type: MessageType, body: Record<string, unknown>) {
+  const { privateKey } = key;
   const message = { ...body, type, deviceId, issuedAt: new Date().toISOString() };
   await q.insert(deviceMessages).values({ deviceId, type, message, signature: signValue(privateKey, message) });
   return deviceId;
@@ -623,9 +625,10 @@ export async function updateDevice(actor: Actor, id: string, input: Record<strin
   }
   if (input.chatModel !== undefined) patch.chatModel = input.chatModel === null ? null : str(input.chatModel, 60) || null;
   if (!Object.keys(patch).length) return { device: deviceView(d) };
+  const key = await serverSigningKey();
   const updated = await db.transaction(async (tx) => {
     const [row] = await tx.update(devices).set(patch).where(eq(devices.id, d.id)).returning();
-    if (patch.poolSize !== undefined || patch.chatModel !== undefined) await sendToDevice(tx, d.id, "settings.update", { poolSize: row.poolSize, chatModel: row.chatModel });
+    if (patch.poolSize !== undefined || patch.chatModel !== undefined) await sendToDevice(tx, key, d.id, "settings.update", { poolSize: row.poolSize, chatModel: row.chatModel });
     return row;
   });
   wake(d.id);
@@ -746,12 +749,13 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
   const id = crypto.randomUUID();
   const branch = jobBranch(issueRef, issue.title, id);
   const offerExpiresAt = new Date(Date.now() + OFFER_TTL_MS);
+  const key = await serverSigningKey();
   const job = await db.transaction(async (tx) => {
     const [j] = await tx
       .insert(deviceJobs)
       .values({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, createdBy: actor.id, offerExpiresAt })
       .returning();
-    await sendToDevice(tx, device.id, "job.offer", {
+    await sendToDevice(tx, key, device.id, "job.offer", {
       jobId: j.id,
       expiresAt: offerExpiresAt.toISOString(),
       model,
@@ -818,6 +822,7 @@ export async function cancelJob(actor: Actor, jobId: string) {
   if (actor.kind !== "human" || (job.createdBy !== actor.id && d?.ownerId !== actor.id)) throw new ServiceError("forbidden", "Only the person who started it or the device's owner can cancel a run");
   if (isFinalState(job.state)) return { job: jobView(job) };
   const now = new Date();
+  const key = await serverSigningKey();
   const updated = await db.transaction(async (tx) => {
     const [row] =
       job.state === "offered"
@@ -831,7 +836,7 @@ export async function cancelJob(actor: Actor, jobId: string) {
             .set({ cancelRequestedAt: now, updatedAt: now })
             .where(and(eq(deviceJobs.id, job.id), inArray(deviceJobs.state, ["accepted", "running"])))
             .returning();
-    if (row) await sendToDevice(tx, job.deviceId, "job.cancel", { jobId: job.id, requestedBy: { id: actor.id, name: actor.name } });
+    if (row) await sendToDevice(tx, key, job.deviceId, "job.cancel", { jobId: job.id, requestedBy: { id: actor.id, name: actor.name } });
     return row;
   });
   wake(job.deviceId);

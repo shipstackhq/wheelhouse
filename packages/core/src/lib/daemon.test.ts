@@ -17,7 +17,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import * as svc from "./service";
 import * as d from "./daemon";
-import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, verifyAssertion, verifyValue } from "./daemon-crypto";
+import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 let owner: Actor;
@@ -163,6 +163,13 @@ describe("device tokens", () => {
 });
 
 describe("devices", () => {
+  test("the first signed message after a restart does not wait on itself (the key is loaded outside the transaction)", async () => {
+    const { device } = await paired();
+    resetSigningKeyCache(); // as after a restart: the key is not in memory yet
+    const r = await Promise.race([d.updateDevice(owner, device.id, { poolSize: 2 }), new Promise((res) => setTimeout(() => res("hung"), 5000))]);
+    assert.notEqual(r, "hung");
+  });
+
   test("a person sees and changes only their own devices; a pool size change goes to the daemon signed", async () => {
     const { device, poll } = await paired();
     assert.ok((await d.listDevices(owner)).some((x) => x.id === device.id));
