@@ -7,6 +7,7 @@ import { timeAgo } from "@wheelhouse/core/lib/time";
 import { ClaudeIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
+import { madeNoChanges, runStatusLabel } from "../../lib/run-status";
 import { issueRunsQuery, runBranchesQuery, runEventsQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 
@@ -31,18 +32,6 @@ const STATE_STYLE: Record<JobState, string> = {
   rejected: "bg-warn/15 text-warn",
   expired: "bg-panel-2 text-muted",
   lost: "bg-warn/15 text-warn",
-};
-
-const STATE_LABEL: Record<JobState, string> = {
-  offered: "waiting for the device",
-  accepted: "setting up",
-  running: "running",
-  succeeded: "done",
-  failed: "failed",
-  canceled: "canceled",
-  rejected: "refused",
-  expired: "not picked up",
-  lost: "lost",
 };
 
 /**
@@ -167,6 +156,13 @@ function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { issueRe
 /** One line under the branch name: what landed (succeeded), or why not (failed, canceled, …). */
 function RunSummary({ job: j }: { job: JobView }) {
   const stats = j.result.diffStats;
+  if (madeNoChanges(j))
+    return (
+      <span className="text-muted">
+        Nothing was changed, so nothing was pushed
+        {j.result.costUsd != null ? ` · ~$${j.result.costUsd.toFixed(2)}` : ""}
+      </span>
+    );
   if (j.state === "succeeded")
     return (
       <span className="text-muted">
@@ -225,7 +221,7 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
           </div>
           {error && <p className="text-xs text-danger" role="alert">{error}</p>}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-            <span className={clsx("chip", STATE_STYLE[j.state])}>{j.cancelRequested && active ? "stopping" : STATE_LABEL[j.state]}</span>
+            <span className={clsx("chip", madeNoChanges(j) ? "bg-panel-2 text-muted" : STATE_STYLE[j.state])}>{runStatusLabel(j)}</span>
             <ModelLabel model={j.model} />
             <span className="text-xs text-muted">{timeAgo(j.createdAt)}</span>
           </div>
