@@ -676,6 +676,8 @@ export type PairingPeek = { userCode: string; name: string; os: string; expiresA
 
 export type JobState = "offered" | "accepted" | "running" | "succeeded" | "failed" | "canceled" | "rejected" | "expired" | "lost";
 /** One "Run on device" of an issue. */
+/** What a run left behind: nothing, a pushed branch, an open pull request, or a pushed branch whose pull request GitHub refused. Null until the run has finished. */
+export type JobDelivery = "none" | "pushed" | "pr_opened" | "pr_failed";
 export type JobView = {
   id: string;
   state: JobState;
@@ -683,13 +685,16 @@ export type JobView = {
   branch: string;
   /** The branch it started from; null for runs from before this was recorded. */
   baseBranch: string | null;
+  /** The run this one continues (same branch, from its commits); null for a fresh run. */
+  continuesJobId: string | null;
   deviceId: string;
   deviceName: string | null;
   repositoryId: string | null;
   repositoryName: string | null;
   result: { commit?: string | null; pushed?: boolean; diffStats?: { files: number | null; insertions: number | null; deletions: number | null }; costUsd?: number | null; durationMs?: number | null;
     /** The pull request the GitHub App opened for the branch, or why it could not. */
-    pullRequest?: { number: number; url: string }; pullRequestError?: string };
+    pullRequest?: { number: number; url: string }; pullRequestError?: string; pullRequestSkipped?: string };
+  delivery: JobDelivery | null;
   error: string | null;
   cancelRequested: boolean;
   createdAt: string;

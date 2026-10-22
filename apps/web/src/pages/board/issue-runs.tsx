@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Link } from "react-router";
 import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
-import type { IssueRuns, JobEvent, JobState, JobView } from "@wheelhouse/api-client";
+import type { IssueRuns, JobEvent, JobView } from "@wheelhouse/api-client";
 import { timeAgo } from "@wheelhouse/core/lib/time";
 import { ClaudeIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
-import { madeNoChanges, runStatusLabel } from "../../lib/run-status";
+import { isActive, madeNoChanges, runStatus, type Tone } from "../../lib/run-status";
 import { issueRunsQuery, runBranchesQuery, runEventsQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 
@@ -20,27 +20,20 @@ function ModelLabel({ model }: { model: string }) {
   );
 }
 
-const ACTIVE: JobState[] = ["offered", "accepted", "running"];
-
-const STATE_STYLE: Record<JobState, string> = {
-  offered: "bg-panel-2 text-muted",
-  accepted: "bg-agent/15 text-agent",
-  running: "bg-agent/15 text-agent",
-  succeeded: "bg-ok/15 text-ok",
-  failed: "bg-danger/15 text-danger",
-  canceled: "bg-panel-2 text-muted",
-  rejected: "bg-warn/15 text-warn",
-  expired: "bg-panel-2 text-muted",
-  lost: "bg-warn/15 text-warn",
+const TONE_STYLE: Record<Tone, string> = {
+  active: "bg-agent/15 text-agent",
+  good: "bg-ok/15 text-ok",
+  warn: "bg-warn/15 text-warn",
+  bad: "bg-danger/15 text-danger",
+  muted: "bg-panel-2 text-muted",
 };
-
 /**
  * Runs on a device: send the issue to an agent on one of your machines (the Wheelhouse daemon), and follow each run. A run works in a
  * worktree on its own branch and pushes it; the board itself is not changed by the agent yet.
  */
 export function IssueRunsSection({ issueRef }: { issueRef: string }) {
   const { api } = useServices();
-  const query = useQuery({ ...issueRunsQuery(api, issueRef), refetchInterval: (q) => (q.state.data?.jobs.some((j) => ACTIVE.includes(j.state)) ? 5_000 : false) });
+  const query = useQuery({ ...issueRunsQuery(api, issueRef), refetchInterval: (q) => (q.state.data?.jobs.some((j) => isActive(j.state)) ? 5_000 : false) });
   const data = query.data;
   if (!data) return null;
   return (
@@ -179,6 +172,7 @@ function RunSummary({ job: j }: { job: JobView }) {
           </>
         ) : null}
         {j.result.pullRequestError ? <span className="block text-danger">{j.result.pullRequestError}</span> : null}
+        {j.result.pullRequestSkipped ? <span className="block">{j.result.pullRequestSkipped}</span> : null}
       </span>
     );
   if (j.error) return <span className="text-danger">{j.error}</span>;
@@ -187,7 +181,7 @@ function RunSummary({ job: j }: { job: JobView }) {
 
 /** The runs on this issue, newest first, as a plain list. Clicking a run's branch expands its log under it. */
 function RunsTable({ jobs, issueRef }: { jobs: JobView[]; issueRef: string }) {
-  const [openId, setOpenId] = useState<string | null>(jobs.find((j) => ACTIVE.includes(j.state))?.id ?? null);
+  const [openId, setOpenId] = useState<string | null>(jobs.find((j) => isActive(j.state))?.id ?? null);
   return (
     <ul className="divide-y divide-line overflow-hidden rounded-md border border-line text-sm" aria-label="Runs">
       {jobs.map((j) => (
@@ -199,8 +193,31 @@ function RunsTable({ jobs, issueRef }: { jobs: JobView[]; issueRef: string }) {
 
 function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: string; open: boolean; onToggle: () => void }) {
   const { api, queryClient } = useServices();
-  const active = ACTIVE.includes(j.state);
+  const active = isActive(j.state);
+  const status = runStatus(j);
   const [error, setError] = useState<string | null>(null);
+  const [again, setAgain] = useState(false);
+  // Same device and model. Continue carries on from this run's pushed branch; Start over makes a fresh branch from the same base.
+  // Either way this run stays in the list as it was.
+  const rerun = async (continueThis: boolean) => {
+    setAgain(true);
+    setError(null);
+    try {
+      await api.runs.start(
+        issueRef,
+        continueThis
+          ? { deviceId: j.deviceId, model: j.model, continuesJobId: j.id }
+          : { deviceId: j.deviceId, repositoryId: j.repositoryId ?? undefined, model: j.model, baseBranch: j.baseBranch ?? undefined },
+      );
+      await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
+    } catch (e) {
+      setError(describeFailure(e));
+    } finally {
+      setAgain(false);
+    }
+  };
+  // Only a run that pushed something has work to continue from.
+  const canContinue = !active && j.result.pushed === true;
   return (
     <li className="px-3 py-2">
       <div className="flex items-start gap-3">
@@ -215,17 +232,29 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
           >
             {j.branch}
           </button>
-          {j.baseBranch && <div className="truncate text-xs text-muted">from {j.baseBranch}</div>}
+          {j.baseBranch && <div className="truncate text-xs text-muted">{j.continuesJobId ? `continues an earlier run · into ${j.baseBranch}` : `from ${j.baseBranch}`}</div>}
           <div className="truncate text-xs">
             <RunSummary job={j} />
           </div>
           {error && <p className="text-xs text-danger" role="alert">{error}</p>}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-            <span className={clsx("chip", madeNoChanges(j) ? "bg-panel-2 text-muted" : STATE_STYLE[j.state])}>{runStatusLabel(j)}</span>
+            <span className={clsx("chip", TONE_STYLE[status.tone])}>{status.label}</span>
             <ModelLabel model={j.model} />
             <span className="text-xs text-muted">{timeAgo(j.createdAt)}</span>
           </div>
         </div>
+        {!active && (
+          <span className="flex shrink-0 gap-1">
+            {canContinue && (
+              <button type="button" className="btn py-0.5 text-xs" disabled={again} onClick={() => void rerun(true)} title="A new run on this branch, from what this run pushed">
+                Continue
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost py-0.5 text-xs" disabled={again} onClick={() => void rerun(false)} title="A new run on a fresh branch from the same starting branch">
+              Start over
+            </button>
+          </span>
+        )}
         {active && !j.cancelRequested && (
           <button
             type="button"

@@ -546,7 +546,7 @@ export async function finishJob(device: Device, jobId: string, input: Record<str
 
 /**
  * The run's pull request, from its branch into the branch it started from. It is opened ready for review, not as a draft, so the
- * pull request rules move the issue to Review. A failure is recorded on the run (`result.pullRequestError`) and never fails the
+ * pull request rules move the issue to Review. A refusal is recorded on the run (`result.pullRequestError`), and a repository the App cannot reach as a note (`pullRequestSkipped`); neither fails the
  * finish: the branch is pushed either way, and a person can open the pull request by hand.
  */
 async function openJobPullRequest(j: typeof deviceJobs.$inferSelect, device: Device, gh: PullRequestOpener) {
@@ -559,7 +559,25 @@ async function openJobPullRequest(j: typeof deviceJobs.$inferSelect, device: Dev
     .where(eq(issues.id, j.issueId));
   let outcome: Record<string, unknown>;
   if (!row) return;
-  if (!gh || !row.repo.githubInstallationId || !row.repo.githubRepoId) outcome = { pullRequestError: "The GitHub App is not set up for this repository, so no pull request was opened" };
+  // A continuation pushes to a branch that may already have its pull request: the push updated it, so it is this run's too.
+  const [earlier] = await db
+    .select({ result: deviceJobs.result })
+    .from(deviceJobs)
+    .where(and(eq(deviceJobs.branch, j.branch), eq(deviceJobs.repositoryId, j.repositoryId!), sql`${deviceJobs.id} <> ${j.id}`, sql`${deviceJobs.result} ? 'pullRequest'`))
+    .orderBy(desc(deviceJobs.createdAt))
+    .limit(1);
+  if (earlier) {
+    const [updated] = await db
+      .update(deviceJobs)
+      .set({ result: sql`${deviceJobs.result} || ${JSON.stringify({ pullRequest: earlier.result.pullRequest })}::jsonb`, updatedAt: new Date() })
+      .where(eq(deviceJobs.id, j.id))
+      .returning();
+    if (updated) signalJob(updated);
+    return;
+  }
+  // Not an error: without the App no pull request was ever expected, so the run just reads as pushed.
+  if (!gh || !row.repo.githubInstallationId || !row.repo.githubRepoId)
+    outcome = { pullRequestSkipped: "The GitHub App is not set up for this repository, so no pull request was opened" };
   else {
     const ref = `${row.teamKey}-${row.issue.number}`;
     const r = j.result as { costUsd?: number | null; diffStats?: { files: number | null; insertions: number | null; deletions: number | null } };
@@ -735,6 +753,21 @@ const slugify = (s: string) =>
 /** `wh/WH-12-fix-the-login-3f2a1c`: the issue ref (so the GitHub App links it), its title, and a bit of the job id, since an issue can run again. */
 export const jobBranch = (ref: string, title: string, jobId: string) => `wh/${[ref, slugify(title), jobId.replace(/-/g, "").slice(0, 6)].filter(Boolean).join("-")}`;
 
+/** What a run left behind, apart from how it ended: nothing, a pushed branch, an open pull request, or a branch whose pull request GitHub refused. */
+export type JobDelivery = "none" | "pushed" | "pr_opened" | "pr_failed";
+
+/**
+ * Derived from what the run recorded, so it needs no column of its own. Null while a run has not finished (or was never taken up),
+ * because it has nothing to report yet. A pull request is opened a moment after the run finishes, so a pushed run reads `pushed`
+ * until that attempt lands.
+ */
+export function jobDelivery(state: DeviceJobState, result: Record<string, unknown>): JobDelivery | null {
+  if (result.pullRequest) return "pr_opened";
+  if (result.pullRequestError) return "pr_failed";
+  if (result.pushed === true) return "pushed";
+  return state === "succeeded" || state === "failed" || state === "canceled" ? "none" : null;
+}
+
 function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string | null; repositoryName?: string | null } = {}) {
   return {
     id: j.id,
@@ -742,11 +775,13 @@ function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string
     model: j.model,
     branch: j.branch,
     baseBranch: j.baseBranch,
+    continuesJobId: j.continuesJobId,
     deviceId: j.deviceId,
     deviceName: extra.deviceName ?? null,
     repositoryId: j.repositoryId,
     repositoryName: extra.repositoryName ?? null,
     result: j.result,
+    delivery: jobDelivery(j.state, j.result),
     error: j.error,
     cancelRequested: !!j.cancelRequestedAt,
     createdAt: j.createdAt.toISOString(),
@@ -815,7 +850,30 @@ export async function runBranches(actor: Actor, ref: string, repositoryId: strin
 }
 
 /**
- * "Run on device": `{ deviceId, repositoryId?, model, baseBranch? }`. The person must be able to edit the issue and own the device, which must be
+ * The earlier run a "Continue" carries on from: one of this issue's runs that has finished and pushed its branch, with no other run on
+ * that branch right now (two agents on one branch would push over each other). Its final summary is handed to the new run.
+ */
+async function continuable(q: Q, issueId: string, jobId: unknown) {
+  const id = str(jobId, 60);
+  const [job] = isUuid(id) ? await q.select().from(deviceJobs).where(and(eq(deviceJobs.id, id), eq(deviceJobs.issueId, issueId))) : [];
+  if (!job) throw new ServiceError("invalid", "There is no such run of this issue to continue", { fields: { continuesJobId: "a run of this issue" } });
+  if (!isFinalState(job.state)) throw new ServiceError("conflict", "That run has not finished yet");
+  if (job.result?.pushed !== true) throw new ServiceError("invalid", "That run pushed nothing, so there is nothing to continue from: start over instead");
+  const [busy] = await q.select({ id: deviceJobs.id }).from(deviceJobs).where(and(eq(deviceJobs.branch, job.branch), inArray(deviceJobs.state, ACTIVE))).limit(1);
+  if (busy) throw new ServiceError("conflict", "Another run is already working on that branch");
+  const [last] = await q
+    .select({ data: deviceJobEvents.data })
+    .from(deviceJobEvents)
+    .where(and(eq(deviceJobEvents.jobId, job.id), eq(deviceJobEvents.type, "result")))
+    .orderBy(desc(deviceJobEvents.seq))
+    .limit(1);
+  const summary = typeof last?.data?.text === "string" ? (last.data.text as string) : null;
+  return { job, summary };
+}
+
+/**
+ * "Run on device": `{ deviceId, repositoryId?, model, baseBranch?, continuesJobId? }`. With `continuesJobId` the new run works on that
+ * earlier run's branch, from its commits, with the same repository and pull request target; otherwise it starts a new branch. The person must be able to edit the issue and own the device, which must be
  * online. The repository is one of the issue team's GitHub repositories (the only one, if the team has one). The job is offered to
  * the device as a signed message carrying everything it needs, and expires if the device does not take it within a minute.
  */
@@ -828,7 +886,9 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
   });
   if (!deviceOnline(device)) throw new ServiceError("conflict", `${device.name} is offline. Start the daemon on it and try again.`);
   const repos = await runnableRepositories(db, team.id);
-  const repoId = str(input.repositoryId, 60);
+  // "Continue": carry on from an earlier run of this issue, on its branch and from its commits, with what it said at the end.
+  const previous = input.continuesJobId === undefined || input.continuesJobId === null ? null : await continuable(db, issue.id, input.continuesJobId);
+  const repoId = previous ? (previous.job.repositoryId ?? "") : str(input.repositoryId, 60);
   const repo = repoId ? repos.find((r) => r.id === repoId) : repos.length === 1 ? repos[0] : undefined;
   if (!repo)
     throw new ServiceError("invalid", repos.length ? "Pick the repository to work in" : "This team has no GitHub repository the agent can clone yet", {
@@ -837,17 +897,21 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
   const view = deviceView(device);
   const model = str(input.model, 60);
   if (!model || !view.models.includes(model)) throw new ServiceError("invalid", `Pick a model ${device.name} offers: ${view.models.join(", ")}`, { fields: { model: view.models.join(", ") } });
-  const baseBranch = input.baseBranch === undefined || input.baseBranch === "" ? repo.defaultBranch || "main" : validBaseBranch(input.baseBranch);
+  const baseBranch = previous
+    ? previous.job.baseBranch || repo.defaultBranch || "main"
+    : input.baseBranch === undefined || input.baseBranch === ""
+      ? repo.defaultBranch || "main"
+      : validBaseBranch(input.baseBranch);
   if (!baseBranch) throw new ServiceError("invalid", "That is not a branch name", { fields: { baseBranch: "a branch of the repository" } });
 
   const id = crypto.randomUUID();
-  const branch = jobBranch(issueRef, issue.title, id);
+  const branch = previous ? previous.job.branch : jobBranch(issueRef, issue.title, id);
   const offerExpiresAt = new Date(Date.now() + OFFER_TTL_MS);
   const key = await serverSigningKey();
   const job = await db.transaction(async (tx) => {
     const [j] = await tx
       .insert(deviceJobs)
-      .values({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, createdBy: actor.id, offerExpiresAt })
+      .values({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, offerExpiresAt })
       .returning();
     await sendToDevice(tx, key, device.id, "job.offer", {
       jobId: j.id,
@@ -855,6 +919,9 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
       model,
       branch,
       baseBranch,
+      // Where the worktree starts: the earlier run's pushed branch when continuing, else the base.
+      startFrom: previous ? branch : baseBranch,
+      previous: previous ? { jobId: previous.job.id, state: previous.job.state, summary: previous.summary, error: previous.job.error } : null,
       // Board writes come with the MCP redesign; until then the agent works only in its worktree.
       boardAccess: "none",
       issue: { id: issue.id, ref: issueRef, title: issue.title, body: issue.body, team: { key: team.key, name: team.name } },

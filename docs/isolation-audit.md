@@ -30,6 +30,7 @@ Team keys are per workspace (two workspaces can both have `SH`), so a bare key n
 | `workspaces-admin.ts` and the admin pages | instance admins only (`ADMIN_EMAILS`); metadata only | `workspaces-admin.test.ts` |
 | `/mcp`, `/api/v1/<tool>` | authenticate, then call the tools above | end-to-end checks in the production image |
 | `/api/health` | `select 1`, no data | n/a |
+| Agent daemon (`daemon.ts`, `/api/daemon/*`, `/api/app/devices`, runs on an issue) | a device belongs to one person in one workspace; people reach only their own devices (owner and workspace id) and runs through `resolveIssue`; a device's token names one device, which reaches only its own jobs and messages | `daemon.test.ts`: another person's and another workspace's device, another device's job, a stranger reading a run |
 
 ## Findings
 

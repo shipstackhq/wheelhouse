@@ -68,10 +68,13 @@ function assertion(deviceId: string, key: crypto.KeyObject, o: { aud?: string; i
 
 const ctx = { ip: "127.0.0.1", origin: "https://wh.example" };
 
+let machines = 0;
+
 /** Pair a machine for `who`, and get it a token: what `wheelhouse-daemon pair` and its first connect do. */
 async function paired(who: Actor = owner) {
   const m = machine();
-  const start = await d.startPairing({ publicKey: m.publicKey, name: "Laptop", os: "darwin" }, ctx);
+  // Each machine pairs from its own address, so the per-address pairing limit is not what a long test file runs into.
+  const start = await d.startPairing({ publicKey: m.publicKey, name: "Laptop", os: "darwin" }, { ...ctx, ip: `10.0.0.${++machines}` });
   const { device } = await d.approvePairing(who, start.userCode);
   const poll = await d.pollPairing({ deviceCode: start.deviceCode });
   assert.equal(poll.status, "approved");
@@ -86,6 +89,9 @@ async function online(device: d.Device, models = ["opus", "sonnet"]) {
   const db = await getDb();
   return (await db.select().from(schema.devices).where(eq(schema.devices.id, device.id)))[0];
 }
+
+/** The parts of a job offer these tests read. */
+type Offer = { jobId: string; startFrom: string; previous: { jobId: string; state: string; summary: string | null; error: string | null } | null };
 
 const code = (c: string) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
 
@@ -242,6 +248,22 @@ describe("the device's stream", () => {
   });
 });
 
+describe("what a run delivered", () => {
+  test("nothing, a pushed branch, an open pull request, or a refused one; nothing to say until it ends", () => {
+    assert.equal(d.jobDelivery("succeeded", { pushed: false }), "none");
+    assert.equal(d.jobDelivery("succeeded", {}), "none");
+    assert.equal(d.jobDelivery("succeeded", { pushed: true }), "pushed");
+    assert.equal(d.jobDelivery("succeeded", { pushed: true, pullRequest: { number: 3, url: "u" } }), "pr_opened");
+    assert.equal(d.jobDelivery("succeeded", { pushed: true, pullRequestError: "GitHub refused" }), "pr_failed");
+    // No GitHub App means no pull request was expected: that is a push, not a failure.
+    assert.equal(d.jobDelivery("succeeded", { pushed: true, pullRequestSkipped: "App not set up" }), "pushed");
+    // A stopped or failed run still pushes what it had.
+    assert.equal(d.jobDelivery("canceled", { pushed: true }), "pushed");
+    assert.equal(d.jobDelivery("failed", { pushed: false }), "none");
+    for (const s of ["offered", "accepted", "running", "rejected", "expired", "lost"] as const) assert.equal(d.jobDelivery(s, {}), null, s);
+  });
+});
+
 describe("jobs", () => {
   test("run on device: a signed offer with the issue and the repository, accepted, run, and finished", async () => {
     const { device, poll } = await paired();
@@ -278,6 +300,7 @@ describe("jobs", () => {
     await d.finishJob(device, job.id, { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 2, insertions: 10, deletions: 3 }, costUsd: 0.4 });
     const done = (await d.issueJobs(teammate, issue.ref)).jobs.find((j) => j.id === job.id)!;
     assert.equal(done.state, "succeeded");
+    assert.equal(done.delivery, "pushed");
     assert.equal(done.result.commit, "abc1234");
     await d.finishJob(device, job.id, { state: "succeeded" }); // the same finish again is fine
     await assert.rejects(d.recordJobEvents(device, job.id, { events: [{ seq: 3, type: "x" }] }), code("conflict"));
@@ -351,6 +374,47 @@ describe("jobs", () => {
     for (const bad of ["../etc", "-x", "a b", "a..b", "x.lock", "a@{1}"]) await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: bad }), code("invalid"), bad);
     // Without the GitHub App, only the default branch is known.
     assert.deepEqual(await d.runBranches(owner, issue.ref, repoId), { defaultBranch: "main", branches: ["main"], listed: false });
+  });
+
+  test("continue: a new run on the earlier run's branch, from its commits, keeping its base, told what the last one said", async () => {
+    const { device } = await paired();
+    await online(device);
+    const issue = await svc.createIssue(owner, "DM", { title: "continue me" });
+    const { job: first } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
+    await d.acceptJob(device, first.id);
+    await d.recordJobEvents(device, first.id, { events: [{ seq: 0, type: "started" }, { seq: 1, type: "result", data: { text: "Edited a.ts; tests still failing" } }] });
+    await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: first.id }), code("conflict"), "not finished yet");
+    await d.finishJob(device, first.id, { state: "failed", pushed: true, commit: "abc1234", error: "timed out" });
+
+    const { job: next } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "sonnet", continuesJobId: first.id, baseBranch: "ignored" });
+    assert.equal(next.branch, first.branch, "the same branch");
+    assert.equal(next.baseBranch, "staging", "the first run's base, which its pull request targets");
+    assert.equal(next.continuesJobId, first.id);
+    const db = await getDb();
+    const offers = await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id));
+    const offer = offers.map((o) => o.message as Offer).find((m) => m.jobId === next.id)!;
+    assert.equal(offer.startFrom, first.branch);
+    assert.deepEqual(offer.previous, { jobId: first.id, state: "failed", summary: "Edited a.ts; tests still failing", error: "timed out" });
+    await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: first.id }), code("conflict"), "a second run on the same branch");
+
+    // A run that pushed nothing has nothing to continue from; a run of another issue is not this issue's.
+    const { job: empty } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
+    await d.rejectJob(device, empty.id, { reason: "no_free_slot" });
+    await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: empty.id }), code("invalid"));
+    const other = await svc.createIssue(owner, "DM", { title: "other" });
+    await assert.rejects(d.runOnDevice(owner, other.ref, { deviceId: device.id, model: "opus", continuesJobId: first.id }), code("invalid"));
+  });
+
+  test("a fresh run starts from its base", async () => {
+    const { device } = await paired();
+    await online(device);
+    const issue = await svc.createIssue(owner, "DM", { title: "fresh" });
+    const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
+    assert.equal(job.continuesJobId, null);
+    const db = await getDb();
+    const offer = (await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id))).map((o) => o.message as Offer).find((m) => m.jobId === job.id)!;
+    assert.equal(offer.startFrom, "staging");
+    assert.equal(offer.previous, null);
   });
 
   test("another device cannot touch the job", async () => {

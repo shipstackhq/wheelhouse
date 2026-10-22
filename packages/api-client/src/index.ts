@@ -491,7 +491,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** The branches a run in that repository can start from. */
       branches: (ref: string, repositoryId: string) =>
         request<RunBranches>("GET", `/api/app/issues/${encodeURIComponent(ref)}/jobs/branches?repositoryId=${encodeURIComponent(repositoryId)}`),
-      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string; baseBranch?: string }) =>
+      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string; baseBranch?: string; continuesJobId?: string }) =>
         (await request<{ job: JobView }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/jobs`, input)).job,
       /** Progress after event number `after`. */
       events: (id: string, after?: number) =>

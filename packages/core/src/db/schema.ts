@@ -1152,7 +1152,10 @@ export const deviceJobs = table(
     state: text("state", { enum: DEVICE_JOB_STATES }).notNull().default("offered"),
     branch: text("branch").notNull(),
     // The branch the job's branch starts from: chosen when it is run, the repository's default branch unless someone picks another.
+    // A continuation keeps its first run's base, which is what its pull request targets.
     baseBranch: text("base_branch"),
+    // The run this one carries on from ("Continue"): it works on that run's branch, from its commits. Null for a fresh run.
+    continuesJobId: uuid("continues_job_id").references((): AnyPgColumn => deviceJobs.id, { onDelete: "set null" }),
     // What the daemon reported at the end: commit, diff stats, cost.
     result: jsonb("result").$type<Record<string, unknown>>().notNull().default({}),
     error: text("error"),
