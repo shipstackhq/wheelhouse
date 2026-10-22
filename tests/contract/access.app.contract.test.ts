@@ -148,6 +148,22 @@ describe("roles inside a team", () => {
   });
 });
 
+describe("deleting a team", () => {
+  test("needs the team key typed as ?confirm= (a DELETE has no body); the wrong key or none is a 400 and deletes nothing", async () => {
+    const owner = await signUp("Owner");
+    const key = await makeTeam(owner, "Doomed");
+    await makeTeam(owner, "Stays"); // the last active team cannot be deleted
+    for (const q of ["", "?confirm=", "?confirm=NOPE"]) {
+      const r = await app("DELETE", `/api/app/teams/${key}${q}`, owner.sess);
+      assert.equal(r.status, 400, `${q}: ${r.text}`);
+    }
+    assert.equal((await app("GET", `/api/app/teams/${key}/board`, owner.sess)).status, 200, "still there");
+    const ok = await app("DELETE", `/api/app/teams/${key}?confirm=${key.toLowerCase()}`, owner.sess);
+    assert.equal(ok.status, 200, ok.text);
+    assert.equal((await app("GET", `/api/app/teams/${key}/board`, owner.sess)).status, 404);
+  });
+});
+
 describe("workspace owners and admins", () => {
   test("see every team by name, join one as admin (audited and visible to its members), and a plain member cannot", async () => {
     const owner = await signUp("Owner");

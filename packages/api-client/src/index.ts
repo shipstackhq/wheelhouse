@@ -298,7 +298,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Bring a retired team back (team admins). */
       restore: async (teamKey: string) => (await request<{ team: Team }>("POST", `${team(teamKey)}/restore`, {})).team,
       /** Delete the team and everything in it (team admins). `confirm` is the team key, typed. */
-      remove: (teamKey: string, confirm: string) => request<{ ok: true; deleted: string }>("DELETE", team(teamKey), { confirm }),
+      remove: (teamKey: string, confirm: string) => request<{ ok: true; deleted: string }>("DELETE", `${team(teamKey)}?confirm=${encodeURIComponent(confirm)}`),
       /** Teammates remove an agent session from a team. */
       removeSession: (teamKey: string, sessionId: string) =>
         request<{ ok: true }>("DELETE", `/api/app/teams/${encodeURIComponent(teamKey)}/sessions/${encodeURIComponent(sessionId)}`),

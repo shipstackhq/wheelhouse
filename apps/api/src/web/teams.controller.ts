@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { listTeamsWithRole, setTeamOrder } from "@wheelhouse/core/lib/team-members";
 import { createTeam, deleteTeam, removeSession, ServiceError, updateTeam } from "@wheelhouse/core/lib/service";
 import { getTeamSettings, parentCandidates, restoreTeam, retireTeam, setTeamParent } from "@wheelhouse/core/lib/team-lifecycle";
@@ -78,12 +78,12 @@ export class TeamsController {
     return { team: view(await restoreTeam(req.human.actor, key)) };
   }
 
-  /** `{ confirm }`: the team key, typed. Deletes the team and everything in it (admins). */
+  /** `?confirm=KEY`: the team key, typed (a DELETE's body is not read, see raw-text.ts). Deletes the team and everything in it (admins). */
   @Delete(":key")
   @UseGuards(SessionGuard)
   @HttpCode(200)
-  remove(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    if (str(jsonBody(req).confirm).trim().toUpperCase() !== key.toUpperCase()) throw new ServiceError("invalid", "Type the team key to confirm the delete");
+  remove(@Req() req: SessionRequest, @Param("key") key: string, @Query("confirm") confirm?: string) {
+    if (typeof confirm !== "string" || confirm.trim().toUpperCase() !== key.toUpperCase()) throw new ServiceError("invalid", "Type the team key to confirm the delete");
     return deleteTeam(req.human.actor, key);
   }
 

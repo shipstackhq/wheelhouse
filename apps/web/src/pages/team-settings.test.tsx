@@ -84,3 +84,19 @@ describe("a team's icon", () => {
     expect((screen.getByRole("button", { name: "rocket" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe("the danger zone", () => {
+  const allowed = { allowed: true, reason: null };
+  const settings = { team: { id: "id-AA", key: "AA", name: "Alpha", retired: false, retiredAt: null }, myRole: "admin", parent: null, children: [], hiddenChildren: 0, canLeave: allowed, canRetire: allowed, canDelete: allowed };
+
+  test("deleting asks for the key and sends it as ?confirm= (a DELETE has no body the server reads)", async () => {
+    const { server } = open((s) => (s.on("GET /api/app/teams/AA/settings", settings), s.on("DELETE /api/app/teams/AA", { ok: true, deleted: "AA" })));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Delete team" }));
+    const confirm = screen.getByLabelText(/Type AA to confirm/);
+    await user.type(confirm, "aa");
+    await user.click(screen.getByRole("button", { name: "Delete AA for good" }));
+    await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA")).toHaveLength(1));
+    expect(server.sent("DELETE /api/app/teams/AA")[0].url).toBe("/api/app/teams/AA?confirm=aa");
+  });
+});
