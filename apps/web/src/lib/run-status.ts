@@ -2,7 +2,7 @@ import type { JobState, JobView } from "@wheelhouse/api-client";
 
 type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested">;
 
-const ACTIVE: JobState[] = ["offered", "accepted", "running"];
+const ACTIVE: JobState[] = ["offered", "accepted", "running", "unreachable"];
 export const isActive = (state: JobState) => ACTIVE.includes(state);
 
 /** How a status chip is coloured: running, went well, needs a look, went wrong, or nothing to say. */
@@ -18,6 +18,7 @@ export const madeNoChanges = (job: Pick<JobView, "state" | "delivery">) => job.s
 export function runStatus(job: RunLike): { label: string; tone: Tone } {
   if (isActive(job.state)) {
     if (job.cancelRequested) return { label: "stopping", tone: "active" };
+    if (job.state === "unreachable") return { label: "unreachable", tone: "warn" };
     return { label: { offered: "waiting for the device", accepted: "setting up", running: "running" }[job.state as "offered" | "accepted" | "running"], tone: "active" };
   }
   switch (job.state) {

@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import { approvePairing, cancelJob, denyPairing, issueJobs, jobEvents, listDevices, peekPairing, revokeDevice, runBranches, runOnDevice, updateDevice } from "@wheelhouse/core/lib/daemon";
+import { approvePairing, cancelJob, denyPairing, issueJobs, jobEvents, listDevices, markJobLost, peekPairing, revokeDevice, runBranches, runOnDevice, updateDevice } from "@wheelhouse/core/lib/daemon";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
@@ -78,5 +78,12 @@ export class DevicesController {
   @HttpCode(200)
   cancel(@Req() req: SessionRequest, @Param("id") id: string) {
     return cancelJob(req.human.actor, id);
+  }
+
+  /** Mark an unreachable run lost, by hand. */
+  @Post("jobs/:id/mark-lost")
+  @HttpCode(200)
+  markLost(@Req() req: SessionRequest, @Param("id") id: string) {
+    return markJobLost(req.human.actor, id);
   }
 }

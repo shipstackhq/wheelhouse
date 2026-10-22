@@ -149,6 +149,14 @@ function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { issueRe
 /** One line under the branch name: what landed (succeeded), or why not (failed, canceled, …). */
 function RunSummary({ job: j }: { job: JobView }) {
   const stats = j.result.diffStats;
+  // A newer run took this one's branch over while it was out of reach: its result is kept, but the branch is for a person to sort out.
+  const note = j.result.supersededBy ? <span className="block text-warn">A newer run took over this branch before this one finished, so no pull request was opened.</span> : null;
+  if (j.state === "unreachable")
+    return (
+      <span className="text-muted">
+        Cannot reach the device{j.lastHeardAt ? ` · last heard ${timeAgo(j.lastHeardAt)}` : ""}. The run is not lost: it carries on if the device comes back.
+      </span>
+    );
   if (madeNoChanges(j))
     return (
       <span className="text-muted">
@@ -173,10 +181,17 @@ function RunSummary({ job: j }: { job: JobView }) {
         ) : null}
         {j.result.pullRequestError ? <span className="block text-danger">{j.result.pullRequestError}</span> : null}
         {j.result.pullRequestSkipped ? <span className="block">{j.result.pullRequestSkipped}</span> : null}
+        {note}
       </span>
     );
-  if (j.error) return <span className="text-danger">{j.error}</span>;
-  return null;
+  if (j.error)
+    return (
+      <>
+        <span className="text-danger">{j.error}</span>
+        {note}
+      </>
+    );
+  return note;
 }
 
 /** The runs on this issue, newest first, as a plain list. Clicking a run's branch expands its log under it. */
@@ -197,7 +212,8 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
   const status = runStatus(j);
   const [error, setError] = useState<string | null>(null);
   const [again, setAgain] = useState(false);
-  // Same device and model. Continue carries on from this run's pushed branch; Start over makes a fresh branch from the same base.
+  const [confirmLost, setConfirmLost] = useState(false);
+  // Same device and model. Continue carries on from this run's branch (what it pushed, or its starting branch if it was stopped or lost before pushing); Start over makes a fresh branch from the same base.
   // Either way this run stays in the list as it was.
   const rerun = async (continueThis: boolean) => {
     setAgain(true);
@@ -216,8 +232,18 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
       setAgain(false);
     }
   };
-  // Only a run that pushed something has work to continue from.
-  const canContinue = !active && j.result.pushed === true;
+  const markLost = async () => {
+    setError(null);
+    try {
+      await api.runs.markLost(j.id);
+    } catch (e) {
+      setError(describeFailure(e));
+    }
+    setConfirmLost(false);
+    await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
+  };
+  // A run that pushed has work to continue from; a stopped or lost run can also be picked up again, from its starting branch.
+  const canContinue = !active && (j.result.pushed === true || j.state === "canceled" || j.state === "lost");
   return (
     <li className="px-3 py-2">
       <div className="flex items-start gap-3">
@@ -237,6 +263,19 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
             <RunSummary job={j} />
           </div>
           {error && <p className="text-xs text-danger" role="alert">{error}</p>}
+          {confirmLost && (
+            <div className="space-y-1.5 rounded border border-line bg-panel-2 p-2 text-xs">
+              <p>If this machine is only offline, the run may still be going. Marking it lost lets you continue it; if you do, the old run is stopped when the machine comes back.</p>
+              <div className="flex gap-1">
+                <button type="button" className="btn py-0.5 text-xs" onClick={() => void markLost()}>
+                  Mark as lost
+                </button>
+                <button type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => setConfirmLost(false)}>
+                  Keep waiting
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
             <span className={clsx("chip", TONE_STYLE[status.tone])}>{status.label}</span>
             <ModelLabel model={j.model} />
@@ -254,6 +293,11 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
               Start over
             </button>
           </span>
+        )}
+        {j.state === "unreachable" && !confirmLost && (
+          <button type="button" className="btn btn-ghost shrink-0 py-0.5 text-xs" onClick={() => setConfirmLost(true)} title="Give up waiting for this run">
+            Mark as lost
+          </button>
         )}
         {active && !j.cancelRequested && (
           <button
