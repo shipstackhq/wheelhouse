@@ -7,6 +7,7 @@ import clsx from "clsx";
 import type { ComponentProps } from "react";
 import {
   RiAddLine,
+  RiAnthropicFill,
   RiAlertLine,
   RiArrowDownLine,
   RiArrowDownSLine,
@@ -325,15 +326,5 @@ export const TEAM_ICONS: Record<TeamIconName, RemixiconComponentType> = {
   time: RiTimeFill, calendar: RiCalendarFill, anchor: RiAnchorFill, puzzle: RiPuzzleFill, user: RiUserFill, team: RiTeamFill, "customer-service": RiCustomerService2Fill, megaphone: RiMegaphoneFill, gift: RiGiftFill, sun: RiSunFill,
 };
 
-/**
- * Anthropic's mark, for naming a Claude model (a run's model column, a model picker). Not from Remix Icon, and not run through
- * `icon()`: it's a fixed brand mark, not a recolorable glyph, so it keeps its own color (Anthropic's clay) in both themes rather than
- * inheriting the surrounding text color.
- */
-export function ClaudeIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={clsx("inline-block h-[1em] w-[1em] shrink-0 align-[-0.125em]", className)} fill="#D97757" aria-hidden="true">
-      <path d="M12.593 4.044h-2.734L4.4 19.956h2.734l1.117-3.1h5.473l1.117 3.1h2.734L12.11 4.044Zm-3.492 10.1 1.98-5.5.045-.135.044.135 1.98 5.5H9.1Z" />
-    </svg>
-  );
-}
+// Anthropic's mark, for naming a Claude model (the run picker and each run's row).
+export const ClaudeIcon = icon(RiAnthropicFill);
