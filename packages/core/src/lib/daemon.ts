@@ -560,6 +560,8 @@ export const deviceOnline = (d: Pick<Device, "lastSeenAt" | "revokedAt">, now = 
 
 function deviceView(d: Device) {
   const caps = (d.capabilities ?? {}) as { claude?: { models?: string[] } };
+  // A device that has reported lists exactly what it offers (none when claude is missing or signed out); the defaults are only for one
+  // that has not said hello yet.
   return {
     id: d.id,
     name: d.name,
@@ -569,7 +571,7 @@ function deviceView(d: Device) {
     chatModel: d.chatModel,
     daemonVersion: d.daemonVersion,
     capabilities: d.capabilities,
-    models: caps.claude?.models?.length ? caps.claude.models : DEFAULT_MODELS,
+    models: caps.claude ? (caps.claude.models ?? []) : DEFAULT_MODELS,
     lastSeenAt: d.lastSeenAt?.toISOString() ?? null,
     createdAt: d.createdAt.toISOString(),
   };

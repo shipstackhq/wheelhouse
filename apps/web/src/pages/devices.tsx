@@ -103,7 +103,7 @@ function DeviceCard({ device: d }: { device: DeviceView }) {
           )}
         </dd>
         <dt className="text-muted">Models</dt>
-        <dd>{d.models.join(", ")}</dd>
+        <dd>{d.models.join(", ") || <span className="text-muted">none until Claude Code is installed and signed in</span>}</dd>
         <dt className="text-muted">Runs at once</dt>
         <dd className="max-w-[120px]">
           <Select

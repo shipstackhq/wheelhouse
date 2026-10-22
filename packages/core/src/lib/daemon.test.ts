@@ -190,6 +190,15 @@ describe("devices", () => {
     assert.equal(JSON.stringify(v.capabilities).includes("leak"), false);
     assert.equal(JSON.stringify(v.capabilities).includes("secret"), false);
   });
+
+  test("a device whose claude is missing offers no models, so nothing can be run on it", async () => {
+    const { device } = await paired();
+    await d.deviceHello(device, { version: "0.1.0", capabilities: { claude: { installed: false } }, jobs: [] });
+    const [v] = (await d.listDevices(owner)).filter((x) => x.id === device.id);
+    assert.deepEqual(v.models, []);
+    const issue = await svc.createIssue(owner, "DM", { title: "m" });
+    await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" }), code("invalid"));
+  });
 });
 
 describe("the device's stream", () => {
