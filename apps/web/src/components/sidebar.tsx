@@ -4,7 +4,7 @@ import { Popover } from "radix-ui";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { NAV_ICON, NAV_ICON_RAIL, NAV_ITEM, NAV_ITEM_RAIL, NavLink } from "./nav-link";
-import { AddIcon, ChevronRightIcon, CollapseSidebarIcon, ExpandSidebarIcon, MoreFillIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
+import { AddIcon, ChevronRightIcon, MoreFillIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
 import { SectionLabel, SidebarCloseButton, SidebarFrame, SidebarGroup, useFolded } from "./sidebar-frame";
 import { useServices } from "../lib/services";
 import { TeamIcon } from "./team-icon";
@@ -44,17 +44,28 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
 /** How rows slide into place while a team is dragged: a stiff, well-damped spring, so they settle at once instead of wobbling. */
 const reorderSpring = { type: "spring", stiffness: 900, damping: 50, mass: 0.5 } as const;
 
-const RECENT_KEY = "wh:recent-teams";
-const COLLAPSED_KEY = "wh:sidebar-collapsed";
-
-/** Whether the person last left the sidebar as the icon-only rail. Storage can be blocked or empty: then it is open. */
-function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(COLLAPSED_KEY) === "1";
-  } catch {
-    return false;
-  }
+/** A sidebar row that is a button rather than a link (no place to go yet). Same size and look as a link; the rail shows its icon and a tooltip. */
+function NavButton({ icon, collapsed = false, children }: { icon: IconPair; collapsed?: boolean; children: React.ReactNode }) {
+  const Icon = icon.line;
+  const button = (
+    <button
+      type="button"
+      className={clsx(NAV_ITEM, collapsed && NAV_ITEM_RAIL, "w-full text-muted hover:bg-panel-2 hover:text-fg")}
+    >
+      <Icon className={clsx(NAV_ICON, collapsed && NAV_ICON_RAIL)} />
+      <span className={clsx("min-w-0 flex-1 truncate text-left", collapsed && "md:sr-only")}>{children}</span>
+    </button>
+  );
+  return collapsed ? (
+    <Tip content={children} side="right" align="center">
+      {button}
+    </Tip>
+  ) : (
+    button
+  );
 }
+
+const RECENT_KEY = "wh:recent-teams";
 const LAST_COOKIE = "wh_last_team";
 
 function readRecent(): string[] {
@@ -76,10 +87,13 @@ export function Sidebar({
   workspaceName,
   isAdmin,
   profile,
+  collapsed,
 }: {
   teams: TeamItem[];
   workspaceName: string;
   isAdmin: boolean;
+  /** The icon-only rail, tablet and up. The app's header holds the toggle. */
+  collapsed: boolean;
   /** The account menu; a function gets whether the sidebar is the icon-only rail, so it can draw itself compact. */
   profile: React.ReactNode | ((collapsed: boolean) => React.ReactNode);
 }) {
@@ -89,16 +103,6 @@ export function Sidebar({
   const currentKey = match ? decodeURIComponent(match[1]) : null;
   const current = teams.find((p) => p.key === currentKey) ?? null;
   const [open, setOpen] = useState(false); // mobile drawer
-  const [collapsed, setCollapsed] = useState(readCollapsed); // the icon-only rail, tablet and up
-  const toggleCollapsed = () =>
-    setCollapsed((c) => {
-      try {
-        localStorage.setItem(COLLAPSED_KEY, c ? "0" : "1");
-      } catch {
-        /* the choice just is not remembered */
-      }
-      return !c;
-    });
   const [openTeams, setOpenTeams] = useState<string[]>(() => (currentKey ? [currentKey] : []));
   const toggleTeam = (key: string) => setOpenTeams((o) => (o.includes(key) ? o.filter((k) => k !== key) : [...o, key]));
   // Going to a team (from a link, the search, the address bar) opens it; opening or closing one by hand never navigates.
@@ -195,21 +199,15 @@ export function Sidebar({
         <div className={clsx("flex items-center justify-between px-3 py-3", collapsed && "md:flex-col md:gap-3 md:px-0")}>
           <WorkspaceSwitcher name={workspaceName} collapsed={collapsed} />
           <SidebarCloseButton onClose={() => setOpen(false)} />
-          <Tip content={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right" align="center">
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-expanded={!collapsed}
-              aria-controls="app-sidebar"
-              className="hidden rounded-md p-1 text-lg text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 md:inline-flex"
-            >
-              {collapsed ? <ExpandSidebarIcon /> : <CollapseSidebarIcon />}
-            </button>
-          </Tip>
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
-          <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
+          {/* The main items space themselves like the links in a section. The last three are placeholders: buttons with nothing behind them yet. */}
+          <div className="space-y-0.5">
+            <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
+            <NavButton icon={NAV_ICONS.inbox} collapsed={collapsed}>Inbox</NavButton>
+            <NavButton icon={NAV_ICONS.agent} collapsed={collapsed}>Agent</NavButton>
+            <NavButton icon={NAV_ICONS.myIssues} collapsed={collapsed}>My issues</NavButton>
+          </div>
           <SidebarGroup title="Workspace" collapsed={collapsed} gap="mt-3">
             <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
             <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>

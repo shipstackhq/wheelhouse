@@ -8,6 +8,7 @@ import { PwaRegister } from "../components/pwa";
 import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
+import { useSidebarCollapsed } from "../components/sidebar-toggle";
 import { useRememberAppLocation } from "../lib/app-location";
 import { useMe, useTeams } from "../lib/session";
 import { NotFound } from "./errors";
@@ -84,6 +85,7 @@ export function AppLayout() {
   const me = useMe().data;
   const teams = useTeams().data;
   useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
+  const [collapsed, toggleCollapsed] = useSidebarCollapsed(); // the sidebar's rail, toggled from the header
   // The session ended while the page was open (signed out in another tab, expired): the cache says so, go and sign in.
   if (me === null) return <Navigate to="/login" replace />;
   if (!me || !teams) return <FullPageSkeleton />;
@@ -91,13 +93,14 @@ export function AppLayout() {
     <div className="flex h-dvh">
       <NavigationProgress />
       <Sidebar
+        collapsed={collapsed}
         teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
         workspaceName={me.workspace.name}
         isAdmin={me.isInstanceAdmin}
         profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} compact={collapsed} />}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} />
+        <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
         <main className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
         </main>

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./sidebar";
+import { SidebarToggle, useSidebarCollapsed } from "./sidebar-toggle";
 import { NAV_ICONS } from "./icons";
 import { renderIn, serverWithData } from "../test/harness";
 
@@ -11,9 +12,17 @@ const TEAMS = [
   { key: "BB", name: "Beta" },
   { key: "CC", name: "Gamma" },
 ];
-const sidebar = (over: Partial<React.ComponentProps<typeof Sidebar>> = {}) => (
-  <Sidebar teams={TEAMS} workspaceName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} />
-);
+/** The app's pieces together: the layout holds the collapsed state, the header holds the toggle, the sidebar shows the rail. */
+function Harness(over: Partial<Omit<React.ComponentProps<typeof Sidebar>, "collapsed">> & { collapsed?: boolean }) {
+  const [collapsed, toggle] = useSidebarCollapsed();
+  return (
+    <>
+      <SidebarToggle collapsed={over.collapsed ?? collapsed} onToggle={toggle} />
+      <Sidebar teams={TEAMS} workspaceName="Analytical Engines" isAdmin={false} profile={<div>the profile</div>} {...over} collapsed={over.collapsed ?? collapsed} />
+    </>
+  );
+}
+const sidebar = (over: Partial<React.ComponentProps<typeof Sidebar>> = {}) => <Harness {...over} />;
 const nav = () => screen.getByRole("navigation");
 const switcher = () => within(nav()).getByRole("button", { name: "Search teams (⌘K)" });
 
