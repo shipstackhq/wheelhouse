@@ -96,8 +96,9 @@ export function AppLayout() {
         collapsed={collapsed}
         teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
         workspaceName={me.workspace.name}
+        workspaceImageUrl={me.workspace.imageUrl}
         isAdmin={me.isInstanceAdmin}
-        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} compact={collapsed} />}
+        profile={(collapsed) => <ProfileMenu name={me.user.name} email={me.user.email} role={me.role} tags={me.tags} workspace={me.workspace.name} imageUrl={me.user.avatarUrl} compact={collapsed} />}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />

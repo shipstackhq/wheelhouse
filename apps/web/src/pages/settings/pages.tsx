@@ -1,6 +1,9 @@
 import { Link } from "react-router";
 import { ChangePasswordForm } from "../../components/change-password-form";
 import { ChevronRightIcon } from "../../components/icons";
+import { ImageUpload } from "../../components/image-upload";
+import { Avatar } from "../../components/profile-menu";
+import { useServices } from "../../lib/services";
 import { ThemeSwitch } from "../../components/theme-toggle";
 import { useWorkspace } from "../../lib/queries";
 import { canManagePeople } from "../../lib/roles";
@@ -21,12 +24,22 @@ function Section({ title, hint, children }: { title: string; hint: string; child
 
 /** `/settings/profile`: who you are, and how the app looks for you. */
 export function ProfileSettingsPage() {
+  const { api } = useServices();
   const me = useMe().data;
   if (!me) return null;
   return (
     <Section title="Profile" hint="Who you are in Wheelhouse, and how it looks for you.">
       <div className="card p-5">
         <h2 className="font-medium">Profile</h2>
+        <div className="mt-3">
+          <ImageUpload
+            label="Profile picture"
+            preview={<Avatar name={me.user.name} email={me.user.email} size={56} imageUrl={me.user.avatarUrl} />}
+            hasImage={!!me.user.avatarUrl}
+            onSave={(data) => api.avatar.set(data)}
+            onRemove={() => api.avatar.remove()}
+          />
+        </div>
         <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
           <dt className="text-muted">Name</dt>
           <dd>{me.user.name}</dd>
@@ -58,6 +71,7 @@ export function PasswordSettingsPage() {
 
 /** `/settings/workspace`: the workspace, your place in it, and its seats (for those who manage people). */
 export function WorkspaceSettingsPage() {
+  const { api } = useServices();
   const me = useMe().data;
   const workspace = useWorkspace().data;
   if (!me) return null;
@@ -66,6 +80,23 @@ export function WorkspaceSettingsPage() {
     <Section title="General" hint="This workspace, and your place in it.">
       <div className="card p-5">
         <h2 className="font-medium">{me.workspace.name}</h2>
+        {manages && (
+          <div className="mt-3">
+            <ImageUpload
+              label="Workspace image"
+              preview={
+                me.workspace.imageUrl ? (
+                  <img src={me.workspace.imageUrl} alt="" className="size-14 rounded-xl object-cover" />
+                ) : (
+                  <span aria-hidden className="grid size-14 place-items-center rounded-xl bg-accent/15 text-xl font-semibold uppercase text-accent">{me.workspace.name.trim().charAt(0) || "W"}</span>
+                )
+              }
+              hasImage={!!me.workspace.imageUrl}
+              onSave={(data) => api.workspace.setImage(data)}
+              onRemove={() => api.workspace.removeImage()}
+            />
+          </div>
+        )}
         <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
           <dt className="text-muted">Your role</dt>
           <dd className="flex flex-wrap items-center gap-1">

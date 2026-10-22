@@ -10,7 +10,7 @@ import { ChevronDownIcon } from "./icons";
  * workspaces; choosing another moves this session there and drops everything read from the old one (every team, project and key
  * is the other workspace's). With a single workspace the menu just names it. `collapsed` is the icon-only rail, where the arrow is hidden and only the icon stays.
  */
-export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; collapsed?: boolean }) {
+export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name: string; imageUrl?: string | null; collapsed?: boolean }) {
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
   const query = useQuery({ queryKey: ["me", "workspaces"] as const, queryFn: () => api.workspaces.list() });
@@ -34,9 +34,13 @@ export function WorkspaceSwitcher({ name, collapsed = false }: { name: string; c
           collapsed && "md:gap-0 md:pr-0.5", // in the icon-only rail the arrow goes and only the icon stays
         )}
       >
-        <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
-          {name.trim().charAt(0) || "W"}
-        </span>
+        {imageUrl ? (
+          <img src={imageUrl} alt="" aria-hidden className="size-5 rounded-full object-cover" />
+        ) : (
+          <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
+            {name.trim().charAt(0) || "W"}
+          </span>
+        )}
         <ChevronDownIcon aria-hidden className={clsx("text-sm transition-transform group-data-[state=open]:rotate-180", collapsed && "md:hidden")} />
       </Popover.Trigger>
       <Popover.Portal>
