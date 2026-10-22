@@ -27,6 +27,7 @@ describe("settings as a screen of its own", () => {
     expect(links).toEqual([
       ["Profile", "/settings/profile"],
       ["Password", "/settings/password"],
+      ["Devices", "/settings/devices"],
       ["General", "/settings/workspace"],
       ["Members", "/settings/members"],
       ["Agents & API keys", "/settings/agents"],

@@ -4,10 +4,20 @@ import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
 import type { IssueRuns, JobEvent, JobState, JobView } from "@wheelhouse/api-client";
 import { timeAgo } from "@wheelhouse/core/lib/time";
+import { ClaudeIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { issueRunsQuery, runBranchesQuery, runEventsQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
+
+/** A model name with the Claude mark beside it, wherever one is named: the picker, a run's row. */
+function ModelLabel({ model }: { model: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <ClaudeIcon /> {model}
+    </span>
+  );
+}
 
 const ACTIVE: JobState[] = ["offered", "accepted", "running"];
 
@@ -49,13 +59,7 @@ export function IssueRunsSection({ issueRef }: { issueRef: string }) {
       <span className="label">Runs on a device</span>
       <div className="space-y-3">
         <RunForm issueRef={issueRef} data={data} />
-        {data.jobs.length > 0 && (
-          <ul className="space-y-2" aria-label="Runs">
-            {data.jobs.map((j) => (
-              <RunRow key={j.id} job={j} issueRef={issueRef} />
-            ))}
-          </ul>
-        )}
+        {data.jobs.length > 0 && <RunsTable jobs={data.jobs} issueRef={issueRef} />}
       </div>
     </section>
   );
@@ -113,7 +117,12 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
           <Select className="!w-auto" ariaLabel="Repository" value={repo.id} options={data.repositories.map((r) => ({ value: r.id, label: r.name }))} onValueChange={(v) => (setBase(null), setRepositoryId(v))} />
         )}
         <BaseBranchPicker issueRef={issueRef} repositoryId={repo.id} value={base} onChange={setBase} />
-        {models.length > 0 && <Select className="!w-auto" ariaLabel="Model" value={chosenModel} options={models.map((m) => ({ value: m, label: m }))} onValueChange={setModel} />}
+        {models.length > 0 && (
+          <span className="flex items-center gap-1">
+            <ClaudeIcon />
+            <Select className="!w-auto" ariaLabel="Model" value={chosenModel} options={models.map((m) => ({ value: m, label: m }))} onValueChange={setModel} />
+          </span>
+        )}
         <button type="button" className="btn btn-primary" disabled={busy || !device || !chosenModel} onClick={() => void start()}>
           Run on device
         </button>
@@ -155,19 +164,80 @@ function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { issueRe
   );
 }
 
-function RunRow({ job: j, issueRef }: { job: JobView; issueRef: string }) {
+/** One line under the branch name: what landed (succeeded), or why not (failed, canceled, …). */
+function RunSummary({ job: j }: { job: JobView }) {
+  const stats = j.result.diffStats;
+  if (j.state === "succeeded")
+    return (
+      <span className="text-muted">
+        {j.result.pushed ? "Pushed" : "Not pushed"}
+        {j.result.commit ? ` · ${j.result.commit.slice(0, 7)}` : ""}
+        {stats?.files != null ? ` · ${stats.files} files, +${stats.insertions ?? 0} −${stats.deletions ?? 0}` : ""}
+        {j.result.costUsd != null ? ` · ~$${j.result.costUsd.toFixed(2)}` : ""}
+      </span>
+    );
+  if (j.error) return <span className="text-danger">{j.error}</span>;
+  return null;
+}
+
+/** The runs on this issue, newest first: one row per run, click its branch to expand the log. */
+function RunsTable({ jobs, issueRef }: { jobs: JobView[]; issueRef: string }) {
+  const [openId, setOpenId] = useState<string | null>(jobs.find((j) => ACTIVE.includes(j.state))?.id ?? null);
+  return (
+    <div className="overflow-hidden rounded-md border border-line">
+      <table className="w-full border-collapse text-sm">
+        <thead>
+          <tr className="border-b border-line bg-panel-2/50 text-left text-xs text-muted">
+            <th className="px-3 py-2 font-medium">Branch</th>
+            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">Device</th>
+            <th className="px-3 py-2 font-medium">Model</th>
+            <th className="px-3 py-2 font-medium">When</th>
+            <th className="px-3 py-2 font-medium" />
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((j) => (
+            <RunRow key={j.id} job={j} issueRef={issueRef} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: string; open: boolean; onToggle: () => void }) {
   const { api, queryClient } = useServices();
   const active = ACTIVE.includes(j.state);
-  const [open, setOpen] = useState(active);
   const [error, setError] = useState<string | null>(null);
-  const stats = j.result.diffStats;
   return (
-    <li className="rounded-md border border-line p-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={clsx("chip", STATE_STYLE[j.state])}>{j.cancelRequested && active ? "stopping" : STATE_LABEL[j.state]}</span>
-        <span>{j.deviceName ?? "a device"}</span>
-        <span className="text-muted">· {j.model}{j.repositoryName ? ` · ${j.repositoryName}` : ""} · {timeAgo(j.createdAt)}</span>
-        <span className="ml-auto flex gap-1">
+    <>
+      <tr className="border-b border-line last:border-0 align-top">
+        <td className="max-w-0 px-3 py-2">
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={onToggle}
+            className="block max-w-full truncate rounded text-left font-mono text-xs outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent/50"
+            title={j.branch}
+          >
+            {j.branch}
+          </button>
+          {j.baseBranch && <div className="mt-0.5 truncate text-xs text-muted">from {j.baseBranch}</div>}
+          <div className="mt-0.5">
+            <RunSummary job={j} />
+          </div>
+          {error && <p className="mt-0.5 text-xs text-danger" role="alert">{error}</p>}
+        </td>
+        <td className="px-3 py-2">
+          <span className={clsx("chip", STATE_STYLE[j.state])}>{j.cancelRequested && active ? "stopping" : STATE_LABEL[j.state]}</span>
+        </td>
+        <td className="px-3 py-2 whitespace-nowrap">{j.deviceName ?? "a device"}</td>
+        <td className="px-3 py-2 whitespace-nowrap">
+          <ModelLabel model={j.model} />
+        </td>
+        <td className="px-3 py-2 whitespace-nowrap text-muted">{timeAgo(j.createdAt)}</td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">
           {active && !j.cancelRequested && (
             <button
               type="button"
@@ -185,28 +255,16 @@ function RunRow({ job: j, issueRef }: { job: JobView; issueRef: string }) {
               Stop
             </button>
           )}
-          <button type="button" className="btn btn-ghost py-0.5 text-xs" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-            {open ? "Hide log" : "Log"}
-          </button>
-        </span>
-      </div>
-      <div className="mt-1 font-mono text-xs text-muted">
-        {j.branch}
-        {j.baseBranch && <span className="font-sans"> from </span>}
-        {j.baseBranch}
-      </div>
-      {j.state === "succeeded" && (
-        <div className="mt-1 text-xs text-muted">
-          {j.result.pushed ? "Pushed" : "Not pushed"}
-          {j.result.commit ? ` · ${j.result.commit.slice(0, 7)}` : ""}
-          {stats?.files != null ? ` · ${stats.files} files, +${stats.insertions ?? 0} −${stats.deletions ?? 0}` : ""}
-          {j.result.costUsd != null ? ` · $${j.result.costUsd.toFixed(2)}` : ""}
-        </div>
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-b border-line last:border-0">
+          <td colSpan={6} className="bg-bg/40 px-3 py-2">
+            <RunLog id={j.id} active={active} />
+          </td>
+        </tr>
       )}
-      {j.error && <p className="mt-1 text-xs text-danger">{j.error}</p>}
-      {error && <p className="mt-1 text-xs text-danger" role="alert">{error}</p>}
-      {open && <RunLog id={j.id} active={active} />}
-    </li>
+    </>
   );
 }
 
