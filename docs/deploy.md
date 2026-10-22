@@ -251,7 +251,7 @@ organisation: *Settings → Developer settings → GitHub Apps → New GitHub Ap
 | Request user authorization (OAuth) during installation | **ticked** (this is how Wheelhouse proves who is connecting an installation) |
 | Webhook URL | `APP_URL/api/webhooks/github` |
 | Webhook secret | a long random string (`openssl rand -hex 32`) |
-| Repository permissions | Contents: **Read-only**, Pull requests: **Read-only**, Checks: **Read-only** (Metadata is added for you) |
+| Repository permissions | Contents: **Read-only**, Pull requests: **Read and write**, Checks: **Read-only** (Metadata is added for you) |
 | Subscribe to events | Push, Pull request, Check run |
 | Where can it be installed | Only on this account (or any account, if other people will connect their own) |
 
@@ -279,6 +279,11 @@ What to know:
   back to In Progress, merged leaves it in Review for a person, an issue in Done is never moved, and an issue someone
   moved in the last ten minutes is left alone (the comment says so). Issues are found by a ref such as `WH-12` in the
   pull request title or branch name.
+- **Runs on a device end in a pull request.** When the daemon pushes a run's branch with changes, the App opens a pull
+  request from it into the branch the run started from, ready for review (so the issue moves to Review). It is authored by
+  `<slug>[bot]`, which is why the App needs *Pull requests: Read and write*. An App created with *Read-only* can be changed
+  in its settings; each installation's owner must then accept the new permission in GitHub, and until they do, the run shows
+  why no pull request was opened.
 - **Test it** from the App's *Advanced* tab: *Recent deliveries* shows each webhook's response and lets you redeliver.
   `200` with `"status":"ignored"` means the delivery was understood but is not about a connected repository.
 

@@ -4,6 +4,7 @@ import { getDb, schema } from "../db";
 import type { DeviceJobState } from "../db/schema";
 import { sha256, type Actor } from "./access";
 import { randomToken } from "./auth-core";
+import { GithubApiError, type GithubApi } from "./github/api";
 import { github } from "./github/runtime";
 import { assertionSubject, publicKeyFromRaw, rawPublicKey, serverSigningKey, signValue, verifyAssertion } from "./daemon-crypto";
 import { bus } from "./event-bus";
@@ -514,8 +515,13 @@ export async function recordJobEvents(device: Device, jobId: string, input: Reco
   return { stored: rows.length };
 }
 
-/** `{ state: succeeded | failed | canceled, branch?, commit?, diffStats?, costUsd?, error? }`: the daemon is done with the job. */
-export async function finishJob(device: Device, jobId: string, input: Record<string, unknown>) {
+type PullRequestOpener = { api: Pick<GithubApi, "openPullRequest"> } | null;
+
+/**
+ * `{ state: succeeded | failed | canceled, branch?, commit?, diffStats?, costUsd?, error? }`: the daemon is done with the job. A
+ * succeeded job that pushed changes gets a pull request, opened by the GitHub App (see `openJobPullRequest`).
+ */
+export async function finishJob(device: Device, jobId: string, input: Record<string, unknown>, gh: PullRequestOpener = github()) {
   const j = await deviceJob(device, jobId);
   const state = input.state as DeviceJobState;
   if (!["succeeded", "failed", "canceled"].includes(state)) throw new ServiceError("invalid", "state must be succeeded, failed or canceled");
@@ -533,7 +539,64 @@ export async function finishJob(device: Device, jobId: string, input: Record<str
     if (j.state === state) return { job: { id: j.id, state: j.state } }; // the same finish, sent again
     throw new ServiceError("conflict", `The job is ${j.state}`);
   }
+  // Only the finish that moved the job opens one, so a finish sent again never opens a second.
+  if (state === "succeeded" && result.pushed && result.commit && result.diffStats.files !== 0) await openJobPullRequest(row, device, gh);
   return { job: { id: row.id, state: row.state } };
+}
+
+/**
+ * The run's pull request, from its branch into the branch it started from. It is opened ready for review, not as a draft, so the
+ * pull request rules move the issue to Review. A failure is recorded on the run (`result.pullRequestError`) and never fails the
+ * finish: the branch is pushed either way, and a person can open the pull request by hand.
+ */
+async function openJobPullRequest(j: typeof deviceJobs.$inferSelect, device: Device, gh: PullRequestOpener) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ issue: issues, teamKey: teams.key, repo: repositories })
+    .from(issues)
+    .innerJoin(teams, eq(teams.id, issues.teamId))
+    .innerJoin(repositories, eq(repositories.id, j.repositoryId!))
+    .where(eq(issues.id, j.issueId));
+  let outcome: Record<string, unknown>;
+  if (!row) return;
+  if (!gh || !row.repo.githubInstallationId || !row.repo.githubRepoId) outcome = { pullRequestError: "The GitHub App is not set up for this repository, so no pull request was opened" };
+  else {
+    const ref = `${row.teamKey}-${row.issue.number}`;
+    const r = j.result as { costUsd?: number | null; diffStats?: { files: number | null; insertions: number | null; deletions: number | null } };
+    const stats = r.diffStats?.files != null ? `${r.diffStats.files} files, +${r.diffStats.insertions ?? 0} −${r.diffStats.deletions ?? 0}` : null;
+    const body = [
+      `Agent run for ${ref}: ${row.issue.title}`,
+      "",
+      [`Run on ${device.name} with ${j.model}`, stats, r.costUsd != null ? `~$${r.costUsd.toFixed(2)}` : null].filter(Boolean).join(" · "),
+      "",
+      "Opened by the Wheelhouse daemon. An agent wrote these commits; review them before merging.",
+    ].join("\n");
+    try {
+      const pr = await gh.api.openPullRequest(row.repo.githubInstallationId, row.repo.githubRepoId, {
+        title: `${ref}: ${row.issue.title}`,
+        head: j.branch,
+        base: j.baseBranch || row.repo.defaultBranch || "main",
+        body,
+      });
+      outcome = { pullRequest: pr };
+    } catch (e) {
+      const status = e instanceof GithubApiError ? e.status : null;
+      outcome = {
+        pullRequestError:
+          status === 403
+            ? "GitHub refused: the App needs the \"Pull requests: Read and write\" permission"
+            : status === 422
+              ? "GitHub refused: the branch has no changes against its base, or a pull request for it is already open"
+              : `Could not open the pull request (${e instanceof Error ? e.message : "unknown error"})`,
+      };
+    }
+  }
+  const [updated] = await db
+    .update(deviceJobs)
+    .set({ result: sql`${deviceJobs.result} || ${JSON.stringify(outcome)}::jsonb`, updatedAt: new Date() })
+    .where(eq(deviceJobs.id, j.id))
+    .returning();
+  if (updated) signalJob(updated);
 }
 
 /**

@@ -687,7 +687,9 @@ export type JobView = {
   deviceName: string | null;
   repositoryId: string | null;
   repositoryName: string | null;
-  result: { commit?: string | null; pushed?: boolean; diffStats?: { files: number | null; insertions: number | null; deletions: number | null }; costUsd?: number | null; durationMs?: number | null };
+  result: { commit?: string | null; pushed?: boolean; diffStats?: { files: number | null; insertions: number | null; deletions: number | null }; costUsd?: number | null; durationMs?: number | null;
+    /** The pull request the GitHub App opened for the branch, or why it could not. */
+    pullRequest?: { number: number; url: string }; pullRequestError?: string };
   error: string | null;
   cancelRequested: boolean;
   createdAt: string;

@@ -17,6 +17,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import * as svc from "./service";
 import * as d from "./daemon";
+import { GithubApiError } from "./github/api";
 import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";
 
 const RUN = Math.random().toString(16).slice(2, 8);
@@ -280,6 +281,50 @@ describe("jobs", () => {
     assert.equal(done.result.commit, "abc1234");
     await d.finishJob(device, job.id, { state: "succeeded" }); // the same finish again is fine
     await assert.rejects(d.recordJobEvents(device, job.id, { events: [{ seq: 3, type: "x" }] }), code("conflict"));
+  });
+
+  test("a run that pushed changes gets a pull request from the App, once; a refusal is recorded and the run still succeeds", async () => {
+    const db = await getDb();
+    await db.update(schema.repositories).set({ githubInstallationId: "77" }).where(eq(schema.repositories.id, repoId));
+    try {
+      const { device } = await paired();
+      await online(device);
+      const calls: { installationId: string; repoId: string; pr: { title: string; head: string; base: string; body: string } }[] = [];
+      const gh = { api: { openPullRequest: async (installationId: string, repoId: string, pr: (typeof calls)[number]["pr"]) => (calls.push({ installationId, repoId, pr }), { number: 42, url: "https://github.com/acme/app/pull/42" }) } };
+      const run = async (title: string) => {
+        const issue = await svc.createIssue(owner, "DM", { title });
+        const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "develop" });
+        await d.acceptJob(device, job.id);
+        return { issue, job };
+      };
+
+      const { issue, job } = await run("Add dark mode");
+      const done = { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 3, insertions: 20, deletions: 1 }, costUsd: 1.25 };
+      await d.finishJob(device, job.id, done, gh);
+      await d.finishJob(device, job.id, done, gh); // sent again
+      assert.equal(calls.length, 1, "one pull request, however often the finish arrives");
+      assert.deepEqual([calls[0].installationId, calls[0].repoId, calls[0].pr.head, calls[0].pr.base], ["77", "1234", job.branch, "develop"]);
+      assert.equal(calls[0].pr.title, `${issue.ref}: Add dark mode`, "the ref in the title links it to the issue");
+      assert.match(calls[0].pr.body, /Run on Laptop with opus · 3 files, \+20 −1 · ~\$1\.25/);
+      const view = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
+      assert.deepEqual(view.result.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42" });
+      assert.equal(view.result.commit, "abc1234", "the rest of the result is kept");
+
+      const nothing = await run("Nothing to change");
+      await d.finishJob(device, nothing.job.id, { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 0, insertions: 0, deletions: 0 } }, gh);
+      const failed = await run("Breaks halfway");
+      await d.finishJob(device, failed.job.id, { state: "failed", commit: "abc1234", pushed: true, error: "boom" }, gh);
+      assert.equal(calls.length, 1, "no pull request without changes, or for a run that failed");
+
+      const refused = await run("No permission");
+      const deny = { api: { openPullRequest: async () => Promise.reject(new GithubApiError("GitHub POST answered 403", 403)) } };
+      const res = await d.finishJob(device, refused.job.id, done, deny);
+      assert.equal(res.job.state, "succeeded");
+      const r = (await d.issueJobs(owner, refused.issue.ref)).jobs.find((j) => j.id === refused.job.id)!;
+      assert.match(r.result.pullRequestError as string, /Pull requests: Read and write/);
+    } finally {
+      await db.update(schema.repositories).set({ githubInstallationId: null }).where(eq(schema.repositories.id, repoId));
+    }
   });
 
   test("refused: an offline device, someone else's device, a model it lacks, a viewer, and another workspace", async () => {

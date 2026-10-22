@@ -174,6 +174,15 @@ function RunSummary({ job: j }: { job: JobView }) {
         {j.result.commit ? ` · ${j.result.commit.slice(0, 7)}` : ""}
         {stats?.files != null ? ` · ${stats.files} files, +${stats.insertions ?? 0} −${stats.deletions ?? 0}` : ""}
         {j.result.costUsd != null ? ` · ~$${j.result.costUsd.toFixed(2)}` : ""}
+        {j.result.pullRequest ? (
+          <>
+            {" · "}
+            <a href={j.result.pullRequest.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              PR #{j.result.pullRequest.number}
+            </a>
+          </>
+        ) : null}
+        {j.result.pullRequestError ? <span className="block text-danger">{j.result.pullRequestError}</span> : null}
       </span>
     );
   if (j.error) return <span className="text-danger">{j.error}</span>;

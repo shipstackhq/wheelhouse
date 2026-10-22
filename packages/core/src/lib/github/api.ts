@@ -30,7 +30,8 @@ export const isZeroSha = (s: string | null | undefined) => !s || ZERO_SHA.test(s
 
 /**
  * The little of GitHub's API we use: changed files and their blob hashes (never contents), an installation's
- * repositories, and who may use an installation. The HTTP client is injected so every call can be tested.
+ * repositories, who may use an installation, and opening a pull request for a daemon's branch. The HTTP client is
+ * injected so every call can be tested.
  */
 export class GithubApi {
   private tokens = new Map<string, { token: string; expires: number }>();
@@ -107,6 +108,17 @@ export class GithubApi {
       if (r.repositories.length < 100) break;
     }
     return out;
+  }
+
+  /** Open a pull request from `head` into `base`, as the App (it shows as `<slug>[bot]`). Needs "Pull requests: Read and write". */
+  async openPullRequest(installationId: string, repoId: string, pr: { title: string; head: string; base: string; body: string; draft?: boolean }): Promise<{ number: number; url: string }> {
+    const token = await this.installationToken(installationId);
+    const r = await this.call<{ number: number; html_url: string }>(`/repositories/${encodeURIComponent(repoId)}/pulls`, token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: pr.title, head: pr.head, base: pr.base, body: pr.body, draft: pr.draft ?? false }),
+    });
+    return { number: r.number, url: r.html_url };
   }
 
   /** The installation's account (who owns it), for display. */
