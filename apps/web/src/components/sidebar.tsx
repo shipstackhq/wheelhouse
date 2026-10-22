@@ -4,7 +4,8 @@ import { Popover } from "radix-ui";
 import { Link, useLocation, useNavigate } from "react-router";
 import clsx from "clsx";
 import { NAV_ICON, NAV_ICON_RAIL, NAV_ITEM, NAV_ITEM_RAIL, NavLink } from "./nav-link";
-import { AddIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, CollapseSidebarIcon, ExpandSidebarIcon, MenuIcon, MoreFillIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
+import { AddIcon, ChevronRightIcon, CollapseSidebarIcon, ExpandSidebarIcon, MoreFillIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
+import { SectionLabel, SidebarCloseButton, SidebarFrame, SidebarGroup, useFolded } from "./sidebar-frame";
 import { useServices } from "../lib/services";
 import { TeamIcon } from "./team-icon";
 import { Tip } from "./tip";
@@ -190,29 +191,10 @@ export function Sidebar({
 
   return (
     <>
-      <button
-        type="button"
-        aria-label="Open menu"
-        onClick={() => setOpen(true)}
-        className="fixed left-2 top-2 z-30 rounded-md border border-line bg-panel px-2 py-1 text-sm md:hidden"
-      >
-        <MenuIcon className="text-lg" />
-      </button>
-      {open && <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setOpen(false)} />}
-      <aside
-        id="app-sidebar"
-        data-collapsed={collapsed ? "true" : "false"}
-        className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-56 shrink-0 flex-col border-r border-line bg-panel transition-transform md:static md:translate-x-0 md:transition-[width]",
-          collapsed && "md:w-14",
-          open ? "translate-x-0" : "-translate-x-full",
-        )}
-      >
+      <SidebarFrame id="app-sidebar" open={open} onOpen={() => setOpen(true)} onClose={() => setOpen(false)} collapsed={collapsed}>
         <div className={clsx("flex items-center justify-between px-3 py-3", collapsed && "md:flex-col md:gap-3 md:px-0")}>
           <WorkspaceSwitcher name={workspaceName} collapsed={collapsed} />
-          <button type="button" aria-label="Close menu" onClick={() => setOpen(false)} className="text-muted md:hidden">
-            <CloseIcon className="text-lg" />
-          </button>
+          <SidebarCloseButton onClose={() => setOpen(false)} />
           <Tip content={collapsed ? "Expand sidebar" : "Collapse sidebar"} side="right" align="center">
             <button
               type="button"
@@ -228,12 +210,12 @@ export function Sidebar({
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
-          <Group title="Workspace" collapsed={collapsed} gap="mt-3">
+          <SidebarGroup title="Workspace" collapsed={collapsed} gap="mt-3">
             <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
             <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
             <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
             <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
-          </Group>
+          </SidebarGroup>
           <div className={clsx("relative", collapsed ? "md:mt-3 md:border-t md:border-line md:pt-3" : "")}>
             <SectionLabel
               title="Teams"
@@ -333,50 +315,19 @@ export function Sidebar({
             </Reorder.Group>
           </div>
           {isAdmin && (
-            <Group title="Admin" collapsed={collapsed} gap="mt-5">
+            <SidebarGroup title="Admin" collapsed={collapsed} gap="mt-5">
               <NavLink href="/admin/workspaces" icon={NAV_ICONS.workspaces} collapsed={collapsed}>Workspaces</NavLink>
               <NavLink href="/admin/invites" icon={NAV_ICONS.inviteWorkspace} collapsed={collapsed}>Invite a new workspace</NavLink>
-            </Group>
+            </SidebarGroup>
           )}
           <div className={clsx("mt-5", collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
             <NavLink href="/settings" icon={NAV_ICONS.settings} collapsed={collapsed}>Settings</NavLink>
           </div>
         </nav>
         <div className="border-t border-line p-2">{typeof profile === "function" ? profile(collapsed) : profile}</div>
-      </aside>
+      </SidebarFrame>
     </>
   );
-}
-
-const GROUPS_KEY = "wh:sidebar-closed-groups";
-
-function readClosedGroups(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? "[]");
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * A titled group of links that folds away from its title (the choice is remembered). The title row is the same size as a link row.
- * As the rail the title goes (it would not fit), the links always show, and a thin rule separates the groups instead.
- */
-/** Whether a titled section is folded, remembered per title. */
-function useFolded(title: string) {
-  const [closed, setClosed] = useState(() => readClosedGroups().includes(title));
-  const toggle = () =>
-    setClosed((c) => {
-      try {
-        const rest = readClosedGroups().filter((g) => g !== title);
-        localStorage.setItem(GROUPS_KEY, JSON.stringify(c ? rest : [...rest, title]));
-      } catch {
-        /* the choice just is not remembered */
-      }
-      return !c;
-    });
-  return [closed, toggle] as const;
 }
 
 /** One team in the sidebar: its row (a toggle, with a three-dot menu) and, when open, its sections. A row is dragged by its toggle (a mouse or pen; Alt+Up and Alt+Down do the same from the keyboard). */
@@ -470,36 +421,3 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
  * The title row of a sidebar section: the label with its arrow right beside it (click to fold), and the section's own actions at the
  * end of the row (shown on hover or focus on wide screens). Not drawn in the icon-only rail, which has no room for titles.
  */
-function SectionLabel({ title, closed, onToggle, controls, collapsed, gap, actions }: { title: string; closed: boolean; onToggle: () => void; controls: string; collapsed: boolean; gap: string; actions?: React.ReactNode }) {
-  return (
-    <div className={clsx("group relative", gap, collapsed && "md:hidden")}>
-      {/* The whole row is the toggle (its hover area too); the actions sit above it, on their own layer, so they take their own clicks. */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={!closed}
-        aria-controls={controls}
-        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-left text-xs font-medium leading-5 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50"
-      >
-        <span className="truncate">{title}</span>
-        <ChevronDownIcon aria-hidden className={clsx("shrink-0 text-sm transition-transform duration-150", closed && "-rotate-90")} />
-      </button>
-      {actions && (
-        <span className="absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">{actions}</span>
-      )}
-    </div>
-  );
-}
-
-function Group({ title, collapsed, gap, children }: { title: string; collapsed: boolean; gap: string; children: React.ReactNode }) {
-  const [closed, toggle] = useFolded(title);
-  const id = `group-${title.toLowerCase()}`;
-  return (
-    <div className={clsx(collapsed && "md:mt-3 md:border-t md:border-line md:pt-3")}>
-      <SectionLabel title={title} closed={closed} onToggle={toggle} controls={id} collapsed={collapsed} gap={gap} />
-      <div id={id} className={clsx("mt-0.5 space-y-0.5", closed && "hidden", closed && collapsed && "md:block")}>
-        {children}
-      </div>
-    </div>
-  );
-}

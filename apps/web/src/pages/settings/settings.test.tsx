@@ -8,7 +8,28 @@ const panel = () => within(screen.getByRole("navigation", { name: "Settings" }))
 
 beforeEach(() => forgetAppLocation());
 
+async function waitForElement(id: string) {
+  for (let i = 0; i < 50; i++) {
+    const el = document.getElementById(id);
+    if (el) return el;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error(`#${id} never appeared`);
+}
+
 describe("settings as a screen of its own", () => {
+  test("its panel is the app sidebar's frame: the same width, and a phone drawer with a menu button", async () => {
+    const { unmount } = renderApp("/settings/profile");
+    await screen.findByRole("heading", { level: 1, name: "Profile" });
+    const settingsWidth = document.getElementById("settings-sidebar")!.className.match(/\bw-\d+\b/)?.[0];
+    expect(screen.getByRole("button", { name: "Open menu" }).getAttribute("aria-controls")).toBe("settings-sidebar");
+    unmount();
+    renderApp("/");
+    const appSidebar = await waitForElement("app-sidebar");
+    expect(settingsWidth).toBeTruthy();
+    expect(appSidebar.className.match(/\bw-\d+\b/)?.[0]).toBe(settingsWidth);
+  });
+
   test("/settings opens the profile, in a layout with its own left panel and no app sidebar or header", async () => {
     const { at } = renderApp("/settings");
     await screen.findByRole("heading", { level: 1, name: "Profile" });
