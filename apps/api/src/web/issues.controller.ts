@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
-import { statusField, intField, moveIssueAs, issueDetail, issueInput, updateIssueAs } from "@wheelhouse/core/lib/board-app";
-import { addComment, deleteIssue, linkIssueNode, ServiceError } from "@wheelhouse/core/lib/service";
+import { statusField, intField, moveIssueAs, issueDetail, issueInput, updateIssueAs } from "../lib/board-app";
+import { addComment, deleteIssue, linkIssueNode, ServiceError } from "../lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

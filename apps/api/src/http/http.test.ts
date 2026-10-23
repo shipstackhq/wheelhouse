@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { clientIp } from "@wheelhouse/core/lib/rate-limit";
+import { clientIp } from "../lib/rate-limit";
 import { cookieValue, toHeaders } from "./util";
 import { rawText } from "./raw-text";
 

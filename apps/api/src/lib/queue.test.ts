@@ -19,7 +19,7 @@ import * as svc from "./service";
 import { runTool } from "./tools";
 import { agentQueues } from "./metrics";
 import { briefing } from "./briefing";
-import { bucketOf } from "./session-buckets";
+import { bucketOf } from "@wheelhouse/shared/session-buckets";
 
 type Changes = Awaited<ReturnType<typeof svc.getChanges>>;
 

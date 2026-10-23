@@ -1,7 +1,7 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
-import { activityView, askAs, connectAs, graphView, nodeView, saveLayoutAs, upsertDecisionAs, upsertFlowAs, upsertNodeAs, upsertTermAs } from "@wheelhouse/core/lib/map-app";
-import { deleteEdge, deleteFlow, deleteNode, deleteTerm, markFresh, ServiceError } from "@wheelhouse/core/lib/service";
-import { resolveDraft } from "@wheelhouse/core/lib/sync";
+import { activityView, askAs, connectAs, graphView, nodeView, saveLayoutAs, upsertDecisionAs, upsertFlowAs, upsertNodeAs, upsertTermAs } from "../lib/map-app";
+import { deleteEdge, deleteFlow, deleteNode, deleteTerm, markFresh, ServiceError } from "../lib/service";
+import { resolveDraft } from "../lib/sync";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

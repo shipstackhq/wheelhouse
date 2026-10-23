@@ -10,7 +10,7 @@ import {
   removeProjectTeamAs,
   updateMilestoneAs,
   updateProjectAs,
-} from "@wheelhouse/core/lib/projects-app";
+} from "../lib/projects-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

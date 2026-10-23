@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
-import { createStatus, deleteStatus, listStatuses, reorderStatuses, updateStatus } from "@wheelhouse/core/lib/statuses";
+import { createStatus, deleteStatus, listStatuses, reorderStatuses, updateStatus } from "../lib/statuses";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

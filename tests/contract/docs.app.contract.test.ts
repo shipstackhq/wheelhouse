@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { DOC_TEMPLATES } from "../../packages/core/src/lib/doc-templates";
+import { DOC_TEMPLATES } from "../../packages/shared/src/doc-templates";
 import { fx, v1ok } from "./lib/http";
 import { LANDED_FILE } from "./lib/fake-github";
 import { anon, app, newAccount, signIn, type Sess } from "./lib/app";

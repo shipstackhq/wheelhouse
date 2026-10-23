@@ -81,7 +81,7 @@ printf 'PG_CONTAINER=%s\nPG_DUMP_USER=wheelhouse\nPG_DB=wheelhouse\n' "$PGNAME" 
 (cd "$WORK/ops" && ./backup.sh >/dev/null 2>"$WORK/backup.err") && ok "backup.sh wrote a valid dump" || { bad "backup.sh"; cat "$WORK/backup.err"; }
 DUMP="$(ls -1 "$WORK"/ops/backups/nightly-*.sql.gz | head -1)"
 RESULT="$(cd "$WORK/ops" && ./restore.sh "$DUMP" 2>&1)" && ok "restore.sh restored it into a scratch database" || { bad "restore.sh"; echo "$RESULT"; }
-EXPECTED="$(node -p "require('./packages/core/drizzle/meta/_journal.json').entries.length")"
+EXPECTED="$(node -p "require('./apps/api/drizzle/meta/_journal.json').entries.length")"
 check "the restored database has the user, the issue and all $EXPECTED migrations" bash -c "grep -q '^users 1' <<<'$RESULT' && grep -q '^issues 1' <<<'$RESULT' && grep -q '^migrations $EXPECTED' <<<'$RESULT'"
 check "restore refuses to restore over a database that has tables" bash -c "cd '$WORK/ops' && ! ./restore.sh '$DUMP' >/dev/null 2>&1"
 

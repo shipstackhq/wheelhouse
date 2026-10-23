@@ -1,11 +1,11 @@
 import { Controller, Get, Req, Res, UseFilters, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { finishConnect, startConnect, type ConnectReply } from "@wheelhouse/core/lib/github/connect";
-import { STATE_COOKIE, STATE_COOKIE_PATH } from "@wheelhouse/core/lib/github/state";
+import { finishConnect, startConnect, type ConnectReply } from "../lib/github/connect";
+import { STATE_COOKIE, STATE_COOKIE_PATH } from "../lib/github/state";
 import { HumanGuard, SignedOutFilter, type HumanRequest } from "../auth/human.guard";
 import { cookieValue } from "../http/util";
 
-/** Send what @wheelhouse/core decided about connecting GitHub: the redirect or text, and the state cookie. */
+/** Send what lib/github decided about connecting GitHub: the redirect or text, and the state cookie. */
 function send(res: Response, r: ConnectReply) {
   if (r.setStateCookie) res.cookie(STATE_COOKIE, r.setStateCookie.value, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: STATE_COOKIE_PATH, maxAge: r.setStateCookie.maxAgeSec * 1000 });
   if (r.clearStateCookie) res.clearCookie(STATE_COOKIE, { path: STATE_COOKIE_PATH });

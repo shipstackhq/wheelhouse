@@ -17,7 +17,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import * as svc from "./service";
 import { runTool } from "./tools";
-import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "./doc-templates";
+import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "@wheelhouse/shared/doc-templates";
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;

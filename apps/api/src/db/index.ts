@@ -1,9 +1,12 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 import { publishAfterCommit } from "../lib/event-bus";
+
+const require = createRequire(import.meta.url); // the drivers are loaded only when used (below), so a PGlite-only run never loads postgres
 
 // Production: real Postgres via DATABASE_URL.
 // Local dev without DATABASE_URL: embedded PGlite persisted to ./.data/pglite,
@@ -16,10 +19,10 @@ const g = globalThis as unknown as { __wheelhouseDb?: Holder };
 
 /**
  * Where the migration files are. WHEELHOUSE_MIGRATIONS_DIR wins; otherwise the layouts we run in are tried in turn: the
- * repository root (packages/core/drizzle), the core package itself, and the flat layout of the container image (./drizzle).
+ * repository root (apps/api/drizzle), the API package itself (./drizzle, which is also the flat layout of the container image).
  */
 function migrationsDir() {
-  const candidates = [process.env.WHEELHOUSE_MIGRATIONS_DIR, path.join(process.cwd(), "packages", "core", "drizzle"), path.join(process.cwd(), "drizzle")].filter(Boolean) as string[];
+  const candidates = [process.env.WHEELHOUSE_MIGRATIONS_DIR, path.join(process.cwd(), "apps", "api", "drizzle"), path.join(process.cwd(), "drizzle")].filter(Boolean) as string[];
   return candidates.find((d) => fs.existsSync(path.join(d, "meta", "_journal.json"))) ?? candidates[0];
 }
 const MIGRATIONS = migrationsDir();
@@ -32,7 +35,6 @@ function init(): Holder {
     throw new Error("DATABASE_URL is required in production (the embedded PGlite fallback is for local development only)");
   }
   if (url) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const postgres = require("postgres") as typeof import("postgres");
     const client = postgres(url, { max: 5, prepare: false });
     const db = publishAfterCommit(drizzlePg(client, { schema }));
@@ -43,9 +45,7 @@ function init(): Holder {
     return { db, ready, close: () => client.end() };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PGlite } = require("@electric-sql/pglite") as typeof import("@electric-sql/pglite");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { drizzle: drizzleLite } = require("drizzle-orm/pglite") as typeof import("drizzle-orm/pglite");
   // PGLITE_DIR overrides the location; tests use "memory://" for a throwaway database.
   const dir = process.env.PGLITE_DIR ?? path.join(process.cwd(), ".data", "pglite");

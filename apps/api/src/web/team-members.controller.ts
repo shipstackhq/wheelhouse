@@ -8,7 +8,7 @@ import {
   listWorkspaceTeams,
   removeTeamMember,
   setTeamMemberRole,
-} from "@wheelhouse/core/lib/team-members";
+} from "../lib/team-members";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

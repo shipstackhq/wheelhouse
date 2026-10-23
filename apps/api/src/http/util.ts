@@ -16,7 +16,7 @@ export function cookieValue(header: string | undefined, name: string): string | 
   return undefined;
 }
 
-/** Node's header bag as the web Headers that @wheelhouse/core's clientIp() reads (repeated headers are joined with a comma). */
+/** Node's header bag as the web Headers that lib/rate-limit's clientIp() reads (repeated headers are joined with a comma). */
 export function toHeaders(h: IncomingHttpHeaders): Headers {
   const out = new Headers();
   for (const [k, v] of Object.entries(h)) {

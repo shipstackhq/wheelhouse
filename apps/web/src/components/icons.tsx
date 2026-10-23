@@ -355,7 +355,7 @@ import {
   RiUserFill,
   RiWalletFill,
 } from "@remixicon/react";
-import type { TeamIconName } from "@wheelhouse/core/lib/team-icon";
+import type { TeamIconName } from "@wheelhouse/shared/team-icon";
 
 // Wrapped like every other icon, so a team's icon sizes with the text it sits in (the sidebar's, the picker's), not Remix's 24px default.
 export const TEAM_ICONS: Record<TeamIconName, ReturnType<typeof icon>> = {

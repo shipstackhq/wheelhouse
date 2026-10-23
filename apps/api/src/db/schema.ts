@@ -20,7 +20,7 @@ import {
   date,
   pgView,
 } from "drizzle-orm/pg-core";
-import { STATUS_ROLES } from "../lib/status-roles";
+import { STATUS_ROLES } from "@wheelhouse/shared/status-roles";
 import { TEAM_ICON_COLORS } from "../lib/team-icon";
 import { sql } from "drizzle-orm";
 

@@ -7,7 +7,7 @@ import {
   listInitiativesAs,
   unlinkProjectAs,
   updateInitiativeAs,
-} from "@wheelhouse/core/lib/initiatives-app";
+} from "../lib/initiatives-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

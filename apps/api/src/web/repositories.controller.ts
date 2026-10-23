@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { browseRepoTreeAs, connectGithubAs, createConceptAs, createRepositoryAs, githubStatus, listRepositoriesAs, onboardingPage, retireRepositoryAs, updateRepositoryAs } from "@wheelhouse/core/lib/docs-app";
+import { browseRepoTreeAs, connectGithubAs, createConceptAs, createRepositoryAs, githubStatus, listRepositoriesAs, onboardingPage, retireRepositoryAs, updateRepositoryAs } from "../lib/docs-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

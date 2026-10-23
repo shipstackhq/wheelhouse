@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import type { Actor } from "@wheelhouse/core/lib/access";
-import { emit, type Q } from "@wheelhouse/core/lib/service";
+import type { Actor } from "../../lib/access";
+import { emit, type Q } from "../../lib/service";
 
 /** The shape of one event, as core's emit takes it. */
 export type EventInput = Parameters<typeof emit>[3];

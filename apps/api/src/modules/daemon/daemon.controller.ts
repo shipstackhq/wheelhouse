@@ -1,8 +1,8 @@
 import { Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseFilters, UseGuards } from "@nestjs/common";
 import { Readable } from "node:stream";
 import type { Request, Response } from "express";
-import { SSE_HEADERS } from "@wheelhouse/core/lib/sse";
-import { clientIp } from "@wheelhouse/core/lib/rate-limit";
+import { SSE_HEADERS } from "../../lib/sse";
+import { clientIp } from "../../lib/rate-limit";
 import type { RawTextRequest } from "../../http/raw-text";
 import { toHeaders } from "../../http/util";
 import { StreamRegistry } from "../../stream/stream.registry";

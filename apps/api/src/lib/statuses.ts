@@ -4,7 +4,7 @@ import type { Actor } from "./access";
 import { emit, requireTeam, type Q, type Tx } from "./service";
 import { ServiceError } from "./service-error";
 import { assertWritable, audit } from "./team-access";
-import { REQUIRED_ROLES, ROLE_ORDER, STATUS_NAME_MAX, roleRank, type StatusRole } from "./status-roles";
+import { REQUIRED_ROLES, ROLE_ORDER, STATUS_NAME_MAX, roleRank, type StatusRole } from "@wheelhouse/shared/status-roles";
 import { TEAM_ICON_COLORS } from "./team-icon";
 
 /**

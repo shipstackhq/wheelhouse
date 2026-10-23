@@ -1,6 +1,6 @@
 import { Controller, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
-import { boardView, statusField, createIssueAs, issueInput } from "@wheelhouse/core/lib/board-app";
-import { queueStatus } from "@wheelhouse/core/lib/service";
+import { boardView, statusField, createIssueAs, issueInput } from "../lib/board-app";
+import { queueStatus } from "../lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

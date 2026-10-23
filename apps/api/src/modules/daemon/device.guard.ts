@@ -1,6 +1,6 @@
 import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import type { Request } from "express";
-import { deviceForToken, type Device } from "@wheelhouse/core/lib/daemon";
+import { deviceForToken, type Device } from "../../lib/daemon";
 import type { RawTextRequest } from "../../http/raw-text";
 
 export type DeviceRequest = Request & RawTextRequest & { device: Device };

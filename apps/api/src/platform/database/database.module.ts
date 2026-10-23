@@ -1,5 +1,5 @@
 import { Global, Module } from "@nestjs/common";
-import type { DB } from "@wheelhouse/core/db";
+import type { DB } from "../../db";
 import { DatabaseService } from "./database.service";
 
 /**

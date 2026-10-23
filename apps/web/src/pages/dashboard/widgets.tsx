@@ -3,7 +3,7 @@ import { Popover } from "radix-ui";
 import { Link } from "react-router";
 import clsx from "clsx";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { CollapsibleList } from "../../components/collapsible-list";
 import { ActivityRow } from "../../components/dashboard/activity-row";
 import { ColumnChart } from "../../components/dashboard/column-chart";

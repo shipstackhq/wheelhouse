@@ -1,8 +1,8 @@
 import type { Actor } from "./access";
 import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
-import { timeAgo } from "./time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { checklistBriefingLine } from "./setup-checklist";
-import { CLOSED_ROLES } from "./status-roles";
+import { CLOSED_ROLES } from "@wheelhouse/shared/status-roles";
 /**
  * Context for agents, so a fresh session starts warm instead of re-reading the
  * codebase. Both renderers produce compact markdown: an overview with pointers,

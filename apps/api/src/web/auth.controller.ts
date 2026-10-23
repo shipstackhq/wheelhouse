@@ -1,8 +1,8 @@
 import { Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { logIn, signUp, signupAllowed } from "@wheelhouse/core/lib/accounts";
-import { endSession, SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
-import { clientIp } from "@wheelhouse/core/lib/rate-limit";
+import { logIn, signUp, signupAllowed } from "../lib/accounts";
+import { endSession, SESSION_COOKIE } from "../lib/auth-core";
+import { clientIp } from "../lib/rate-limit";
 import { cookieValue, toHeaders } from "../http/util";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";

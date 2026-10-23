@@ -6,7 +6,7 @@ import { passwordProblem } from "./auth-policy";
 import { hashPassword, randomToken, switchWorkspace, verifyPassword, type Human } from "./auth-core";
 import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listInvites, peekInvite, peekInviteAsMember, revokeInvite, seatInfo, type Issuer, type PendingInvite } from "./invites";
 import * as members from "./members";
-import { onboarding } from "./onboarding";
+import { onboarding } from "@wheelhouse/shared/onboarding";
 import { minutes, rateLimit } from "./rate-limit";
 import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "./team-access";
 import { listTeams, requireTeam, ServiceError, type Q } from "./service";

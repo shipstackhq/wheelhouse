@@ -1,11 +1,11 @@
 import { Controller, Get, Inject, Param, Req, Res } from "@nestjs/common";
 import { Readable } from "node:stream";
 import type { Request, Response } from "express";
-import { actorFromCredentials, SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
-import { clientIp } from "@wheelhouse/core/lib/rate-limit";
-import { openStream } from "@wheelhouse/core/lib/stream-open";
-import { teamScope, workspaceScope, type StreamScope } from "@wheelhouse/core/lib/stream-scope";
-import type { Actor } from "@wheelhouse/core/lib/access";
+import { actorFromCredentials, SESSION_COOKIE } from "../lib/auth-core";
+import { clientIp } from "../lib/rate-limit";
+import { openStream } from "../lib/stream-open";
+import { teamScope, workspaceScope, type StreamScope } from "../lib/stream-scope";
+import type { Actor } from "../lib/access";
 import { cookieValue, toHeaders } from "../http/util";
 import { StreamRegistry } from "./stream.registry";
 

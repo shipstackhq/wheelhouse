@@ -1,10 +1,10 @@
-import { CLOSED_ROLES, idsWithRole, idsWithRoles } from "./status-roles";
+import { CLOSED_ROLES, idsWithRole, idsWithRoles } from "@wheelhouse/shared/status-roles";
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { roleOnTeam, visibleTeamIds } from "./team-access";
 import { queueStatus } from "./service";
-import type { SessionView } from "./session-buckets";
+import type { SessionView } from "@wheelhouse/shared/session-buckets";
 
 /**
  * Read-only aggregates for the dashboard. One function per widget so new

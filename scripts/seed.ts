@@ -8,7 +8,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { eq, sql } from "drizzle-orm";
-import * as schema from "@wheelhouse/core/db/schema";
+import * as schema from "../apps/api/src/db/schema";
 
 const EMAIL = process.env.SEED_EMAIL ?? "demo@wheelhouse.local";
 const PASSWORD = process.env.SEED_PASSWORD ?? "wheelhouse-demo";

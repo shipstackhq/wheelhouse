@@ -1,10 +1,10 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
-import { SESSION_COOKIE } from "@wheelhouse/core/lib/auth-core";
-import { clientIp } from "@wheelhouse/core/lib/rate-limit";
-import { ServiceError } from "@wheelhouse/core/lib/service";
-import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "@wheelhouse/core/lib/workspace-app";
+import { isInstanceAdmin } from "../lib/auth-policy";
+import { SESSION_COOKIE } from "../lib/auth-core";
+import { clientIp } from "../lib/rate-limit";
+import { ServiceError } from "../lib/service";
+import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "../lib/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { cookieValue, toHeaders } from "../http/util";
 import { jsonBody, str } from "./body";

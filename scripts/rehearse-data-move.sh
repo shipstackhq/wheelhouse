@@ -31,7 +31,7 @@ APP_PID=""; PG=""
 stop_app() { [ -n "$APP_PID" ] && { kill "$APP_PID" 2>/dev/null; wait "$APP_PID" 2>/dev/null; APP_PID=""; }; lsof -ti :"$PORT_APP" -sTCP:LISTEN | xargs -r kill 2>/dev/null; sleep 1; }
 cleanup() { stop_app; [ -n "$PG" ] && docker rm -f "$PG" >/dev/null 2>&1; lsof -ti :"$PORT_FAKE" -sTCP:LISTEN | xargs -r kill 2>/dev/null; true; }
 trap cleanup EXIT
-db() { pnpm --silent exec tsx packages/core/src/tools/db-cli.ts "$@"; }
+db() { pnpm --silent exec tsx apps/api/src/tools/db-cli.ts "$@"; }
 
 echo "rehearsal $NAME: source $SOURCE ($(du -sh "$SOURCE" | cut -f1))"
 echo "tool version: $(git rev-parse --short HEAD)$(git diff --quiet && echo '' || echo '+uncommitted')"
@@ -92,9 +92,9 @@ done_step
 
 step "4b. the database suites on the real Postgres that holds the imported data (as CI runs them, on top of the real rows)"
 TEST_DATABASE_URL="$PGURL" pnpm --silent exec tsx --conditions=react-server --test --test-force-exit --test-concurrency=1 \
-  packages/core/src/lib/queue.test.ts tests/invites.test.ts packages/core/src/lib/workspaces-admin.test.ts tests/isolation.test.ts \
-  packages/core/src/lib/version-lock.test.ts packages/core/src/tools/db-copy.test.ts packages/core/src/lib/workspace-scope.test.ts \
-  packages/core/src/lib/constraints.test.ts packages/core/src/lib/join-tables.test.ts packages/core/src/lib/cycles.test.ts packages/core/src/lib/projects.test.ts packages/core/src/lib/initiatives.test.ts packages/core/src/lib/team-access.test.ts > "$W/dbsuites.log" 2>&1
+  apps/api/src/lib/queue.test.ts tests/invites.test.ts apps/api/src/lib/workspaces-admin.test.ts tests/isolation.test.ts \
+  apps/api/src/lib/version-lock.test.ts apps/api/src/tools/db-copy.test.ts apps/api/src/lib/workspace-scope.test.ts \
+  apps/api/src/lib/constraints.test.ts apps/api/src/lib/join-tables.test.ts apps/api/src/lib/cycles.test.ts apps/api/src/lib/projects.test.ts apps/api/src/lib/initiatives.test.ts apps/api/src/lib/team-access.test.ts > "$W/dbsuites.log" 2>&1
 grep -E "^ℹ (tests|pass|fail)" "$W/dbsuites.log" | tr '\n' ' '; echo
 if grep -qE "^ℹ fail 0" "$W/dbsuites.log"; then ok "the database suites pass on Postgres 18 with the imported data in it"; else bad "database suites failed on Postgres (see $W/dbsuites.log)"; grep -E "^✖|^  ✖" "$W/dbsuites.log" | head -10; fi
 done_step
@@ -172,7 +172,7 @@ healthy=0; for _ in $(seq 1 45); do curl -fsS -m 2 "$IMGBASE/api/health" >/dev/n
 [ "$healthy" = 1 ] && ok "health is 200 on an empty Postgres once the migrations applied" || { bad "the image did not become healthy"; docker logs "$APPC" 2>&1 | tail -8; }
 curl -fsS "$IMGBASE/t/WH/map" | grep -q '<div id="root">' && ok "the same container serves the React app at /t/…" || bad "the React app is not served by the image"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$IMGBASE/api/app/me")" = 401 ] && ok "and the web API answers signed out (401)" || bad "the web API did not answer in the image"
-expected=$(node -p "require('./packages/core/drizzle/meta/_journal.json').entries.length")
+expected=$(node -p "require('./apps/api/drizzle/meta/_journal.json').entries.length")
 applied=$(docker exec -e PGPASSWORD=pw "$PG2" psql -U postgres -d wheelhouse -tAc 'select count(*) from drizzle.__drizzle_migrations' | tr -d ' ')
 [ "$expected" = "$applied" ] && ok "every migration was applied ($applied of $expected)" || bad "migrations applied: $applied of $expected"
 docker rm -f "$APPC" "$PG2" >/dev/null 2>&1

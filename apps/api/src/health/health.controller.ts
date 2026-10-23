@@ -1,6 +1,6 @@
 import { Controller, Get, Res } from "@nestjs/common";
 import type { Response } from "express";
-import { pingDb } from "@wheelhouse/core/db";
+import { pingDb } from "../db";
 
 @Controller()
 export class HealthController {

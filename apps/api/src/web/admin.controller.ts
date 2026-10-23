@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
-import { isInstanceAdmin } from "@wheelhouse/core/lib/auth-policy";
-import { ServiceError } from "@wheelhouse/core/lib/service";
-import { getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "@wheelhouse/core/lib/workspaces-admin";
+import { isInstanceAdmin } from "../lib/auth-policy";
+import { ServiceError } from "../lib/service";
+import { getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "../lib/workspaces-admin";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

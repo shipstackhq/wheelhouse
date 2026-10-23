@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
 import type { DeviceStatus, DeviceView } from "@wheelhouse/api-client";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { CopyBlock } from "../components/copy-block";
 import { Loaded, errorText } from "../components/query-state";
 import { Select, useDialogs } from "../components/ui";

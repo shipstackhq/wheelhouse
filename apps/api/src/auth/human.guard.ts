@@ -1,6 +1,6 @@
 import { Catch, Injectable, type CanActivate, type ExceptionFilter, type ExecutionContext, type ArgumentsHost } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { humanFromSession, SESSION_COOKIE, type Human } from "@wheelhouse/core/lib/auth-core";
+import { humanFromSession, SESSION_COOKIE, type Human } from "../lib/auth-core";
 import { cookieValue } from "../http/util";
 
 export type HumanRequest = Request & { human: Human };

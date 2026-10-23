@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from "@nestjs/common";
-import { closeDb, getDb, type DB } from "@wheelhouse/core/db";
+import { closeDb, getDb, type DB } from "../../db";
 
 /** Opens the database and runs the migrations before the server listens, and closes it on shutdown so PGlite flushes. */
 @Injectable()

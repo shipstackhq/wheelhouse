@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { z } from "zod";
-import { ServiceError } from "@wheelhouse/core/lib/service-error";
+import { ServiceError } from "../../lib/service-error";
 import { ZodValidationPipe } from "./zod-validation.pipe";
 
 const Team = z.object({ name: z.string().min(1, "Enter a name"), size: z.number().int().optional() });

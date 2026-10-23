@@ -1,7 +1,7 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { markAllSeen } from "@wheelhouse/core/lib/service";
-import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs, setKeyTeamsAs } from "@wheelhouse/core/lib/workspace-app";
-import { ServiceError } from "@wheelhouse/core/lib/service";
+import { markAllSeen } from "../lib/service";
+import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs, setKeyTeamsAs } from "../lib/workspace-app";
+import { ServiceError } from "../lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

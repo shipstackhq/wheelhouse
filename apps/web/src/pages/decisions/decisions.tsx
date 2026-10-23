@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { Dialog } from "radix-ui";
 import clsx from "clsx";
 import type { Decision } from "@wheelhouse/api-client";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { GlossaryProvider, Markdown, type GlossaryTerm } from "../../components/markdown";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";

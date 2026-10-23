@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { appJwt, GithubApi, GithubApiError, isZeroSha } from "./api";
 import { githubConfig, githubMissing, type GithubConfig } from "./config";
-import { roleFromText, type RoleStatus } from "../status-roles";
+import { roleFromText, type RoleStatus } from "@wheelhouse/shared/status-roles";
 import { ciState, decideMove, RECENT_MOVE_MS } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";
 import { signBody, verifySignature } from "./signature";

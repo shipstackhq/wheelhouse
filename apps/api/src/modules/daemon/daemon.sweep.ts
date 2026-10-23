@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from "@nestjs/common";
 import { DaemonService } from "./daemon.service";
 
-/** Expires offers nobody took and marks jobs on a device that went silent unreachable, every 15 seconds (the times are in @wheelhouse/core/lib/daemon). */
+/** Expires offers nobody took and marks jobs on a device that went silent unreachable, every 15 seconds (the times are in src/lib/daemon.ts). */
 @Injectable()
 export class DaemonSweep implements OnModuleInit, OnApplicationShutdown {
   private readonly log = new Logger("DaemonSweep");

@@ -1,5 +1,5 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Req, UseGuards } from "@nestjs/common";
-import { removeMemberAs, workspaceOverview, updateMemberAs } from "@wheelhouse/core/lib/workspace-app";
+import { removeMemberAs, workspaceOverview, updateMemberAs } from "../lib/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

@@ -52,7 +52,7 @@ No path was found by which one workspace can read or write another workspace's d
 
 - a **tool** is added without an attack entry (compile-time `satisfies Record<ToolName, …>` plus a runtime comparison),
 - an **API route** (any `@Get`/`@Post`/… in `apps/api`) is added without an entry in `API_ROUTE_AUDIT`,
-- a **file that calls `getDb()`** (in `packages/core` or `apps/api`) is added without an entry in `DB_FILE_AUDIT`. A controller or guard must never appear there: only the service layer touches the database.
+- a **file that calls `getDb()`** (in `apps/api`) is added without an entry in `DB_FILE_AUDIT`. A controller or guard must never appear there: only the service layer touches the database.
 
 Each attack must be refused with a clean error (not a validation error, not a crash), return none of workspace A's data, and leave a hash of everything workspace A owns unchanged. The suite was checked by deliberately removing the workspace filter from `requireTeam`, from `resolveIssue` and from `revokeApiKey`: it failed each time.
 

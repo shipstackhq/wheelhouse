@@ -11,7 +11,7 @@
  *   the issue was moved by someone else in the last few minutes -> left alone, and the comment says so
  */
 
-import { statusForRole, hasRole, type RoleStatus } from "../status-roles";
+import { statusForRole, hasRole, type RoleStatus } from "@wheelhouse/shared/status-roles";
 
 export const RECENT_MOVE_MS = 10 * 60_000;
 

@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
-import { createDocAs, docsIndex, getDocAs, markDocFreshAs, moveDocAs, updateDocAs } from "@wheelhouse/core/lib/docs-app";
-import { deleteDoc, linkDocNode, suggestDocAnchors } from "@wheelhouse/core/lib/service";
+import { createDocAs, docsIndex, getDocAs, markDocFreshAs, moveDocAs, updateDocAs } from "../lib/docs-app";
+import { deleteDoc, linkDocNode, suggestDocAnchors } from "../lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

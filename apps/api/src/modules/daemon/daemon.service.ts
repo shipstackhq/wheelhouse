@@ -24,11 +24,11 @@ import {
   startPairing,
   sweepDeviceJobs,
   updateDevice,
-} from "@wheelhouse/core/lib/daemon";
+} from "../../lib/daemon";
 
 /**
  * What the daemon area can do, as the one door to it: the controllers (and, later, other modules through this module's index.ts)
- * call this, never the core package directly. For now each method hands over to the function in @wheelhouse/core/lib/daemon with
+ * call this, never lib/daemon.ts directly. For now each method hands over to the function in src/lib/daemon.ts with
  * the same arguments and answer; the logic moves in here area by area (docs/nest-architecture.md).
  */
 @Injectable()

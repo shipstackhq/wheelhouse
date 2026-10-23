@@ -1,6 +1,6 @@
 import type { PipeTransform } from "@nestjs/common";
 import type { ZodType } from "zod";
-import { ServiceError } from "@wheelhouse/core/lib/service-error";
+import { ServiceError } from "../../lib/service-error";
 
 /**
  * Checks a request value against a Zod schema and returns the parsed value. A failure is a ServiceError("invalid") with

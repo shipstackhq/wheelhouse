@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { createCycleAs, deleteCycleAs, getCycleAs, listCyclesAs, updateCycleAs } from "@wheelhouse/core/lib/cycles-app";
-import { ServiceError } from "@wheelhouse/core/lib/service";
+import { createCycleAs, deleteCycleAs, getCycleAs, listCyclesAs, updateCycleAs } from "../lib/cycles-app";
+import { ServiceError } from "../lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

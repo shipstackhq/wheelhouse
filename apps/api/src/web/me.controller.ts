@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
-import { listWorkspaces, SESSION_COOKIE, switchWorkspace } from "@wheelhouse/core/lib/auth-core";
-import { ServiceError } from "@wheelhouse/core/lib/service";
-import { changePasswordAs } from "@wheelhouse/core/lib/workspace-app";
+import { listWorkspaces, SESSION_COOKIE, switchWorkspace } from "../lib/auth-core";
+import { ServiceError } from "../lib/service";
+import { changePasswordAs } from "../lib/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { cookieValue } from "../http/util";
 import { jsonBody, str } from "./body";

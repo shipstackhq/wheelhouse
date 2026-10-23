@@ -1,11 +1,11 @@
 import { Catch, Controller, Get, HttpCode, Param, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
-import { v1Failure } from "@wheelhouse/core/lib/api-errors";
-import { listToolDefs, runTool } from "@wheelhouse/core/lib/tools";
+import { v1Failure } from "../lib/api-errors";
+import { listToolDefs, runTool } from "../lib/tools";
 import { ActorGuard, type AuthedRequest } from "../auth/actor.guard";
 import type { RawTextRequest } from "../http/raw-text";
 
-/** Every failure becomes `{ error: { code, message, details? } }`, with the status and codes @wheelhouse/core defines. */
+/** Every failure becomes `{ error: { code, message, details? } }`, with the status and codes lib/api-errors.ts defines. */
 @Catch()
 export class V1ExceptionFilter implements ExceptionFilter {
   catch(e: unknown, host: ArgumentsHost) {

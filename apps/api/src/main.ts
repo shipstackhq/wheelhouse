@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { configureEnvironment } from "./config";
 
-configureEnvironment(); // before @wheelhouse/core is first used
+configureEnvironment(); // before the database or the libraries are first used
 
 const { NestFactory } = await import("@nestjs/core");
 const { AppModule } = await import("./app.module");

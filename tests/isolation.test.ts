@@ -20,21 +20,21 @@ import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq, inArray } from "drizzle-orm";
-import { getDb, schema } from "@wheelhouse/core/db";
-import type { Actor } from "@wheelhouse/core/lib/access";
-import { actorForKey, sha256, userForSessionToken } from "@wheelhouse/core/lib/access";
-import * as svc from "@wheelhouse/core/lib/service";
-import { scopeKeyToAllTeams } from "@wheelhouse/core/lib/key-scope";
-import * as cycles from "@wheelhouse/core/lib/cycles";
-import * as projects from "@wheelhouse/core/lib/projects";
-import * as initiatives from "@wheelhouse/core/lib/initiatives";
-import * as members from "@wheelhouse/core/lib/members";
-import { runTool, tools } from "@wheelhouse/core/lib/tools";
-import { askMap } from "@wheelhouse/core/lib/ask";
-import { briefing, issueContext } from "@wheelhouse/core/lib/briefing";
-import * as metrics from "@wheelhouse/core/lib/metrics";
-import { resolveDraft } from "@wheelhouse/core/lib/sync";
-import * as sync from "@wheelhouse/core/lib/sync";
+import { getDb, schema } from "../apps/api/src/db";
+import type { Actor } from "../apps/api/src/lib/access";
+import { actorForKey, sha256, userForSessionToken } from "../apps/api/src/lib/access";
+import * as svc from "../apps/api/src/lib/service";
+import { scopeKeyToAllTeams } from "../apps/api/src/lib/key-scope";
+import * as cycles from "../apps/api/src/lib/cycles";
+import * as projects from "../apps/api/src/lib/projects";
+import * as initiatives from "../apps/api/src/lib/initiatives";
+import * as members from "../apps/api/src/lib/members";
+import { runTool, tools } from "../apps/api/src/lib/tools";
+import { askMap } from "../apps/api/src/lib/ask";
+import { briefing, issueContext } from "../apps/api/src/lib/briefing";
+import * as metrics from "../apps/api/src/lib/metrics";
+import { resolveDraft } from "../apps/api/src/lib/sync";
+import * as sync from "../apps/api/src/lib/sync";
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything workspace A owns carries this
@@ -365,7 +365,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
-    const { githubActor } = await import("@wheelhouse/core/lib/github/service");
+    const { githubActor } = await import("../apps/api/src/lib/github/service");
     const gh = githubActor(A.workspaceId, A.teamId);
     assert.ok((await svc.requireTeam(gh, A.teamKey)).id);
     await assert.rejects(svc.requireTeam(gh, "SH"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
@@ -731,7 +731,7 @@ describe("projects stay inside their workspace, and show other teams only as tot
     const db = await getDb();
     const [u] = await db.insert(schema.users).values({ email: `a2-${RUN}@example.com`, name: "second-team member", passwordHash: "x" }).returning();
     await db.insert(schema.memberships).values({ userId: u.id, workspaceId: A.workspaceId, role: "member" });
-    const { addTeamMember } = await import("@wheelhouse/core/lib/team-members");
+    const { addTeamMember } = await import("../apps/api/src/lib/team-members");
     await addTeamMember(A.owner, a2.key, { userId: u.id, role: "editor" });
     await projects.addProjectTeam(A.owner, aProject.id, a2.key);
     await svc.createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, status: "Done" });
@@ -808,33 +808,33 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
 
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
 const DB_FILE_AUDIT: Record<string, string> = {
-  "packages/core/src/lib/images.ts": "profile pictures and the workspace image. Writes touch only the caller's own user row, or (owners and admins) the row of the workspace the session is working in; both ids come from the verified session, never from the request. Reads return a workspace's image only for the caller's own workspace, and a person's picture only when that person is a member of the caller's workspace (the join is on the session's workspace id); anything else is not_found (tested in images.test.ts)",
-  "packages/core/src/lib/daemon.ts": "the agent daemon. People: devices are selected by owner id AND the caller's workspace id (another person's or another workspace's device is not_found); runs go through resolveIssue(actor), repositories through the issue's own team, a job is read only through its issue's team (tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused). Devices: every request carries a token that names one device, and a device reaches only its own jobs and messages (jobId AND deviceId in every query; another device's job is not_found, tested). Pairing creates the device in the approving person's own workspace",
-  "packages/core/src/lib/daemon-crypto.ts": "reads and writes only the instance's own signing key (instance_keys); no workspace data",
+  "apps/api/src/lib/images.ts": "profile pictures and the workspace image. Writes touch only the caller's own user row, or (owners and admins) the row of the workspace the session is working in; both ids come from the verified session, never from the request. Reads return a workspace's image only for the caller's own workspace, and a person's picture only when that person is a member of the caller's workspace (the join is on the session's workspace id); anything else is not_found (tested in images.test.ts)",
+  "apps/api/src/lib/daemon.ts": "the agent daemon. People: devices are selected by owner id AND the caller's workspace id (another person's or another workspace's device is not_found); runs go through resolveIssue(actor), repositories through the issue's own team, a job is read only through its issue's team (tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused). Devices: every request carries a token that names one device, and a device reaches only its own jobs and messages (jobId AND deviceId in every query; another device's job is not_found, tested). Pairing creates the device in the approving person's own workspace",
+  "apps/api/src/lib/daemon-crypto.ts": "reads and writes only the instance's own signing key (instance_keys); no workspace data",
   "apps/api/src/platform/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
-  "packages/core/src/db/index.ts": "the connection itself",
-  "packages/core/src/lib/access.ts": "session and key lookup, the suspension check",
-  "packages/core/src/lib/accounts.ts": "signup creates the new user and a workspace they own; login looks one account up by email and checks its password; neither reads another workspace's data (tested)",
-  "packages/core/src/lib/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
-  "packages/core/src/lib/invites.ts": "tokens; scoped by issuer workspace, or by the invite's own workspace at acceptance",
-  "packages/core/src/lib/members.ts": "every statement scoped by the caller's workspace id (tested); removing a member also clears their team rows in that workspace",
-  "packages/core/src/lib/team-members.ts": "every query starts from requireTeam(actor, key, need), which answers not_found for a team the person is not a member of (ADR-23); the workspace-wide views (all team names, the audit log) are for workspace owners and admins and filter by the caller's workspace id (tested in team-access.test.ts and over HTTP)",
-  "packages/core/src/lib/team-lifecycle.ts": "every action starts from requireTeam(actor, key, admin) (not_found for a team of another workspace or one the person is not in, 403 for a non-admin) and runs inside a transaction that locks the workspace's teams; a parent is resolved with findWorkspaceTeam in the actor's workspace and must be one the person can open (ADR-23, so the hierarchy grants no access); candidates and children are filtered to the teams the person can open, and teams they cannot open are only counted (tested in team-lifecycle.test.ts)",
-  "packages/core/src/lib/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
-  "packages/core/src/lib/metrics.ts": "everything derived from the caller's workspace's team ids",
-  "packages/core/src/lib/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
-  "packages/core/src/lib/service.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "packages/core/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
-  "packages/core/src/lib/sync.ts": "every entry point resolves through requireTeam first (tested)",
-  "packages/core/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
-  "packages/core/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
-  "packages/core/src/lib/statuses.ts": "every statement starts from the team found through requireTeam(actor, key, need) (admin to change anything, and humans only) and is scoped by that team's id; a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404, and the status issues move to is looked up the same way (tested)",
-  "packages/core/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
-  "packages/core/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
-  "packages/core/src/lib/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
-  "packages/core/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs, nodes and repositories inside it (tested)",
-  "packages/core/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one team by key and the owner of that team's own workspace, and everything it changes goes through the service layer as that owner, so it can only reach that workspace's map (tested on a throwaway database)",
-  "packages/core/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
+  "apps/api/src/db/index.ts": "the connection itself",
+  "apps/api/src/lib/access.ts": "session and key lookup, the suspension check",
+  "apps/api/src/lib/accounts.ts": "signup creates the new user and a workspace they own; login looks one account up by email and checks its password; neither reads another workspace's data (tested)",
+  "apps/api/src/lib/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
+  "apps/api/src/lib/invites.ts": "tokens; scoped by issuer workspace, or by the invite's own workspace at acceptance",
+  "apps/api/src/lib/members.ts": "every statement scoped by the caller's workspace id (tested); removing a member also clears their team rows in that workspace",
+  "apps/api/src/lib/team-members.ts": "every query starts from requireTeam(actor, key, need), which answers not_found for a team the person is not a member of (ADR-23); the workspace-wide views (all team names, the audit log) are for workspace owners and admins and filter by the caller's workspace id (tested in team-access.test.ts and over HTTP)",
+  "apps/api/src/lib/team-lifecycle.ts": "every action starts from requireTeam(actor, key, admin) (not_found for a team of another workspace or one the person is not in, 403 for a non-admin) and runs inside a transaction that locks the workspace's teams; a parent is resolved with findWorkspaceTeam in the actor's workspace and must be one the person can open (ADR-23, so the hierarchy grants no access); candidates and children are filtered to the teams the person can open, and teams they cannot open are only counted (tested in team-lifecycle.test.ts)",
+  "apps/api/src/lib/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
+  "apps/api/src/lib/metrics.ts": "everything derived from the caller's workspace's team ids",
+  "apps/api/src/lib/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
+  "apps/api/src/lib/service.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
+  "apps/api/src/lib/sync.ts": "every entry point resolves through requireTeam first (tested)",
+  "apps/api/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
+  "apps/api/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
+  "apps/api/src/lib/statuses.ts": "every statement starts from the team found through requireTeam(actor, key, need) (admin to change anything, and humans only) and is scoped by that team's id; a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404, and the status issues move to is looked up the same way (tested)",
+  "apps/api/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
+  "apps/api/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
+  "apps/api/src/lib/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
+  "apps/api/src/lib/docs-app.ts": "the web app's docs, repositories, GitHub connect and onboarding functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs, nodes and repositories inside it (tested)",
+  "apps/api/src/tools/post-migration-map.ts": "an operator's offline tool (docs/cutover.md), not a request handler: it is run by hand on the imported data. It looks up one team by key and the owner of that team's own workspace, and everything it changes goes through the service layer as that owner, so it can only reach that workspace's map (tested on a throwaway database)",
+  "apps/api/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
 };
 
 const walk = (dir: string): string[] =>
@@ -842,9 +842,9 @@ const walk = (dir: string): string[] =>
 
 describe("new entry points must be audited", () => {
   test("every file that touches the database directly has an audit entry", () => {
-    // The core package and the API: the service layer lives in packages/core and must stay covered.
-    // The API too: its controllers and guards must not touch the database, so none has an audit entry and any that does fails here.
-    const files = [...walk("packages/core/src"), ...walk("apps/api/src")]
+    // The whole API: the service layer (src/lib) must stay covered, and its controllers and guards must not touch the database,
+    // so none has an audit entry and any that does fails here.
+    const files = walk("apps/api/src")
       .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f))
       .filter((f) => /\bgetDb\(/.test(fs.readFileSync(f, "utf8")))
       .map((f) => f.split(path.sep).join("/"))

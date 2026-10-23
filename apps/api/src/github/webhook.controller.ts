@@ -1,13 +1,13 @@
 import { Controller, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
-import { receiveWebhook } from "@wheelhouse/core/lib/github/webhook";
+import { receiveWebhook } from "../lib/github/webhook";
 import type { RawTextRequest } from "../http/raw-text";
 
 @Controller("api/webhooks/github")
 export class WebhookController {
   /**
    * GitHub's webhook (WH-20). The signature is over the raw bytes, which the raw-text middleware keeps exactly as received;
-   * every rule (signature, size, framing, dispatch) is @wheelhouse/core's.
+   * every rule (signature, size, framing, dispatch) is lib/github's.
    */
   @Post()
   @HttpCode(200)

@@ -3,7 +3,7 @@ import type { Actor } from "./access";
 import * as svc from "./service";
 import * as sync from "./sync";
 import { PRIORITIES, NODE_KINDS, LAYERS, KINDS_BY_LAYER, EDGE_KINDS, DECISION_STATUSES } from "../db/schema";
-import { DOC_TEMPLATE_IDS } from "./doc-templates";
+import { DOC_TEMPLATE_IDS } from "@wheelhouse/shared/doc-templates";
 
 /**
  * One registry of operations, exposed both as MCP tools (/mcp) and as

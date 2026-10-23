@@ -4,7 +4,7 @@ import { readServiceRole, type ServiceRole } from "./service-role";
 
 /**
  * The environment the API runs with, as config.ts sets it up. Each getter reads process.env when it is used, not when the
- * service is created, so it always answers what the core package reads: undefined means "not set".
+ * service is created, so it always answers what the server's libraries read: undefined means "not set".
  */
 @Injectable()
 export class AppConfig {

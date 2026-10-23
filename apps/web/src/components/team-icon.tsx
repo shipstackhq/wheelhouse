@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { TEAM_ICON_COLORS, type TeamIconColor, type TeamIconName } from "@wheelhouse/core/lib/team-icon";
+import { TEAM_ICON_COLORS, type TeamIconColor, type TeamIconName } from "@wheelhouse/shared/team-icon";
 import { TEAM_ICONS, TeamGlyphIcon } from "./icons";
 
 /** Each colour as a literal class (Tailwind only keeps the classes it can read), and as a swatch. */

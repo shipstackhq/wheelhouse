@@ -1,6 +1,6 @@
 import type { Response } from "express";
-import { AccountError } from "@wheelhouse/core/lib/accounts";
-import { humanFromSession, startSession } from "@wheelhouse/core/lib/auth-core";
+import { AccountError } from "../lib/accounts";
+import { humanFromSession, startSession } from "../lib/auth-core";
 import { meView } from "./me";
 import { setSessionCookie } from "./session-cookie";
 

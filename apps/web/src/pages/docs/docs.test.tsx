@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DOC_TEMPLATES } from "@wheelhouse/core/lib/doc-templates";
+import { DOC_TEMPLATES } from "@wheelhouse/shared/doc-templates";
 import { apiError, renderApp, type FakeServer } from "../../test/harness";
 import { doc, docDetail, DOCS, docsIndex, repo } from "../../test/data";
 import { FakeEventSource } from "../../test/fake-event-source";

@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { List } from "./list";
 import { SessionGroups, type SessionView } from "./session-row";
 import { SubmitButton } from "./submit-button";
