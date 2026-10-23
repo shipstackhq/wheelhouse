@@ -64,6 +64,18 @@ Zod schemas, applied by a pipe (`common/pipes/zod-validation.pipe.ts`). One sche
 - `common/filters/service-error.filter.ts` renders a `ServiceError` through core's `appFailure`, the same mapping every controller uses today. It is not yet registered globally: a controller without its own filter (health, stream, webhook, github) would otherwise change its answer for a `ServiceError`. Registration waits until those controllers have filters.
 - `@CurrentActor()` returns the actor the guards set: `req.actor` for API keys and sessions on `/mcp` and `/api/v1`, `req.human.actor` for signed-in people on `/api/app`.
 
+## Service roles
+
+One build, one or several processes. `SERVICE_ROLE` is `api`, `daemon` or `all` (the default); anything else stops the server at boot. The role decides which modules are loaded, never what a module does (`app.imports.ts`, `platform/config/service-role.ts`):
+
+| Role | Serves |
+|---|---|
+| `api` | people and agents: the legacy group (`/api/app`, `/api/v1`, `/mcp`, GitHub, streams) and the person's side of the daemon module (`/api/app/devices`, runs on an issue) |
+| `daemon` | paired machines: `/api/daemon` and the sweep that expires offers and marks quiet devices' jobs unreachable |
+| `all` | both, in one process |
+
+`/api/health` and the platform modules are in every role. The sweep runs only where the daemon role runs, so it ticks in one process. Splitting the daemon traffic into its own process is then a deployment choice (`SERVICE_ROLE=daemon`) and not a rewrite. Both processes use the same database; each module still reads and writes only its own tables.
+
 ## Migration
 
 Strangler, one area at a time. `daemon` is the pilot. For each area: create the module, move its service and DTOs, switch its controllers to the service, leave core functions in place for the other callers until they are moved too. Routes, responses and the contract suite (`pnpm test:contract`) must not change in any step.
@@ -71,3 +83,9 @@ Strangler, one area at a time. `daemon` is the pilot. For each area: create the 
 ## Boundary enforcement
 
 `eslint.config.mjs` restricts, for files under `apps/api/src/modules/**`, imports of another module's internal files (anything but its `index.ts`). The rule is `no-restricted-imports` at `warn` while the migration runs. It becomes `error` when the last area is migrated.
+
+## Status
+
+- **Daemon pilot, step 1 (done):** `modules/daemon/` has the module (`DaemonModule.register(role)`), `DaemonService` (the module's one door; each method hands over to `@wheelhouse/core/lib/daemon` for now), the device guard and exception filter, both controllers and the sweep. Every other controller sits in `LegacyApiModule` until its area gets a module. Routes, responses and the contract suite are unchanged.
+- **Next for daemon:** move the logic from `packages/core/src/lib/daemon.ts` into the module (service, DTOs), split the people-side and machine-side services if they diverge, and give `device_*` tables their own schema file.
+- **Not started:** DTOs on existing routes, the global exception filter, per-module schema files, the shared browser package.

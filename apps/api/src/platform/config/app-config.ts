@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { REPO_ROOT } from "../../config";
+import { readServiceRole, type ServiceRole } from "./service-role";
 
 /**
  * The environment the API runs with, as config.ts sets it up. Each getter reads process.env when it is used, not when the
@@ -25,5 +26,10 @@ export class AppConfig {
   /** WHEELHOUSE_MIGRATIONS_DIR: the folder of migration files (config.ts sets a default). */
   get migrationsDir(): string | undefined {
     return process.env.WHEELHOUSE_MIGRATIONS_DIR;
+  }
+
+  /** SERVICE_ROLE: which part of the API this process serves (see service-role.ts); "all" when unset. */
+  get serviceRole(): ServiceRole {
+    return readServiceRole(process.env);
   }
 }
