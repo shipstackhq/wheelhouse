@@ -2,7 +2,9 @@ import { Module } from "@nestjs/common";
 import { ActorGuard } from "./auth/actor.guard";
 import { DaemonController, DeviceGuard } from "./daemon/daemon.controller";
 import { DaemonSweep } from "./daemon/daemon.sweep";
-import { DatabaseService } from "./database/database.service";
+import { DatabaseModule } from "./platform/database/database.module";
+import { ConfigModule } from "./platform/config/config.module";
+import { EventsModule } from "./platform/events/events.module";
 import { HumanGuard } from "./auth/human.guard";
 import { GithubController } from "./github/github.controller";
 import { WebhookController } from "./github/webhook.controller";
@@ -34,7 +36,8 @@ import { TeamMembersController } from "./web/team-members.controller";
 import { TeamsController } from "./web/teams.controller";
 
 @Module({
+  imports: [ConfigModule, DatabaseModule, EventsModule],
   controllers: [HealthController, McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ImagesController, TeamsController, TeamMembersController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, StatusesController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController, DaemonController, DevicesController],
-  providers: [DatabaseService, ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard, DeviceGuard, DaemonSweep],
+  providers: [ActorGuard, HumanGuard, StreamRegistry, CsrfGuard, SessionGuard, DeviceGuard, DaemonSweep],
 })
 export class AppModule {}
