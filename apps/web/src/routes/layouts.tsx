@@ -9,6 +9,7 @@ import { PwaRegister } from "../components/pwa";
 import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
+import { TeamStatusBar } from "../components/team-status-bar";
 import { useSidebarCollapsed } from "../components/sidebar-toggle";
 import { PageMenuProvider } from "../components/page-menu";
 import { useRememberAppLocation } from "../lib/app-location";
@@ -109,7 +110,7 @@ export function AppLayout() {
         <NavigationProgress />
         <Sidebar
           collapsed={collapsed}
-          teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor }))}
+          teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor, retired: p.retired }))}
           workspaceName={me.workspace.name}
           workspaceImageUrl={me.workspace.imageUrl}
           isAdmin={me.isInstanceAdmin}
@@ -136,6 +137,7 @@ export function TeamLayout() {
   return (
     <div className="flex h-full flex-col">
       <TeamLiveRefresh teamKey={team.key} />
+      <TeamStatusBar teamKey={team.key} />
       <div className="min-h-0 flex-1">
         <Outlet />
       </div>

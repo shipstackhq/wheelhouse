@@ -255,9 +255,17 @@ export const teams = table("teams", {
   icon: text("icon"),
   iconColor: text("icon_color", { enum: TEAM_ICON_COLORS }),
   issueCounter: integer("issue_counter").notNull().default(0),
+  // The parent team, in the same workspace (composite foreign key below). It places the team in a hierarchy and grants no access (ADR-23).
+  parentId: uuid("parent_id"),
+  // Set while the team is retired: read-only, kept with all its data and members, restorable (WH-128).
+  retiredAt: timestamp("retired_at", { withTimezone: true }),
+  retiredBy: uuid("retired_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 }, (t) => [
   unique("teams_id_workspace_id_unique").on(t.id, t.workspaceId),
+  foreignKey({ name: "teams_parent_fk", columns: [t.parentId, t.workspaceId], foreignColumns: [t.id, t.workspaceId] }).onDelete("restrict"),
+  index("teams_workspace_parent_idx").on(t.workspaceId, t.parentId),
+  check("teams_not_own_parent_check", sql`"parent_id" <> "id"`),
   // A team key ("WH") is what an issue ref starts with: one per workspace, whatever its case.
   uniqueIndex("teams_workspace_key_idx").on(t.workspaceId, sql`lower(${t.key})`),
 ]);

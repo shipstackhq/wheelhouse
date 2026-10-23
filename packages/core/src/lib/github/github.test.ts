@@ -400,6 +400,7 @@ describe("other events", () => {
     const num = t.ref.split("-")[1];
     await handleDelivery({ event: "pull_request", deliveryId: `d-${uniq()}`, payload: { action: "opened", repository: { id: 909090 }, installation: { id: 9004 }, pull_request: { number: 1, title: `DD-${num} x`, html_url: "u", user: { login: "d" }, state: "open", head: { ref: "x", sha: "7".repeat(40) } } } }, fakeGithub.api);
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 1);
+    await svc.createTeam(workspace.owner, { name: "Keep", key: "DK" }); // the last active team of a workspace cannot be deleted
     await svc.deleteTeam(workspace.owner, "DD");
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 0);
   });

@@ -3,7 +3,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { emit, requireTeam, type Q, type Tx } from "./service";
 import { ServiceError } from "./service-error";
-import { audit } from "./team-access";
+import { assertWritable, audit } from "./team-access";
 import { REQUIRED_ROLES, ROLE_ORDER, STATUS_NAME_MAX, roleRank, type StatusRole } from "./status-roles";
 import { TEAM_ICON_COLORS } from "./team-icon";
 
@@ -39,9 +39,11 @@ const bad = (field: string, message: string): never => {
   throw new ServiceError("invalid", message, { fields: { [field]: message } });
 };
 
-function adminOf(actor: Actor, teamRef: string) {
+async function adminOf(actor: Actor, teamRef: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can change a team's statuses");
-  return requireTeam(actor, teamRef, "admin");
+  const team = await requireTeam(actor, teamRef, "admin");
+  assertWritable(team);
+  return team;
 }
 
 async function lockTeam(tx: Tx, teamId: string) {
