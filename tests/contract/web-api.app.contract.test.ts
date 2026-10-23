@@ -188,7 +188,7 @@ describe("GET /api/app/teams", () => {
     const b = await app("GET", "/api/app/teams", await signIn(fx.b.email));
     assert.deepEqual(a.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
     assert.deepEqual(b.json.teams.map((p: { key: string }) => p.key), [fx.b.teamKey]);
-    assert.deepEqual(Object.keys(a.json.teams[0]).sort(), ["createdAt", "description", "icon", "iconColor", "id", "key", "name", "role"]);
+    assert.deepEqual(Object.keys(a.json.teams[0]).sort(), ["createdAt", "description", "icon", "iconColor", "id", "key", "name", "parentId", "retired", "role"]);
   });
 
   test("the workspace cannot be chosen by the request", async () => {

@@ -8,8 +8,9 @@ import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "./doc-templates";
 import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
 import { ServiceError } from "./service-error";
+import { deleteBlock, resolveParent } from "./team-lifecycle";
 import { cleanLabels, labelsOf, setDecisionNodes, setIssueLabels, withCycle, withLabels, withNodeIds } from "./links";
-import { audit, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
+import { assertWritable, audit, lockWorkspaceTeams, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
 
 export { ServiceError };
 
@@ -89,14 +90,14 @@ function diff<T extends Record<string, unknown>>(before: T, patch: Partial<T>) {
 // ───────────────────────── teams ─────────────────────────
 
 /** The teams the actor can open: a person's own teams, or the teams an agent key is scoped to (ADR-23, WH-120). */
-export async function listTeams(actor: Actor) {
+export async function listTeams(actor: Actor, opts: { includeRetired?: boolean } = {}) {
   const db = await getDb();
   const visible = await visibleTeamIds(db, actor);
   if (visible && !visible.length) return [];
   return db
     .select()
     .from(teams)
-    .where(and(eq(teams.workspaceId, actor.workspaceId), visible ? inArray(teams.id, visible) : undefined))
+    .where(and(eq(teams.workspaceId, actor.workspaceId), visible ? inArray(teams.id, visible) : undefined, opts.includeRetired ? undefined : isNull(teams.retiredAt)))
     .orderBy(asc(teams.createdAt));
 }
 
@@ -125,6 +126,8 @@ export async function requireTeam(actor: Actor, ref: string, need: Need = "read"
   const role = p ? await roleOnTeam(db, actor, p.id) : null;
   if (!p || !role) throw new ServiceError("not_found", `Team ${ref} not found`);
   if (!roleAllows(role, need)) throw new ServiceError("forbidden", need === "admin" ? "Only a team admin can do that" : "Your role on this team is read only");
+  // The one check behind every write path: a retired team can be read, never changed (WH-128).
+  if (need === "edit") assertWritable(p);
   return p;
 }
 
@@ -152,21 +155,28 @@ export async function updateTeam(actor: Actor, ref: string, input: { name?: stri
 export async function deleteTeam(actor: Actor, ref: string) {
   if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can delete a team");
   const db = await getDb();
-  const p = await requireTeam(actor, ref, "admin");
-  await db.transaction(async (tx) => {
-    // A team that leads a live project cannot go until someone else leads it; a deleted project it led goes for good with it.
-    const led = await tx.select({ id: projects.id, name: projects.name, deletedAt: projects.deletedAt }).from(projects).where(eq(projects.leadTeamId, p.id));
-    const live = led.filter((x) => !x.deletedAt);
-    if (live.length) throw new ServiceError("conflict", `${p.name} leads ${live.map((x) => `"${x.name}"`).join(", ")}. Make another team the lead of ${live.length === 1 ? "that project" : "those projects"} first.`);
+  const found = await requireTeam(actor, ref, "admin");
+  const p = await db.transaction(async (tx) => {
+    // Lock the workspace's teams, then count: two admins deleting the last two teams at once cannot both succeed.
+    await lockWorkspaceTeams(tx, found.workspaceId);
+    const [p] = await tx.select().from(teams).where(eq(teams.id, found.id));
+    if (!p) throw new ServiceError("not_found", `Team ${ref} not found`);
+    // The last active team stays, a team that leads a live project waits until someone else leads it, and child teams go or move first.
+    const why = await deleteBlock(tx, actor, p);
+    if (why) throw new ServiceError("conflict", why);
+    // A deleted project the team led goes for good with it.
+    const led = await tx.select({ id: projects.id }).from(projects).where(eq(projects.leadTeamId, p.id));
     if (led.length) await tx.delete(projects).where(inArray(projects.id, led.map((x) => x.id)));
+    await audit(tx, actor, { action: "team.deleted", targetType: "team", targetId: p.id, teamId: p.id, before: { key: p.key, name: p.name, retired: !!p.retiredAt } });
     // events has no foreign key to teams, so clear it explicitly; everything else cascades.
     await tx.delete(events).where(eq(events.teamId, p.id));
     await tx.delete(teams).where(eq(teams.id, p.id));
+    return p;
   });
   return { ok: true, deleted: p.key };
 }
 
-export async function createTeam(actor: Actor, input: { name: string; key?: string; description?: string }) {
+export async function createTeam(actor: Actor, input: { name: string; key?: string; description?: string; parent?: string | null }) {
   const db = await getDb();
   const name = input.name.trim();
   if (!name) throw new ServiceError("invalid", "Team name is required");
@@ -183,15 +193,17 @@ export async function createTeam(actor: Actor, input: { name: string; key?: stri
   if (existing.length) throw new ServiceError("conflict", `Team key ${key} already in use`);
 
   return db.transaction(async (tx) => {
+    // A parent must be a team of this workspace that the creator can open; it grants nothing in either direction.
+    const parent = input.parent ? await resolveParent(tx, actor, null, input.parent) : null;
     const [p] = await tx
       .insert(teams)
-      .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "" })
+      .values({ workspaceId: actor.workspaceId, name, key, description: input.description ?? "", parentId: parent?.id ?? null })
       .returning();
     await tx.insert(statuses).values(DEFAULT_STATUS_DEFS.map((c, i) => ({ teamId: p.id, workspaceId: p.workspaceId, name: c.name, role: c.role, isDefault: true, position: i + 1 })));
     // The creator becomes the team's first admin: without a row here nobody could open the team they just made.
     if (actor.kind === "human") {
       await tx.insert(schema.teamMembers).values({ teamId: p.id, userId: actor.id, workspaceId: actor.workspaceId, role: "admin", addedBy: actor.id });
-      await audit(tx, actor, { action: "team.created", targetType: "team", targetId: p.id, teamId: p.id, after: { key: p.key, creatorRole: "admin" } });
+      await audit(tx, actor, { action: "team.created", targetType: "team", targetId: p.id, teamId: p.id, after: { key: p.key, creatorRole: "admin", ...(parent ? { parentKey: parent.key } : {}) } });
     } else if (!actor.system) {
       // A key that makes a team is scoped to it, or it could not open what it just made (WH-120).
       await tx.insert(schema.apiKeyTeams).values({ apiKeyId: actor.id, teamId: p.id, workspaceId: p.workspaceId });
@@ -320,6 +332,7 @@ export async function resolveIssue(actor: Actor, ref: string, q?: Q, need: Need 
   const role = row ? await roleOnTeam(db, actor, row.p.id) : null;
   if (!row || !role) throw new ServiceError("not_found", `Issue ${ref} not found`);
   if (!roleAllows(role, need)) throw new ServiceError("forbidden", "Your role on this team is read only");
+  if (need === "edit") assertWritable(row.p);
   return { issue: row.t, team: row.p, ref: `${row.p.key}-${row.t.number}` };
 }
 

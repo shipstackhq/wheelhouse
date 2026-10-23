@@ -677,7 +677,7 @@ export type DeviceView = {
 /** The machine behind a pairing code, before anyone approves it. */
 export type PairingPeek = { userCode: string; name: string; os: string; expiresAt: string };
 
-export type JobState = "offered" | "accepted" | "running" | "succeeded" | "failed" | "canceled" | "rejected" | "expired" | "lost";
+export type JobState = "offered" | "accepted" | "running" | "unreachable" | "succeeded" | "failed" | "canceled" | "rejected" | "expired" | "lost";
 /** One "Run on device" of an issue. */
 /** What a run left behind: nothing, a pushed branch, an open pull request, or a pushed branch whose pull request GitHub refused. Null until the run has finished. */
 export type JobDelivery = "none" | "pushed" | "pr_opened" | "pr_failed";
@@ -696,10 +696,17 @@ export type JobView = {
   repositoryName: string | null;
   result: { commit?: string | null; pushed?: boolean; diffStats?: { files: number | null; insertions: number | null; deletions: number | null }; costUsd?: number | null; durationMs?: number | null;
     /** The pull request the GitHub App opened for the branch, or why it could not. */
-    pullRequest?: { number: number; url: string }; pullRequestError?: string; pullRequestSkipped?: string };
+    pullRequest?: { number: number; url: string }; pullRequestError?: string; pullRequestSkipped?: string;
+    /** Set when a newer run took this run's branch over before it reported: its outcome is recorded, but no pull request was opened. */
+    supersededBy?: string };
   delivery: JobDelivery | null;
   error: string | null;
   cancelRequested: boolean;
+  /** While the run's device cannot be reached: when that was noticed and when it was last heard. */
+  unreachableSince: string | null;
+  lastHeardAt: string | null;
+  /** A person marked the run lost (a guess); it comes back if the device reports it. */
+  markedLost: boolean;
   createdAt: string;
   acceptedAt: string | null;
   startedAt: string | null;

@@ -7,6 +7,9 @@
       "issueCounter": "number",
       "key": "string",
       "name": "string",
+      "parentId": "null",
+      "retiredAt": "null",
+      "retiredBy": "null",
       "teamId": "string"
     }
   ],
@@ -118,6 +121,9 @@
       "issueCounter": "number",
       "key": "string",
       "name": "string",
+      "parentId": "null",
+      "retiredAt": "null",
+      "retiredBy": "null",
       "teamId": "string"
     },
     "pullRequests": []

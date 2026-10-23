@@ -11,7 +11,7 @@ import { TeamIcon } from "./team-icon";
 import { Tip } from "./tip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
-type TeamItem = { key: string; name: string; icon?: string | null; iconColor?: string | null };
+type TeamItem = { key: string; name: string; icon?: string | null; iconColor?: string | null; retired?: boolean };
 
 const SECTIONS: { group: string; items: { path: string; label: string; icon: IconPair }[] }[] = [
   {
@@ -83,7 +83,7 @@ function currentSection(path: string, key: string): string {
 }
 
 export function Sidebar({
-  teams,
+  teams: allTeams,
   workspaceName,
   workspaceImageUrl,
   isAdmin,
@@ -103,7 +103,10 @@ export function Sidebar({
   const navigate = useNavigate();
   const match = path.match(/^\/t\/([^/]+)/);
   const currentKey = match ? decodeURIComponent(match[1]) : null;
-  const current = teams.find((p) => p.key === currentKey) ?? null;
+  // Retired teams stay out of the main list and the switcher; they sit in their own collapsed group below it.
+  const teams = useMemo(() => allTeams.filter((t) => !t.retired), [allTeams]);
+  const retiredTeams = allTeams.filter((t) => t.retired);
+  const current = allTeams.find((p) => p.key === currentKey) ?? null;
   const [open, setOpen] = useState(false); // mobile drawer
   const [openTeams, setOpenTeams] = useState<string[]>(() => (currentKey ? [currentKey] : []));
   const toggleTeam = (key: string) => setOpenTeams((o) => (o.includes(key) ? o.filter((k) => k !== key) : [...o, key]));
@@ -314,6 +317,19 @@ export function Sidebar({
               ))}
             </Reorder.Group>
           </div>
+          {retiredTeams.length > 0 && (
+            <details className={clsx("mt-3", collapsed && "md:hidden")} open={!!current?.retired}>
+              <summary className="cursor-pointer select-none px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted">Retired ({retiredTeams.length})</summary>
+              <div className="mt-0.5 space-y-0.5">
+                {retiredTeams.map((t) => (
+                  <Link key={t.key} to={`/t/${t.key}`} className={clsx(NAV_ITEM, "text-muted hover:bg-panel-2 hover:text-fg", t.key === current?.key && "text-fg")}>
+                    <TeamIcon team={t} className={NAV_ICON} />
+                    <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </details>
+          )}
           {isAdmin && (
             <SidebarGroup title="Admin" collapsed={collapsed} gap="mt-5">
               <NavLink href="/admin/workspaces" icon={NAV_ICONS.workspaces} collapsed={collapsed}>Workspaces</NavLink>

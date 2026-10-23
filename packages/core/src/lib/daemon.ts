@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { DeviceJobState } from "../db/schema";
 import { sha256, type Actor } from "./access";
@@ -28,15 +28,15 @@ export const TOKEN_TTL_S = 15 * 60;
 export const OFFER_TTL_MS = 60_000;
 /** A device that has not been heard from for this long is offline: no new offers. */
 export const ONLINE_WINDOW_MS = 90_000;
-/** A job whose device has been silent this long is lost. */
-export const LOST_AFTER_MS = 3 * 60_000;
+/** A job whose device has been silent this long is unreachable. Silence alone never loses a job: it may be a closed laptop or a dropped connection. */
+export const UNREACHABLE_AFTER_MS = 3 * 60_000;
 export const MAX_POOL_SIZE = 8;
 export const MAX_EVENTS_PER_JOB = 5_000;
 export const MAX_EVENTS_PER_BATCH = 200;
 /** The models a job may ask for when the device has not listed its own (aliases the claude CLI understands). */
 export const DEFAULT_MODELS = ["opus", "sonnet", "haiku"];
 
-const ACTIVE: DeviceJobState[] = ["offered", "accepted", "running"];
+const ACTIVE: DeviceJobState[] = ["offered", "accepted", "running", "unreachable"];
 const FINAL: DeviceJobState[] = ["succeeded", "failed", "canceled", "rejected", "expired", "lost"];
 export const isFinalState = (s: DeviceJobState) => FINAL.includes(s);
 
@@ -413,7 +413,7 @@ export function cleanCapabilities(v: unknown): Record<string, unknown> {
 
 /**
  * `{ version, capabilities, jobs: [{ id, state }] }`, sent each time the daemon connects. Records what the machine can do now, and
- * reconciles: a job this device was running that the daemon no longer knows about (it restarted and lost it) is lost.
+ * reconciles (`reconcileJobs`): a job the daemon still holds is running again, one it no longer knows about (it restarted and lost it) is lost.
  */
 export async function deviceHello(device: Device, input: Record<string, unknown>) {
   const db = await getDb();
@@ -427,19 +427,75 @@ export async function deviceHello(device: Device, input: Record<string, unknown>
     .set({ daemonVersion: str(input.version, 40) || null, capabilities: cleanCapabilities(input.capabilities), lastSeenAt: new Date() })
     .where(eq(devices.id, device.id))
     .returning();
-  const running = await db.select().from(deviceJobs).where(and(eq(deviceJobs.deviceId, device.id), inArray(deviceJobs.state, ["accepted", "running"])));
-  for (const j of running.filter((j) => !reported.has(j.id))) {
-    await finishJobRow(j, "lost", { error: "The daemon restarted and no longer has this job" });
-  }
+  await reconcileJobs(device, reported, "hello");
   return { device: { id: d.id, name: d.name, poolSize: d.poolSize, chatModel: d.chatModel } };
 }
 
-/** `{ running: [jobId], free, onBattery }`, every 30 seconds. Keeps the device online and its jobs from being declared lost. */
+/** `{ running: [jobId], free, onBattery }`, every 30 seconds. Keeps the device online, and settles its unreachable jobs the way a hello does. */
 export async function deviceHeartbeat(device: Device, input: Record<string, unknown>) {
   const db = await getDb();
   const caps = { ...(device.capabilities ?? {}), power: { onBattery: input.onBattery === true }, pool: { free: Number.isInteger(input.free) ? input.free : null } };
   await db.update(devices).set({ lastSeenAt: new Date(), capabilities: caps }).where(eq(devices.id, device.id));
+  await reconcileJobs(device, new Set((Array.isArray(input.running) ? input.running : []).filter((id): id is string => typeof id === "string" && isUuid(id))), "heartbeat");
   return { ok: true as const };
+}
+
+/**
+ * What the daemon says it holds is the only evidence a run is gone. For this device's jobs:
+ * - an unreachable job the daemon reports is running again; one it does not report is lost (it is no longer there);
+ * - a hello (the daemon just started) that leaves out an accepted or running job loses it too, since a restart forgets its jobs. A
+ *   heartbeat does not: its list can be a moment older than an accept;
+ * - a job a person marked lost that the daemon still reports comes back, unless a newer run has taken over its branch, in which case
+ *   the old agent is told to stop (`supersede`).
+ */
+async function reconcileJobs(device: Device, reported: Set<string>, source: "hello" | "heartbeat") {
+  const db = await getDb();
+  const states: DeviceJobState[] = source === "hello" ? ["accepted", "running", "unreachable"] : ["unreachable"];
+  const open = await db.select().from(deviceJobs).where(and(eq(deviceJobs.deviceId, device.id), inArray(deviceJobs.state, states)));
+  for (const j of open) {
+    if (reported.has(j.id)) {
+      if (j.state === "unreachable") await revive(j, ["unreachable"]);
+    } else {
+      await finishJobRow(j, "lost", { error: source === "hello" ? "The daemon restarted and no longer has this job" : "The daemon no longer has this job" });
+    }
+  }
+  if (!reported.size) return;
+  const marked = await db
+    .select()
+    .from(deviceJobs)
+    .where(and(eq(deviceJobs.deviceId, device.id), eq(deviceJobs.state, "lost"), sql`${deviceJobs.markedLostBy} is not null`, inArray(deviceJobs.id, [...reported])));
+  for (const j of marked) {
+    if (await takenOverBy(j)) await supersede(device, j);
+    else await revive(j, ["lost"]);
+  }
+}
+
+/** Back to running (or setting up, if it had not started): the device is talking about it after all. */
+async function revive(j: typeof deviceJobs.$inferSelect, from: DeviceJobState[]) {
+  return transition(j.id, from, { state: j.startedAt ? "running" : "accepted", unreachableSince: null, finishedAt: null, error: null, markedLostBy: null });
+}
+
+/** The id of a newer run on this run's branch (one that was offered and not refused), if there is one: it has taken the branch over. */
+async function takenOverBy(j: typeof deviceJobs.$inferSelect) {
+  const db = await getDb();
+  const [t] = await db
+    .select({ id: deviceJobs.id })
+    .from(deviceJobs)
+    .where(and(eq(deviceJobs.issueId, j.issueId), eq(deviceJobs.branch, j.branch), sql`${deviceJobs.id} <> ${j.id}`, gt(deviceJobs.createdAt, j.createdAt), notInArray(deviceJobs.state, ["rejected", "expired"])))
+    .limit(1);
+  return t?.id ?? null;
+}
+
+/** Tell a device whose run was taken over to stop it, without pushing. Asked once: the daemon answers with its finish. */
+async function supersede(device: Device, j: typeof deviceJobs.$inferSelect) {
+  if (j.cancelRequestedAt) return;
+  const db = await getDb();
+  const key = await serverSigningKey();
+  await db.transaction(async (tx) => {
+    const [row] = await tx.update(deviceJobs).set({ cancelRequestedAt: new Date(), updatedAt: new Date() }).where(and(eq(deviceJobs.id, j.id), isNull(deviceJobs.cancelRequestedAt))).returning();
+    if (row) await sendToDevice(tx, key, device.id, "job.cancel", { jobId: j.id, superseded: true });
+  });
+  wake(device.id);
 }
 
 async function deviceJob(device: Device, jobId: string) {
@@ -495,7 +551,15 @@ export async function rejectJob(device: Device, jobId: string, input: Record<str
  * after a dropped connection is stored once. A `started` event moves an accepted job to running.
  */
 export async function recordJobEvents(device: Device, jobId: string, input: Record<string, unknown>) {
-  const j = await deviceJob(device, jobId);
+  let j = await deviceJob(device, jobId);
+  // Progress from the device is proof it is alive: an unreachable run, or one a person marked lost that nobody has taken over, comes back.
+  if (j.state === "lost" && j.markedLostBy) {
+    if (await takenOverBy(j)) {
+      await supersede(device, j);
+      throw new ServiceError("conflict", "A newer run took over this branch, so this one is being stopped");
+    }
+    j = (await revive(j, ["lost"])) ?? j;
+  } else if (j.state === "unreachable") j = (await revive(j, ["unreachable"])) ?? j;
   if (isFinalState(j.state)) throw new ServiceError("conflict", `The job is ${j.state}`);
   const list = Array.isArray(input.events) ? input.events.slice(0, MAX_EVENTS_PER_BATCH) : [];
   const rows = list
@@ -520,6 +584,8 @@ type PullRequestOpener = { api: Pick<GithubApi, "openPullRequest"> } | null;
 /**
  * `{ state: succeeded | failed | canceled, branch?, commit?, diffStats?, costUsd?, error? }`: the daemon is done with the job. A
  * succeeded job that pushed changes gets a pull request, opened by the GitHub App (see `openJobPullRequest`).
+ * A job already marked lost takes the daemon's word over: the real outcome replaces `lost`. If a newer run has taken the branch over
+ * meanwhile, the outcome is still recorded (with `supersededBy`) but no pull request is opened: the branch is for a person to sort out.
  */
 export async function finishJob(device: Device, jobId: string, input: Record<string, unknown>, gh: PullRequestOpener = github()) {
   const j = await deviceJob(device, jobId);
@@ -534,13 +600,18 @@ export async function finishJob(device: Device, jobId: string, input: Record<str
     costUsd: num(input.costUsd),
     durationMs: num(input.durationMs),
   };
-  const row = await finishJobRow(j, state, { error: state === "succeeded" ? null : str(input.error, 2000) || null, result });
+  const error = state === "succeeded" ? null : str(input.error, 2000) || null;
+  const supersededBy = j.state === "lost" ? await takenOverBy(j) : null;
+  const row =
+    j.state === "lost"
+      ? await transition(j.id, ["lost"], { state, finishedAt: new Date(), error, markedLostBy: null, result: supersededBy ? { ...result, supersededBy } : result })
+      : await finishJobRow(j, state, { error, result });
   if (!row) {
     if (j.state === state) return { job: { id: j.id, state: j.state } }; // the same finish, sent again
     throw new ServiceError("conflict", `The job is ${j.state}`);
   }
   // Only the finish that moved the job opens one, so a finish sent again never opens a second.
-  if (state === "succeeded" && result.pushed && result.commit && result.diffStats.files !== 0) await openJobPullRequest(row, device, gh);
+  if (!supersededBy && state === "succeeded" && result.pushed && result.commit && result.diffStats.files !== 0) await openJobPullRequest(row, device, gh);
   return { job: { id: row.id, state: row.state } };
 }
 
@@ -618,8 +689,9 @@ async function openJobPullRequest(j: typeof deviceJobs.$inferSelect, device: Dev
 }
 
 /**
- * Time-based moves, run every so often by the host: offers nobody accepted expire, and jobs on a device that went silent are lost (its
- * branch, if it pushed one, stays). Returns how many of each, for the log.
+ * Time-based moves, run every so often by the host: offers nobody accepted expire, and jobs on a device that went silent become
+ * unreachable. Silence never loses a job: it goes on waiting until the daemon reports it (`reconcileJobs`) or a person marks it lost
+ * (`markJobLost`). Returns how many of each, for the log.
  */
 export async function sweepDeviceJobs(now = new Date()) {
   const db = await getDb();
@@ -628,14 +700,14 @@ export async function sweepDeviceJobs(now = new Date()) {
     .set({ state: "expired", finishedAt: now, updatedAt: now })
     .where(and(eq(deviceJobs.state, "offered"), lt(deviceJobs.offerExpiresAt, now)))
     .returning();
-  const silent = db.select({ id: devices.id }).from(devices).where(or(isNull(devices.lastSeenAt), lt(devices.lastSeenAt, new Date(now.getTime() - LOST_AFTER_MS)), sql`${devices.revokedAt} is not null`));
-  const lost = await db
+  const silent = db.select({ id: devices.id }).from(devices).where(or(isNull(devices.lastSeenAt), lt(devices.lastSeenAt, new Date(now.getTime() - UNREACHABLE_AFTER_MS))));
+  const unreachable = await db
     .update(deviceJobs)
-    .set({ state: "lost", finishedAt: now, updatedAt: now, error: "The device stopped reporting" })
+    .set({ state: "unreachable", unreachableSince: now, updatedAt: now })
     .where(and(inArray(deviceJobs.state, ["accepted", "running"]), inArray(deviceJobs.deviceId, silent)))
     .returning();
-  for (const j of [...expired, ...lost]) signalJob(j);
-  return { expired: expired.length, lost: lost.length };
+  for (const j of [...expired, ...unreachable]) signalJob(j);
+  return { expired: expired.length, unreachable: unreachable.length };
 }
 
 // ───────── people: devices ─────────
@@ -768,7 +840,7 @@ export function jobDelivery(state: DeviceJobState, result: Record<string, unknow
   return state === "succeeded" || state === "failed" || state === "canceled" ? "none" : null;
 }
 
-function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string | null; repositoryName?: string | null } = {}) {
+function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string | null; repositoryName?: string | null; lastHeardAt?: Date | null } = {}) {
   return {
     id: j.id,
     state: j.state,
@@ -784,6 +856,10 @@ function jobView(j: typeof deviceJobs.$inferSelect, extra: { deviceName?: string
     delivery: jobDelivery(j.state, j.result),
     error: j.error,
     cancelRequested: !!j.cancelRequestedAt,
+    // While unreachable: when the server noticed, and when the device was last heard. `markedLost`: a person ended it, not evidence.
+    unreachableSince: j.unreachableSince?.toISOString() ?? null,
+    lastHeardAt: j.state === "unreachable" ? (extra.lastHeardAt?.toISOString() ?? null) : null,
+    markedLost: !!j.markedLostBy,
     createdAt: j.createdAt.toISOString(),
     acceptedAt: j.acceptedAt?.toISOString() ?? null,
     startedAt: j.startedAt?.toISOString() ?? null,
@@ -806,7 +882,7 @@ export async function issueJobs(actor: Actor, ref: string) {
   const db = await getDb();
   const { issue, team } = await resolveIssue(actor, ref, db);
   const rows = await db
-    .select({ job: deviceJobs, deviceName: devices.name, repositoryName: repositories.displayName })
+    .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt, repositoryName: repositories.displayName })
     .from(deviceJobs)
     .innerJoin(devices, eq(devices.id, deviceJobs.deviceId))
     .leftJoin(repositories, eq(repositories.id, deviceJobs.repositoryId))
@@ -816,7 +892,7 @@ export async function issueJobs(actor: Actor, ref: string) {
   const repos = await runnableRepositories(db, team.id);
   const mine = actor.kind === "human" ? await listDevices(actor) : [];
   return {
-    jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.repositoryName })),
+    jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.repositoryName, lastHeardAt: r.lastHeardAt })),
     devices: mine.map((d) => ({ id: d.id, name: d.name, status: d.status, models: d.models, poolSize: d.poolSize, activeJobs: d.activeJobs })),
     repositories: repos.map((r) => ({ id: r.id, name: r.displayName, fullName: r.githubFullName, defaultBranch: r.defaultBranch })),
   };
@@ -857,8 +933,11 @@ async function continuable(q: Q, issueId: string, jobId: unknown) {
   const id = str(jobId, 60);
   const [job] = isUuid(id) ? await q.select().from(deviceJobs).where(and(eq(deviceJobs.id, id), eq(deviceJobs.issueId, issueId))) : [];
   if (!job) throw new ServiceError("invalid", "There is no such run of this issue to continue", { fields: { continuesJobId: "a run of this issue" } });
+  if (job.state === "unreachable") throw new ServiceError("conflict", "That run cannot be reached. If it is gone, mark it lost first, then continue it");
   if (!isFinalState(job.state)) throw new ServiceError("conflict", "That run has not finished yet");
-  if (job.result?.pushed !== true) throw new ServiceError("invalid", "That run pushed nothing, so there is nothing to continue from: start over instead");
+  // A run that was stopped or lost can be picked up again even if it never pushed; any other run needs a push to continue from.
+  const pushed = job.result?.pushed === true;
+  if (!pushed && job.state !== "canceled" && job.state !== "lost") throw new ServiceError("invalid", "That run pushed nothing, so there is nothing to continue from: start over instead");
   const [busy] = await q.select({ id: deviceJobs.id }).from(deviceJobs).where(and(eq(deviceJobs.branch, job.branch), inArray(deviceJobs.state, ACTIVE))).limit(1);
   if (busy) throw new ServiceError("conflict", "Another run is already working on that branch");
   const [last] = await q
@@ -868,7 +947,7 @@ async function continuable(q: Q, issueId: string, jobId: unknown) {
     .orderBy(desc(deviceJobEvents.seq))
     .limit(1);
   const summary = typeof last?.data?.text === "string" ? (last.data.text as string) : null;
-  return { job, summary };
+  return { job, summary, pushed };
 }
 
 /**
@@ -919,8 +998,8 @@ export async function runOnDevice(actor: Actor, ref: string, input: Record<strin
       model,
       branch,
       baseBranch,
-      // Where the worktree starts: the earlier run's pushed branch when continuing, else the base.
-      startFrom: previous ? branch : baseBranch,
+      // Where the worktree starts: the earlier run's pushed branch when continuing, else the base (also when a stopped or lost run never pushed).
+      startFrom: previous?.pushed ? branch : baseBranch,
       previous: previous ? { jobId: previous.job.id, state: previous.job.state, summary: previous.summary, error: previous.job.error } : null,
       // Board writes come with the MCP redesign; until then the agent works only in its worktree.
       boardAccess: "none",
@@ -970,7 +1049,8 @@ export async function jobEvents(actor: Actor, jobId: string, opts: { after?: num
     .where(and(eq(deviceJobEvents.jobId, job.id), gt(deviceJobEvents.seq, opts.after ?? -1)))
     .orderBy(asc(deviceJobEvents.seq))
     .limit(limit);
-  return { job: jobView(job), events: rows.map((e) => ({ seq: e.seq, at: e.at.toISOString(), type: e.type, data: e.data })) };
+  const [dev] = job.state === "unreachable" ? await db.select({ lastSeenAt: devices.lastSeenAt }).from(devices).where(eq(devices.id, job.deviceId)) : [];
+  return { job: jobView(job, { lastHeardAt: dev?.lastSeenAt }), events: rows.map((e) => ({ seq: e.seq, at: e.at.toISOString(), type: e.type, data: e.data })) };
 }
 
 /**
@@ -996,7 +1076,7 @@ export async function cancelJob(actor: Actor, jobId: string) {
         : await tx
             .update(deviceJobs)
             .set({ cancelRequestedAt: now, updatedAt: now })
-            .where(and(eq(deviceJobs.id, job.id), inArray(deviceJobs.state, ["accepted", "running"])))
+            .where(and(eq(deviceJobs.id, job.id), inArray(deviceJobs.state, ["accepted", "running", "unreachable"])))
             .returning();
     if (row) await sendToDevice(tx, key, job.deviceId, "job.cancel", { jobId: job.id, requestedBy: { id: actor.id, name: actor.name } });
     return row;
@@ -1004,4 +1084,25 @@ export async function cancelJob(actor: Actor, jobId: string) {
   wake(job.deviceId);
   if (updated) signalJob(updated);
   return { job: jobView(updated ?? job) };
+}
+
+/**
+ * Mark an unreachable run lost, by hand: the person decides it is not coming back, which frees its branch to continue. Only an
+ * unreachable run can be marked, by the device's owner or someone who can edit the issue. It is a guess, so it is not final: if the
+ * device reports the run after all, it comes back (or, if a newer run took the branch, it is stopped; see `reconcileJobs`).
+ */
+export async function markJobLost(actor: Actor, jobId: string) {
+  const job = await readableJob(actor, jobId);
+  const db = await getDb();
+  if (actor.kind !== "human") throw new ServiceError("forbidden", "Only a person can mark a run lost");
+  const [d] = await db.select().from(devices).where(eq(devices.id, job.deviceId));
+  if (d?.ownerId !== actor.id) {
+    const [i] = await db.select({ number: issues.number, key: teams.key }).from(issues).innerJoin(teams, eq(teams.id, issues.teamId)).where(eq(issues.id, job.issueId));
+    await resolveIssue(actor, `${i.key}-${i.number}`, db, "edit");
+  }
+  if (job.state === "lost") return { job: jobView(job, { deviceName: d?.name }) };
+  if (job.state !== "unreachable") throw new ServiceError("conflict", "Only a run that cannot be reached can be marked lost");
+  const row = await transition(job.id, ["unreachable"], { state: "lost", finishedAt: new Date(), markedLostBy: actor.id, error: `Marked lost by ${actor.name}` });
+  if (!row) throw new ServiceError("conflict", "The device reconnected, so the run is not lost");
+  return { job: jobView(row, { deviceName: d?.name }) };
 }

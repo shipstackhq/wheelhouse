@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema } from "../db";
 import type { TeamRole, WorkspaceRole } from "../db/schema";
 import type { Actor } from "./access";
@@ -117,6 +117,46 @@ export async function audit(
 /** Who may invite people, change roles and remove members: owners and admins (ADR-23). Only an owner may make or unmake another owner. */
 export const canManagePeople = (role: WorkspaceRole) => role === "owner" || role === "admin";
 export const isWorkspaceRole = (v: unknown): v is WorkspaceRole => typeof v === "string" && (schema.WORKSPACE_ROLES as readonly string[]).includes(v);
+
+/** A retired team is read only for everyone, people and agent keys alike (WH-128). Every write path reaches this through `requireTeam` or `resolveIssue`. */
+export function assertWritable(team: { key: string; retiredAt: Date | null }) {
+  if (team.retiredAt) throw new ServiceError("conflict", `Team ${team.key} is retired and read only. Restore it to make changes.`);
+}
+
+/**
+ * The ids of the active (not retired) teams a person is on. The one place both the leave guard and the "can leave?" state in the
+ * team settings read from, so the two cannot disagree.
+ */
+export async function activeTeamIdsOf(q: Q, workspaceId: string, userId: string): Promise<string[]> {
+  const { teamMembers: pm, teams } = schema;
+  const rows = await q
+    .select({ id: pm.teamId })
+    .from(pm)
+    .innerJoin(teams, and(eq(teams.id, pm.teamId), eq(teams.workspaceId, pm.workspaceId)))
+    .where(and(eq(pm.userId, userId), eq(pm.workspaceId, workspaceId), isNull(teams.retiredAt)));
+  return rows.map((r) => r.id);
+}
+
+/** Why a person cannot leave the team, or null when they can. A retired team is always free to leave, unless the person is its last admin. */
+export async function leaveBlock(q: Q, team: { id: string; workspaceId: string; retiredAt: Date | null }, userId: string): Promise<string | null> {
+  const { teamMembers: pm } = schema;
+  const [me] = await q.select({ role: pm.role }).from(pm).where(and(eq(pm.teamId, team.id), eq(pm.userId, userId)));
+  if (!me) return "You are not in this team";
+  if (me.role === "admin") {
+    const [r] = await q.select({ n: sql<number>`count(*)::int` }).from(pm).where(and(eq(pm.teamId, team.id), eq(pm.role, "admin")));
+    if (Number(r.n) <= 1) return "A team needs at least one admin. Name another admin first.";
+  }
+  if (!team.retiredAt) {
+    const active = await activeTeamIdsOf(q, team.workspaceId, userId);
+    if (!active.some((id) => id !== team.id)) return "This is the only active team you are on. Join or ask to be added to another team first.";
+  }
+  return null;
+}
+
+/** Lock the workspace's team rows for the rest of the transaction, so two lifecycle changes to its teams run one after the other. */
+export async function lockWorkspaceTeams(q: Q, workspaceId: string) {
+  await q.execute(sql`select id from ${schema.teams} where ${schema.teams.workspaceId} = ${workspaceId} for update`);
+}
 
 /** Throws forbidden when the role cannot do what is asked; the wording says what to ask for. */
 export function assertAllows(role: TeamRole, need: Need) {
