@@ -25,6 +25,8 @@ import { acceptInvite, createInvite, InviteError, InviteFailure, peekInvite, typ
 import { AdminError, getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "./workspaces-admin";
 import { addComment, createIssue } from "../issues/issues";
 import { createTeam } from "../teams/teams";
+import { testApp } from "../../test/app";
+await testApp();
 
 const PW = "correct horse battery";
 let n = 0;

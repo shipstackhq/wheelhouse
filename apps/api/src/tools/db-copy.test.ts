@@ -20,6 +20,7 @@ import { upsertEdge, upsertFlow, upsertNode } from "../modules/map/graph";
 import { createTeam } from "../modules/teams/teams";
 import { createMilestone, createProject } from "../modules/issues/projects";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";
+import { testApp } from "../test/app";
 
 const require = createRequire(import.meta.url);
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "wh-dbcopy-"));
@@ -38,6 +39,7 @@ before(async () => {
   source = path.join(work, "source");
   process.env.PGLITE_DIR = source;
   delete process.env.DATABASE_URL;
+  await testApp(); // after the directory is chosen: the app opens the database it finds
   const db = await getDb();
   const [workspace] = await db.insert(schema.workspaces).values({ name: "Move workspace" }).returning();
   const [user] = await db.insert(schema.users).values({ email: "move@example.test", name: "Mo", passwordHash: "x" }).returning();

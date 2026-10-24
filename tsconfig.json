@@ -10,8 +10,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "experimentalDecorators": true,
     "types": ["node"]
   },
-  "include": ["tests/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "apps", "packages", "tests/contract/.work"]
+  "include": ["tests/**/*.ts", "scripts/**/*.ts", "apps/api/src/**/*.ts"],
+  "exclude": ["node_modules", "tests/contract/.work"]
 }

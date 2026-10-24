@@ -22,6 +22,8 @@ import * as life from "./team-lifecycle";
 import { ServiceError } from "../../common/service-error";
 import { addComment, createIssue, getBoard, moveIssue } from "../issues/issues";
 import { createTeam, deleteTeam, listTeams } from "./teams";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

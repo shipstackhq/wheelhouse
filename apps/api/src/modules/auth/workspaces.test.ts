@@ -20,6 +20,8 @@ import { acceptInviteAsMember, createInvite, InviteError, InviteFailure, peekInv
 import { ServiceError } from "../../common/service-error";
 import { createTeam, listTeams, requireTeam } from "../teams/teams";
 import * as t from "./workspace-app";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

@@ -22,6 +22,8 @@ import { IssueInput, createIssue } from "./issues";
 import * as pr from "./projects";
 import * as ini from "./initiatives";
 import { addTeamMember } from "../teams/team-members";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

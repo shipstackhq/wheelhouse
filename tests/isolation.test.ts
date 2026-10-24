@@ -45,6 +45,8 @@ import { briefing, issueContext } from "../apps/api/src/modules/map/briefing";
 import * as metrics from "../apps/api/src/modules/dashboard/metrics";
 import { resolveDraft } from "../apps/api/src/modules/map/sync";
 import * as sync from "../apps/api/src/modules/map/sync";
+import { testApp } from "../apps/api/src/test/app";
+await testApp();
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything workspace A owns carries this
@@ -828,6 +830,8 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/daemon/device-jobs.ts": "every function takes the device the token names and reaches its jobs by job id AND device id; a pull request is opened for the job's own repository; the sweep is time-based and only moves job states (tested in daemon.test.ts)",
   "apps/api/src/modules/daemon/devices.ts": "people: devices are selected by owner id AND the caller's workspace id (another person's or another workspace's device is not_found); unpairing cancels only that device's own jobs (tested in daemon.test.ts)",
   "apps/api/src/modules/daemon/runs.ts": "people: runs go through resolveIssue(actor), repositories through the issue's own team, and a job is read only through its issue's team (tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused)",
+  "apps/api/src/platform/database/database.ts": "hands out the client or the current transaction (`q`) and opens or joins a transaction; runs no queries itself",
+  "apps/api/src/platform/events/events.service.ts": "writes the event log on the current transaction for an actor and a team its caller already resolved through the service layer (the same contract as emit); reads nothing",
   "apps/api/src/platform/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
   "apps/api/src/db/index.ts": "the connection itself",
   "apps/api/src/modules/auth/access.ts": "session and key lookup, the suspension check",
@@ -871,7 +875,7 @@ describe("new entry points must be audited", () => {
     // so none has an audit entry and any that does fails here.
     const files = walk("apps/api/src")
       .filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f))
-      .filter((f) => /\bgetDb\(/.test(fs.readFileSync(f, "utf8")))
+      .filter((f) => /\bgetDb\(|\bthis\.db\.q\b/.test(fs.readFileSync(f, "utf8")))
       .map((f) => f.split(path.sep).join("/"))
       .sort();
     const missing = files.filter((f) => !(f in DB_FILE_AUDIT));

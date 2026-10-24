@@ -19,6 +19,8 @@ import { createTeam } from "../teams/teams";
 import { createDoc } from "./docs";
 import { runTool } from "../../lib/tools";
 import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "@wheelhouse/shared/doc-templates";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;

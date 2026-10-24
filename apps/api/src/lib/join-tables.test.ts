@@ -21,6 +21,8 @@ import { listDecisions, upsertDecision } from "../modules/map/decisions";
 import { deleteNode, getGraph, upsertNode } from "../modules/map/graph";
 import { createTeam, deleteTeam } from "../modules/teams/teams";
 import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember, type Issuer } from "../modules/auth/invites";
+import { testApp } from "../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

@@ -21,6 +21,8 @@ import { retireRepository } from "./repositories";
 import { land } from "../map/sync";
 import type { GithubApi } from "./api";
 import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
+import { testApp } from "../../test/app";
+await testApp();
 
 type Workspace = { owner: Actor; member: Actor; installation: string; repoSlug: string; repoRowId: string };
 let A: Workspace;

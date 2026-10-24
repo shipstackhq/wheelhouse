@@ -22,6 +22,8 @@ import { hashPassword, humanFromSession, startSession, type Human } from "../mod
 import { readImageAs, setAvatarAs, setWorkspaceImageAs } from "./images";
 import { ServiceError } from "../common/service-error";
 import { LocalStorage, setStorage } from "../platform/storage/storage";
+import { testApp } from "../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("picture")]);

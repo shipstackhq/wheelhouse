@@ -25,6 +25,8 @@ import { InviteError, InviteFailure } from "./invites";
 import { ServiceError } from "../../common/service-error";
 import { AdminError } from "./workspaces-admin";
 import * as t from "./workspace-app";
+import { testApp } from "../../test/app";
+await testApp();
 
 const PW = "correct horse battery";
 let n = 0;

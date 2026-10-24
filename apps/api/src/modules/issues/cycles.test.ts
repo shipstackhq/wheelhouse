@@ -19,6 +19,8 @@ import { ServiceError } from "../../common/service-error";
 import { createTeam } from "../teams/teams";
 import { IssueInput, createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "./issues";
 import * as cy from "./cycles";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

@@ -22,6 +22,8 @@ import { createTeam } from "../../modules/teams/teams";
 import { emit } from "./emit";
 import { runTool } from "../../lib/tools";
 import { teamScope, workspaceScope } from "../streams/stream-scope";
+import { testApp } from "../../test/app";
+await testApp();
 
 let human: Actor;
 let agent: Actor;

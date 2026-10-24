@@ -18,6 +18,7 @@ import { createTeam } from "../../apps/api/src/modules/teams/teams";
 import type { Actor } from "../../apps/api/src/common/actor";
 import { hashPassword } from "../../apps/api/src/modules/auth/auth-core";
 import type { Fixtures, GithubFixture, WorkspaceFixture } from "./lib/fixtures";
+import { testApp } from "../../apps/api/src/test/app";
 
 const arg = (name: string) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -86,6 +87,7 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
 }
 
 async function main() {
+  await testApp(); // the converted modules' functions (createTeam) run on the booted services
   const db = await getDb();
   const passwordHash = await hashPassword(PASSWORD);
   const a = await workspace("A", passwordHash);

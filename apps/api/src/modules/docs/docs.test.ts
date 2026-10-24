@@ -25,6 +25,8 @@ import { createTeam, requireTeam } from "../teams/teams";
 import { createDoc, deleteDoc, extractPathTokens, getDoc, linkDocNode, listDocs, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "./docs";
 import { runTool } from "../../lib/tools";
 import * as sync from "../map/sync";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;

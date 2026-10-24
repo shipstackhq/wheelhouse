@@ -20,6 +20,8 @@ import { createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
 import { createTeam, deleteTeam, requireTeam } from "./teams";
 import * as st from "./statuses";
 import { addTeamMember } from "./team-members";
+import { testApp } from "../../test/app";
+await testApp();
 
 let db: Awaited<ReturnType<typeof getDb>>;
 let owner: Actor; // admin of both teams

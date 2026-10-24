@@ -33,6 +33,8 @@ import {
   seatInfo,
   type Issuer,
 } from "../apps/api/src/modules/auth/invites";
+import { testApp } from "../apps/api/src/test/app";
+await testApp();
 
 const PW = "correct horse battery"; // 21 chars
 const run = RUN;

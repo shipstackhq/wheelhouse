@@ -20,6 +20,8 @@ import { createIssue, getBoard, getIssue, moveIssue } from "../modules/issues/is
 import { createTeam } from "../modules/teams/teams";
 import { summary } from "../modules/dashboard/metrics";
 import { briefing } from "../modules/map/briefing";
+import { testApp } from "../test/app";
+await testApp();
 
 let human: Actor;
 let agent: Actor;

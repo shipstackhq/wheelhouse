@@ -21,6 +21,8 @@ import { createTeam } from "../teams/teams";
 import * as d from "./internal";
 import { GithubApiError } from "../github/api";
 import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 let owner: Actor;

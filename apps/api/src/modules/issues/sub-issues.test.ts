@@ -19,6 +19,8 @@ import { createTeam } from "../teams/teams";
 import { createIssue, deleteIssue, getIssue, moveIssue, updateIssue } from "./issues";
 import { issueDetail, issueInput } from "./board-app";
 import { MAX_ISSUE_DEPTH } from "./sub-issues";
+import { testApp } from "../../test/app";
+await testApp();
 
 let human: Actor;
 const refused = (e: unknown) => e instanceof ServiceError && e.code === "invalid";

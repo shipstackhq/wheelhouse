@@ -23,6 +23,8 @@ import { runTool } from "./tools";
 import { agentQueues } from "../modules/dashboard/metrics";
 import { briefing } from "../modules/map/briefing";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
+import { testApp } from "../test/app";
+await testApp();
 
 type Changes = Awaited<ReturnType<typeof getChanges>>;
 

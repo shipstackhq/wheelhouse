@@ -29,6 +29,8 @@ import { listEvents } from "../../lib/service-queue";
 import { addComment, createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
 import { createTeam, deleteTeam, listTeams, requireTeam, updateTeam } from "./teams";
 import { teamScope, workspaceScope } from "../../platform/streams/stream-scope";
+import { testApp } from "../../test/app";
+await testApp();
 
 const RUN = Math.random().toString(16).slice(2, 8);
 /** Two letters unique to this run (team keys are letters only). */

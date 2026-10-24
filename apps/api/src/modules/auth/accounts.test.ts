@@ -19,6 +19,8 @@ import { AccountError, logIn, signUp } from "./accounts";
 import { appFailure } from "../../lib/api-errors";
 import { endSession, startSession, verifyPassword } from "./auth-core";
 import { resetRateLimit } from "../../common/rate-limit";
+import { testApp } from "../../test/app";
+await testApp();
 
 const PASSWORD = "correct horse battery";
 let n = 0;

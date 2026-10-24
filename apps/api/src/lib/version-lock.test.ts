@@ -21,6 +21,8 @@ import { upsertDecision } from "../modules/map/decisions";
 import { upsertFlow, upsertNode } from "../modules/map/graph";
 import { createTeam } from "../modules/teams/teams";
 import { ServiceError } from "../common/service-error";
+import { testApp } from "../test/app";
+await testApp();
 
 let actor: Actor;
 const ROUNDS = 6;

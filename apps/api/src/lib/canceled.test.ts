@@ -21,6 +21,8 @@ import { summary, teamProgress, needsAttention } from "../modules/dashboard/metr
 import { briefing } from "../modules/map/briefing";
 import { decideMove } from "../modules/github/pr-rules";
 import { DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
+import { testApp } from "../test/app";
+await testApp();
 
 let ada: Actor;
 const DAY = 86_400_000;
