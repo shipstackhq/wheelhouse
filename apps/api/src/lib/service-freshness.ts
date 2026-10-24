@@ -3,7 +3,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { ServiceError } from "./service-error";
 import { emit } from "./service-core";
-import { DocRow } from "./service-docs";
+import { DocRow } from "../modules/docs/docs";
 import { Layer, NodeRow, upsertNode } from "./service-map";
 import { findOrCreateRepository } from "./service-repositories";
 import { requireTeam } from "../modules/teams/teams";

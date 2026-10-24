@@ -18,4 +18,4 @@ export * from "./service-freshness";
 export * from "./service-decisions";
 export * from "./service-queue";
 export * from "./service-checklist";
-export * from "./service-docs";
+export * from "../modules/docs/docs";

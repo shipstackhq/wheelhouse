@@ -1,13 +1,13 @@
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "@wheelhouse/shared/doc-templates";
-import { ServiceError } from "./service-error";
-import { cleanLabels } from "./links";
-import { Q, diff, emit, isUuid, lockRow } from "./service-core";
-import { normPath } from "./service-freshness";
-import { landedHashesFor, resolveNode } from "./service-map";
-import { requireTeam } from "../modules/teams/teams";
+import { ServiceError } from "../../lib/service-error";
+import { cleanLabels } from "../../lib/links";
+import { Q, diff, emit, isUuid, lockRow } from "../../lib/service-core";
+import { normPath } from "../../lib/service-freshness";
+import { landedHashesFor, resolveNode } from "../../lib/service-map";
+import { requireTeam } from "../teams/teams";
 
 const { nodes, events, docs, docNodes, apiKeys, users } = schema;
 
@@ -305,7 +305,7 @@ export async function updateDoc(actor: Actor, teamRef: string, ref: string, patc
   if (actor.kind === "agent" && !patch.forcePublish) {
     const existing = await resolveDoc(db, team.id, ref).catch(() => undefined);
     if (existing) {
-      const { maybeDraftDoc } = await import("./sync");
+      const { maybeDraftDoc } = await import("../../lib/sync");
       const d = await maybeDraftDoc(actor, existing, patch);
       if (d) return { ...existing, ...d };
     }

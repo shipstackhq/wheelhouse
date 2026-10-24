@@ -12,7 +12,6 @@ import { AuthController } from "./web/auth.controller";
 import { BoardController } from "./web/board.controller";
 import { CyclesController } from "./web/cycles.controller";
 import { DashboardController } from "./web/dashboard.controller";
-import { DocsController } from "./web/docs.controller";
 import { CsrfGuard, SessionGuard } from "./web/endpoints";
 import { ImagesController } from "./web/images.controller";
 import { InitiativesController } from "./web/initiatives.controller";
@@ -32,7 +31,7 @@ import { WorkspaceController } from "./web/workspace.controller";
  */
 @Module({
   imports: [StreamsModule],
-  controllers: [McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ImagesController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, IssuesController, MapController, DocsController, RepositoriesController, CyclesController, ProjectsController, InitiativesController],
+  controllers: [McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ImagesController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, BoardController, IssuesController, MapController, RepositoriesController, CyclesController, ProjectsController, InitiativesController],
   providers: [ActorGuard, HumanGuard, CsrfGuard, SessionGuard],
 })
 export class LegacyApiModule {}
