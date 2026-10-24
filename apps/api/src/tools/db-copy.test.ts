@@ -17,7 +17,7 @@ import { createDoc } from "../modules/docs/docs";
 import { addComment, createIssue, updateIssue } from "../modules/issues/issues";
 import { upsertDecision, upsertTerm } from "../modules/map/decisions";
 import { upsertEdge, upsertFlow, upsertNode } from "../modules/map/graph";
-import { createTeam } from "../modules/teams/teams";
+import { createTeam } from "../modules/teams/teams.legacy";
 import { createMilestone, createProject } from "../modules/issues/projects";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";
 import { testApp } from "../test/app";

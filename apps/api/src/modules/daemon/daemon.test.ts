@@ -17,7 +17,7 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { createIssue } from "../issues/issues";
-import { createTeam } from "../teams/teams";
+import { createTeam } from "../teams/teams.legacy";
 import * as d from "./internal";
 import { GithubApiError } from "../github/api";
 import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";

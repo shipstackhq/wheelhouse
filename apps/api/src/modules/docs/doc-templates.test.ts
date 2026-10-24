@@ -15,7 +15,7 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { createTeam } from "../teams/teams";
+import { createTeam } from "../teams/teams.legacy";
 import { createDoc } from "./docs";
 import { runTool } from "../../lib/tools";
 import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "@wheelhouse/shared/doc-templates";

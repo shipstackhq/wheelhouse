@@ -19,7 +19,7 @@ import { createDoc, moveDoc, updateDoc } from "../modules/docs/docs";
 import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
 import { upsertDecision } from "../modules/map/decisions";
 import { upsertFlow, upsertNode } from "../modules/map/graph";
-import { createTeam } from "../modules/teams/teams";
+import { createTeam } from "../modules/teams/teams.legacy";
 import { ServiceError } from "../common/service-error";
 import { testApp } from "../test/app";
 await testApp();

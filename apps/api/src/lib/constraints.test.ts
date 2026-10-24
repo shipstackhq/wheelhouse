@@ -16,7 +16,7 @@ import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { createIssue } from "../modules/issues/issues";
-import { createTeam } from "../modules/teams/teams";
+import { createTeam } from "../modules/teams/teams.legacy";
 import { testApp } from "../test/app";
 await testApp();
 

@@ -5,7 +5,7 @@ import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "@wheelhouse/sh
 import { bus } from "../platform/events/event-bus";
 import { ServiceError } from "../common/service-error";
 import { Q } from "../platform/database/transaction";
-import { listTeams, requireTeam } from "../modules/teams/teams";
+import { listTeams, requireTeam } from "../modules/teams/index";
 
 const { issues, nodes, events, agentCursors, workSessions, docs } = schema;
 

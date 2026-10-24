@@ -9,7 +9,7 @@ export { ServiceError };
 export * from "../platform/events/emit";
 export * from "../platform/database/transaction";
 export * from "../common/uuid";
-export * from "../modules/teams/teams";
+export { createTeam, deleteTeam, listTeams, requireTeam, updateTeam } from "../modules/teams/teams.legacy";
 export * from "../modules/issues/issues";
 export * from "../modules/issues/issue-nodes";
 export * from "../modules/map/graph";

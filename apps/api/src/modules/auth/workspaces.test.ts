@@ -18,7 +18,7 @@ import { userWorkspaceSuspended } from "./access";
 import { currentMembership, humanFromSession, listWorkspaces, startSession, switchWorkspace } from "./auth-core";
 import { acceptInviteAsMember, createInvite, InviteError, InviteFailure, peekInviteAsMember, type Issuer } from "./invites";
 import { ServiceError } from "../../common/service-error";
-import { createTeam, listTeams, requireTeam } from "../teams/teams";
+import { createTeam, listTeams, requireTeam } from "../teams/teams.legacy";
 import * as t from "./workspace-app";
 import { testApp } from "../../test/app";
 await testApp();

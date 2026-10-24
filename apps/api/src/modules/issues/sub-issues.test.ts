@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { createTeam } from "../teams/teams";
+import { createTeam } from "../teams/teams.legacy";
 import { createIssue, deleteIssue, getIssue, moveIssue, updateIssue } from "./issues";
 import { issueDetail, issueInput } from "./board-app";
 import { MAX_ISSUE_DEPTH } from "./sub-issues";

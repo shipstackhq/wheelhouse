@@ -17,9 +17,9 @@ import type { Actor } from "../../common/actor";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
 import { ServiceError } from "../../common/service-error";
 import { createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
-import { createTeam, deleteTeam, requireTeam } from "./teams";
-import * as st from "./statuses";
-import { addTeamMember } from "./team-members";
+import { createTeam, deleteTeam, requireTeam } from "./teams.legacy";
+import * as st from "./teams.legacy";
+import { addTeamMember } from "./teams.legacy";
 import { testApp } from "../../test/app";
 await testApp();
 

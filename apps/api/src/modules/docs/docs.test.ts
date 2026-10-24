@@ -21,7 +21,7 @@ import { ServiceError } from "../../common/service-error";
 import { getChanges, listEvents } from "../../lib/service-queue";
 import { anchorScore, reportChanges } from "../map/freshness";
 import { upsertNode } from "../map/graph";
-import { createTeam, requireTeam } from "../teams/teams";
+import { createTeam, requireTeam } from "../teams/teams.legacy";
 import { createDoc, deleteDoc, extractPathTokens, getDoc, linkDocNode, listDocs, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "./docs";
 import { runTool } from "../../lib/tools";
 import * as sync from "../map/sync";

@@ -16,7 +16,7 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { createIssue, getIssue, moveIssue } from "../issues/issues";
 import { getNode, upsertNode } from "../map/graph";
-import { createTeam, deleteTeam, requireTeam } from "../teams/teams";
+import { createTeam, deleteTeam, requireTeam } from "../teams/teams.legacy";
 import { retireRepository } from "./repositories";
 import { land } from "../map/sync";
 import type { GithubApi } from "./api";

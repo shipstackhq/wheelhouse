@@ -16,7 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { createTeam } from "../teams/teams";
+import { createTeam } from "../teams/teams.legacy";
 import { IssueInput, createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "./issues";
 import * as cy from "./cycles";
 import { testApp } from "../../test/app";
@@ -55,7 +55,7 @@ before(async () => {
   vic = await mk("vic", "member");
   a = await createTeam(ada, { name: "Alpha", key: `${L}A` });
   b = await createTeam(ada, { name: "Beta", key: `${L}B` });
-  const { addTeamMember } = await import("../teams/team-members");
+  const { addTeamMember } = await import("../teams/teams.legacy");
   await addTeamMember(ada, a.key, { userId: vic.id, role: "viewer" });
 });
 

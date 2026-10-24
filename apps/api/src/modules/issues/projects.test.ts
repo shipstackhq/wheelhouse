@@ -17,10 +17,10 @@ import { getDb, schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { createTeam, deleteTeam } from "../teams/teams";
+import { createTeam, deleteTeam } from "../teams/teams.legacy";
 import { IssueInput, createIssue, getIssue, updateIssue } from "./issues";
 import * as pr from "./projects";
-import { addTeamMember, setTeamMemberRole } from "../teams/team-members";
+import { addTeamMember, setTeamMemberRole } from "../teams/teams.legacy";
 import { testApp } from "../../test/app";
 await testApp();
 

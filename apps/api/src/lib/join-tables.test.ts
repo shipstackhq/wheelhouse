@@ -19,7 +19,7 @@ import { ServiceError } from "../common/service-error";
 import { createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
 import { listDecisions, upsertDecision } from "../modules/map/decisions";
 import { deleteNode, getGraph, upsertNode } from "../modules/map/graph";
-import { createTeam, deleteTeam } from "../modules/teams/teams";
+import { createTeam, deleteTeam } from "../modules/teams/teams.legacy";
 import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember, type Issuer } from "../modules/auth/invites";
 import { testApp } from "../test/app";
 await testApp();

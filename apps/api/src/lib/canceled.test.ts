@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
-import { createTeam, requireTeam } from "../modules/teams/teams";
+import { createTeam, requireTeam } from "../modules/teams/teams.legacy";
 import * as cy from "../modules/issues/cycles";
 import * as pr from "../modules/issues/projects";
 import { summary, teamProgress, needsAttention } from "../modules/dashboard/metrics";

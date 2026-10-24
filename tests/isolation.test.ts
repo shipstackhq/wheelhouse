@@ -33,7 +33,7 @@ import { addComment, createIssue, getIssue, updateIssue } from "../apps/api/src/
 import { upsertDecision, upsertTerm } from "../apps/api/src/modules/map/decisions";
 import { listStaleDocs, reportChanges } from "../apps/api/src/modules/map/freshness";
 import { upsertEdge, upsertFlow, upsertNode } from "../apps/api/src/modules/map/graph";
-import { createTeam, deleteTeam, requireTeam } from "../apps/api/src/modules/teams/teams";
+import { createTeam, deleteTeam, requireTeam } from "../apps/api/src/modules/teams/teams.legacy";
 import { scopeKeyToAllTeams } from "../apps/api/src/modules/auth/key-scope";
 import * as cycles from "../apps/api/src/modules/issues/cycles";
 import * as projects from "../apps/api/src/modules/issues/projects";
@@ -743,7 +743,7 @@ describe("projects stay inside their workspace, and show other teams only as tot
     const db = await getDb();
     const [u] = await db.insert(schema.users).values({ email: `a2-${RUN}@example.com`, name: "second-team member", passwordHash: "x" }).returning();
     await db.insert(schema.memberships).values({ userId: u.id, workspaceId: A.workspaceId, role: "member" });
-    const { addTeamMember } = await import("../apps/api/src/modules/teams/team-members");
+    const { addTeamMember } = await import("../apps/api/src/modules/teams/teams.legacy");
     await addTeamMember(A.owner, a2.key, { userId: u.id, role: "editor" });
     await projects.addProjectTeam(A.owner, aProject.id, a2.key);
     await createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, status: "Done" });
@@ -839,8 +839,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/auth/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
   "apps/api/src/modules/auth/invites.ts": "tokens; scoped by issuer workspace, or by the invite's own workspace at acceptance",
   "apps/api/src/modules/auth/members.ts": "every statement scoped by the caller's workspace id (tested); removing a member also clears their team rows in that workspace",
-  "apps/api/src/modules/teams/team-members.ts": "every query starts from requireTeam(actor, key, need), which answers not_found for a team the person is not a member of (ADR-23); the workspace-wide views (all team names, the audit log) are for workspace owners and admins and filter by the caller's workspace id (tested in team-access.test.ts and over HTTP)",
-  "apps/api/src/modules/teams/team-lifecycle.ts": "every action starts from requireTeam(actor, key, admin) (not_found for a team of another workspace or one the person is not in, 403 for a non-admin) and runs inside a transaction that locks the workspace's teams; a parent is resolved with findWorkspaceTeam in the actor's workspace and must be one the person can open (ADR-23, so the hierarchy grants no access); candidates and children are filtered to the teams the person can open, and teams they cannot open are only counted (tested in team-lifecycle.test.ts)",
+  "apps/api/src/modules/teams/teams.repository.ts": "the only file of the teams module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need) (the former requireTeam): not_found for a team of another workspace or one the person is not a member of, 403 below the needed role (ADR-23). Members: the workspace-wide views (all team names, the audit log) are for workspace owners and admins and every change checks the caller's role and keeps one admin (tested in team-access.test.ts). Lifecycle: every action runs inside a transaction that locks the workspace's teams, a parent must be one the person can open so the hierarchy grants no access, and children and candidates are filtered to teams the person can open (tested in team-lifecycle.test.ts). Statuses: admin to change anything, humans only, every statement scoped by the found team's id, and a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404 (tested in statuses.test.ts)",
   "apps/api/src/platform/streams/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
   "apps/api/src/modules/dashboard/metrics.ts": "everything derived from the caller's workspace's team ids",
   "apps/api/src/modules/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
@@ -851,14 +850,12 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/map/graph.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/github/repositories.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/modules/teams/teams.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/platform/streams/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/modules/map/sync.ts": "every entry point resolves through requireTeam first (tested)",
   "apps/api/src/modules/auth/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "apps/api/src/modules/issues/issues.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/issues/issue-nodes.ts": "the issue is resolved through resolveIssue(actor, ref, edit) and the node inside that issue's own team, so a node of another team or workspace is not_found; only the issue_nodes row of that pair is written or removed (tested)",
   "apps/api/src/modules/issues/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
-  "apps/api/src/modules/teams/statuses.ts": "every statement starts from the team found through requireTeam(actor, key, need) (admin to change anything, and humans only) and is scoped by that team's id; a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404, and the status issues move to is looked up the same way (tested)",
   "apps/api/src/modules/issues/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
   "apps/api/src/modules/issues/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
   "apps/api/src/modules/issues/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
