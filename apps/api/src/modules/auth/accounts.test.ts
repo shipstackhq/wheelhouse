@@ -12,12 +12,12 @@ if (process.env.TEST_DATABASE_URL) {
 import { afterEach, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { sha256, WORKSPACE_SUSPENDED_MESSAGE } from "./access";
 import { AccountError, logIn, signUp } from "./accounts";
-import { appFailure } from "./api-errors";
+import { appFailure } from "../../lib/api-errors";
 import { endSession, startSession, verifyPassword } from "./auth-core";
-import { resetRateLimit } from "./rate-limit";
+import { resetRateLimit } from "../../lib/rate-limit";
 
 const PASSWORD = "correct horse battery";
 let n = 0;
@@ -194,7 +194,7 @@ describe("appFailure: the web app's error envelope", () => {
     assert.deepEqual((g.body as { error: { details: unknown } }).error.details, { fields: { name: "Enter your name" } });
   });
   test("everything else is the REST envelope", async () => {
-    const { ServiceError } = await import("./service");
+    const { ServiceError } = await import("../../lib/service");
     const f = appFailure(new ServiceError("conflict", "changed", { current: { version: 3 } }));
     assert.equal(f.status, 409);
     assert.deepEqual(f.body, { error: { code: "conflict", message: "changed", details: { current: { version: 3 } } } });

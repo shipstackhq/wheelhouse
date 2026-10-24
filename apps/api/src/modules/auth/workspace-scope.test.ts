@@ -13,11 +13,11 @@ if (process.env.TEST_DATABASE_URL) {
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { WorkspaceRole } from "../db/schema";
-import type { Actor } from "../common/actor";
-import * as svc from "./service";
-import * as pmem from "../modules/teams/team-members";
+import { getDb, schema } from "../../db";
+import type { WorkspaceRole } from "../../db/schema";
+import type { Actor } from "../../common/actor";
+import * as svc from "../../lib/service";
+import * as pmem from "../teams/team-members";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

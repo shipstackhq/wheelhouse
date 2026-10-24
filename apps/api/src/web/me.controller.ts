@@ -1,12 +1,12 @@
 import { Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
-import { listWorkspaces, SESSION_COOKIE, switchWorkspace } from "../lib/auth-core";
+import { listWorkspaces, SESSION_COOKIE, switchWorkspace } from "../modules/auth/auth-core";
 import { ServiceError } from "../lib/service";
-import { changePasswordAs } from "../lib/workspace-app";
+import { changePasswordAs } from "../modules/auth/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { cookieValue } from "../http/util";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
-import { meView } from "./me";
+import { meView } from "../modules/auth/me";
 
 @Controller("api/app/me")
 @AppEndpoints()

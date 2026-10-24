@@ -32,7 +32,7 @@ import {
   revokeInvite,
   seatInfo,
   type Issuer,
-} from "../apps/api/src/lib/invites";
+} from "../apps/api/src/modules/auth/invites";
 
 const PW = "correct horse battery"; // 21 chars
 const run = RUN;

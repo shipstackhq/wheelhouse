@@ -1,8 +1,8 @@
 import { applyDecorators, Catch, Injectable, UseFilters, UseGuards, type ArgumentsHost, type CanActivate, type ExceptionFilter, type ExecutionContext } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { AuthError } from "../lib/access";
+import { AuthError } from "../modules/auth/access";
 import { appFailure } from "../lib/api-errors";
-import { humanFromSession, SESSION_COOKIE, type Human } from "../lib/auth-core";
+import { humanFromSession, SESSION_COOKIE, type Human } from "../modules/auth/auth-core";
 import { cookieValue } from "../http/util";
 import { checkCsrf, configuredOrigins, CSRF_HEADER, CsrfError } from "./csrf";
 

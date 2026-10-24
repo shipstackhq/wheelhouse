@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { actorForKey, AuthError, sessionForToken, sha256 } from "./access";
-import type { Actor } from "../common/actor";
-import { isUuid } from "../modules/teams/team-access";
+import type { Actor } from "../../common/actor";
+import { isUuid } from "../teams/team-access";
 
 /**
  * Who is calling, from the raw credentials of a request. Framework-free so the Next app and the API share one

@@ -12,10 +12,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../apps/api/src/db";
-import { scopeKeyToAllTeams } from "../../apps/api/src/lib/key-scope";
+import { scopeKeyToAllTeams } from "../../apps/api/src/modules/auth/key-scope";
 import * as svc from "../../apps/api/src/lib/service";
-import type { Actor } from "../../apps/api/src/lib/access";
-import { hashPassword } from "../../apps/api/src/lib/auth-core";
+import type { Actor } from "../../apps/api/src/common/actor";
+import { hashPassword } from "../../apps/api/src/modules/auth/auth-core";
 import type { Fixtures, GithubFixture, WorkspaceFixture } from "./lib/fixtures";
 
 const arg = (name: string) => {

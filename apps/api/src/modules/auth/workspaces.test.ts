@@ -13,11 +13,11 @@ process.env.MAX_WORKSPACE_MEMBERS = "100";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { userWorkspaceSuspended } from "./access";
 import { currentMembership, humanFromSession, listWorkspaces, startSession, switchWorkspace } from "./auth-core";
 import { acceptInviteAsMember, createInvite, InviteError, InviteFailure, peekInviteAsMember, type Issuer } from "./invites";
-import * as svc from "./service";
+import * as svc from "../../lib/service";
 import * as t from "./workspace-app";
 
 const RUN = Math.random().toString(16).slice(2, 8);

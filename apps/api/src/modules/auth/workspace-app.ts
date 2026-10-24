@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { sha256 } from "./access";
 import { AccountError } from "./accounts";
 import { passwordProblem } from "./auth-policy";
@@ -7,10 +7,10 @@ import { hashPassword, randomToken, switchWorkspace, verifyPassword, type Human 
 import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listInvites, peekInvite, peekInviteAsMember, revokeInvite, seatInfo, type Issuer, type PendingInvite } from "./invites";
 import * as members from "./members";
 import { onboarding } from "@wheelhouse/shared/onboarding";
-import { minutes, rateLimit } from "./rate-limit";
-import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "../modules/teams/team-access";
-import { listTeams, requireTeam, ServiceError, type Q } from "./service";
-import type { WorkspaceRole } from "../db/schema";
+import { minutes, rateLimit } from "../../lib/rate-limit";
+import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "../teams/team-access";
+import { listTeams, requireTeam, ServiceError, type Q } from "../../lib/service";
+import type { WorkspaceRole } from "../../db/schema";
 
 /**
  * What the web app's workspace, agents and invite pages do, as functions of the signed-in person (WH-95). The API's controllers

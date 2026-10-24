@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { Human } from "./auth-core";
+import type { Human } from "../modules/auth/auth-core";
 import { ServiceError } from "./service";
 import { getStorage, type StoredObject } from "./storage";
 import { canManagePeople } from "../modules/teams/team-access";

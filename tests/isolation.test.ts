@@ -21,14 +21,14 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../apps/api/src/db";
-import type { Actor } from "../apps/api/src/lib/access";
-import { actorForKey, sha256, userForSessionToken } from "../apps/api/src/lib/access";
+import type { Actor } from "../apps/api/src/common/actor";
+import { actorForKey, sha256, userForSessionToken } from "../apps/api/src/modules/auth/access";
 import * as svc from "../apps/api/src/lib/service";
-import { scopeKeyToAllTeams } from "../apps/api/src/lib/key-scope";
+import { scopeKeyToAllTeams } from "../apps/api/src/modules/auth/key-scope";
 import * as cycles from "../apps/api/src/modules/issues/cycles";
 import * as projects from "../apps/api/src/modules/issues/projects";
 import * as initiatives from "../apps/api/src/modules/issues/initiatives";
-import * as members from "../apps/api/src/lib/members";
+import * as members from "../apps/api/src/modules/auth/members";
 import { runTool, tools } from "../apps/api/src/lib/tools";
 import { askMap } from "../apps/api/src/modules/map/ask";
 import { briefing, issueContext } from "../apps/api/src/modules/map/briefing";
@@ -820,11 +820,11 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/daemon/runs.ts": "people: runs go through resolveIssue(actor), repositories through the issue's own team, and a job is read only through its issue's team (tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused)",
   "apps/api/src/platform/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
   "apps/api/src/db/index.ts": "the connection itself",
-  "apps/api/src/lib/access.ts": "session and key lookup, the suspension check",
-  "apps/api/src/lib/accounts.ts": "signup creates the new user and a workspace they own; login looks one account up by email and checks its password; neither reads another workspace's data (tested)",
-  "apps/api/src/lib/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
-  "apps/api/src/lib/invites.ts": "tokens; scoped by issuer workspace, or by the invite's own workspace at acceptance",
-  "apps/api/src/lib/members.ts": "every statement scoped by the caller's workspace id (tested); removing a member also clears their team rows in that workspace",
+  "apps/api/src/modules/auth/access.ts": "session and key lookup, the suspension check",
+  "apps/api/src/modules/auth/accounts.ts": "signup creates the new user and a workspace they own; login looks one account up by email and checks its password; neither reads another workspace's data (tested)",
+  "apps/api/src/modules/auth/auth-core.ts": "the signed-in user's membership, looked up by the id of the user a verified session or key already resolved to",
+  "apps/api/src/modules/auth/invites.ts": "tokens; scoped by issuer workspace, or by the invite's own workspace at acceptance",
+  "apps/api/src/modules/auth/members.ts": "every statement scoped by the caller's workspace id (tested); removing a member also clears their team rows in that workspace",
   "apps/api/src/modules/teams/team-members.ts": "every query starts from requireTeam(actor, key, need), which answers not_found for a team the person is not a member of (ADR-23); the workspace-wide views (all team names, the audit log) are for workspace owners and admins and filter by the caller's workspace id (tested in team-access.test.ts and over HTTP)",
   "apps/api/src/modules/teams/team-lifecycle.ts": "every action starts from requireTeam(actor, key, admin) (not_found for a team of another workspace or one the person is not in, 403 for a non-admin) and runs inside a transaction that locks the workspace's teams; a parent is resolved with findWorkspaceTeam in the actor's workspace and must be one the person can open (ADR-23, so the hierarchy grants no access); candidates and children are filtered to the teams the person can open, and teams they cannot open are only counted (tested in team-lifecycle.test.ts)",
   "apps/api/src/lib/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
@@ -840,7 +840,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/teams/teams.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/modules/map/sync.ts": "every entry point resolves through requireTeam first (tested)",
-  "apps/api/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
+  "apps/api/src/modules/auth/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "apps/api/src/modules/issues/issues.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/issues/issue-nodes.ts": "the issue is resolved through resolveIssue(actor, ref, edit) and the node inside that issue's own team, so a node of another team or workspace is not_found; only the issue_nodes row of that pair is written or removed (tested)",
   "apps/api/src/modules/issues/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
@@ -849,7 +849,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/issues/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
   "apps/api/src/modules/issues/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
   "apps/api/src/modules/docs/docs-app.ts": "the web app's docs functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs and nodes inside it (tested)",
-  "apps/api/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
+  "apps/api/src/modules/auth/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
 };
 
 const walk = (dir: string): string[] =>

@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
-import { getDb, schema, type DB } from "../db";
+import { getDb, schema, type DB } from "../../db";
 import { inviteTtlHours, isInstanceAdmin, maxWorkspaceMembers, passwordProblem } from "./auth-policy";
-import type { TeamRole, WorkspaceRole } from "../db/schema";
-import { audit, canManagePeople, isWorkspaceRole } from "../modules/teams/team-access";
-import { requireTeam } from "./service";
+import type { TeamRole, WorkspaceRole } from "../../db/schema";
+import { audit, canManagePeople, isWorkspaceRole } from "../teams/team-access";
+import { requireTeam } from "../../lib/service";
 import { newWorkspaceSlug } from "./workspace-slug";
 
 /**

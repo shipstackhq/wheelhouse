@@ -1,14 +1,14 @@
 import { Controller, Delete, Get, HttpCode, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { isInstanceAdmin } from "../lib/auth-policy";
-import { SESSION_COOKIE } from "../lib/auth-core";
+import { isInstanceAdmin } from "../modules/auth/auth-policy";
+import { SESSION_COOKIE } from "../modules/auth/auth-core";
 import { clientIp } from "../lib/rate-limit";
 import { ServiceError } from "../lib/service";
-import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "../lib/workspace-app";
+import { acceptInviteAs, acceptInviteAsMemberAs, createInviteAs, pendingInvites, peekInviteAs, peekInviteAsMemberAs, revokeInviteAs } from "../modules/auth/workspace-app";
 import type { RawTextRequest } from "../http/raw-text";
 import { cookieValue, toHeaders } from "../http/util";
 import { jsonBody, str } from "./body";
-import { beginSession } from "./begin";
+import { beginSession } from "../modules/auth/begin";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 import { requestOrigin } from "./origin";
 

@@ -1,6 +1,6 @@
 /**
  * The workspace, agents and invite functions behind the web app's pages (WH-95), against a throwaway in-memory PGlite.
- * To use a real Postgres: TEST_DATABASE_URL=postgres://... npx tsx --test --test-force-exit src/lib/workspace-app.test.ts
+ * To use a real Postgres: TEST_DATABASE_URL=postgres://... npx tsx --test --test-force-exit src/modules/auth/workspace-app.test.ts
  */
 if (process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -16,13 +16,13 @@ process.env.MAX_WORKSPACE_MEMBERS = "100";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { WorkspaceRole } from "../db/schema";
+import { getDb, schema } from "../../db";
+import type { WorkspaceRole } from "../../db/schema";
 import { AccountError } from "./accounts";
-import { appFailure } from "./api-errors";
+import { appFailure } from "../../lib/api-errors";
 import { hashPassword, humanFromSession, startSession, type Human } from "./auth-core";
 import { InviteError, InviteFailure } from "./invites";
-import { ServiceError } from "./service";
+import { ServiceError } from "../../lib/service";
 import { AdminError } from "./workspaces-admin";
 import * as t from "./workspace-app";
 

@@ -2,7 +2,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { clientIp, rateLimit, resetRateLimit } from "./rate-limit";
-import { signupOpen } from "./auth-policy";
+import { signupOpen } from "../modules/auth/auth-policy";
 
 describe("rateLimit", () => {
   test("allows up to the limit, then blocks with a retry time", () => {

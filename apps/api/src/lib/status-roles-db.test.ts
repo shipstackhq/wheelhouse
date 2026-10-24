@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
-import { scopeKeyToAllTeams } from "./key-scope";
+import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
 import * as svc from "./service";
 import { summary } from "./metrics";
 import { briefing } from "../modules/map/briefing";

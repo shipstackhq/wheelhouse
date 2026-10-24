@@ -1,7 +1,7 @@
 import { and, eq, gt, lt } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { sha256 } from "../../lib/access";
-import { randomToken } from "../../lib/auth-core";
+import { sha256 } from "../auth/access";
+import { randomToken } from "../auth/auth-core";
 import { assertionSubject, publicKeyFromRaw, verifyAssertion } from "./daemon-crypto";
 import { rateLimit } from "../../lib/rate-limit";
 import { ServiceError } from "../../lib/service";

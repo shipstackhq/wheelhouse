@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "../common/actor";
-import { rateLimit } from "./rate-limit";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../common/actor";
+import { rateLimit } from "../../lib/rate-limit";
 
 /**
  * Who is allowed in: session and API-key lookups, and the suspension check (WH-52). No Next.js request

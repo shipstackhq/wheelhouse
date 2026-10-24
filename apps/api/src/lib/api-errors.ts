@@ -1,8 +1,8 @@
-import { AuthError } from "./access";
-import { AccountError } from "./accounts";
-import { InviteError, InviteFailure, INVITE_INVALID } from "./invites";
+import { AuthError } from "../modules/auth/access";
+import { AccountError } from "../modules/auth/accounts";
+import { InviteError, InviteFailure, INVITE_INVALID } from "../modules/auth/invites";
 import { ServiceError } from "./service";
-import { AdminError } from "./workspaces-admin";
+import { AdminError } from "../modules/auth/workspaces-admin";
 
 /** How a failure is answered over HTTP: shared by every host so the REST and MCP error shapes cannot drift apart. */
 export type Failure = { status: number; body: unknown; headers?: Record<string, string> };

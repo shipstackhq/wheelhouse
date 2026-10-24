@@ -1,8 +1,8 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import { isUuid } from "../modules/teams/team-access";
-import { ServiceError } from "./service-error";
-import type { WorkspaceRole } from "../db/schema";
+import { getDb, schema } from "../../db";
+import { isUuid } from "../teams/team-access";
+import { ServiceError } from "../../lib/service-error";
+import type { WorkspaceRole } from "../../db/schema";
 
 /**
  * Workspace membership and API-key changes made by a workspace owner. Every statement is scoped by `workspaceId`, so a user id

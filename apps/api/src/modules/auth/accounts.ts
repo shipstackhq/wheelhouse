@@ -1,10 +1,10 @@
 import { eq, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { WORKSPACE_SUSPENDED_MESSAGE, userWorkspaceSuspended } from "./access";
 import { passwordProblem, signupOpen } from "./auth-policy";
 import { hashPassword, verifyPassword } from "./auth-core";
 import { newWorkspaceSlug } from "./workspace-slug";
-import { minutes, rateLimit, resetRateLimit } from "./rate-limit";
+import { minutes, rateLimit, resetRateLimit } from "../../lib/rate-limit";
 
 /**
  * Creating an account and signing in: the rules, with no HTTP in them. The Next server actions and the API call these, so

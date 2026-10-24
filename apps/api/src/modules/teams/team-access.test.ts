@@ -17,12 +17,12 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
-import { acceptInvite, createInvite, listInvites, type Issuer } from "../../lib/invites";
-import { removeMember, updateMember } from "../../lib/members";
+import { acceptInvite, createInvite, listInvites, type Issuer } from "../auth/invites";
+import { removeMember, updateMember } from "../auth/members";
 import * as metrics from "../../lib/metrics";
 import { effectiveRole, roleAllows, roleOnTeam, visibleTeamIds } from "./team-access";
 import * as pmem from "./team-members";
-import { scopeKeyToAllTeams } from "../../lib/key-scope";
+import { scopeKeyToAllTeams } from "../auth/key-scope";
 import * as svc from "../../lib/service";
 import { teamScope, workspaceScope } from "../../lib/stream-scope";
 

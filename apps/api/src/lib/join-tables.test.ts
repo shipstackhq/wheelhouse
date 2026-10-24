@@ -16,7 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import * as svc from "./service";
-import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember, type Issuer } from "./invites";
+import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember, type Issuer } from "../modules/auth/invites";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

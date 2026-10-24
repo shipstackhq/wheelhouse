@@ -1,7 +1,7 @@
-import { isInstanceAdmin } from "../lib/auth-policy";
-import type { Human } from "../lib/auth-core";
-import { avatarUrl, workspaceImageUrl } from "../lib/images";
-import { csrfToken } from "./csrf";
+import { isInstanceAdmin } from "./auth-policy";
+import type { Human } from "./auth-core";
+import { avatarUrl, workspaceImageUrl } from "../../lib/images";
+import { csrfToken } from "../../web/csrf";
 
 /** Who is signed in, as the web app sees it. `csrfToken` is what to send as X-CSRF-Token on every state-changing request. */
 export function meView(h: Human, sessionToken: string) {

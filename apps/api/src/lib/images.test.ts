@@ -18,7 +18,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { WorkspaceRole } from "../db/schema";
-import { hashPassword, humanFromSession, startSession, type Human } from "./auth-core";
+import { hashPassword, humanFromSession, startSession, type Human } from "../modules/auth/auth-core";
 import { readImageAs, setAvatarAs, setWorkspaceImageAs } from "./images";
 import { ServiceError } from "./service";
 import { LocalStorage, setStorage } from "./storage";

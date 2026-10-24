@@ -1,13 +1,13 @@
 import { Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { logIn, signUp, signupAllowed } from "../lib/accounts";
-import { endSession, SESSION_COOKIE } from "../lib/auth-core";
+import { logIn, signUp, signupAllowed } from "../modules/auth/accounts";
+import { endSession, SESSION_COOKIE } from "../modules/auth/auth-core";
 import { clientIp } from "../lib/rate-limit";
 import { cookieValue, toHeaders } from "../http/util";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints } from "./endpoints";
-import { beginSession } from "./begin";
+import { beginSession } from "../modules/auth/begin";
 import { clearSessionCookie } from "./session-cookie";
 
 @Controller("api/app/auth")

@@ -1,4 +1,4 @@
-import { AccountError } from "./accounts";
+import { AccountError } from "../modules/auth/accounts";
 import { ServiceError } from "./service";
 import { minutes } from "./rate-limit";
 

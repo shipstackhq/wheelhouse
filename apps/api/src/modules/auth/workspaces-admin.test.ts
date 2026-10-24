@@ -18,11 +18,11 @@ import crypto from "node:crypto";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { actorForKey, SuspendedError, WORKSPACE_SUSPENDED_MESSAGE, sha256, userForSessionToken, userWorkspaceSuspended } from "./access";
 import { acceptInvite, createInvite, InviteError, InviteFailure, peekInvite, type Issuer } from "./invites";
 import { AdminError, getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "./workspaces-admin";
-import * as svc from "./service";
+import * as svc from "../../lib/service";
 
 const PW = "correct horse battery";
 let n = 0;

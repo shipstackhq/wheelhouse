@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
-import { schema, type DB } from "../db";
+import { schema, type DB } from "../../db";
 
 /** A name as an address: lowercase letters, digits and single dashes. "Babbage & Co" is "babbage-co". */
 export function slugify(name: string): string {

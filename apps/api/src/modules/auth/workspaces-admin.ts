@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 import { isInstanceAdmin, maxWorkspaceMembers } from "./auth-policy";
-import type { WorkspaceRole } from "../db/schema";
+import type { WorkspaceRole } from "../../db/schema";
 
 /**
  * Instance-admin view of the workspaces on this server, and the switch that cuts a whole workspace off (WH-52).

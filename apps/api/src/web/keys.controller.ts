@@ -1,6 +1,6 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { markAllSeen } from "../lib/service";
-import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs, setKeyTeamsAs } from "../lib/workspace-app";
+import { agentsPage, createKeyAs, revokeKeyAs, setKeyDocsWriteAs, setKeyTeamsAs } from "../modules/auth/workspace-app";
 import { ServiceError } from "../lib/service";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";

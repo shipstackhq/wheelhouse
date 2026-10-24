@@ -1,8 +1,8 @@
 import type { Response } from "express";
-import { AccountError } from "../lib/accounts";
-import { humanFromSession, startSession } from "../lib/auth-core";
+import { AccountError } from "./accounts";
+import { humanFromSession, startSession } from "./auth-core";
 import { meView } from "./me";
-import { setSessionCookie } from "./session-cookie";
+import { setSessionCookie } from "../../web/session-cookie";
 
 /** Start a session for a person who has just proved who they are (sign in, sign up, accepting an invite): set the cookie, answer with who they are. */
 export async function beginSession(userId: string, res: Response) {
