@@ -1,6 +1,7 @@
 import type { DynamicModule, Type } from "@nestjs/common";
 import { LegacyApiModule } from "./legacy-api.module";
 import { DaemonModule } from "./modules/daemon";
+import { TeamsModule } from "./modules/teams";
 import { ConfigModule } from "./platform/config/config.module";
 import { servesApi, type ServiceRole } from "./platform/config/service-role";
 import { DatabaseModule } from "./platform/database/database.module";
@@ -12,5 +13,5 @@ import { EventsModule } from "./platform/events/events.module";
  * routes have always come after the rest.
  */
 export function buildAppImports(role: ServiceRole): Array<Type | DynamicModule> {
-  return [ConfigModule, DatabaseModule, EventsModule, ...(servesApi(role) ? [LegacyApiModule] : []), DaemonModule.register(role)];
+  return [ConfigModule, DatabaseModule, EventsModule, ...(servesApi(role) ? [LegacyApiModule, TeamsModule] : []), DaemonModule.register(role)];
 }

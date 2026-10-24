@@ -6,6 +6,7 @@ import { buildAppImports } from "./app.imports";
 import { DaemonController } from "./modules/daemon/daemon.controller";
 import { DaemonSweep } from "./modules/daemon/daemon.sweep";
 import { daemonControllers, daemonProviders, DaemonModule } from "./modules/daemon/daemon.module";
+import { TeamsModule } from "./modules/teams";
 import { DevicesController } from "./modules/daemon/devices.controller";
 
 const names = (xs: unknown[]) => xs.map((x) => (x as { name: string }).name);
@@ -38,5 +39,13 @@ describe("what each SERVICE_ROLE loads", () => {
     }
     const all = buildAppImports("all");
     assert.ok(all.indexOf(LegacyApiModule) < all.findIndex((m) => (m as DynamicModule).module === DaemonModule));
+  });
+});
+
+describe("the teams module", () => {
+  test("serves people, so it is in the api and all roles and not in the daemon role", () => {
+    assert.ok(buildAppImports("api").includes(TeamsModule));
+    assert.ok(buildAppImports("all").includes(TeamsModule));
+    assert.ok(!buildAppImports("daemon").includes(TeamsModule));
   });
 });
