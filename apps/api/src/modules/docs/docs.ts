@@ -3,7 +3,7 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "@wheelhouse/shared/doc-templates";
 import { ServiceError } from "../../common/service-error";
-import { cleanLabels } from "../../lib/links";
+import { cleanLabels } from "../../common/labels";
 import { isUuid } from "../../common/uuid";
 import { Q, lockRow } from "../../platform/database/transaction";
 import { diff, emit } from "../../platform/events/emit";

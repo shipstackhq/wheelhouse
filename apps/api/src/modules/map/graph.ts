@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { withNodeIds } from "../../lib/links";
+import { withNodeIds } from "./links";
 import { isUuid } from "../../common/uuid";
 import { Q, lockRow } from "../../platform/database/transaction";
 import { diff, emit } from "../../platform/events/emit";
