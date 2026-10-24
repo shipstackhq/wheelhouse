@@ -1,6 +1,4 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
-import { getDb, schema } from "../../db";
 
 /**
  * The cryptography between Wheelhouse and the agent daemon. Both ends use Ed25519: a device proves who it is by signing an assertion
@@ -95,48 +93,4 @@ export function verifyAssertion(jwt: string, key: crypto.KeyObject, now = Date.n
   const s = now / 1000;
   if (iat > s + CLOCK_SKEW_S || exp < s - CLOCK_SKEW_S) return null;
   return { sub, jti, iat, exp };
-}
-
-// ───────── the server's signing key ─────────
-
-const SIGNING_KEY = "daemon_signing";
-type KeyPair = { privateKey: crypto.KeyObject; publicKey: crypto.KeyObject };
-const g = globalThis as unknown as { __whDaemonKey?: Promise<KeyPair> };
-
-/**
- * The key the server signs device messages with. DAEMON_SIGNING_KEY (an Ed25519 private key, PKCS#8 DER in base64) wins; without it
- * the instance makes one the first time and keeps it in `instance_keys`, so a restart does not orphan paired devices (they pinned it).
- */
-export function serverSigningKey(): Promise<KeyPair> {
-  return (g.__whDaemonKey ??= loadSigningKey().catch((e) => {
-    g.__whDaemonKey = undefined;
-    throw e;
-  }));
-}
-
-async function loadSigningKey(): Promise<KeyPair> {
-  const env = process.env.DAEMON_SIGNING_KEY?.trim();
-  if (env) {
-    const privateKey = crypto.createPrivateKey({ key: Buffer.from(env, "base64"), format: "der", type: "pkcs8" });
-    if (privateKey.asymmetricKeyType !== "ed25519") throw new Error("DAEMON_SIGNING_KEY must be an Ed25519 key");
-    return { privateKey, publicKey: crypto.createPublicKey(privateKey) };
-  }
-  const db = await getDb();
-  const read = async () => (await db.select().from(schema.instanceKeys).where(eq(schema.instanceKeys.name, SIGNING_KEY)))[0];
-  let row = await read();
-  if (!row) {
-    const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
-    await db
-      .insert(schema.instanceKeys)
-      .values({ name: SIGNING_KEY, privateKey: privateKey.export({ format: "der", type: "pkcs8" }).toString("base64"), publicKey: rawPublicKey(publicKey) })
-      .onConflictDoNothing();
-    row = await read(); // another process may have won the race; everyone uses the stored one
-  }
-  const privateKey = crypto.createPrivateKey({ key: Buffer.from(row!.privateKey, "base64"), format: "der", type: "pkcs8" });
-  return { privateKey, publicKey: crypto.createPublicKey(privateKey) };
-}
-
-/** Forget the cached key (tests that swap DAEMON_SIGNING_KEY). */
-export function resetSigningKeyCache() {
-  g.__whDaemonKey = undefined;
 }

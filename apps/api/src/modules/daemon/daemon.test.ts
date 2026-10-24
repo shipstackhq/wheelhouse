@@ -18,11 +18,54 @@ import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { createIssue } from "../issues/issues.legacy";
 import { createTeam } from "../teams/teams.legacy";
-import * as d from "./internal";
+import { DeviceAuthError } from "./daemon-errors";
+import { DeviceAuthService } from "./device-auth.service";
+import { DeviceJobsService } from "./device-jobs.service";
+import { DeviceStreamService } from "./device-stream.service";
+import { DevicesService } from "./devices.service";
+import { RunsService } from "./runs.service";
+import { jobDelivery } from "./daemon.presenter";
+import { OFFER_TTL_MS, UNREACHABLE_AFTER_MS, type Device } from "./device-common";
 import { GithubApiError } from "../github/api";
-import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";
+import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, verifyAssertion, verifyValue } from "./daemon-crypto";
 import { testApp } from "../../test/app";
-await testApp();
+const app = await testApp();
+const auth = app.get(DeviceAuthService);
+const jobs = app.get(DeviceJobsService);
+const stream = app.get(DeviceStreamService);
+const devices = app.get(DevicesService);
+const runs = app.get(RunsService);
+
+/** The services' methods under the names these tests were written with. */
+const d = {
+  OFFER_TTL_MS,
+  UNREACHABLE_AFTER_MS,
+  jobDelivery,
+  startPairing: auth.startPairing.bind(auth),
+  pollPairing: auth.pollPairing.bind(auth),
+  exchangeAssertion: auth.exchangeAssertion.bind(auth),
+  deviceForToken: auth.deviceForToken.bind(auth),
+  deviceHello: jobs.hello.bind(jobs),
+  deviceHeartbeat: jobs.heartbeat.bind(jobs),
+  acceptJob: jobs.acceptJob.bind(jobs),
+  rejectJob: jobs.rejectJob.bind(jobs),
+  recordJobEvents: jobs.recordJobEvents.bind(jobs),
+  finishJob: jobs.finishJob.bind(jobs),
+  sweepDeviceJobs: jobs.sweep.bind(jobs),
+  deviceStream: stream.stream.bind(stream),
+  listDevices: devices.listDevices.bind(devices),
+  peekPairing: devices.peekPairing.bind(devices),
+  approvePairing: devices.approvePairing.bind(devices),
+  denyPairing: devices.denyPairing.bind(devices),
+  updateDevice: devices.updateDevice.bind(devices),
+  revokeDevice: devices.revokeDevice.bind(devices),
+  issueJobs: runs.issueJobs.bind(runs),
+  runBranches: runs.runBranches.bind(runs),
+  runOnDevice: runs.runOnDevice.bind(runs),
+  jobEvents: runs.jobEvents.bind(runs),
+  cancelJob: runs.cancelJob.bind(runs),
+  markJobLost: runs.markJobLost.bind(runs),
+};
 
 const RUN = Math.random().toString(16).slice(2, 8);
 let owner: Actor;
@@ -88,7 +131,7 @@ async function paired(who: Actor = owner) {
 }
 
 /** Bring a device online with the models it offers. */
-async function online(device: d.Device, models = ["opus", "sonnet"]) {
+async function online(device: Device, models = ["opus", "sonnet"]) {
   await d.deviceHello(device, { version: "0.1.0", capabilities: { claude: { installed: true, signedIn: true, models }, repositories: [] }, jobs: [] });
   const db = await getDb();
   return (await db.select().from(schema.devices).where(eq(schema.devices.id, device.id)))[0];
@@ -147,7 +190,7 @@ describe("device tokens", () => {
     const t = await d.exchangeAssertion({ assertion: a }, ctx);
     assert.match(t.accessToken, /^whd_/);
     assert.equal((await d.deviceForToken(`Bearer ${t.accessToken}`)).id, device.id);
-    await assert.rejects(d.exchangeAssertion({ assertion: a }, ctx), d.DeviceAuthError, "replayed");
+    await assert.rejects(d.exchangeAssertion({ assertion: a }, ctx), DeviceAuthError, "replayed");
   });
 
   test("another key, the wrong audience, a stale or long-lived assertion are all refused", async () => {
@@ -161,22 +204,22 @@ describe("device tokens", () => {
       assertion(crypto.randomUUID(), privateKey),
       "not.a.jwt",
     ])
-      await assert.rejects(d.exchangeAssertion({ assertion: bad }, ctx), d.DeviceAuthError);
+      await assert.rejects(d.exchangeAssertion({ assertion: bad }, ctx), DeviceAuthError);
     assert.equal(verifyAssertion("x.y.z", publicKeyFromRaw(rawPublicKey(crypto.createPublicKey(privateKey)))!), null);
   });
 
   test("an unpaired device's token stops working, and it cannot get another", async () => {
     const { device, privateKey, accessToken } = await paired();
     await d.revokeDevice(owner, device.id);
-    await assert.rejects(d.deviceForToken(`Bearer ${accessToken}`), d.DeviceAuthError);
-    await assert.rejects(d.exchangeAssertion({ assertion: assertion(device.id, privateKey) }, ctx), d.DeviceAuthError);
+    await assert.rejects(d.deviceForToken(`Bearer ${accessToken}`), DeviceAuthError);
+    await assert.rejects(d.exchangeAssertion({ assertion: assertion(device.id, privateKey) }, ctx), DeviceAuthError);
   });
 });
 
 describe("devices", () => {
   test("the first signed message after a restart does not wait on itself (the key is loaded outside the transaction)", async () => {
     const { device } = await paired();
-    resetSigningKeyCache(); // as after a restart: the key is not in memory yet
+    stream.resetSigningKey(); // as after a restart: the key is not in memory yet
     const r = await Promise.race([d.updateDevice(owner, device.id, { poolSize: 2 }), new Promise((res) => setTimeout(() => res("hung"), 5000))]);
     assert.notEqual(r, "hung");
   });

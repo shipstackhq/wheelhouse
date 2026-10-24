@@ -7,7 +7,10 @@ import { toHeaders } from "../../common/http/cookies";
 import { StreamRegistry } from "../../platform/streams/stream.registry";
 import { requestOrigin } from "../../common/http/origin";
 import { DaemonExceptionFilter } from "./daemon-exception.filter";
-import { DaemonService } from "./daemon.service";
+import { parseLastEventId } from "./daemon.rules";
+import { DeviceAuthService } from "./device-auth.service";
+import { DeviceJobsService } from "./device-jobs.service";
+import { DeviceStreamService } from "./device-stream.service";
 import { DeviceGuard, type DeviceRequest } from "./device.guard";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import type { JsonObject } from "../../common/body";
@@ -25,28 +28,30 @@ const ip = (req: Request) => clientIp(toHeaders(req.headers));
 export class DaemonController {
   constructor(
     @Inject(StreamRegistry) private readonly streams: StreamRegistry,
-    @Inject(DaemonService) private readonly daemon: DaemonService,
+    @Inject(DeviceAuthService) private readonly auth: DeviceAuthService,
+    @Inject(DeviceStreamService) private readonly messages: DeviceStreamService,
+    @Inject(DeviceJobsService) private readonly jobs: DeviceJobsService,
   ) {}
 
   /** `{ publicKey, name, os }` → the device code to poll with and the code the person types in Wheelhouse. */
   @Post("pair/start")
   @HttpCode(200)
   pairStart(@Req() req: Request, @JsonBody() body: JsonObject) {
-    return this.daemon.startPairing(body, { ip: ip(req), origin: requestOrigin(req) });
+    return this.auth.startPairing(body, { ip: ip(req), origin: requestOrigin(req) });
   }
 
   /** `{ deviceCode }` → `{ status: pending | slow_down | denied | expired }`, or once approved the device id and the server's key. */
   @Post("pair/poll")
   @HttpCode(200)
   pairPoll(@JsonBody() body: JsonObject) {
-    return this.daemon.pollPairing(body);
+    return this.auth.pollPairing(body);
   }
 
   /** `{ assertion }` (an EdDSA JWT signed with the device key) → `{ accessToken, expiresIn }`. */
   @Post("token")
   @HttpCode(200)
   token(@Req() req: Request, @JsonBody() body: JsonObject) {
-    return this.daemon.exchangeAssertion(body, { ip: ip(req) });
+    return this.auth.exchangeAssertion(body, { ip: ip(req) });
   }
 
   /** The device's signed messages: replayed from Last-Event-ID, then live. */
@@ -60,7 +65,7 @@ export class DaemonController {
       untrack();
     });
     const last = req.headers["last-event-id"];
-    const body = this.daemon.stream(req.device.id, this.daemon.parseLastEventId(Array.isArray(last) ? last[0] : last), gone.signal);
+    const body = this.messages.stream(req.device.id, parseLastEventId(Array.isArray(last) ? last[0] : last), gone.signal);
     res.writeHead(200, SSE_HEADERS);
     res.flushHeaders();
     Readable.fromWeb(body as never).pipe(res);
@@ -71,7 +76,7 @@ export class DaemonController {
   @HttpCode(200)
   @UseGuards(DeviceGuard)
   hello(@Req() req: DeviceRequest, @JsonBody() body: JsonObject) {
-    return this.daemon.hello(req.device, body);
+    return this.jobs.hello(req.device, body);
   }
 
   /** `{ running, free, onBattery }`, every 30 seconds. */
@@ -79,14 +84,14 @@ export class DaemonController {
   @HttpCode(200)
   @UseGuards(DeviceGuard)
   heartbeat(@Req() req: DeviceRequest, @JsonBody() body: JsonObject) {
-    return this.daemon.heartbeat(req.device, body);
+    return this.jobs.heartbeat(req.device, body);
   }
 
   @Post("jobs/:id/accept")
   @HttpCode(200)
   @UseGuards(DeviceGuard)
   accept(@Req() req: DeviceRequest, @Param("id") id: string) {
-    return this.daemon.acceptJob(req.device, id);
+    return this.jobs.acceptJob(req.device, id);
   }
 
   /** `{ reason, detail? }`. */
@@ -94,7 +99,7 @@ export class DaemonController {
   @HttpCode(200)
   @UseGuards(DeviceGuard)
   reject(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
-    return this.daemon.rejectJob(req.device, id, body);
+    return this.jobs.rejectJob(req.device, id, body);
   }
 
   /** `{ events: [{ seq, at, type, data }] }`, batched. */
@@ -102,7 +107,7 @@ export class DaemonController {
   @HttpCode(200)
   @UseGuards(DeviceGuard)
   events(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
-    return this.daemon.recordJobEvents(req.device, id, body);
+    return this.jobs.recordJobEvents(req.device, id, body);
   }
 
   /** `{ state, commit?, pushed?, diffStats?, costUsd?, durationMs?, error? }`. */
@@ -110,6 +115,6 @@ export class DaemonController {
   @HttpCode(200)
   @UseGuards(DeviceGuard)
   finish(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
-    return this.daemon.finishJob(req.device, id, body);
+    return this.jobs.finishJob(req.device, id, body);
   }
 }
