@@ -1,16 +1,18 @@
-import { Controller, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
-import { listWorkspaces, SESSION_COOKIE, switchWorkspace } from "../modules/auth/auth-core";
-import { ServiceError } from "../lib/service";
-import { changePasswordAs } from "../modules/auth/workspace-app";
-import type { RawTextRequest } from "../http/raw-text";
-import { cookieValue } from "../http/util";
-import { jsonBody, str } from "./body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
-import { meView } from "../modules/auth/me";
+import { Controller, Inject, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
+import { SESSION_COOKIE } from "./auth-core";
+import { ServiceError } from "../../lib/service";
+import type { RawTextRequest } from "../../http/raw-text";
+import { cookieValue } from "../../http/util";
+import { jsonBody, str } from "../../web/body";
+import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { meView } from "./me";
+import { AuthService } from "./auth.service";
 
 @Controller("api/app/me")
 @AppEndpoints()
 export class MeController {
+  constructor(@Inject(AuthService) private readonly auth: AuthService) {}
+
   /** The signed-in person, their workspace and role, and the CSRF token to send on state-changing requests. 401 when signed out. */
   @Get()
   @UseGuards(SessionGuard)
@@ -22,7 +24,7 @@ export class MeController {
   @Get("workspaces")
   @UseGuards(SessionGuard)
   async workspaces(@Req() req: SessionRequest) {
-    return { workspaces: await listWorkspaces(req.human.user.id, req.human.workspace.id) };
+    return { workspaces: await this.auth.listWorkspaces(req.human.user.id, req.human.workspace.id) };
   }
 
   /** `{ workspaceId }`: work in another of your workspaces. Only this session changes. Not one of yours, or suspended, is a 404. */
@@ -30,7 +32,7 @@ export class MeController {
   @UseGuards(SessionGuard)
   @HttpCode(200)
   async switchTo(@Req() req: SessionRequest & RawTextRequest) {
-    const workspace = await switchWorkspace(cookieValue(req.headers.cookie, SESSION_COOKIE)!, req.human.user.id, str(jsonBody(req).workspaceId));
+    const workspace = await this.auth.switchWorkspace(cookieValue(req.headers.cookie, SESSION_COOKIE)!, req.human.user.id, str(jsonBody(req).workspaceId));
     if (!workspace) throw new ServiceError("not_found", "Workspace not found");
     return { workspace };
   }
@@ -41,6 +43,6 @@ export class MeController {
   @HttpCode(200)
   password(@Req() req: SessionRequest & RawTextRequest) {
     const b = jsonBody(req);
-    return changePasswordAs(req.human, { current: str(b.current), next: str(b.next) });
+    return this.auth.changePasswordAs(req.human, { current: str(b.current), next: str(b.next) });
   }
 }
