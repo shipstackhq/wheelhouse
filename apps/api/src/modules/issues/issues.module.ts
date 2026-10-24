@@ -2,6 +2,7 @@ import { Inject, Module, type OnModuleInit } from "@nestjs/common";
 import { Database } from "../../platform/database/database";
 import { EventsModule } from "../../platform/events/events.module";
 import { GithubModule } from "../github/github.module";
+import { MapModule } from "../map/map.module";
 import { TeamsModule } from "../teams/teams.module";
 import { BoardController } from "./board.controller";
 import { CyclesController } from "./cycles.controller";
@@ -21,10 +22,11 @@ import { ProjectsService } from "./projects.service";
 
 /**
  * Issues and the board, cycles, projects and initiatives around them: the person's side only (/api/app), so it is part of the api role.
- * An issue shows its pull requests, so this module depends on the github module; github reaches it only through events (`IssuesListeners`).
+ * An issue shows its pull requests and links to map nodes, so this module depends on the github and map modules; github reaches it only
+ * through events (`IssuesListeners`), and the map never reaches it (its graph only reads the `issue_nodes` table).
  */
 @Module({
-  imports: [EventsModule, TeamsModule, GithubModule],
+  imports: [EventsModule, TeamsModule, GithubModule, MapModule],
   controllers: [BoardController, IssuesController, CyclesController, ProjectsController, InitiativesController],
   providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners],
   exports: [IssuesService, CyclesService, ProjectsService, InitiativesService],

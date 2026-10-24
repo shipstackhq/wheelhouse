@@ -9,7 +9,7 @@ import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
 import { DeliveriesService } from "../github/index";
-import { noteIssueActivity, resolveNode } from "../map/index";
+import { GraphService, SessionsService } from "../map/index";
 import { TeamAccessService } from "../teams/index";
 import { CyclesService, systemActor } from "./cycles.service";
 import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
@@ -42,6 +42,8 @@ export class IssuesService {
     @Inject(CyclesService) private readonly cycles: CyclesService,
     @Inject(ProjectsService) private readonly projects: ProjectsService,
     @Inject(DeliveriesService) private readonly deliveries: DeliveriesService,
+    @Inject(GraphService) private readonly graph: GraphService,
+    @Inject(SessionsService) private readonly sessions: SessionsService,
   ) {}
 
   // ───────── the board ─────────
@@ -380,7 +382,7 @@ export class IssuesService {
 
   /** An agent working an issue binds it to its active session (for the reconciliation check). */
   async bindSession<T extends { id: string; teamId: string }>(actor: Actor, t: T): Promise<T> {
-    if (actor.kind === "agent") await noteIssueActivity(actor, t.teamId, t.id);
+    if (actor.kind === "agent") await this.sessions.noteIssueActivity(actor, t.teamId, t.id);
     return t;
   }
 
@@ -406,7 +408,7 @@ export class IssuesService {
   async linkIssueNode(actor: Actor, issueRef: string, nodeRef: string, unlink = false) {
     return this.db.transaction(async () => {
       const { issue, team, ref } = await this.resolveIssue(actor, issueRef, "edit");
-      const n = await resolveNode(this.db.q, team.id, nodeRef);
+      const n = await this.graph.resolveNode(team.id, nodeRef);
       if (unlink) await this.repo.unlinkNode(issue.id, n.id);
       else await this.repo.linkNode(issue.id, n.id);
       await this.events.emit(actor, team.id, {
