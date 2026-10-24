@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../actor";
 import { actorOf } from "./current-actor.decorator";
 
 const person: Actor = { kind: "human", id: "u1", name: "Ada", workspaceId: "w1" };

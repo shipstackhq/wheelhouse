@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import type { Scope, StreamEvent } from "./event-bus";
 import { visibleTeamIds } from "../modules/teams/team-access";
 import { requireTeam, ServiceError } from "./service";

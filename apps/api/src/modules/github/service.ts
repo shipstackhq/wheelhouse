@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { addComment, createRepository, emit, requireTeam, moveIssue, ServiceError } from "../../lib/service";
 import { land } from "../map/sync";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";

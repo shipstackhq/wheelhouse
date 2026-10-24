@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import * as svc from "../../lib/service";
 import * as pr from "./projects";
 import * as ini from "./initiatives";

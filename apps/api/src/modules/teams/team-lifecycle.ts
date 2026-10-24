@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { TeamRole } from "../../db/schema";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { audit, leaveBlock, lockWorkspaceTeams, roleOnTeam, visibleTeamIds } from "./team-access";
 import { emit, findWorkspaceTeam, requireTeam, type Q } from "../../lib/service";
 import { ServiceError } from "../../lib/service-error";

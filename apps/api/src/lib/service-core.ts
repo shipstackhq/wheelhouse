@@ -1,7 +1,7 @@
 import { DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
 import { eq } from "drizzle-orm";
 import { schema, type DB } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import { deferPublish } from "./event-bus";
 import { ServiceError } from "./service-error";
 

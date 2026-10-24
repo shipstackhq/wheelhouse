@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "@wheelhouse/shared/session-buckets";
 import { bus } from "./event-bus";
 import { ServiceError } from "./service-error";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import * as svc from "./service";
 import * as sync from "../modules/map/sync";
 import { PRIORITIES, NODE_KINDS, LAYERS, KINDS_BY_LAYER, EDGE_KINDS, DECISION_STATUSES } from "../db/schema";

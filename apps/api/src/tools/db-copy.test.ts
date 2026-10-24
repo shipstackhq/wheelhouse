@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb, schema } from "../db";
-import type { Actor } from "../lib/access";
+import type { Actor } from "../common/actor";
 import * as svc from "../lib/service";
 import { createMilestone, createProject } from "../modules/issues/projects";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";

@@ -1,4 +1,4 @@
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { askEnabled, askMap } from "./ask";
 import { rateLimit } from "../../lib/rate-limit";
 import * as schema from "../../db/schema";

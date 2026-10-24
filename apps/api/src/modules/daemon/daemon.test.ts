@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import * as svc from "../../lib/service";
 import * as d from "./internal";
 import { GithubApiError } from "../github/api";

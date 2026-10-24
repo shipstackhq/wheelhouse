@@ -1,7 +1,7 @@
 import { DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
 import { ServiceError } from "../../lib/service-error";
 import { deleteBlock, resolveParent } from "./team-lifecycle";

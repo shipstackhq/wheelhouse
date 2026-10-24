@@ -1,4 +1,4 @@
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "../../lib/service";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { checklistBriefingLine } from "../../lib/setup-checklist";

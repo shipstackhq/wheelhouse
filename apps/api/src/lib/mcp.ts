@@ -1,4 +1,4 @@
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import { listToolDefs, runTool } from "./tools";
 import { ServiceError } from "./service";
 import { getPrompt, listPromptDefs } from "./prompts";

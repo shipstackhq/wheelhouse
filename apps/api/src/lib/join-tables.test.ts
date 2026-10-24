@@ -14,7 +14,7 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import * as svc from "./service";
 import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember, type Issuer } from "./invites";
 

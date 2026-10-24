@@ -1,7 +1,7 @@
 import { statusForRole, roleFromText } from "@wheelhouse/shared/status-roles";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../lib/service-error";
 import { cleanLabels, labelsOf, setIssueLabels, withCycle, withLabels } from "../../lib/links";
 import { assertWritable, type Need, roleAllows, roleOnTeam } from "../teams/team-access";

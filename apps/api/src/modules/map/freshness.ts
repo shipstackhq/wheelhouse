@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../lib/service-error";
 import { emit } from "../../lib/service-core";
 import { DocRow } from "../docs/docs";

@@ -1,6 +1,6 @@
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../lib/service-error";
 import { Q, emit, isUuid } from "../../lib/service-core";
 import { upsertNode } from "../map/graph";

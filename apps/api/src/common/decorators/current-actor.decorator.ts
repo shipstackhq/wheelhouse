@@ -1,5 +1,5 @@
 import { createParamDecorator, type ExecutionContext } from "@nestjs/common";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../actor";
 
 /**
  * The actor the guards put on the request: `req.actor` (ActorGuard: an API key or a session, for /mcp and /api/v1), or

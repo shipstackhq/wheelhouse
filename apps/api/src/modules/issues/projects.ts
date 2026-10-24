@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Priority, ProjectHealth, ProjectStatus, TeamRole } from "../../db/schema";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { avatarUrl } from "../../lib/images";
 import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
 import { ServiceError } from "../../lib/service-error";

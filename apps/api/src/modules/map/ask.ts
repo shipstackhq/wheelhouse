@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { getGraph, ServiceError } from "../../lib/service";
 
 /**

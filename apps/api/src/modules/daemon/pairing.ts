@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { sha256, type Actor } from "../../lib/access";
+import { sha256 } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { randomToken } from "../../lib/auth-core";
 import { publicKeyFromRaw, rawPublicKey, serverSigningKey } from "./daemon-crypto";
 import { rateLimit } from "../../lib/rate-limit";

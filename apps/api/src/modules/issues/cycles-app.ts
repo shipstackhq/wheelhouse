@@ -1,4 +1,4 @@
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import * as cy from "./cycles";
 
 /**

@@ -1,6 +1,6 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
 import { requireTeam } from "../modules/teams/teams";
 

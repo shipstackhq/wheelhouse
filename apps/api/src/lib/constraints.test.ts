@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { eq, sql } from "drizzle-orm";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import * as svc from "./service";
 
 const RUN = Math.random().toString(16).slice(2, 8);

@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query, Req, UseGuards } from "@nestjs/common";
 import * as m from "../lib/metrics";
 import { requireTeam, ServiceError } from "../lib/service";
-import type { Actor } from "../lib/access";
+import type { Actor } from "../common/actor";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
 
 /**

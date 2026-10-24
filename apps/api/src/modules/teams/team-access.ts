@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import type { Q } from "../../lib/service";
 import { ServiceError } from "../../lib/service-error";
 

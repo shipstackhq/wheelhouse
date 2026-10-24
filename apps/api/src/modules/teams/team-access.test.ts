@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { WorkspaceRole } from "../../db/schema";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { acceptInvite, createInvite, listInvites, type Issuer } from "../../lib/invites";
 import { removeMember, updateMember } from "../../lib/members";
 import * as metrics from "../../lib/metrics";

@@ -13,7 +13,7 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import type { Actor } from "../common/actor";
 import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { runTool } from "./tools";

@@ -5,7 +5,7 @@ import { actorFromCredentials, SESSION_COOKIE } from "../lib/auth-core";
 import { clientIp } from "../lib/rate-limit";
 import { openStream } from "../lib/stream-open";
 import { teamScope, workspaceScope, type StreamScope } from "../lib/stream-scope";
-import type { Actor } from "../lib/access";
+import type { Actor } from "../common/actor";
 import { cookieValue, toHeaders } from "../http/util";
 import { StreamRegistry } from "./stream.registry";
 

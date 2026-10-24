@@ -14,7 +14,7 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import { sha256 } from "../../lib/access";
 import { scopeKeyToAllTeams } from "../../lib/key-scope";
 import * as svc from "../../lib/service";

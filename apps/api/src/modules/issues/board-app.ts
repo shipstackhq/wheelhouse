@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import * as svc from "../../lib/service";
 import { withCycle, withLabels } from "../../lib/links";
 import { cycleOptions, type CycleOption } from "./cycles";

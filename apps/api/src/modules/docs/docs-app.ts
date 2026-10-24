@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import type { Human } from "../../lib/auth-core";
 import { DOC_TEMPLATE_IDS } from "@wheelhouse/shared/doc-templates";
 import * as svc from "../../lib/service";

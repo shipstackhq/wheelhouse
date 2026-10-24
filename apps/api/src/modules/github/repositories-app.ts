@@ -1,5 +1,5 @@
 import { schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import type { Human } from "../../lib/auth-core";
 import { githubConfig, githubMissing } from "./config";
 import { github } from "./runtime";

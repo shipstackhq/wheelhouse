@@ -13,7 +13,7 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../../lib/access";
+import type { Actor } from "../../common/actor";
 import * as svc from "../../lib/service";
 import { issueDetail, issueInput } from "./board-app";
 import { MAX_ISSUE_DEPTH } from "./sub-issues";
