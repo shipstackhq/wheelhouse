@@ -1,12 +1,12 @@
 import { statusForRole, roleFromText } from "@wheelhouse/shared/status-roles";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import { ServiceError } from "./service-error";
-import { cleanLabels, labelsOf, setIssueLabels, withCycle, withLabels } from "./links";
-import { assertWritable, type Need, roleAllows, roleOnTeam } from "../modules/teams/team-access";
-import { DEFAULT_STATUSES, Q, Tx, diff, emit, isUuid, lockRow } from "./service-core";
-import { requireTeam } from "../modules/teams/teams";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import { ServiceError } from "../../lib/service-error";
+import { cleanLabels, labelsOf, setIssueLabels, withCycle, withLabels } from "../../lib/links";
+import { assertWritable, type Need, roleAllows, roleOnTeam } from "../teams/team-access";
+import { DEFAULT_STATUSES, Q, Tx, diff, emit, isUuid, lockRow } from "../../lib/service-core";
+import { requireTeam } from "../teams/teams";
 
 const { teams, statuses, issues, comments, nodes, issueNodes, events, projects } = schema;
 
@@ -150,7 +150,7 @@ export async function getIssue(actor: Actor, ref: string) {
     .orderBy(desc(events.seq))
     .limit(50);
   // Pull requests GitHub reported against this issue (WH-20). Loaded lazily: that module imports this one.
-  const { pullRequestsForIssue } = await import("./github/service");
+  const { pullRequestsForIssue } = await import("../../lib/github/service");
   const pullRequests = await pullRequestsForIssue(issue.id);
   const [withLabel] = await withCycle(db, await withLabels(db, [issue]));
   const { parent, children } = await (await import("./sub-issues")).relatives(db, team, issue);
@@ -392,7 +392,7 @@ export async function claimIssue(actor: Actor, ref: string) {
 /** An agent working an issue binds it to its active session (for the reconciliation check). */
 export async function bindSession<T extends { id: string; teamId: string }>(actor: Actor, t: T): Promise<T> {
   if (actor.kind === "agent") {
-    const { noteIssueActivity } = await import("./sync");
+    const { noteIssueActivity } = await import("../../lib/sync");
     await noteIssueActivity(actor, t.teamId, t.id);
   }
   return t;

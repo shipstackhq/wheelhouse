@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb, schema } from "../db";
 import type { Actor } from "../lib/access";
 import * as svc from "../lib/service";
-import { createMilestone, createProject } from "../lib/projects";
+import { createMilestone, createProject } from "../modules/issues/projects";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";
 
 const require = createRequire(import.meta.url);

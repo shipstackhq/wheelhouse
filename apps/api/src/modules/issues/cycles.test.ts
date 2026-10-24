@@ -13,9 +13,9 @@ if (process.env.TEST_DATABASE_URL) {
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import * as svc from "./service";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import * as svc from "../../lib/service";
 import * as cy from "./cycles";
 
 const RUN = Math.random().toString(16).slice(2, 8);
@@ -51,7 +51,7 @@ before(async () => {
   vic = await mk("vic", "member");
   a = await svc.createTeam(ada, { name: "Alpha", key: `${L}A` });
   b = await svc.createTeam(ada, { name: "Beta", key: `${L}B` });
-  const { addTeamMember } = await import("../modules/teams/team-members");
+  const { addTeamMember } = await import("../teams/team-members");
   await addTeamMember(ada, a.key, { userId: vic.id, role: "viewer" });
 });
 

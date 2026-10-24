@@ -16,7 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../lib/access";
-import * as projects from "../../lib/projects";
+import * as projects from "../issues/projects";
 import * as pmem from "./team-members";
 import * as life from "./team-lifecycle";
 import * as svc from "../../lib/service";

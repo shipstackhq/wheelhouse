@@ -1,11 +1,11 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { InitiativeStatus, ProjectHealth } from "../db/schema";
-import type { Actor } from "./access";
+import { getDb, schema } from "../../db";
+import type { InitiativeStatus, ProjectHealth } from "../../db/schema";
+import type { Actor } from "../../lib/access";
 import { bad, day, deriveHealth, oneOf, openProject, text, workspaceEvent, type HealthView, type ProgressCounts } from "./projects";
-import type { Q, Tx } from "./service";
-import { ServiceError } from "./service-error";
-import { isUuid, workspaceRoleOf } from "../modules/teams/team-access";
+import type { Q, Tx } from "../../lib/service";
+import { ServiceError } from "../../lib/service-error";
+import { isUuid, workspaceRoleOf } from "../teams/team-access";
 
 /**
  * Initiatives (WH-119): a goal that groups projects and other initiatives, up to three levels deep. It belongs to the workspace and

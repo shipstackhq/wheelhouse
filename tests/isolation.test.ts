@@ -25,9 +25,9 @@ import type { Actor } from "../apps/api/src/lib/access";
 import { actorForKey, sha256, userForSessionToken } from "../apps/api/src/lib/access";
 import * as svc from "../apps/api/src/lib/service";
 import { scopeKeyToAllTeams } from "../apps/api/src/lib/key-scope";
-import * as cycles from "../apps/api/src/lib/cycles";
-import * as projects from "../apps/api/src/lib/projects";
-import * as initiatives from "../apps/api/src/lib/initiatives";
+import * as cycles from "../apps/api/src/modules/issues/cycles";
+import * as projects from "../apps/api/src/modules/issues/projects";
+import * as initiatives from "../apps/api/src/modules/issues/initiatives";
 import * as members from "../apps/api/src/lib/members";
 import { runTool, tools } from "../apps/api/src/lib/tools";
 import { askMap } from "../apps/api/src/lib/ask";
@@ -834,7 +834,6 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/lib/service-decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/docs/docs.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/lib/service-issues.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-map.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-repositories.ts": "every function resolves through requireTeam / resolveIssue (tested)",
@@ -842,11 +841,13 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/lib/sync.ts": "every entry point resolves through requireTeam first (tested)",
   "apps/api/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
-  "apps/api/src/lib/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
+  "apps/api/src/modules/issues/issues.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/issues/issue-nodes.ts": "the issue is resolved through resolveIssue(actor, ref, edit) and the node inside that issue's own team, so a node of another team or workspace is not_found; only the issue_nodes row of that pair is written or removed (tested)",
+  "apps/api/src/modules/issues/board-app.ts": "the board's reads: the team is resolved through requireTeam(actor) (the service layer, scoped by workspace), and the map nodes and members are selected by that team's id and the actor's workspace id (tested over HTTP with two workspaces)",
   "apps/api/src/modules/teams/statuses.ts": "every statement starts from the team found through requireTeam(actor, key, need) (admin to change anything, and humans only) and is scoped by that team's id; a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404, and the status issues move to is looked up the same way (tested)",
-  "apps/api/src/lib/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
-  "apps/api/src/lib/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
-  "apps/api/src/lib/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
+  "apps/api/src/modules/issues/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
+  "apps/api/src/modules/issues/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
+  "apps/api/src/modules/issues/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
   "apps/api/src/modules/docs/docs-app.ts": "the web app's docs functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs and nodes inside it (tested)",
   "apps/api/src/lib/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
 };

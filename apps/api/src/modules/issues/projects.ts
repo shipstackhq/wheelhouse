@@ -1,11 +1,11 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Priority, ProjectHealth, ProjectStatus, TeamRole } from "../db/schema";
-import type { Actor } from "./access";
-import { avatarUrl } from "./images";
-import { emit, requireTeam, type Q, type Tx } from "./service";
-import { ServiceError } from "./service-error";
-import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "../modules/teams/team-access";
+import { getDb, schema } from "../../db";
+import type { Priority, ProjectHealth, ProjectStatus, TeamRole } from "../../db/schema";
+import type { Actor } from "../../lib/access";
+import { avatarUrl } from "../../lib/images";
+import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
+import { ServiceError } from "../../lib/service-error";
+import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "../teams/team-access";
 
 /**
  * Projects (WH-118): an outcome that ends and can span teams, with a lead, dates, milestones and a health worked out from its

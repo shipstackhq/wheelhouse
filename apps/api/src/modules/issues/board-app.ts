@@ -1,12 +1,12 @@
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import * as svc from "./service";
-import { withCycle, withLabels } from "./links";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import * as svc from "../../lib/service";
+import { withCycle, withLabels } from "../../lib/links";
 import { cycleOptions, type CycleOption } from "./cycles";
 import { projectsOfTeam, type TeamProjectOption } from "./projects";
-import { ServiceError } from "./service";
-import type { ChecklistState } from "./setup-checklist";
+import { ServiceError } from "../../lib/service";
+import type { ChecklistState } from "../../lib/setup-checklist";
 import type { IssueRelative } from "./sub-issues";
 /**
  * What the web app's board and issue dialog read and write (WH-96), as functions of the signed-in person. The API's controllers
@@ -117,7 +117,7 @@ export type IssueDetail = {
   comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
-  pullRequests: Awaited<ReturnType<typeof import("./github/service").pullRequestsForIssue>>;
+  pullRequests: Awaited<ReturnType<typeof import("../../lib/github/service").pullRequestsForIssue>>;
   /** The issue above this one, and the ones directly under it. */
   parent: IssueRelative | null;
   children: IssueRelative[];

@@ -1,9 +1,9 @@
-import { Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { createCycleAs, deleteCycleAs, getCycleAs, listCyclesAs, updateCycleAs } from "../lib/cycles-app";
-import { ServiceError } from "../lib/service";
-import type { RawTextRequest } from "../http/raw-text";
-import { jsonBody } from "./body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
+import { Controller, Inject, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { ServiceError } from "../../lib/service";
+import { IssuesService } from "./issues.service";
+import type { RawTextRequest } from "../../http/raw-text";
+import { jsonBody } from "../../web/body";
+import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 
 /** A cycle is addressed by its number inside the team. Anything that is not a whole number is a cycle that does not exist. */
 const cycleNumber = (raw: string) => {
@@ -16,33 +16,35 @@ const cycleNumber = (raw: string) => {
 @AppEndpoints()
 @UseGuards(SessionGuard)
 export class CyclesController {
+  constructor(@Inject(IssuesService) private readonly issues: IssuesService) {}
+
   /** The cycles by when they are: `{ current, upcoming, past }`, each with how many issues are in it and how many are done. Ended cycles hand their unfinished issues on first. */
   @Get(":key/cycles")
   async list(@Req() req: SessionRequest, @Param("key") key: string) {
-    return listCyclesAs(req.human.actor, key);
+    return this.issues.listCyclesAs(req.human.actor, key);
   }
 
   /** `{ name?, goal?, startsAt?, endsAt? }`: from now for two weeks when the dates are left out; one to fourteen days, not overlapping another cycle of the team. */
   @Post(":key/cycles")
   async create(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { cycle: await createCycleAs(req.human.actor, key, jsonBody(req)) };
+    return { cycle: await this.issues.createCycleAs(req.human.actor, key, jsonBody(req)) };
   }
 
   /** One cycle: its issues, and what landed (reached Done) while it ran. */
   @Get(":key/cycles/:number")
   async one(@Req() req: SessionRequest, @Param("key") key: string, @Param("number") number: string) {
-    return { cycle: await getCycleAs(req.human.actor, key, cycleNumber(number)) };
+    return { cycle: await this.issues.getCycleAs(req.human.actor, key, cycleNumber(number)) };
   }
 
   /** `{ name?, goal?, startsAt?, endsAt? }`. A cycle that has ended keeps its dates. */
   @Patch(":key/cycles/:number")
   async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("number") number: string) {
-    return { cycle: await updateCycleAs(req.human.actor, key, cycleNumber(number), jsonBody(req)) };
+    return { cycle: await this.issues.updateCycleAs(req.human.actor, key, cycleNumber(number), jsonBody(req)) };
   }
 
   /** Its issues stay on the board, in no cycle. */
   @Delete(":key/cycles/:number")
   async remove(@Req() req: SessionRequest, @Param("key") key: string, @Param("number") number: string) {
-    return deleteCycleAs(req.human.actor, key, cycleNumber(number));
+    return this.issues.deleteCycleAs(req.human.actor, key, cycleNumber(number));
   }
 }

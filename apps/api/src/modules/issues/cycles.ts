@@ -1,8 +1,8 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import { emit, requireTeam, type Q, type Tx } from "./service";
-import { ServiceError } from "./service-error";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
+import { ServiceError } from "../../lib/service-error";
 
 /**
  * Cycles (WH-117): an optional window of one to fourteen days with a goal, belonging to a team (ADR-11, revised). An issue joins

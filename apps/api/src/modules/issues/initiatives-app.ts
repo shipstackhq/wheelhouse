@@ -1,4 +1,4 @@
-import type { Actor } from "./access";
+import type { Actor } from "../../lib/access";
 import * as ini from "./initiatives";
 
 /**

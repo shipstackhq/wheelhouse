@@ -5,7 +5,6 @@ import { ServiceError } from "./service-error";
 import { withNodeIds } from "./links";
 import { Q, diff, emit, isUuid, lockRow } from "./service-core";
 import { anchorScore } from "./service-freshness";
-import { resolveIssue } from "./service-issues";
 import { requireTeam } from "../modules/teams/teams";
 
 const { issues, nodes, edges, issueNodes, flows, decisions, terms } = schema;
@@ -617,27 +616,6 @@ export async function unlinkNodes(actor: Actor, teamRef: string, input: { from: 
     .where(and(eq(edges.fromNodeId, from.id), eq(edges.toNodeId, to.id), input.kind ? eq(edges.kind, input.kind) : undefined));
   for (const e of found) await deleteEdge(actor, team.id, e.id); // logged like UI deletes
   return { ok: true, removed: found.length };
-}
-
-export async function linkIssueNode(actor: Actor, issueRef: string, nodeRef: string, unlink = false) {
-  const db = await getDb();
-  return db.transaction(async (tx) => {
-    const { issue, team, ref } = await resolveIssue(actor, issueRef, tx, "edit");
-    const n = await resolveNode(tx, team.id, nodeRef);
-    if (unlink) {
-      await tx.delete(issueNodes).where(and(eq(issueNodes.issueId, issue.id), eq(issueNodes.nodeId, n.id)));
-    } else {
-      await tx.insert(issueNodes).values({ issueId: issue.id, nodeId: n.id }).onConflictDoNothing();
-    }
-    await emit(tx, actor, team.id, {
-      type: unlink ? "issue.unlinked" : "issue.linked",
-      entity: "issue",
-      entityId: issue.id,
-      summary: `${unlink ? "unlinked" : "linked"} ${ref} ${unlink ? "from" : "to"} "${n.name}"`,
-      data: { ref, node: n.name },
-    });
-    return { ok: true };
-  });
 }
 
 // ───────── flows ─────────
