@@ -3,14 +3,14 @@ import { Readable } from "node:stream";
 import type { Request, Response } from "express";
 import { SSE_HEADERS } from "../../platform/streams/sse";
 import { clientIp } from "../../common/rate-limit";
-import type { RawTextRequest } from "../../common/http/raw-text";
 import { toHeaders } from "../../common/http/cookies";
 import { StreamRegistry } from "../../platform/streams/stream.registry";
-import { jsonBody } from "../../common/body";
 import { requestOrigin } from "../../common/http/origin";
 import { DaemonExceptionFilter } from "./daemon-exception.filter";
 import { DaemonService } from "./daemon.service";
 import { DeviceGuard, type DeviceRequest } from "./device.guard";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
 
 /**
  * The agent daemon's API (see wheelhouse-cli/daemon/DESIGN.md). Pairing and the token exchange need no credentials (they are the way
@@ -31,22 +31,22 @@ export class DaemonController {
   /** `{ publicKey, name, os }` → the device code to poll with and the code the person types in Wheelhouse. */
   @Post("pair/start")
   @HttpCode(200)
-  pairStart(@Req() req: RawTextRequest) {
-    return this.daemon.startPairing(jsonBody(req), { ip: ip(req), origin: requestOrigin(req) });
+  pairStart(@Req() req: Request, @JsonBody() body: JsonObject) {
+    return this.daemon.startPairing(body, { ip: ip(req), origin: requestOrigin(req) });
   }
 
   /** `{ deviceCode }` → `{ status: pending | slow_down | denied | expired }`, or once approved the device id and the server's key. */
   @Post("pair/poll")
   @HttpCode(200)
-  pairPoll(@Req() req: RawTextRequest) {
-    return this.daemon.pollPairing(jsonBody(req));
+  pairPoll(@JsonBody() body: JsonObject) {
+    return this.daemon.pollPairing(body);
   }
 
   /** `{ assertion }` (an EdDSA JWT signed with the device key) → `{ accessToken, expiresIn }`. */
   @Post("token")
   @HttpCode(200)
-  token(@Req() req: RawTextRequest) {
-    return this.daemon.exchangeAssertion(jsonBody(req), { ip: ip(req) });
+  token(@Req() req: Request, @JsonBody() body: JsonObject) {
+    return this.daemon.exchangeAssertion(body, { ip: ip(req) });
   }
 
   /** The device's signed messages: replayed from Last-Event-ID, then live. */
@@ -70,16 +70,16 @@ export class DaemonController {
   @Post("hello")
   @HttpCode(200)
   @UseGuards(DeviceGuard)
-  hello(@Req() req: DeviceRequest) {
-    return this.daemon.hello(req.device, jsonBody(req));
+  hello(@Req() req: DeviceRequest, @JsonBody() body: JsonObject) {
+    return this.daemon.hello(req.device, body);
   }
 
   /** `{ running, free, onBattery }`, every 30 seconds. */
   @Post("heartbeat")
   @HttpCode(200)
   @UseGuards(DeviceGuard)
-  heartbeat(@Req() req: DeviceRequest) {
-    return this.daemon.heartbeat(req.device, jsonBody(req));
+  heartbeat(@Req() req: DeviceRequest, @JsonBody() body: JsonObject) {
+    return this.daemon.heartbeat(req.device, body);
   }
 
   @Post("jobs/:id/accept")
@@ -93,23 +93,23 @@ export class DaemonController {
   @Post("jobs/:id/reject")
   @HttpCode(200)
   @UseGuards(DeviceGuard)
-  reject(@Req() req: DeviceRequest, @Param("id") id: string) {
-    return this.daemon.rejectJob(req.device, id, jsonBody(req));
+  reject(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return this.daemon.rejectJob(req.device, id, body);
   }
 
   /** `{ events: [{ seq, at, type, data }] }`, batched. */
   @Post("jobs/:id/events")
   @HttpCode(200)
   @UseGuards(DeviceGuard)
-  events(@Req() req: DeviceRequest, @Param("id") id: string) {
-    return this.daemon.recordJobEvents(req.device, id, jsonBody(req));
+  events(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return this.daemon.recordJobEvents(req.device, id, body);
   }
 
   /** `{ state, commit?, pushed?, diffStats?, costUsd?, durationMs?, error? }`. */
   @Post("jobs/:id/finish")
   @HttpCode(200)
   @UseGuards(DeviceGuard)
-  finish(@Req() req: DeviceRequest, @Param("id") id: string) {
-    return this.daemon.finishJob(req.device, id, jsonBody(req));
+  finish(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return this.daemon.finishJob(req.device, id, body);
   }
 }

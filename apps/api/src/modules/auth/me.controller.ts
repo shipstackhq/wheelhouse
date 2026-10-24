@@ -1,13 +1,14 @@
 import { Controller, Inject, Get, HttpCode, Post, Req } from "@nestjs/common";
 import { SESSION_COOKIE } from "./auth-core";
 import { ServiceError } from "../../common/service-error";
-import type { RawTextRequest } from "../../common/http/raw-text";
 import { cookieValue } from "../../common/http/cookies";
-import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { meView } from "./me";
 import { AuthService } from "./auth.service";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { changePasswordDto, switchWorkspaceDto, type ChangePasswordDto, type SwitchWorkspaceDto } from "./dto/auth.dto";
 
 @Controller("api/app/me")
 @AppEndpoints()
@@ -29,8 +30,8 @@ export class MeController {
   /** `{ workspaceId }`: work in another of your workspaces. Only this session changes. Not one of yours, or suspended, is a 404. */
   @Post("workspace")
   @HttpCode(200)
-  async switchTo(@Req() req: SessionRequest & RawTextRequest) {
-    const workspace = await this.auth.switchWorkspace(cookieValue(req.headers.cookie, SESSION_COOKIE)!, req.human.user.id, str(jsonBody(req).workspaceId));
+  async switchTo(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(switchWorkspaceDto)) body: SwitchWorkspaceDto) {
+    const workspace = await this.auth.switchWorkspace(cookieValue(req.headers.cookie, SESSION_COOKIE)!, req.human.user.id, body.workspaceId);
     if (!workspace) throw new ServiceError("not_found", "Workspace not found");
     return { workspace };
   }
@@ -38,8 +39,7 @@ export class MeController {
   /** Change your own password: `{ current, next }`. The current one must be right; the new one must be strong enough. */
   @Post("password")
   @HttpCode(200)
-  password(@Req() req: SessionRequest & RawTextRequest) {
-    const b = jsonBody(req);
-    return this.auth.changePasswordAs(req.human, { current: str(b.current), next: str(b.next) });
+  password(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(changePasswordDto)) body: ChangePasswordDto) {
+    return this.auth.changePasswordAs(req.human, body);
   }
 }

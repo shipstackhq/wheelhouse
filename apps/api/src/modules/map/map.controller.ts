@@ -2,10 +2,12 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Put, Query, Req
 import { nodeView } from "./map-app";
 import { ServiceError } from "../../common/service-error";
 import { MapService } from "./map.service";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { resolveDraftDto, type ResolveDraftDto } from "./dto/map.dto";
 
 /** The map, decisions, glossary and activity pages. A team, node, edge, flow, decision or term of another workspace is a 404. */
 @Controller("api/app/teams")
@@ -21,8 +23,8 @@ export class MapController {
 
   /** Create (no `id`) or change (`id`) a node. `version` is the lock: a change made since is a 409 `conflict` with the node as it is now. */
   @Put(":key/nodes")
-  async upsertNode(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { node: await this.map.upsertNodeAs(req.human.actor, key, jsonBody(req)) };
+  async upsertNode(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { node: await this.map.upsertNodeAs(req.human.actor, key, body) };
   }
 
   /** Deletes the node and everything nested inside it. */
@@ -41,15 +43,15 @@ export class MapController {
 
   /** `{ positions: [{ id, x, y, width?, height? }], placed? }`: where nodes were put by a drag, a resize or a Tidy. */
   @Put(":key/layout")
-  saveLayout(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return this.map.saveLayoutAs(req.human.actor, key, jsonBody(req));
+  saveLayout(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return this.map.saveLayoutAs(req.human.actor, key, body);
   }
 
   /** `{ from, to, label?, kind? }`: `depends` (the default) within a layer, `implements` from a lower layer to a higher one. */
   @Post(":key/edges")
   @HttpCode(200)
-  async connect(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { edge: await this.map.connectAs(req.human.actor, key, jsonBody(req)) };
+  async connect(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { edge: await this.map.connectAs(req.human.actor, key, body) };
   }
 
   @Delete(":key/edges/:id")
@@ -60,8 +62,8 @@ export class MapController {
 
   /** `{ id?, name, description?, steps?: [{ node, title, detail? }], version? }`: steps are replaced wholesale. */
   @Put(":key/flows")
-  async upsertFlow(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { flow: await this.map.upsertFlowAs(req.human.actor, key, jsonBody(req)) };
+  async upsertFlow(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { flow: await this.map.upsertFlowAs(req.human.actor, key, body) };
   }
 
   @Delete(":key/flows/:id")
@@ -72,14 +74,14 @@ export class MapController {
 
   /** Without `number` a new ADR is recorded; with it, that ADR is changed (and `version` is its lock). */
   @Put(":key/decisions")
-  async upsertDecision(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { decision: await this.map.upsertDecisionAs(req.human.actor, key, jsonBody(req)) };
+  async upsertDecision(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { decision: await this.map.upsertDecisionAs(req.human.actor, key, body) };
   }
 
   /** `{ definition, node? }` defines (or redefines) the term named in the path. */
   @Put(":key/terms/:term")
-  async upsertTerm(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("term") term: string) {
-    return { term: await this.map.upsertTermAs(req.human.actor, key, term, jsonBody(req)) };
+  async upsertTerm(@Req() req: SessionRequest, @Param("key") key: string, @Param("term") term: string, @JsonBody() body: JsonObject) {
+    return { term: await this.map.upsertTermAs(req.human.actor, key, term, body) };
   }
 
   @Delete(":key/terms/:term")
@@ -91,8 +93,8 @@ export class MapController {
   /** `{ action: "publish" | "discard" }` for a map update an agent drafted while its code was still in flux. */
   @Post(":key/drafts/:id/resolve")
   @HttpCode(200)
-  async resolve(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("id") id: string) {
-    const action = str(jsonBody(req).action);
+  async resolve(@Req() req: SessionRequest, @Param("key") key: string, @Param("id") id: string, @JsonBody(new ZodValidationPipe(resolveDraftDto)) body: ResolveDraftDto) {
+    const action = body.action;
     if (action !== "publish" && action !== "discard") throw new ServiceError("invalid", "action must be publish or discard", { fields: { action: "publish or discard" } });
     return this.map.resolveDraft(req.human.actor, key, id, action);
   }
@@ -103,8 +105,8 @@ export class MapController {
    */
   @Post(":key/ask")
   @HttpCode(200)
-  ask(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return this.map.askAs(req.human.actor, key, jsonBody(req));
+  ask(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return this.map.askAs(req.human.actor, key, body);
   }
 
   /** The team's last 200 events, newest first; `?who=agent` or `?who=human` narrows it. */

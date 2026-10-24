@@ -1,9 +1,11 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Req } from "@nestjs/common";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody, str } from "../../common/body";
+import { str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { AuthService } from "./auth.service";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { updateMemberDto, type UpdateMemberDto } from "./dto/auth.dto";
 
 @Controller("api/app/workspace")
 @AppEndpoints()
@@ -18,9 +20,8 @@ export class WorkspaceController {
 
   /** Owners change a member's role and tags: `{ role, tags }` (tags as a list or a comma-separated string). */
   @Patch("members/:userId")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("userId") userId: string) {
-    const b = jsonBody(req);
-    return { member: await this.auth.updateMemberAs(req.human, { userId: str(userId), role: b.role, tags: b.tags }) };
+  async update(@Req() req: SessionRequest, @Param("userId") userId: string, @JsonBody(new ZodValidationPipe(updateMemberDto)) body: UpdateMemberDto) {
+    return { member: await this.auth.updateMemberAs(req.human, { userId: str(userId), role: body.role, tags: body.tags }) };
   }
 
   /** Owners remove a member of their own workspace (never themselves). */

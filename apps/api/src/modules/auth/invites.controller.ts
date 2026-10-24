@@ -1,18 +1,19 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Query, Req, Res } from "@nestjs/common";
-import type { Response } from "express";
+import type { Request, Response } from "express";
 import { isInstanceAdmin } from "./auth-policy";
 import { SESSION_COOKIE } from "./auth-core";
 import { clientIp } from "../../common/rate-limit";
 import { ServiceError } from "../../common/service-error";
-import type { RawTextRequest } from "../../common/http/raw-text";
 import { cookieValue, toHeaders } from "../../common/http/cookies";
-import { jsonBody, str } from "../../common/body";
 import { beginSession } from "./begin";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { requestOrigin } from "../../common/http/origin";
 import { AuthService } from "./auth.service";
 import { Public } from "../../common/decorators/public.decorator";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { acceptInviteDto, createInviteDto, inviteTokenDto, type AcceptInviteDto, type CreateInviteDto, type InviteTokenDto } from "./dto/auth.dto";
 
 @Controller("api/app/invites")
 @AppEndpoints()
@@ -32,40 +33,38 @@ export class InvitesController {
   /** `{ kind, email, role?, tags?, workspace? }`. The link is returned once: the token is in its #fragment and is not stored. */
   @Post()
   @HttpCode(201)
-  create(@Req() req: SessionRequest & RawTextRequest) {
-    const b = jsonBody(req);
-    return this.auth.createInviteAs(req.human, { kind: b.kind, email: str(b.email), role: b.role, tags: b.tags, workspace: str(b.workspace), teams: b.teams }, requestOrigin(req));
+  create(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(createInviteDto)) body: CreateInviteDto) {
+    return this.auth.createInviteAs(req.human, body, requestOrigin(req));
   }
 
   /** Signed in with an existing account: what an invite sent to your own address would add you to. Anything else is the usual invalid-link answer. */
   @Post("peek-existing")
   @HttpCode(200)
-  async peekExisting(@Req() req: SessionRequest & RawTextRequest) {
-    return { invite: await this.auth.peekInviteAsMemberAs(req.human, str(jsonBody(req).token)) };
+  async peekExisting(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(inviteTokenDto)) body: InviteTokenDto) {
+    return { invite: await this.auth.peekInviteAsMemberAs(req.human, body.token) };
   }
 
   /** Signed in with an existing account: join the workspace an invite for your own address names, then this session works in it. */
   @Post("accept-existing")
   @HttpCode(200)
-  acceptExisting(@Req() req: SessionRequest & RawTextRequest) {
-    return this.auth.acceptInviteAsMemberAs(req.human, str(jsonBody(req).token), cookieValue(req.headers.cookie, SESSION_COOKIE)!);
+  acceptExisting(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(inviteTokenDto)) body: InviteTokenDto) {
+    return this.auth.acceptInviteAsMemberAs(req.human, body.token, cookieValue(req.headers.cookie, SESSION_COOKIE)!);
   }
 
   /** Public, rate limited per address. POST so the token never sits in a URL or a log. The same answer for every bad link. */
   @Public()
   @Post("peek")
   @HttpCode(200)
-  async peek(@Req() req: RawTextRequest) {
-    return { invite: await this.auth.peekInviteAs(str(jsonBody(req).token), clientIp(toHeaders(req.headers))) };
+  async peek(@Req() req: Request, @JsonBody(new ZodValidationPipe(inviteTokenDto)) body: InviteTokenDto) {
+    return { invite: await this.auth.peekInviteAs(body.token, clientIp(toHeaders(req.headers))) };
   }
 
   /** Public. Creates the account like sign-up does and signs the new person in. `{ token, name, password, confirm }`. */
   @Public()
   @Post("accept")
   @HttpCode(201)
-  async accept(@Req() req: RawTextRequest, @Res({ passthrough: true }) res: Response) {
-    const b = jsonBody(req);
-    const { userId } = await this.auth.acceptInviteAs({ token: str(b.token), name: str(b.name), password: str(b.password), confirm: str(b.confirm) }, clientIp(toHeaders(req.headers)));
+  async accept(@Req() req: Request, @Res({ passthrough: true }) res: Response, @JsonBody(new ZodValidationPipe(acceptInviteDto)) body: AcceptInviteDto) {
+    const { userId } = await this.auth.acceptInviteAs(body, clientIp(toHeaders(req.headers)));
     return beginSession(userId, res);
   }
 

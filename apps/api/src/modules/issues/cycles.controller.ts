@@ -1,10 +1,10 @@
 import { Controller, Inject, Delete, Get, Param, Patch, Post, Req } from "@nestjs/common";
 import { ServiceError } from "../../common/service-error";
 import { IssuesService } from "./issues.service";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
 
 /** A cycle is addressed by its number inside the team. Anything that is not a whole number is a cycle that does not exist. */
 const cycleNumber = (raw: string) => {
@@ -26,8 +26,8 @@ export class CyclesController {
 
   /** `{ name?, goal?, startsAt?, endsAt? }`: from now for two weeks when the dates are left out; one to fourteen days, not overlapping another cycle of the team. */
   @Post(":key/cycles")
-  async create(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { cycle: await this.issues.createCycleAs(req.human.actor, key, jsonBody(req)) };
+  async create(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { cycle: await this.issues.createCycleAs(req.human.actor, key, body) };
   }
 
   /** One cycle: its issues, and what landed (reached Done) while it ran. */
@@ -38,8 +38,8 @@ export class CyclesController {
 
   /** `{ name?, goal?, startsAt?, endsAt? }`. A cycle that has ended keeps its dates. */
   @Patch(":key/cycles/:number")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("number") number: string) {
-    return { cycle: await this.issues.updateCycleAs(req.human.actor, key, cycleNumber(number), jsonBody(req)) };
+  async update(@Req() req: SessionRequest, @Param("key") key: string, @Param("number") number: string, @JsonBody() body: JsonObject) {
+    return { cycle: await this.issues.updateCycleAs(req.human.actor, key, cycleNumber(number), body) };
   }
 
   /** Its issues stay on the board, in no cycle. */

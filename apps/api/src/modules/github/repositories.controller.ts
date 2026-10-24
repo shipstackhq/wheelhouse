@@ -1,10 +1,10 @@
 import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { requestOrigin } from "../../common/http/origin";
 import { GithubService } from "./github.service";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
 
 /** The repositories page, the Connect GitHub card, and the onboarding wizard. A team or repository of another workspace is a 404. */
 @Controller("api/app/teams")
@@ -19,8 +19,8 @@ export class RepositoriesController {
 
   /** `{ displayName, role, provider?, defaultBranch?, pathLimit?, lifecycle? }`: a repository linked by hand. */
   @Post(":key/repositories")
-  async create(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { repository: await this.github.createRepositoryAs(req.human.actor, key, jsonBody(req)) };
+  async create(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { repository: await this.github.createRepositoryAs(req.human.actor, key, body) };
   }
 
   /**
@@ -34,13 +34,13 @@ export class RepositoriesController {
 
   /** `{ installationId, repoId, role?, pathLimit? }`. Owners only; the installation must be the workspace's own (ADR-12). Name and branch come from GitHub. */
   @Post(":key/repositories/github")
-  async connectGithub(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { repository: await this.github.connectGithubAs(req.human.actor, key, jsonBody(req)) };
+  async connectGithub(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { repository: await this.github.connectGithubAs(req.human.actor, key, body) };
   }
 
   @Patch(":key/repositories/:id")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("id") id: string) {
-    return { repository: await this.github.updateRepositoryAs(req.human.actor, key, id, jsonBody(req)) };
+  async update(@Req() req: SessionRequest, @Param("key") key: string, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return { repository: await this.github.updateRepositoryAs(req.human.actor, key, id, body) };
   }
 
   @Post(":key/repositories/:id/retire")
@@ -64,7 +64,7 @@ export class RepositoriesController {
   /** `{ description }`: the "no code yet" path, a few sentences that become the map's first concept. */
   @Post(":key/onboarding/concept")
   @HttpCode(200)
-  concept(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return this.github.createConceptAs(req.human.actor, key, jsonBody(req));
+  concept(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return this.github.createConceptAs(req.human.actor, key, body);
   }
 }

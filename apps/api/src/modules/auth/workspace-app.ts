@@ -246,7 +246,7 @@ export async function pendingInvites(h: Human, kind: "join_workspace" | "new_wor
  */
 export async function createInviteAs(
   h: Human,
-  input: { kind: unknown; email: string; role?: unknown; tags?: unknown; workspace?: string; teams?: unknown },
+  input: { kind?: unknown; email: string; role?: unknown; tags?: unknown; workspace?: string; teams?: unknown },
   origin: string,
 ) {
   const hit = rateLimit(`invite-create:${h.user.id}`, 20, 60 * 60_000);

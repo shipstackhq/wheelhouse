@@ -2,11 +2,12 @@ import { Controller, Inject, Get, HttpCode, Param, Post, Req } from "@nestjs/com
 import { isInstanceAdmin } from "./auth-policy";
 import { ServiceError } from "../../common/service-error";
 import { type Admin } from "./workspaces-admin";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { AuthService } from "./auth.service";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { suspendWorkspaceDto, type SuspendWorkspaceDto } from "./dto/auth.dto";
 
 const adminOf = (req: SessionRequest): Admin => ({ userId: req.human.user.id, email: req.human.user.email, workspaceId: req.human.workspace.id });
 
@@ -36,10 +37,9 @@ export class AdminController {
   /** `{ confirm, reason? }`: the workspace's exact name must be typed. Signs its members out; reversible. */
   @Post("workspaces/:id/suspend")
   @HttpCode(200)
-  async suspend(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
+  async suspend(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody(new ZodValidationPipe(suspendWorkspaceDto)) body: SuspendWorkspaceDto) {
     onlyAdmins(req);
-    const b = jsonBody(req);
-    return this.auth.suspendWorkspace(adminOf(req), id, { confirmName: str(b.confirm), reason: str(b.reason) });
+    return this.auth.suspendWorkspace(adminOf(req), id, { confirmName: body.confirm, reason: body.reason });
   }
 
   @Post("workspaces/:id/restore")

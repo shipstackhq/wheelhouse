@@ -1,9 +1,9 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from "@nestjs/common";
 import { DocsService } from "./docs.service";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
 
 /** The docs page. A team, doc or map node of another workspace is a 404. A doc is addressed by its id. */
 @Controller("api/app/teams")
@@ -24,14 +24,14 @@ export class DocsController {
 
   /** `{ title, body?, parent?, template? }`: a template fills the body when none is given. */
   @Post(":key/docs")
-  async create(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { doc: await this.docs.createDocAs(req.human.actor, key, jsonBody(req)) };
+  async create(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { doc: await this.docs.createDocAs(req.human.actor, key, body) };
   }
 
   /** `{ title?, body?, anchors?, version? }`: with `version`, a doc changed since is a 409 `conflict` and nothing is overwritten. */
   @Patch(":key/docs/:ref")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("ref") ref: string) {
-    return { doc: await this.docs.updateDocAs(req.human.actor, key, ref, jsonBody(req)) };
+  async update(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string, @JsonBody() body: JsonObject) {
+    return { doc: await this.docs.updateDocAs(req.human.actor, key, ref, body) };
   }
 
   /** "Still accurate": clears the stale flag without changing the doc. */
@@ -50,8 +50,8 @@ export class DocsController {
   /** `{ parent?, index?, version? }`: `parent: null` is the top level. */
   @Post(":key/docs/:ref/move")
   @HttpCode(200)
-  async move(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("ref") ref: string) {
-    return { doc: await this.docs.moveDocAs(req.human.actor, key, ref, jsonBody(req)) };
+  async move(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string, @JsonBody() body: JsonObject) {
+    return { doc: await this.docs.moveDocAs(req.human.actor, key, ref, body) };
   }
 
   /** Deletes the doc and everything nested under it. */

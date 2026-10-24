@@ -2,10 +2,11 @@ import { Controller, Delete, Get, HttpCode, Param, Put, Req, Res, StreamableFile
 import type { Response } from "express";
 import { readImageAs, setAvatarAs, setWorkspaceImageAs } from "../lib/images";
 import { ServiceError } from "../common/service-error";
-import type { RawTextRequest } from "../common/http/raw-text";
-import { jsonBody } from "../common/body";
 import { AppEndpoints } from "../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../common/guards/session.guard";
+import { JsonBody } from "../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../common/pipes/zod-validation.pipe";
+import { imageDto, type ImageDto } from "./dto/images.dto";
 
 /** Custom pictures (WH-126). Uploads are `{ data }` in base64; the bytes go to whatever object storage the instance is set up with. */
 @Controller("api/app")
@@ -13,8 +14,8 @@ import { type SessionRequest } from "../common/guards/session.guard";
 export class ImagesController {
   /** Your own profile picture. */
   @Put("me/avatar")
-  setAvatar(@Req() req: SessionRequest & RawTextRequest) {
-    return setAvatarAs(req.human, jsonBody(req).data);
+  setAvatar(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(imageDto)) body: ImageDto) {
+    return setAvatarAs(req.human, body.data);
   }
 
   @Delete("me/avatar")
@@ -25,8 +26,8 @@ export class ImagesController {
 
   /** The workspace's image (owners and admins). */
   @Put("workspace/image")
-  setWorkspaceImage(@Req() req: SessionRequest & RawTextRequest) {
-    return setWorkspaceImageAs(req.human, jsonBody(req).data);
+  setWorkspaceImage(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(imageDto)) body: ImageDto) {
+    return setWorkspaceImageAs(req.human, body.data);
   }
 
   @Delete("workspace/image")

@@ -1,9 +1,9 @@
 import { Controller, Inject, Delete, Get, Param, Patch, Post, Req } from "@nestjs/common";
 import { IssuesService } from "./issues.service";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
 
 /**
  * Initiatives (WH-119): goals that group projects and other initiatives, up to three levels. They belong to the workspace and every
@@ -23,8 +23,8 @@ export class InitiativesController {
 
   /** `{ name, description?, status?, targetDate?, owner?, parentId?, healthOverride? }`; 201. Viewers cannot create. */
   @Post()
-  async create(@Req() req: SessionRequest & RawTextRequest) {
-    return { initiative: await this.issues.createInitiativeAs(req.human.actor, jsonBody(req)) };
+  async create(@Req() req: SessionRequest, @JsonBody() body: JsonObject) {
+    return { initiative: await this.issues.createInitiativeAs(req.human.actor, body) };
   }
 
   /** One initiative: its path, sub-initiatives, the projects of the viewer's teams and the totals of the rest. */
@@ -35,8 +35,8 @@ export class InitiativesController {
 
   /** Any create field, `healthOverride: null` to clear it, `parentId` (null for the top) and `index` to move it, and `version` for the lock. */
   @Patch(":id")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
-    return { initiative: await this.issues.updateInitiativeAs(req.human.actor, id, jsonBody(req)) };
+  async update(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return { initiative: await this.issues.updateInitiativeAs(req.human.actor, id, body) };
   }
 
   /** Soft delete: its sub-initiatives move up, its links go, the projects stay. */
@@ -47,8 +47,8 @@ export class InitiativesController {
 
   /** `{ projectId }`: group a project you can see. */
   @Post(":id/projects")
-  async link(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
-    return { initiative: await this.issues.linkProjectAs(req.human.actor, id, jsonBody(req)) };
+  async link(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return { initiative: await this.issues.linkProjectAs(req.human.actor, id, body) };
   }
 
   /** The project and its issues are untouched. */

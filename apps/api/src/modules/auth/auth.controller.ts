@@ -3,13 +3,14 @@ import type { Request, Response } from "express";
 import { SESSION_COOKIE } from "./auth-core";
 import { clientIp } from "../../common/rate-limit";
 import { cookieValue, toHeaders } from "../../common/http/cookies";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { beginSession } from "./begin";
 import { clearSessionCookie } from "../../common/http/session-cookie";
 import { AuthService } from "./auth.service";
 import { Public } from "../../common/decorators/public.decorator";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { loginDto, signupDto, type LoginDto, type SignupDto } from "./dto/auth.dto";
 
 @Controller("api/app/auth")
 @AppEndpoints()
@@ -27,9 +28,8 @@ export class AuthController {
   @Public()
   @Post("login")
   @HttpCode(200)
-  async login(@Req() req: RawTextRequest, @Res({ passthrough: true }) res: Response) {
-    const b = jsonBody(req);
-    const { userId } = await this.auth.logIn({ email: str(b.email), password: str(b.password) }, clientIp(toHeaders(req.headers)));
+  async login(@Req() req: Request, @Res({ passthrough: true }) res: Response, @JsonBody(new ZodValidationPipe(loginDto)) body: LoginDto) {
+    const { userId } = await this.auth.logIn(body, clientIp(toHeaders(req.headers)));
     return this.begin(userId, res);
   }
 
@@ -37,9 +37,8 @@ export class AuthController {
   @Public()
   @Post("signup")
   @HttpCode(201)
-  async signup(@Req() req: RawTextRequest, @Res({ passthrough: true }) res: Response) {
-    const b = jsonBody(req);
-    const { userId } = await this.auth.signUp({ name: str(b.name), email: str(b.email), password: str(b.password), workspace: str(b.workspace) }, clientIp(toHeaders(req.headers)));
+  async signup(@Req() req: Request, @Res({ passthrough: true }) res: Response, @JsonBody(new ZodValidationPipe(signupDto)) body: SignupDto) {
+    const { userId } = await this.auth.signUp(body, clientIp(toHeaders(req.headers)));
     return this.begin(userId, res);
   }
 

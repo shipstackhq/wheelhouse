@@ -1,9 +1,9 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import { IssuesService } from "./issues.service";
-import type { RawTextRequest } from "../../common/http/raw-text";
-import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import type { JsonObject } from "../../common/body";
 
 /**
  * Projects (WH-118): outcomes that end and can span teams. They belong to the workspace, and a person sees one only through a team
@@ -23,8 +23,8 @@ export class ProjectsController {
 
   /** `{ name, leadTeam, description?, status?, priority?, startDate?, targetDate?, leadUser?, healthOverride?, teams? }`; 201. The lead team is a team you can edit. */
   @Post()
-  async create(@Req() req: SessionRequest & RawTextRequest) {
-    return { project: await this.issues.createProjectAs(req.human.actor, jsonBody(req)) };
+  async create(@Req() req: SessionRequest, @JsonBody() body: JsonObject) {
+    return { project: await this.issues.createProjectAs(req.human.actor, body) };
   }
 
   /** One project: its milestones, the viewer's own teams with their issues, the totals of the other teams, and the teams they could bring in. */
@@ -35,8 +35,8 @@ export class ProjectsController {
 
   /** Any of the create fields, `healthOverride: null` to clear it, and `version` for the lock. Changing the lead needs the lead or an admin of the lead team. */
   @Patch(":id")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
-    return { project: await this.issues.updateProjectAs(req.human.actor, id, jsonBody(req)) };
+  async update(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return { project: await this.issues.updateProjectAs(req.human.actor, id, body) };
   }
 
   /** Soft delete: its issues stay on their boards, in no project. */
@@ -47,8 +47,8 @@ export class ProjectsController {
 
   /** `{ team }`: bring in a team you can edit. */
   @Post(":id/teams")
-  async addTeam(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
-    return { project: await this.issues.addProjectTeamAs(req.human.actor, id, jsonBody(req)) };
+  async addTeam(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return { project: await this.issues.addProjectTeamAs(req.human.actor, id, body) };
   }
 
   /** Take a team out. A team with issues in the project is a 409 unless `?releaseIssues=1`; the lead team cannot go. */
@@ -59,14 +59,14 @@ export class ProjectsController {
 
   /** `{ name, description?, targetDate? }`; 201. */
   @Post(":id/milestones")
-  async addMilestone(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string) {
-    return { project: await this.issues.createMilestoneAs(req.human.actor, id, jsonBody(req)) };
+  async addMilestone(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
+    return { project: await this.issues.createMilestoneAs(req.human.actor, id, body) };
   }
 
   /** Any of `name`, `description`, `targetDate`, and `index` to move it in the order. */
   @Patch(":id/milestones/:milestoneId")
-  async patchMilestone(@Req() req: SessionRequest & RawTextRequest, @Param("id") id: string, @Param("milestoneId") milestoneId: string) {
-    return { project: await this.issues.updateMilestoneAs(req.human.actor, id, milestoneId, jsonBody(req)) };
+  async patchMilestone(@Req() req: SessionRequest, @Param("id") id: string, @Param("milestoneId") milestoneId: string, @JsonBody() body: JsonObject) {
+    return { project: await this.issues.updateMilestoneAs(req.human.actor, id, milestoneId, body) };
   }
 
   /** Its issues stay in the project, in no milestone. */
