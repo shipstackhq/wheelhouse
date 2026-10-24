@@ -2,7 +2,7 @@ import { and, eq, gt, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { DeviceJobState } from "../../db/schema";
 import { serverSigningKey } from "./daemon-crypto";
-import { isUuid } from "../../lib/team-access";
+import { isUuid } from "../teams/team-access";
 import { type Device, str } from "./device-common";
 import { sendToDevice, wake } from "./device-stream";
 import { finishJobRow, transition } from "./job-state";

@@ -1,10 +1,10 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { TeamRole } from "../db/schema";
-import type { Actor } from "./access";
+import { getDb, schema } from "../../db";
+import type { TeamRole } from "../../db/schema";
+import type { Actor } from "../../lib/access";
 import { audit, leaveBlock, lockWorkspaceTeams, roleOnTeam, visibleTeamIds } from "./team-access";
-import { emit, findWorkspaceTeam, requireTeam, type Q } from "./service";
-import { ServiceError } from "./service-error";
+import { emit, findWorkspaceTeam, requireTeam, type Q } from "../../lib/service";
+import { ServiceError } from "../../lib/service-error";
 
 /**
  * A team's lifecycle (active → retired → deleted) and its place in a hierarchy (WH-128). The guards here are shared by the actions

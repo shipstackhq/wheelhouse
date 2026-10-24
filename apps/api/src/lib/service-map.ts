@@ -6,7 +6,7 @@ import { withNodeIds } from "./links";
 import { Q, diff, emit, isUuid, lockRow } from "./service-core";
 import { anchorScore } from "./service-freshness";
 import { resolveIssue } from "./service-issues";
-import { requireTeam } from "./service-teams";
+import { requireTeam } from "../modules/teams/teams";
 
 const { issues, nodes, edges, issueNodes, flows, decisions, terms } = schema;
 

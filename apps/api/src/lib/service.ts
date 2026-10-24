@@ -10,7 +10,7 @@ import { ServiceError } from "./service-core";
  */
 export { ServiceError };
 export * from "./service-core";
-export * from "./service-teams";
+export * from "../modules/teams/teams";
 export * from "./service-issues";
 export * from "./service-map";
 export * from "./service-repositories";

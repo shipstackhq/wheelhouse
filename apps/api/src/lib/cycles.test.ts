@@ -51,7 +51,7 @@ before(async () => {
   vic = await mk("vic", "member");
   a = await svc.createTeam(ada, { name: "Alpha", key: `${L}A` });
   b = await svc.createTeam(ada, { name: "Beta", key: `${L}B` });
-  const { addTeamMember } = await import("./team-members");
+  const { addTeamMember } = await import("../modules/teams/team-members");
   await addTeamMember(ada, a.key, { userId: vic.id, role: "viewer" });
 });
 

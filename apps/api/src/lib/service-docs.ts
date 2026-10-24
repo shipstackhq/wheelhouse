@@ -7,7 +7,7 @@ import { cleanLabels } from "./links";
 import { Q, diff, emit, isUuid, lockRow } from "./service-core";
 import { normPath } from "./service-freshness";
 import { landedHashesFor, resolveNode } from "./service-map";
-import { requireTeam } from "./service-teams";
+import { requireTeam } from "../modules/teams/teams";
 
 const { nodes, events, docs, docNodes, apiKeys, users } = schema;
 

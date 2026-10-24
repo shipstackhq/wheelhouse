@@ -4,7 +4,7 @@ import { getDb, schema } from "../db";
 import type { Human } from "./auth-core";
 import { ServiceError } from "./service";
 import { getStorage, type StoredObject } from "./storage";
-import { canManagePeople } from "./team-access";
+import { canManagePeople } from "../modules/teams/team-access";
 
 /** Custom pictures: a workspace's image and a person's profile picture. The bytes live in object storage (storage.ts), the key on the row. */
 

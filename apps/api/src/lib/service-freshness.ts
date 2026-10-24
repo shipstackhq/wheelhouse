@@ -6,7 +6,7 @@ import { emit } from "./service-core";
 import { DocRow } from "./service-docs";
 import { Layer, NodeRow, upsertNode } from "./service-map";
 import { findOrCreateRepository } from "./service-repositories";
-import { requireTeam } from "./service-teams";
+import { requireTeam } from "../modules/teams/teams";
 
 const { nodes, docs } = schema;
 

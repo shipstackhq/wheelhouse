@@ -4,7 +4,7 @@ import type { Actor } from "./access";
 import { ServiceError } from "./service-error";
 import { Q, emit, isUuid } from "./service-core";
 import { upsertNode } from "./service-map";
-import { requireTeam } from "./service-teams";
+import { requireTeam } from "../modules/teams/teams";
 
 const { repositories } = schema;
 

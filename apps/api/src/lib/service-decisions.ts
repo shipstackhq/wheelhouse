@@ -5,7 +5,7 @@ import { ServiceError } from "./service-error";
 import { setDecisionNodes, withNodeIds } from "./links";
 import { diff, emit, isUuid } from "./service-core";
 import { resolveNode } from "./service-map";
-import { requireTeam } from "./service-teams";
+import { requireTeam } from "../modules/teams/teams";
 
 const { decisions, terms } = schema;
 

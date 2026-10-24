@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import type { Scope, StreamEvent } from "./event-bus";
-import { visibleTeamIds } from "./team-access";
+import { visibleTeamIds } from "../modules/teams/team-access";
 import { requireTeam, ServiceError } from "./service";
 
 /** What a stream listens to (`scope`, on the bus) and which rows of the log it may replay (`where`). Always the caller's own workspace. */

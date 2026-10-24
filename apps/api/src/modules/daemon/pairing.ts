@@ -6,7 +6,7 @@ import { randomToken } from "../../lib/auth-core";
 import { publicKeyFromRaw, rawPublicKey, serverSigningKey } from "./daemon-crypto";
 import { rateLimit } from "../../lib/rate-limit";
 import { ServiceError } from "../../lib/service";
-import { workspaceRoleOf } from "../../lib/team-access";
+import { workspaceRoleOf } from "../teams/team-access";
 import { PAIRING_POLL_INTERVAL_S, PAIRING_TTL_MS, str } from "./device-common";
 import { deviceView } from "./devices";
 

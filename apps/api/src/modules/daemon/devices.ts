@@ -3,7 +3,7 @@ import { getDb, schema } from "../../db";
 import { type Actor } from "../../lib/access";
 import { serverSigningKey } from "./daemon-crypto";
 import { ServiceError, type Q } from "../../lib/service";
-import { isUuid } from "../../lib/team-access";
+import { isUuid } from "../teams/team-access";
 import { ACTIVE, DEFAULT_MODELS, type Device, MAX_POOL_SIZE, ONLINE_WINDOW_MS, str } from "./device-common";
 import { sendToDevice, signalJob, wake } from "./device-stream";
 

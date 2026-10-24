@@ -14,17 +14,17 @@ process.env.MAX_WORKSPACE_MEMBERS = "100";
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { WorkspaceRole } from "../db/schema";
-import type { Actor } from "./access";
-import { acceptInvite, createInvite, listInvites, type Issuer } from "./invites";
-import { removeMember, updateMember } from "./members";
-import * as metrics from "./metrics";
+import { getDb, schema } from "../../db";
+import type { WorkspaceRole } from "../../db/schema";
+import type { Actor } from "../../lib/access";
+import { acceptInvite, createInvite, listInvites, type Issuer } from "../../lib/invites";
+import { removeMember, updateMember } from "../../lib/members";
+import * as metrics from "../../lib/metrics";
 import { effectiveRole, roleAllows, roleOnTeam, visibleTeamIds } from "./team-access";
 import * as pmem from "./team-members";
-import { scopeKeyToAllTeams } from "./key-scope";
-import * as svc from "./service";
-import { teamScope, workspaceScope } from "./stream-scope";
+import { scopeKeyToAllTeams } from "../../lib/key-scope";
+import * as svc from "../../lib/service";
+import { teamScope, workspaceScope } from "../../lib/stream-scope";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 /** Two letters unique to this run (team keys are letters only). */

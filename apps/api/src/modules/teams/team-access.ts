@@ -1,9 +1,9 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { schema } from "../db";
-import type { TeamRole, WorkspaceRole } from "../db/schema";
-import type { Actor } from "./access";
-import type { Q } from "./service";
-import { ServiceError } from "./service-error";
+import { schema } from "../../db";
+import type { TeamRole, WorkspaceRole } from "../../db/schema";
+import type { Actor } from "../../lib/access";
+import type { Q } from "../../lib/service";
+import { ServiceError } from "../../lib/service-error";
 
 /**
  * Who can open a team (ADR-23). A team is reachable only through a row in `team_members`; the workspace role never

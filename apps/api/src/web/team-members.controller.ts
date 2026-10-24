@@ -8,7 +8,7 @@ import {
   listWorkspaceTeams,
   removeTeamMember,
   setTeamMemberRole,
-} from "../lib/team-members";
+} from "../modules/teams/team-members";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

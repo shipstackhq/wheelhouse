@@ -4,9 +4,9 @@ import { getDb, schema } from "../db";
 import type { Actor } from "./access";
 import { ServiceError } from "./service-error";
 import { cleanLabels, labelsOf, setIssueLabels, withCycle, withLabels } from "./links";
-import { assertWritable, type Need, roleAllows, roleOnTeam } from "./team-access";
+import { assertWritable, type Need, roleAllows, roleOnTeam } from "../modules/teams/team-access";
 import { DEFAULT_STATUSES, Q, Tx, diff, emit, isUuid, lockRow } from "./service-core";
-import { requireTeam } from "./service-teams";
+import { requireTeam } from "../modules/teams/teams";
 
 const { teams, statuses, issues, comments, nodes, issueNodes, events, projects } = schema;
 

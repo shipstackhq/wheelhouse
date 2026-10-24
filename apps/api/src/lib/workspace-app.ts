@@ -8,7 +8,7 @@ import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listI
 import * as members from "./members";
 import { onboarding } from "@wheelhouse/shared/onboarding";
 import { minutes, rateLimit } from "./rate-limit";
-import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "./team-access";
+import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "../modules/teams/team-access";
 import { listTeams, requireTeam, ServiceError, type Q } from "./service";
 import type { WorkspaceRole } from "../db/schema";
 

@@ -5,7 +5,7 @@ import type { Actor } from "./access";
 import { avatarUrl } from "./images";
 import { emit, requireTeam, type Q, type Tx } from "./service";
 import { ServiceError } from "./service-error";
-import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "./team-access";
+import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "../modules/teams/team-access";
 
 /**
  * Projects (WH-118): an outcome that ends and can span teams, with a lead, dates, milestones and a health worked out from its

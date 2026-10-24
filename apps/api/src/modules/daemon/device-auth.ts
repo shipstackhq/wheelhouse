@@ -5,7 +5,7 @@ import { randomToken } from "../../lib/auth-core";
 import { assertionSubject, publicKeyFromRaw, verifyAssertion } from "./daemon-crypto";
 import { rateLimit } from "../../lib/rate-limit";
 import { ServiceError } from "../../lib/service";
-import { isUuid } from "../../lib/team-access";
+import { isUuid } from "../teams/team-access";
 import { type Device, TOKEN_TTL_S, str } from "./device-common";
 
 /** A paired machine's short-lived tokens: the signed assertion exchange and checking a bearer token. See wheelhouse-cli/daemon/DESIGN.md. */

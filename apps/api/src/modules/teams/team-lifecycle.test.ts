@@ -13,13 +13,13 @@ process.env.MAX_WORKSPACE_MEMBERS = "100";
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { WorkspaceRole } from "../db/schema";
-import type { Actor } from "./access";
-import * as projects from "./projects";
+import { getDb, schema } from "../../db";
+import type { WorkspaceRole } from "../../db/schema";
+import type { Actor } from "../../lib/access";
+import * as projects from "../../lib/projects";
 import * as pmem from "./team-members";
 import * as life from "./team-lifecycle";
-import * as svc from "./service";
+import * as svc from "../../lib/service";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

@@ -1,7 +1,7 @@
 import { Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
-import { listTeamsWithRole, setTeamOrder } from "../lib/team-members";
+import { listTeamsWithRole, setTeamOrder } from "../modules/teams/team-members";
 import { createTeam, deleteTeam, removeSession, ServiceError, updateTeam } from "../lib/service";
-import { getTeamSettings, parentCandidates, restoreTeam, retireTeam, setTeamParent } from "../lib/team-lifecycle";
+import { getTeamSettings, parentCandidates, restoreTeam, retireTeam, setTeamParent } from "../modules/teams/team-lifecycle";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody, str } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

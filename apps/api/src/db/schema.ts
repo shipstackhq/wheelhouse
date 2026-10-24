@@ -21,7 +21,7 @@ import {
   pgView,
 } from "drizzle-orm/pg-core";
 import { STATUS_ROLES } from "@wheelhouse/shared/status-roles";
-import { TEAM_ICON_COLORS } from "../lib/team-icon";
+import { TEAM_ICON_COLORS } from "../modules/teams/team-icon";
 import { sql } from "drizzle-orm";
 
 /**

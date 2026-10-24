@@ -19,7 +19,7 @@ import type { Actor } from "./access";
 import * as svc from "./service";
 import * as pr from "./projects";
 import * as ini from "./initiatives";
-import { addTeamMember } from "./team-members";
+import { addTeamMember } from "../modules/teams/team-members";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();

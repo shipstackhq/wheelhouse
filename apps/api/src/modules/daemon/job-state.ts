@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { DeviceJobState } from "../../db/schema";
 import { ServiceError } from "../../lib/service";
-import { isUuid } from "../../lib/team-access";
+import { isUuid } from "../teams/team-access";
 import { ACTIVE, type Device } from "./device-common";
 import { signalJob } from "./device-stream";
 
