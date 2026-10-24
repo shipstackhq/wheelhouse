@@ -26,7 +26,7 @@ apps/api/src/
 
 ## Table ownership
 
-Every table in `apps/api/src/db/schema.ts` has exactly one owner. The first cut was checked against the schema's own comments.
+Every table in `apps/api/src/db/schema.ts` has exactly one owner. The first cut was checked against the schema's own comments; the platform and the issues rows below record the decisions on the tables that more than one area touches.
 
 | Module | Tables |
 |---|---|
@@ -40,12 +40,10 @@ Every table in `apps/api/src/db/schema.ts` has exactly one owner. The first cut 
 
 `instance_keys` sits with `daemon` because it holds the daemon message signing key. `work_sessions` sits with `map` because it drives the "in flux" state of the map; `docs` is its own module because it has its own controllers.
 
-**TO DECIDE** (four tables, each written by more than one module):
+**Decided (2026-10-23):**
 
-- `events`: the append-only event log every write goes through (`emit`). Owner is either `platform/events` or a future activity module; this needs a decision before `EventsService` gains readers.
-- `workspace_events`: the same log for workspace-level changes (projects, initiatives). Goes with `events`.
-- `agent_cursors`: an API key's read position in a team's event log. Could be `auth` (it is keyed by the key) or the event log's consumer.
-- `issue_nodes`: links an issue to a map node. Both `issues` and `map` write it.
+- `events`, `workspace_events` and `agent_cursors` belong to `platform/events`. The event log is infrastructure: every module writes it through `EventsService.emit`, and a cursor is a reader's position in it. No domain module reads or writes these tables directly.
+- `issue_nodes` (an issue linked to a map node) belongs to `issues`: it is written only from an issue (`linkIssueNode`). The map's graph asks the issues module for the issues attached to a set of nodes and does not join the table itself. The table's foreign keys to `issues` and `nodes` couple the two areas in the database; if the map is ever extracted, that foreign key is the one to drop.
 
 ## Rules
 
@@ -87,5 +85,6 @@ Strangler, one area at a time. `daemon` is the pilot. For each area: create the 
 ## Status
 
 - **Daemon pilot, step 1 (done):** `modules/daemon/` has the module (`DaemonModule.register(role)`), `DaemonService` (the module's one door; each method hands over to `src/lib/daemon.ts` for now), the device guard and exception filter, both controllers and the sweep. Every other controller sits in `LegacyApiModule` until its area gets a module. Routes, responses and the contract suite are unchanged.
-- **Next for daemon:** move the logic from `apps/api/src/lib/daemon.ts` into the module (service, DTOs), split the people-side and machine-side services if they diverge, and give `device_*` tables their own schema file.
+- **Daemon pilot, step 2 (done):** `lib/daemon.ts` and `lib/daemon-crypto.ts` are now in the module, one file per concern: `device-common` (constants, states), `device-stream` (signed messages and the SSE stream), `pairing`, `device-auth` (tokens), `device-reports` (hello, heartbeat, settling what a machine holds), `job-state` (finding and moving a job's row), `device-jobs` (accept, reject, progress, finish, the pull request, the sweep), `devices` (a person's machines) and `runs` (a person's runs on an issue). `internal.ts` re-exports them for the module's own tests; `index.ts` stays the public surface. `DaemonService` still hands over to these functions; folding them into service methods is optional and can wait.
+- **Next for daemon:** the `device_*` tables in their own schema file, and Zod DTOs on the routes that take a body (keeping today's error messages).
 - **Not started:** DTOs on existing routes, the global exception filter, per-module schema files, the shared browser package.

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { getDb, schema } from "../../db";
 
 /**
  * The cryptography between Wheelhouse and the agent daemon. Both ends use Ed25519: a device proves who it is by signing an assertion

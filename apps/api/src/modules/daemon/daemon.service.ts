@@ -24,7 +24,7 @@ import {
   startPairing,
   sweepDeviceJobs,
   updateDevice,
-} from "../../lib/daemon";
+} from "./internal";
 
 /**
  * What the daemon area can do, as the one door to it: the controllers (and, later, other modules through this module's index.ts)

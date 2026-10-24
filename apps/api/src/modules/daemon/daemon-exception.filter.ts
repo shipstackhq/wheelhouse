@@ -1,7 +1,7 @@
 import { Catch, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
 import { appFailure } from "../../lib/api-errors";
-import { DeviceAuthError } from "../../lib/daemon";
+import { DeviceAuthError } from "./internal";
 
 /** The daemon API's failures: the web app's envelope, with 401 `unauthorized` (and a `WWW-Authenticate`) for a bad or expired device token. */
 @Catch()
