@@ -16,7 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { ServiceError } from "../common/service-error";
-import { createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
+import { createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "../modules/issues/issues.legacy";
 import { listDecisions, upsertDecision } from "../modules/map/map.legacy";
 import { deleteNode, getGraph, upsertNode } from "../modules/map/map.legacy";
 import { createTeam, deleteTeam } from "../modules/teams/teams.legacy";

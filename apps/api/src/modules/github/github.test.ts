@@ -15,7 +15,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import "../map/index"; // loads the map before anything that reaches it through the docs module (a load-order cycle between map and docs)
 import type { Actor } from "../../common/actor";
-import { createIssue, getIssue, moveIssue } from "../issues/issues";
+import { createIssue, getIssue, moveIssue } from "../issues/issues.legacy";
 import { getNode, upsertNode } from "../map/map.legacy";
 import { createTeam, deleteTeam, requireTeam } from "../teams/teams.legacy";
 import { land } from "../map/map.legacy";

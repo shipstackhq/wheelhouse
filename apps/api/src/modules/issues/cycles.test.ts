@@ -17,8 +17,8 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { createTeam } from "../teams/teams.legacy";
-import { IssueInput, createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "./issues";
-import * as cy from "./cycles";
+import { IssueInput, createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } from "./issues.legacy";
+import * as cy from "./issues.legacy";
 import { testApp } from "../../test/app";
 await testApp();
 

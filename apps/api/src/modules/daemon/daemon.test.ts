@@ -16,7 +16,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { createIssue } from "../issues/issues";
+import { createIssue } from "../issues/issues.legacy";
 import { createTeam } from "../teams/teams.legacy";
 import * as d from "./internal";
 import { GithubApiError } from "../github/api";

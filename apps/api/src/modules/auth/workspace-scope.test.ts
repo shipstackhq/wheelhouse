@@ -17,7 +17,7 @@ import { getDb, schema } from "../../db";
 import type { WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { createIssue, updateIssue } from "../issues/issues";
+import { createIssue, updateIssue } from "../issues/issues.legacy";
 import { createTeam, deleteTeam } from "../teams/teams.legacy";
 import * as pmem from "../teams/teams.legacy";
 import { testApp } from "../../test/app";

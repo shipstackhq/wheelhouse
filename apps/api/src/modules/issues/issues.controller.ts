@@ -1,5 +1,6 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from "@nestjs/common";
-import { statusField, intField, issueInput } from "./board-app";
+import { statusField, intField, issueInput } from "./issues.rules";
+import { issueDetailView } from "./issues.presenter";
 import { ServiceError } from "../../common/service-error";
 import { IssuesService } from "./issues.service";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
@@ -17,8 +18,8 @@ export class IssuesController {
 
   /** The issue with its discussion, linked map nodes, history and pull requests. */
   @Get(":ref")
-  get(@Req() req: SessionRequest, @Param("ref") ref: string) {
-    return this.issues.issueDetail(req.human.actor, ref);
+  async get(@Req() req: SessionRequest, @Param("ref") ref: string) {
+    return issueDetailView(await this.issues.getIssue(req.human.actor, ref));
   }
 
   /** Change fields. `version` (what you last read) makes a change by anyone since a 409 `conflict` with the current issue in `details.current`. */

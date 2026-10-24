@@ -14,11 +14,11 @@ import { sql } from "drizzle-orm";
 import { closeDb, getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { createDoc } from "../modules/docs/docs.legacy";
-import { addComment, createIssue, updateIssue } from "../modules/issues/issues";
+import { addComment, createIssue, updateIssue } from "../modules/issues/issues.legacy";
 import { upsertDecision, upsertTerm } from "../modules/map/map.legacy";
 import { upsertEdge, upsertFlow, upsertNode } from "../modules/map/map.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
-import { createMilestone, createProject } from "../modules/issues/projects";
+import { createMilestone, createProject } from "../modules/issues/issues.legacy";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, tablesInOrder, type Conn } from "./db-copy";
 import { testApp } from "../test/app";
 

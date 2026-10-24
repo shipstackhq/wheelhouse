@@ -13,7 +13,7 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../apps/api/src/db";
 import { scopeKeyToAllTeams } from "../../apps/api/src/modules/auth/key-scope";
-import { createIssue } from "../../apps/api/src/modules/issues/issues";
+import { createIssue } from "../../apps/api/src/modules/issues/issues.legacy";
 import { createTeam } from "../../apps/api/src/modules/teams/teams.legacy";
 import { testApp } from "../../apps/api/src/test/app";
 import type { Actor } from "../../apps/api/src/common/actor";

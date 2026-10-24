@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { statusField, intField, issueInput } from "./board-app";
+import { statusField, intField, issueInput } from "./issues.rules";
 import { ServiceError } from "../../common/service-error";
 
 /** Reading a request body for the board and issue endpoints: nothing wrong-typed gets past here to the database. */

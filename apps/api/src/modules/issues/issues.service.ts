@@ -1,107 +1,459 @@
-import { Injectable } from "@nestjs/common";
-import { addComment, deleteIssue } from "./issues";
-import { boardView, createIssueAs, issueDetail, moveIssueAs, updateIssueAs } from "./board-app";
-import { createCycleAs, deleteCycleAs, getCycleAs, listCyclesAs, updateCycleAs } from "./cycles-app";
-import { createInitiativeAs, deleteInitiativeAs, getInitiativeAs, linkProjectAs, listInitiativesAs, unlinkProjectAs, updateInitiativeAs } from "./initiatives-app";
-import { linkIssueNode } from "./issue-nodes";
-import { addProjectTeamAs, createMilestoneAs, createProjectAs, deleteMilestoneAs, deleteProjectAs, getProjectAs, listProjectsAs, removeProjectTeamAs, updateMilestoneAs, updateProjectAs } from "./projects-app";
+import { Inject, Injectable } from "@nestjs/common";
+import { statusForRole, roleFromText } from "@wheelhouse/shared/status-roles";
+import type { Actor } from "../../common/actor";
+import { ServiceError } from "../../common/service-error";
+import { cleanLabels } from "../../common/labels";
+import { assertWritable, roleAllows, type Need } from "../../common/roles";
+import { isUuid } from "../../common/uuid";
+import { Database } from "../../platform/database/database";
+import { diff } from "../../platform/events/emit";
+import { EventsService } from "../../platform/events/events.service";
+import { checklistForTeam } from "../dashboard/index";
+import { DeliveriesService } from "../github/index";
+import { noteIssueActivity, resolveNode } from "../map/index";
+import { TeamAccessService } from "../teams/index";
+import { CyclesService, systemActor } from "./cycles.service";
+import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
+import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, fitsDepth, parseIssueRef, positionAmong, sameLabels, type IssueInput } from "./issues.rules";
+import { issueView } from "./issues.presenter";
+import { ProjectsService } from "./projects.service";
+
+export type IssueWithLinks = IssueRow & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
+export type IssueRelative = { ref: string; title: string; priority: IssueRow["priority"]; status: string; done: boolean; canceled: boolean; assigneeId: string | null };
 
 /**
- * What the issues area (issues, cycles, projects, initiatives) can do, as the one door to it: the controllers (and, later, other
- * modules through this module's index.ts) call this, never the functions in this folder directly. For now each method hands
- * over to the function of the same name with the same arguments and answer; folding the functions into service methods can
- * wait (docs/nest-architecture.md).
+ * Issues: create, change (with optimistic locking), move, delete, claim, comment, link to the map, the board, and sub-issues. An issue
+ * is reached only through its team (`TeamAccessService.require`, or `resolveIssue`, which also answers for the issue's ref), and every
+ * change writes its event on the same transaction. Cycles, projects and the labels of an issue are looked up through their own services.
+ *
+ * Sub-issues: an issue can sit under another issue of its own team, as deep as MAX_ISSUE_DEPTH levels. The one thing that must never
+ * happen is a loop (an issue under its own descendant), and it is refused here, not by the database: a loop has no single row to
+ * check, only the chain above the new parent. The check is one recursive query up the parent chain, which is as many primary-key
+ * lookups as the chain is long. A closure table would make it constant, but every re-parent would then rewrite the moved issue's whole
+ * subtree, and that is the common edit. Two people moving A under B and B under A at the same moment would each pass the check, so a
+ * re-parent takes the team's row lock first, as cycles do, and the second one checks against the first one's result.
  */
 @Injectable()
 export class IssuesService {
-  addComment(...a: Parameters<typeof addComment>) {
-    return addComment(...a);
+  constructor(
+    @Inject(Database) private readonly db: Database,
+    @Inject(IssuesRepository) private readonly repo: IssuesRepository,
+    @Inject(TeamAccessService) private readonly access: TeamAccessService,
+    @Inject(EventsService) private readonly events: EventsService,
+    @Inject(CyclesService) private readonly cycles: CyclesService,
+    @Inject(ProjectsService) private readonly projects: ProjectsService,
+    @Inject(DeliveriesService) private readonly deliveries: DeliveriesService,
+  ) {}
+
+  // ───────── the board ─────────
+
+  /**
+   * Release agent claims with no activity from the claiming agent for a day, so a
+   * crashed or abandoned session doesn't hold work hostage. Logged as an event.
+   */
+  async expireStaleClaims(team: { id: string; key: string; workspaceId: string }) {
+    for (const t of await this.repo.claimedIssues(team.id)) {
+      const lastAt = new Date((await this.repo.lastEventAt(t.id, t.claimedByKeyId!)) ?? t.updatedAt).getTime();
+      if (Date.now() - lastAt < CLAIM_TTL_MS) continue;
+      await this.db.transaction(async () => {
+        await this.repo.releaseClaim(t.id, t.version + 1);
+        await this.events.emit(systemActor(team.workspaceId, team.id), team.id, {
+          type: "issue.claim_expired",
+          entity: "issue",
+          entityId: t.id,
+          summary: `released ${team.key}-${t.number}: no activity from the claiming agent for 24h`,
+          data: { ref: `${team.key}-${t.number}` },
+        });
+      });
+    }
   }
-  addProjectTeamAs(...a: Parameters<typeof addProjectTeamAs>) {
-    return addProjectTeamAs(...a);
+
+  async getBoard(actor: Actor, teamRef: string) {
+    const team = await this.access.require(actor, teamRef);
+    await this.expireStaleClaims(team);
+    await this.cycles.rolloverCycles(team.id);
+    const cols = await this.repo.statusesOf(team.id);
+    const ts = await this.repo.issuesOf(team.id);
+    const ids = ts.map((t) => t.id);
+    const links = ids.length ? await this.repo.nodeLinksOf(ids) : [];
+    const labelMap = await this.labelsOf(ids);
+    const cycleOf = new Map((await this.cycles.withCycle(ts)).map((t) => [t.id, t.cycle]));
+    const counts = ids.length ? await this.repo.commentCounts(ids) : [];
+    const countMap = new Map(counts.map((c) => [c.issueId, Number(c.n)]));
+    const withLinks: IssueWithLinks[] = ts.map((t) => ({
+      ...t,
+      ref: `${team.key}-${t.number}`,
+      labels: labelMap.get(t.id) ?? [],
+      cycle: cycleOf.get(t.id) ?? null,
+      nodeIds: links.filter((l) => l.issueId === t.id).map((l) => l.nodeId),
+      commentCount: countMap.get(t.id) ?? 0,
+    }));
+    return { team, statuses: cols, issues: withLinks };
   }
-  boardView(...a: Parameters<typeof boardView>) {
-    return boardView(...a);
+
+  /** The team page's parts: the board, the map nodes an issue can link to, the team's members (the people an issue can be assigned to), its cycles and projects, and the setup checklist. */
+  async boardPage(actor: Actor, teamKey: string) {
+    const [board, checklist] = await Promise.all([this.getBoard(actor, teamKey), checklistForTeam(actor, teamKey)]);
+    const [nodes, members] = await Promise.all([this.repo.boardNodes(board.team.id), this.repo.teamMembersOf(board.team.id)]);
+    const cycles = await this.cycles.cycleOptions(board.team.id);
+    const projects = await this.projects.projectsOfTeam(board.team.id);
+    return { board, nodes, members, cycles, projects, checklist };
   }
-  createCycleAs(...a: Parameters<typeof createCycleAs>) {
-    return createCycleAs(...a);
+
+  // ───────── finding an issue ─────────
+
+  /** An assignee must be a member of the issue's team: a user from another workspace, a workspace member who is not on the team, or a made-up id is refused. */
+  async assertAssignee(teamId: string, userId: string | null | undefined) {
+    if (!userId) return;
+    const member = isUuid(userId) ? await this.repo.isTeamMember(teamId, userId) : false;
+    if (!member) throw new ServiceError("invalid", "Assignee must be a member of this team");
   }
-  createInitiativeAs(...a: Parameters<typeof createInitiativeAs>) {
-    return createInitiativeAs(...a);
+
+  async resolveStatus(teamId: string, ref: string) {
+    const cols = await this.repo.statusesOf(teamId);
+    // An id or an exact name wins; otherwise a role ("review") finds the status with that role even if it was renamed.
+    const role = roleFromText(ref);
+    const c = cols.find((c) => c.id === ref) ?? cols.find((c) => c.name.toLowerCase() === ref.toLowerCase()) ?? (role ? statusForRole(cols, role) : undefined);
+    if (!c) throw new ServiceError("invalid", `Unknown status "${ref}". Valid: ${cols.map((c) => c.name).join(", ")}`);
+    return c;
   }
-  createIssueAs(...a: Parameters<typeof createIssueAs>) {
-    return createIssueAs(...a);
+
+  /** Accepts an issue uuid or a ref like "WH-12". An issue of a team the actor cannot open is not_found; `need` says what the caller will do with it. */
+  async resolveIssue(actor: Actor, ref: string, need: Need = "read") {
+    let row: { t: IssueRow; p: TeamRow } | undefined;
+    if (isUuid(ref)) {
+      row = await this.repo.findWithTeam(actor.workspaceId, { id: ref });
+    } else {
+      const m = parseIssueRef(ref);
+      if (!m) throw new ServiceError("invalid", `Bad issue ref "${ref}" (use uuid or KEY-123)`);
+      row = await this.repo.findWithTeam(actor.workspaceId, { teamKey: m.key.toUpperCase(), number: m.number });
+    }
+    const role = row ? await this.access.roleOn(actor, row.p.id) : null;
+    if (!row || !role) throw new ServiceError("not_found", `Issue ${ref} not found`);
+    if (!roleAllows(role, need)) throw new ServiceError("forbidden", "Your role on this team is read only");
+    if (need === "edit") assertWritable(row.p);
+    return { issue: row.t, team: row.p, ref: `${row.p.key}-${row.t.number}` };
   }
-  createMilestoneAs(...a: Parameters<typeof createMilestoneAs>) {
-    return createMilestoneAs(...a);
+
+  async getIssue(actor: Actor, ref: string) {
+    const { issue, team, ref: r } = await this.resolveIssue(actor, ref);
+    const col = await this.repo.statusById(issue.statusId);
+    const comments = await this.repo.commentsOf(issue.id);
+    const nodes = await this.repo.linkedNodes(issue.id);
+    const history = await this.repo.historyOf(team.id, issue.id);
+    // Pull requests GitHub reported against this issue (WH-20).
+    const pullRequests = await this.deliveries.pullRequestsForIssue(issue.id);
+    const [withLabel] = await this.decorate([issue]);
+    const { parent, children } = await this.relatives(team, issue);
+    return { issue: { ...withLabel, ref: r, status: col?.name }, team, comments, nodes, history, pullRequests, parent, children };
   }
-  createProjectAs(...a: Parameters<typeof createProjectAs>) {
-    return createProjectAs(...a);
+
+  /** An issue's parent and its direct sub-issues (in number order), each with the name and kind of its status, so progress can be shown. */
+  private async relatives(team: { key: string }, issue: { id: string; parentId: string | null }) {
+    const view = (r: { number: number; title: string; priority: IssueRow["priority"]; assigneeId: string | null; status: string; role: string | null }): IssueRelative => ({
+      ref: `${team.key}-${r.number}`,
+      title: r.title,
+      priority: r.priority,
+      status: r.status,
+      done: r.role === "done",
+      canceled: r.role === "canceled",
+      assigneeId: r.assigneeId,
+    });
+    const parent = issue.parentId ? await this.repo.withStatus(issue.parentId) : undefined;
+    const children = await this.repo.subIssuesWithStatus(issue.id);
+    return { parent: parent ? view(parent) : null, children: children.map(view) };
   }
-  deleteCycleAs(...a: Parameters<typeof deleteCycleAs>) {
-    return deleteCycleAs(...a);
+
+  // ───────── labels and cycles on issues ─────────
+
+  /** The label names on each issue, alphabetical. */
+  private async labelsOf(issueIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>(issueIds.map((id) => [id, []]));
+    if (!issueIds.length) return out;
+    for (const r of await this.repo.labelRows(issueIds)) out.get(r.issueId)!.push(r.name);
+    return out;
   }
-  deleteInitiativeAs(...a: Parameters<typeof deleteInitiativeAs>) {
-    return deleteInitiativeAs(...a);
+
+  /** Rows of issues with their label names and the number of the cycle they are in. */
+  private async decorate<T extends { id: string; cycleId: string | null }>(rows: T[]) {
+    const map = await this.labelsOf(rows.map((r) => r.id));
+    return this.cycles.withCycle(rows.map((r) => ({ ...r, labels: map.get(r.id) ?? [] })));
   }
-  deleteIssue(...a: Parameters<typeof deleteIssue>) {
-    return deleteIssue(...a);
+
+  // ───────── sub-issues ─────────
+
+  /**
+   * The id of the issue to put `childId` under, from a ref ("WH-12") or an id, or null for none. `childId` is null for an issue that
+   * does not exist yet. Throws when the parent is not in the team, would make a loop, or would nest too deep.
+   */
+  private async resolveParent(team: { id: string; key: string }, childId: string | null, parentRef: string | null): Promise<string | null> {
+    if (parentRef === null) return null;
+    let parent: { id: string; number: number } | undefined;
+    if (isUuid(parentRef)) {
+      parent = await this.repo.parentById(team.id, parentRef);
+    } else {
+      const m = parseIssueRef(parentRef);
+      if (!m) throw new ServiceError("invalid", `Bad parent "${parentRef}" (use an issue ref like ${team.key}-12)`);
+      if (m.key.toUpperCase() !== team.key.toUpperCase()) throw new ServiceError("invalid", `A sub-issue is in the same team as its parent: ${parentRef} is not in ${team.key}`);
+      parent = await this.repo.parentByNumber(team.id, m.number);
+    }
+    if (!parent) throw new ServiceError("invalid", `Parent issue ${parentRef} not found in ${team.key}`);
+
+    if (childId) {
+      // Loops come from re-parenting an issue that already exists; look at the chain only once nobody else is moving issues in this team.
+      await this.repo.lockTeam(team.id);
+      if (await this.repo.isSelfOrAncestor(childId, parent.id, MAX_ISSUE_DEPTH)) {
+        throw new ServiceError("invalid", `${team.key}-${parent.number} cannot be the parent: it is that issue or one of its sub-issues`);
+      }
+    }
+    const above = await this.repo.depthAbove(parent.id, MAX_ISSUE_DEPTH);
+    const below = childId ? await this.repo.heightBelow(childId, MAX_ISSUE_DEPTH) : 1;
+    if (!fitsDepth(above, below)) throw new ServiceError("invalid", `Sub-issues can be nested at most ${MAX_ISSUE_DEPTH} levels deep`);
+    return parent.id;
   }
-  deleteMilestoneAs(...a: Parameters<typeof deleteMilestoneAs>) {
-    return deleteMilestoneAs(...a);
+
+  // ───────── changing issues ─────────
+
+  private async positionAt(statusId: string, index: number | undefined, excludeId?: string) {
+    return positionAmong(await this.repo.siblingsInStatus(statusId, excludeId), index);
   }
-  deleteProjectAs(...a: Parameters<typeof deleteProjectAs>) {
-    return deleteProjectAs(...a);
+
+  async createIssue(actor: Actor, teamRef: string, input: IssueInput & { title: string; status?: string }) {
+    const team = await this.access.require(actor, teamRef, "edit");
+    if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
+    return this.db.transaction(async () => {
+      await this.assertAssignee(team.id, input.assigneeId);
+      const cycle = input.cycle == null ? null : await this.cycles.cycleForIssue(team.id, input.cycle);
+      const inProject =
+        input.projectId === undefined && input.milestoneId === undefined
+          ? { projectId: null, milestoneId: null }
+          : await this.projects.resolveIssueProject(team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
+      const parentId = input.parent == null ? null : await this.resolveParent(team, null, input.parent);
+      const col = await this.resolveStatus(team.id, input.status ?? DEFAULT_STATUSES[0]);
+      const number = await this.repo.nextNumber(team.id);
+      const position = await this.positionAt(col.id, undefined);
+      const t = await this.repo.insertIssue({
+        teamId: team.id,
+        workspaceId: team.workspaceId,
+        statusId: col.id,
+        number,
+        title: input.title.trim(),
+        body: input.body ?? "",
+        priority: input.priority ?? "none",
+        assigneeId: input.assigneeId ?? null,
+        cycleId: cycle?.id ?? null,
+        projectId: inProject.projectId,
+        milestoneId: inProject.milestoneId,
+        parentId,
+        agentClaimable: input.agentClaimable ?? actor.kind === "agent",
+        position,
+        createdByKind: actor.kind,
+        createdById: actor.id,
+      });
+      await this.repo.setLabels(team, t.id, cleanLabels(input.labels ?? []));
+      const ref = `${team.key}-${t.number}`;
+      await this.projects.emitIssueMove(actor, team.id, ref, null, t.projectId);
+      await this.events.emit(actor, team.id, {
+        type: "issue.created",
+        entity: "issue",
+        entityId: t.id,
+        summary: `created ${ref} "${t.title}" in ${col.name}`,
+        data: { ref, status: col.name, title: t.title, ...(parentId ? { parent: input.parent } : {}) },
+      });
+      const [withLabel] = await this.decorate([t]);
+      return { ...withLabel, ref, status: col.name };
+    });
   }
-  getCycleAs(...a: Parameters<typeof getCycleAs>) {
-    return getCycleAs(...a);
+
+  /**
+   * Patch an issue. Pass `expectedVersion` for optimistic locking: if someone
+   * (human or agent) changed the issue since you read it, you get a 409 with
+   * the current state instead of silently overwriting their change.
+   */
+  async updateIssue(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
+    return this.bindSession(actor, await this.applyUpdate(actor, ref, patch, expectedVersion));
   }
-  getInitiativeAs(...a: Parameters<typeof getInitiativeAs>) {
-    return getInitiativeAs(...a);
+
+  private applyUpdate(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
+    return this.db.transaction(async () => {
+      const resolved = await this.resolveIssue(actor, ref, "edit");
+      const { team, ref: r } = resolved;
+      const locked = await this.repo.lockIssue(resolved.issue);
+      const [issue] = await this.decorate([locked]);
+      if (expectedVersion !== undefined && expectedVersion !== issue.version) {
+        throw new ServiceError("conflict", `${r} was changed (version ${issue.version}, you had ${expectedVersion}). Re-read and retry.`, {
+          current: issue,
+        });
+      }
+      const clean: IssueInput = {};
+      for (const [k, v] of Object.entries(patch)) if (v !== undefined) (clean as Record<string, unknown>)[k] = v;
+      if (clean.labels) {
+        const want = cleanLabels(clean.labels);
+        if (sameLabels(want, issue.labels)) delete clean.labels;
+        else clean.labels = want;
+      }
+      await this.assertAssignee(team.id, clean.assigneeId);
+      const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, ...cleanRest } = clean;
+      const parentChange = wantParent === undefined ? {} : { parentId: await this.resolveParent(team, issue.id, wantParent) };
+      const projectChoice =
+        wantProject === undefined && wantMilestone === undefined
+          ? undefined
+          : await this.projects.resolveIssueProject(team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
+      const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange } as Record<string, unknown>);
+      if (!Object.keys(changes).length) return { ...issue, ref: r };
+      const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
+      const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await this.cycles.cycleForIssue(team.id, newCycle)).id };
+      const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, version: issue.version + 1, updatedAt: new Date() });
+      if (newLabels) await this.repo.setLabels(team, row.id, newLabels);
+      const t = { ...row, labels: newLabels ?? issue.labels, cycle: newCycle === undefined ? issue.cycle : newCycle };
+      await this.projects.emitIssueMove(actor, team.id, r, issue.projectId, row.projectId);
+      await this.events.emit(actor, team.id, {
+        type: "issue.updated",
+        entity: "issue",
+        entityId: t.id,
+        summary: `updated ${r}: ${Object.keys(changes).join(", ")}`,
+        data: { ref: r, changes },
+      });
+      return { ...t, ref: r };
+    });
   }
-  getProjectAs(...a: Parameters<typeof getProjectAs>) {
-    return getProjectAs(...a);
+
+  async moveIssue(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
+    return this.bindSession(actor, await this.applyMove(actor, ref, status, index, expectedVersion));
   }
-  issueDetail(...a: Parameters<typeof issueDetail>) {
-    return issueDetail(...a);
+
+  private applyMove(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
+    return this.db.transaction(async () => {
+      const resolved = await this.resolveIssue(actor, ref, "edit");
+      const { team, ref: r } = resolved;
+      const locked = await this.repo.lockIssue(resolved.issue);
+      const [issue] = await this.decorate([locked]);
+      if (expectedVersion !== undefined && expectedVersion !== issue.version) {
+        throw new ServiceError("conflict", `${r} was changed since you read it`, { current: issue });
+      }
+      const to = await this.resolveStatus(team.id, status);
+      const from = (await this.repo.statusById(issue.statusId))!;
+      const position = await this.positionAt(to.id, index, issue.id);
+      const moved = await this.repo.updateIssue(issue.id, { statusId: to.id, position, version: issue.version + 1, updatedAt: new Date() });
+      const t = { ...moved, labels: issue.labels, cycle: issue.cycle };
+      if (from.id !== to.id) {
+        await this.events.emit(actor, team.id, {
+          type: "issue.moved",
+          entity: "issue",
+          entityId: t.id,
+          summary: `moved ${r} from ${from.name} → ${to.name}`,
+          data: { ref: r, from: from.name, to: to.name, fromRole: from.role, toRole: to.role },
+        });
+      }
+      return { ...t, ref: r, status: to.name };
+    });
   }
-  linkIssueNode(...a: Parameters<typeof linkIssueNode>) {
-    return linkIssueNode(...a);
+
+  async deleteIssue(actor: Actor, ref: string) {
+    return this.db.transaction(async () => {
+      const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "edit");
+      await this.repo.deleteIssue(issue.id);
+      await this.events.emit(actor, team.id, {
+        type: "issue.deleted",
+        entity: "issue",
+        entityId: issue.id,
+        summary: `deleted ${r} "${issue.title}"`,
+        data: { ref: r, title: issue.title },
+      });
+      return { ok: true };
+    });
   }
-  linkProjectAs(...a: Parameters<typeof linkProjectAs>) {
-    return linkProjectAs(...a);
+
+  /** Agent claims an issue it's about to work on (only if humans marked it claimable). */
+  async claimIssue(actor: Actor, ref: string) {
+    if (actor.kind !== "agent") throw new ServiceError("forbidden", "Only agents claim issues");
+    const t = await this.db.transaction(async () => {
+      const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "edit");
+      if (!issue.agentClaimable) throw new ServiceError("forbidden", `${r} is not marked agent-claimable by the workspace`);
+      if (issue.claimedByKeyId && issue.claimedByKeyId !== actor.id) throw new ServiceError("conflict", `${r} is already claimed by another agent`);
+      const claimed = await this.repo.updateIssue(issue.id, { claimedByKeyId: actor.id, version: issue.version + 1, updatedAt: new Date() });
+      const [t] = await this.decorate([claimed]);
+      await this.events.emit(actor, team.id, { type: "issue.claimed", entity: "issue", entityId: t.id, summary: `claimed ${r}`, data: { ref: r } });
+      return { ...t, ref: r };
+    });
+    return this.bindSession(actor, t);
   }
-  listCyclesAs(...a: Parameters<typeof listCyclesAs>) {
-    return listCyclesAs(...a);
+
+  /** An agent working an issue binds it to its active session (for the reconciliation check). */
+  async bindSession<T extends { id: string; teamId: string }>(actor: Actor, t: T): Promise<T> {
+    if (actor.kind === "agent") await noteIssueActivity(actor, t.teamId, t.id);
+    return t;
   }
-  listInitiativesAs(...a: Parameters<typeof listInitiativesAs>) {
-    return listInitiativesAs(...a);
+
+  async addComment(actor: Actor, ref: string, body: string) {
+    if (!body?.trim()) throw new ServiceError("invalid", "Comment body is required");
+    const { c, issue } = await this.db.transaction(async () => {
+      const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "edit");
+      const c = await this.repo.insertComment({ issueId: issue.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() });
+      await this.events.emit(actor, team.id, {
+        type: "comment.created",
+        entity: "issue",
+        entityId: issue.id,
+        summary: `commented on ${r}`,
+        data: { ref: r, commentId: c.id, body: c.body },
+      });
+      return { c, issue };
+    });
+    await this.bindSession(actor, issue);
+    return c;
   }
-  listProjectsAs(...a: Parameters<typeof listProjectsAs>) {
-    return listProjectsAs(...a);
+
+  /** Link an issue to a map node, or unlink it. This module owns issue_nodes: the table is written only from an issue. */
+  async linkIssueNode(actor: Actor, issueRef: string, nodeRef: string, unlink = false) {
+    return this.db.transaction(async () => {
+      const { issue, team, ref } = await this.resolveIssue(actor, issueRef, "edit");
+      const n = await resolveNode(this.db.q, team.id, nodeRef);
+      if (unlink) await this.repo.unlinkNode(issue.id, n.id);
+      else await this.repo.linkNode(issue.id, n.id);
+      await this.events.emit(actor, team.id, {
+        type: unlink ? "issue.unlinked" : "issue.linked",
+        entity: "issue",
+        entityId: issue.id,
+        summary: `${unlink ? "unlinked" : "linked"} ${ref} ${unlink ? "from" : "to"} "${n.name}"`,
+        data: { ref, node: n.name },
+      });
+      return { ok: true };
+    });
   }
-  moveIssueAs(...a: Parameters<typeof moveIssueAs>) {
-    return moveIssueAs(...a);
+
+  // ───────── what the web app reads and writes ─────────
+
+  /**
+   * A stale `version` is a 409 whose `details.current` is what the issue is now. The service attaches the raw row; the web app is
+   * given the same trimmed issue every other answer uses, so the screen can show the conflict and offer the latest text.
+   */
+  private async withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (e) {
+      if (e instanceof ServiceError && e.code === "conflict" && (e.details as { current?: unknown } | undefined)?.current) {
+        const now = await this.resolveIssue(actor, ref);
+        const [withLabel] = await this.decorate([now.issue]);
+        throw new ServiceError("conflict", e.message, { current: issueView({ ...withLabel, ref: now.ref }) });
+      }
+      throw e;
+    }
   }
-  removeProjectTeamAs(...a: Parameters<typeof removeProjectTeamAs>) {
-    return removeProjectTeamAs(...a);
+
+  async createIssueAs(actor: Actor, teamKey: string, input: IssueInput & { title: string }, status?: string) {
+    const t = await this.createIssue(actor, teamKey, { ...input, status });
+    return { ...issueView(t), status: t.status };
   }
-  unlinkProjectAs(...a: Parameters<typeof unlinkProjectAs>) {
-    return unlinkProjectAs(...a);
+
+  /** Change fields. With `version`, a change made by anyone since is refused (409) and nothing is overwritten. */
+  async updateIssueAs(actor: Actor, ref: string, patch: IssueInput, version?: number) {
+    const t = await this.withCurrent(actor, ref, () => this.updateIssue(actor, ref, patch, version));
+    return issueView(t);
   }
-  updateCycleAs(...a: Parameters<typeof updateCycleAs>) {
-    return updateCycleAs(...a);
-  }
-  updateInitiativeAs(...a: Parameters<typeof updateInitiativeAs>) {
-    return updateInitiativeAs(...a);
-  }
-  updateIssueAs(...a: Parameters<typeof updateIssueAs>) {
-    return updateIssueAs(...a);
-  }
-  updateMilestoneAs(...a: Parameters<typeof updateMilestoneAs>) {
-    return updateMilestoneAs(...a);
-  }
-  updateProjectAs(...a: Parameters<typeof updateProjectAs>) {
-    return updateProjectAs(...a);
+
+  /** Move to a status (an id, a name or a role such as "review") at a position (the end when absent). */
+  async moveIssueAs(actor: Actor, ref: string, status: string, index?: number, version?: number) {
+    const t = await this.withCurrent(actor, ref, () => this.moveIssue(actor, ref, status, index, version));
+    return { ...issueView(t), status: t.status };
   }
 }

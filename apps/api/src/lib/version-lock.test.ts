@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { createDoc, moveDoc, updateDoc } from "../modules/docs/docs.legacy";
-import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
+import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues/issues.legacy";
 import { upsertDecision } from "../modules/map/map.legacy";
 import { upsertFlow, upsertNode } from "../modules/map/map.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";

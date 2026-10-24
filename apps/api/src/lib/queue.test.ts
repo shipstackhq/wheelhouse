@@ -16,7 +16,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
 import { ServiceError } from "../common/service-error";
-import { addComment, createIssue } from "../modules/issues/issues";
+import { addComment, createIssue } from "../modules/issues/issues.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
 import { getChanges, markAllSeen, queueStatus, removeSession } from "./service-queue";
 import { runTool } from "./tools";

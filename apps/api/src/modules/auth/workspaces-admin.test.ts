@@ -23,7 +23,7 @@ import { actorForKey, SuspendedError, WORKSPACE_SUSPENDED_MESSAGE, userForSessio
 import { sha256 } from "../../common/crypto";
 import { acceptInvite, createInvite, InviteError, InviteFailure, peekInvite, type Issuer } from "./invites";
 import { AdminError, getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "./workspaces-admin";
-import { addComment, createIssue } from "../issues/issues";
+import { addComment, createIssue } from "../issues/issues.legacy";
 import { createTeam } from "../teams/teams.legacy";
 import { testApp } from "../../test/app";
 await testApp();

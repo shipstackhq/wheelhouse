@@ -16,7 +16,7 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
 import { ServiceError } from "../../common/service-error";
-import { createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
+import { createIssue, getBoard, getIssue, moveIssue } from "../issues/issues.legacy";
 import { createTeam, deleteTeam, requireTeam } from "./teams.legacy";
 import * as st from "./teams.legacy";
 import { addTeamMember } from "./teams.legacy";

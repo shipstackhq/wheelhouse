@@ -16,9 +16,10 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { createTeam } from "../teams/teams.legacy";
-import { createIssue, deleteIssue, getIssue, moveIssue, updateIssue } from "./issues";
-import { issueDetail, issueInput } from "./board-app";
-import { MAX_ISSUE_DEPTH } from "./sub-issues";
+import { createIssue, deleteIssue, getIssue, moveIssue, updateIssue } from "./issues.legacy";
+import { issueDetail } from "./issues.legacy";
+import { issueInput } from "./issues.rules";
+import { MAX_ISSUE_DEPTH } from "./issues.rules";
 import { testApp } from "../../test/app";
 await testApp();
 

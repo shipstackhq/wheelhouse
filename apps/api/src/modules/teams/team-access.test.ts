@@ -26,7 +26,7 @@ import * as pmem from "./teams.legacy";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
 import { ServiceError } from "../../common/service-error";
 import { listEvents } from "../../lib/service-queue";
-import { addComment, createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
+import { addComment, createIssue, getBoard, getIssue, moveIssue } from "../issues/issues.legacy";
 import { createTeam, deleteTeam, listTeams, requireTeam, updateTeam } from "./teams.legacy";
 import { teamScope, workspaceScope } from "../../platform/streams/stream-scope";
 import { testApp } from "../../test/app";
