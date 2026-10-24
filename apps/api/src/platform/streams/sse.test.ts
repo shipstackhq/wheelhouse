@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { MemoryBus, type StreamEvent } from "./event-bus";
+import { MemoryBus, type StreamEvent } from "../../lib/event-bus";
 import { eventStream, formatChange, formatHeartbeat, formatMarker, parseSince, REPLAY_CAP, type StreamDeps } from "./sse";
 
 const ev = (seq: number | undefined, over: Partial<StreamEvent> = {}): StreamEvent => ({ workspaceId: "T", teamId: "P", seq, type: "issue.moved", summary: `s${seq}`, ...over });

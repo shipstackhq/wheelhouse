@@ -18,7 +18,7 @@ import { bus, type StreamEvent } from "./event-bus";
 import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
 import * as svc from "./service";
 import { runTool } from "./tools";
-import { teamScope, workspaceScope } from "./stream-scope";
+import { teamScope, workspaceScope } from "../platform/streams/stream-scope";
 
 let human: Actor;
 let agent: Actor;

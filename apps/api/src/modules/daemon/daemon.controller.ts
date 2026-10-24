@@ -1,11 +1,11 @@
 import { Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseFilters, UseGuards } from "@nestjs/common";
 import { Readable } from "node:stream";
 import type { Request, Response } from "express";
-import { SSE_HEADERS } from "../../lib/sse";
+import { SSE_HEADERS } from "../../platform/streams/sse";
 import { clientIp } from "../../common/rate-limit";
 import type { RawTextRequest } from "../../http/raw-text";
 import { toHeaders } from "../../http/util";
-import { StreamRegistry } from "../../stream/stream.registry";
+import { StreamRegistry } from "../../platform/streams/stream.registry";
 import { jsonBody } from "../../web/body";
 import { requestOrigin } from "../../web/origin";
 import { DaemonExceptionFilter } from "./daemon-exception.filter";

@@ -1,10 +1,10 @@
 import { and, asc, desc, gt } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import { AuthError } from "../modules/auth/access";
-import type { Actor } from "../common/actor";
-import { bus, type StreamEvent } from "./event-bus";
+import { getDb, schema } from "../../db";
+import { AuthError } from "../../modules/auth/access";
+import type { Actor } from "../../common/actor";
+import { bus, type StreamEvent } from "../../lib/event-bus";
 import type { StreamScope } from "./stream-scope";
-import { ServiceError } from "./service";
+import { ServiceError } from "../../lib/service";
 import { eventStream, parseSince, SSE_HEADERS } from "./sse";
 
 export { SSE_HEADERS };

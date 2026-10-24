@@ -24,7 +24,7 @@ import { effectiveRole, roleAllows, roleOnTeam, visibleTeamIds } from "./team-ac
 import * as pmem from "./team-members";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
 import * as svc from "../../lib/service";
-import { teamScope, workspaceScope } from "../../lib/stream-scope";
+import { teamScope, workspaceScope } from "../../platform/streams/stream-scope";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 /** Two letters unique to this run (team keys are letters only). */

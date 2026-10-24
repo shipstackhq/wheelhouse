@@ -3,11 +3,11 @@ import { Readable } from "node:stream";
 import type { Request, Response } from "express";
 import { actorFromCredentials, SESSION_COOKIE } from "../modules/auth/auth-core";
 import { clientIp } from "../common/rate-limit";
-import { openStream } from "../lib/stream-open";
-import { teamScope, workspaceScope, type StreamScope } from "../lib/stream-scope";
+import { openStream } from "../platform/streams/stream-open";
+import { teamScope, workspaceScope, type StreamScope } from "../platform/streams/stream-scope";
 import type { Actor } from "../common/actor";
 import { cookieValue, toHeaders } from "../http/util";
-import { StreamRegistry } from "./stream.registry";
+import { StreamRegistry } from "../platform/streams/stream.registry";
 
 @Controller()
 export class StreamController {
