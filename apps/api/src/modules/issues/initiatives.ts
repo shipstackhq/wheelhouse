@@ -5,7 +5,7 @@ import type { Actor } from "../../common/actor";
 import { bad, day, deriveHealth, oneOf, openProject, text, workspaceEvent, type HealthView, type ProgressCounts } from "./projects";
 import type { Q, Tx } from "../../lib/service";
 import { ServiceError } from "../../common/service-error";
-import { workspaceRoleOf } from "../teams/team-access";
+import { workspaceRoleOf } from "../teams/index";
 import { isUuid } from "../../common/uuid";
 
 /**

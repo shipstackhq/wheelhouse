@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { addComment, createRepository, emit, requireTeam, moveIssue, ServiceError } from "../../lib/service";
-import { land } from "../map/sync";
+import { land } from "../map/index";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { decideMove, ciState, type CheckState } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";

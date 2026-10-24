@@ -1,4 +1,4 @@
-import type { Human } from "../auth/auth-core";
+import type { Human } from "../auth/index";
 import { requireTeam, ServiceError } from "../../lib/service";
 import { githubConfig } from "./config";
 import { github } from "./runtime";

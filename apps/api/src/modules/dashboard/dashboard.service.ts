@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { requireTeam } from "../teams/teams";
+import { requireTeam } from "../teams/index";
 import * as m from "./metrics";
 
 /**

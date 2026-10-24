@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { emit } from "../../platform/events/emit";
-import { resolveNode } from "../map/graph";
+import { resolveNode } from "../map/index";
 import { resolveIssue } from "./issues";
 
 const { issueNodes } = schema;

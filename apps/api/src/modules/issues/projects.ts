@@ -5,7 +5,7 @@ import type { Actor } from "../../common/actor";
 import { avatarUrl } from "../../lib/images";
 import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
 import { ServiceError } from "../../common/service-error";
-import { teamRoleMap, workspaceRoleOf } from "../teams/team-access";
+import { teamRoleMap, workspaceRoleOf } from "../teams/index";
 import { roleAllows } from "../../common/roles";
 import { isUuid } from "../../common/uuid";
 

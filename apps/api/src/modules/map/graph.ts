@@ -7,7 +7,7 @@ import { isUuid } from "../../common/uuid";
 import { Q, lockRow } from "../../platform/database/transaction";
 import { diff, emit } from "../../platform/events/emit";
 import { anchorScore } from "./freshness";
-import { requireTeam } from "../teams/teams";
+import { requireTeam } from "../teams/index";
 
 const { issues, nodes, edges, issueNodes, flows, decisions, terms } = schema;
 

@@ -5,8 +5,8 @@ import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { Q } from "../../platform/database/transaction";
 import { emit } from "../../platform/events/emit";
-import { upsertNode } from "../map/graph";
-import { requireTeam } from "../teams/teams";
+import { upsertNode } from "../map/index";
+import { requireTeam } from "../teams/index";
 
 const { repositories } = schema;
 

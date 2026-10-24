@@ -3,10 +3,10 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { emit } from "../../platform/events/emit";
-import { DocRow } from "../docs/docs";
+import { DocRow } from "../docs/index";
 import { Layer, NodeRow, upsertNode } from "./graph";
-import { findOrCreateRepository } from "../github/repositories";
-import { requireTeam } from "../teams/teams";
+import { findOrCreateRepository } from "../github/index";
+import { requireTeam } from "../teams/index";
 
 const { nodes, docs } = schema;
 

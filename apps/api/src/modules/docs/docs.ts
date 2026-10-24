@@ -7,9 +7,9 @@ import { cleanLabels } from "../../common/labels";
 import { isUuid } from "../../common/uuid";
 import { Q, lockRow } from "../../platform/database/transaction";
 import { diff, emit } from "../../platform/events/emit";
-import { normPath } from "../map/freshness";
-import { landedHashesFor, resolveNode } from "../map/graph";
-import { requireTeam } from "../teams/teams";
+import { normPath } from "../map/index";
+import { landedHashesFor, resolveNode } from "../map/index";
+import { requireTeam } from "../teams/index";
 
 const { nodes, events, docs, docNodes, apiKeys, users } = schema;
 

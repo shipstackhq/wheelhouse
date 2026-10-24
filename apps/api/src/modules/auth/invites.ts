@@ -4,7 +4,7 @@ import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "../../db";
 import { inviteTtlHours, isInstanceAdmin, maxWorkspaceMembers, passwordProblem } from "./auth-policy";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
-import { audit } from "../teams/team-access";
+import { audit } from "../teams/index";
 import { canManagePeople, isWorkspaceRole } from "../../common/roles";
 import { requireTeam } from "../../lib/service";
 import { newWorkspaceSlug } from "./workspace-slug";

@@ -9,7 +9,7 @@ import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listI
 import * as members from "./members";
 import { onboarding } from "@wheelhouse/shared/onboarding";
 import { minutes, rateLimit } from "../../common/rate-limit";
-import { teamRoleMap } from "../teams/team-access";
+import { teamRoleMap } from "../teams/index";
 import { canManagePeople, isWorkspaceRole, roleAllows } from "../../common/roles";
 import { listTeams, requireTeam, ServiceError, type Q } from "../../lib/service";
 import type { WorkspaceRole } from "../../db/schema";

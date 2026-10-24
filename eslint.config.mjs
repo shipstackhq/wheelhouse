@@ -12,13 +12,13 @@ export default [
     rules: reactHooks.configs.recommended.rules,
   },
   // A NestJS module (apps/api/src/modules/<area>) is reached only through its index.ts. A relative import that climbs into
-  // a sibling module's folder must name its index (or the folder), never a file inside it. Warn now; error when the migration ends
-  // (docs/nest-architecture.md). A module's own files import each other with "./".
+  // a sibling module's folder must name its index (or the folder), never a file inside it. An error. A module's own files import each
+  // other with "./". Test files are exempt: they build their fixtures from other modules' internals (docs/nest-architecture.md).
   {
     files: ["apps/api/src/modules/**/*.ts"],
     rules: {
       "no-restricted-imports": [
-        "warn",
+        "error",
         {
           patterns: [
             {
@@ -35,5 +35,9 @@ export default [
         },
       ],
     },
+  },
+  {
+    files: ["apps/api/src/modules/**/*.test.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
 ];

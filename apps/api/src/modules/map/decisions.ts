@@ -6,7 +6,7 @@ import { setDecisionNodes, withNodeIds } from "./links";
 import { isUuid } from "../../common/uuid";
 import { diff, emit } from "../../platform/events/emit";
 import { resolveNode } from "./graph";
-import { requireTeam } from "../teams/teams";
+import { requireTeam } from "../teams/index";
 
 const { decisions, terms } = schema;
 

@@ -1,6 +1,6 @@
 import { schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import type { Human } from "../auth/auth-core";
+import type { Human } from "../auth/index";
 import { githubConfig, githubMissing } from "./config";
 import { github } from "./runtime";
 import { connectGithubRepository, listInstallations } from "./service";

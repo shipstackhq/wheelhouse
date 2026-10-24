@@ -5,12 +5,12 @@ import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { cleanLabels } from "../../common/labels";
 import { labelsOf, setIssueLabels, withCycle, withLabels } from "./links";
-import { roleOnTeam } from "../teams/team-access";
+import { roleOnTeam } from "../teams/index";
 import { assertWritable, type Need, roleAllows } from "../../common/roles";
 import { isUuid } from "../../common/uuid";
 import { Q, Tx, lockRow } from "../../platform/database/transaction";
 import { diff, emit } from "../../platform/events/emit";
-import { requireTeam } from "../teams/teams";
+import { requireTeam } from "../teams/index";
 
 export const DEFAULT_STATUSES = DEFAULT_STATUS_DEFS.map((c) => c.name);
 
