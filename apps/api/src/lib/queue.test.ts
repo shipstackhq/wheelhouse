@@ -21,7 +21,7 @@ import { createTeam } from "../modules/teams/teams.legacy";
 import { getChanges, markAllSeen, queueStatus, removeSession } from "./service-queue";
 import { runTool } from "./tools";
 import { agentQueues } from "../modules/dashboard/metrics";
-import { briefing } from "../modules/map/briefing";
+import { briefing } from "../modules/map/map.legacy";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
 import { testApp } from "../test/app";
 await testApp();

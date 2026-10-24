@@ -30,8 +30,7 @@ export const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+
 
 /**
  * A team's repositories (WH-68): linked by hand, connected through GitHub or registered by a client report; each has a system node on
- * the map. Owners manage them (see createIssue for the human/agent split used elsewhere). Also the onboarding wizard's data and its
- * "first concept", which belong to the map and move with it. Every method resolves the team through TeamAccessService, so another
+ * the map. Owners manage them (see createIssue for the human/agent split used elsewhere). Every method resolves the team through TeamAccessService, so another
  * workspace's team or repository is "not found". The `...As` methods take the request body as the web app sends it and check it.
  */
 @Injectable()

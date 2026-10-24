@@ -8,7 +8,7 @@ import { bad, oneOf, text, textList, textOrNull, whole } from "../../lib/web-inp
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
-import { getGraph } from "../map/index";
+import { getGraph, maybeDraftDoc } from "../map/index";
 import type { Human } from "../auth/index";
 import { TeamAccessService } from "../teams/index";
 import { DocsRepository, type DocRow } from "./docs.repository";
@@ -263,8 +263,6 @@ export class DocsService {
     if (actor.kind === "agent" && !patch.forcePublish) {
       const existing = await this.resolveDoc(team.id, ref).catch(() => undefined);
       if (existing) {
-        // Loaded here: the map module's sync imports the docs module, so a static import would be a cycle.
-        const { maybeDraftDoc } = await import("../map/sync");
         const d = await maybeDraftDoc(actor, existing, patch);
         if (d) return { ...existing, ...d };
       }

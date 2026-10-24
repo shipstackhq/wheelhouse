@@ -19,13 +19,14 @@ import { sha256 } from "../../common/crypto";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
 import { ServiceError } from "../../common/service-error";
 import { getChanges, listEvents } from "../../lib/service-queue";
-import { anchorScore, reportChanges } from "../map/freshness";
-import { upsertNode } from "../map/graph";
+import { anchorScore } from "../map/map.rules";
+import { reportChanges } from "../map/map.legacy";
+import { upsertNode } from "../map/map.legacy";
 import { createTeam, requireTeam } from "../teams/teams.legacy";
 import { createDoc, deleteDoc, getDoc, linkDocNode, listDocs, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "./docs.legacy";
 import { extractPathTokens } from "./docs.rules";
 import { runTool } from "../../lib/tools";
-import * as sync from "../map/sync";
+import * as sync from "../map/map.legacy";
 import { testApp } from "../../test/app";
 await testApp();
 

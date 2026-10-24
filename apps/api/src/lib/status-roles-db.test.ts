@@ -19,7 +19,7 @@ import { ServiceError } from "../common/service-error";
 import { createIssue, getBoard, getIssue, moveIssue } from "../modules/issues/issues";
 import { createTeam } from "../modules/teams/teams.legacy";
 import { summary } from "../modules/dashboard/metrics";
-import { briefing } from "../modules/map/briefing";
+import { briefing } from "../modules/map/map.legacy";
 import { testApp } from "../test/app";
 await testApp();
 

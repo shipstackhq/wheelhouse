@@ -2,10 +2,10 @@ import type { DeliveriesService } from "./deliveries.service";
 import type { RepositoriesService } from "./repositories.service";
 
 /**
- * Temporary. Code that is not converted yet (the MCP tools through lib/service.ts, the map module, the issues module) still calls plain
+ * Temporary. Code that is not converted yet (the MCP tools through lib/service.ts, the issues module) still calls plain
  * functions; these are those functions, each one line forwarding to the live service. `GithubModule.onModuleInit` points them at the
  * services Nest built, so nothing works before the application has booted (tests call `testApp()`). None takes a `q`. Delete this file
- * when the last caller moves to the services (the MCP redesign moves the tools; the map phase moves the map's calls).
+ * when the last caller moves to the services (the MCP redesign moves the tools).
  */
 type Live = { repositories: RepositoriesService; deliveries: DeliveriesService };
 let live: Live | undefined;

@@ -30,9 +30,9 @@ import { createDoc, getDoc, linkDocNode, markDocFresh } from "../apps/api/src/mo
 import { createRepository, findOrCreateRepository, listRepositories, retireRepository, updateRepository } from "../apps/api/src/modules/github/github.legacy";
 import { linkIssueNode } from "../apps/api/src/modules/issues/issue-nodes";
 import { addComment, createIssue, getIssue, updateIssue } from "../apps/api/src/modules/issues/issues";
-import { upsertDecision, upsertTerm } from "../apps/api/src/modules/map/decisions";
-import { listStaleDocs, reportChanges } from "../apps/api/src/modules/map/freshness";
-import { upsertEdge, upsertFlow, upsertNode } from "../apps/api/src/modules/map/graph";
+import { upsertDecision, upsertTerm } from "../apps/api/src/modules/map/map.legacy";
+import { listStaleDocs, reportChanges } from "../apps/api/src/modules/map/map.legacy";
+import { upsertEdge, upsertFlow, upsertNode } from "../apps/api/src/modules/map/map.legacy";
 import { createTeam, deleteTeam, requireTeam } from "../apps/api/src/modules/teams/teams.legacy";
 import { scopeKeyToAllTeams } from "../apps/api/src/modules/auth/key-scope";
 import * as cycles from "../apps/api/src/modules/issues/cycles";
@@ -40,11 +40,11 @@ import * as projects from "../apps/api/src/modules/issues/projects";
 import * as initiatives from "../apps/api/src/modules/issues/initiatives";
 import * as members from "../apps/api/src/modules/auth/members";
 import { runTool, tools } from "../apps/api/src/lib/tools";
-import { askMap } from "../apps/api/src/modules/map/ask";
-import { briefing, issueContext } from "../apps/api/src/modules/map/briefing";
+import { askMap } from "../apps/api/src/modules/map/map.legacy";
+import { briefing, issueContext } from "../apps/api/src/modules/map/map.legacy";
 import * as metrics from "../apps/api/src/modules/dashboard/metrics";
-import { resolveDraft } from "../apps/api/src/modules/map/sync";
-import * as sync from "../apps/api/src/modules/map/sync";
+import { resolveDraft } from "../apps/api/src/modules/map/map.legacy";
+import * as sync from "../apps/api/src/modules/map/map.legacy";
 import { testApp } from "../apps/api/src/test/app";
 await testApp();
 
@@ -844,13 +844,11 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/dashboard/metrics.ts": "everything derived from the caller's workspace's team ids",
   "apps/api/src/modules/github/github.repository.ts": "the only file of the github module that queries; it decides nothing, and every caller is a service. Webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace; repositories are found inside the team the caller opened through TeamAccessService.require(actor, key, need), so another workspace's repository is not_found (tested)",
   "apps/api/src/modules/dashboard/checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/modules/map/decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/docs/docs.repository.ts": "the only file of the docs module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need): a doc, a parent and a linked node are found inside the actor's team only, so another workspace's are not_found (tested in docs.test.ts and in this file's cross-workspace attacks); the members it lists are those of the signed-in person's own workspace, and an agent key's capabilities are read by the key's own id (tested)",
-  "apps/api/src/modules/map/freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/modules/map/graph.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/platform/streams/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
-  "apps/api/src/modules/map/sync.ts": "every entry point resolves through requireTeam first (tested)",
+  "apps/api/src/modules/map/map.repository.ts": "the only file of the map module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need) (the former requireTeam / resolveIssue): nodes, edges, flows, decisions, terms, drafts, work sessions, landed files and the docs the map flags are all read and written by the found team's id, a node or flow is looked up inside that team only, and a draft is resolved only when it belongs to the actor's team and is pending, so another workspace's are not_found and stay untouched (tested). Graph: nodes, edges, flows and the data layer (graph.service). Decisions: ADRs and glossary (decisions.service). Freshness: reported changes, landing and draft publishing (freshness.service). Sync: sessions, drafts and debt (sessions.service); every entry point resolves the team first (tested)",
+  "apps/api/src/modules/map/sessions.service.ts": "hands the current handle (`this.db.q`) to pruneSessions(q, team.id) after ending a session of the team found through TeamAccessService.require(actor, key); every other statement goes through MapRepository, audited above (tested)",
   "apps/api/src/modules/auth/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "apps/api/src/modules/issues/issues.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/issues/issue-nodes.ts": "the issue is resolved through resolveIssue(actor, ref, edit) and the node inside that issue's own team, so a node of another team or workspace is not_found; only the issue_nodes row of that pair is written or removed (tested)",
@@ -1042,8 +1040,8 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "PATCH /api/app/teams/:key/repositories/:id": "updateRepository(actor): the repository is resolved inside the actor's team (tested)",
   "POST /api/app/teams/:key/repositories/:id/retire": "retireRepository(actor): resolved inside the actor's team (tested)",
   "GET /api/app/teams/:key/repositories/:id/tree": "browseRepoTreeAs(actor): the repository is looked up in the actor's own team, so another workspace's repository id is a 404 and no tree is fetched (tested)",
-  "GET /api/app/teams/:key/onboarding": "onboardingPage(actor): the team through requireTeam(actor); the commands carry no API key (tested)",
-  "POST /api/app/teams/:key/onboarding/concept": "createConceptAs(actor): the team through requireTeam(actor); the node is written to that team (tested)",
+  "GET /api/app/teams/:key/onboarding": "onboardingPage(actor): the team through TeamAccessService.require(actor); the commands carry no API key (tested)",
+  "POST /api/app/teams/:key/onboarding/concept": "createConceptAs(actor): the team through TeamAccessService.require(actor, key, edit); the node is written to that team (tested)",
   "GET /api/app/dashboard/:widget": "metrics.*(actor): every query is by the actor's workspace id and limited to the teams the person is a member of; `?team=KEY` is resolved through requireTeam(actor, key), so another workspace's team, one the person is not in, a malformed value or a repeated parameter is a 404, and the snapshot is intersected with what they can open anyway; the Focus widget needs a team; an unknown widget is a 404 (tested)",
 };
 

@@ -1,8 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { OnEvent } from "@nestjs/event-emitter";
 import { PUSH_LANDED, REPOSITORY_CHANGED, type PushLanded, type RepositoryChanged } from "../github/index";
-import { upsertNode } from "./graph";
-import { land } from "./sync";
+import { FreshnessService } from "./freshness.service";
+import { GraphService } from "./graph.service";
 
 type NodeStatus = "planned" | "building" | "live" | "deprecated";
 const LIFECYCLE_STATUS: Record<RepositoryChanged["repository"]["lifecycle"], NodeStatus> = { live: "live", being_replaced: "deprecated", planned: "planned", retired: "deprecated" };
@@ -13,10 +13,15 @@ const LIFECYCLE_STATUS: Record<RepositoryChanged["repository"]["lifecycle"], Nod
  */
 @Injectable()
 export class MapListeners {
+  constructor(
+    @Inject(GraphService) private readonly graph: GraphService,
+    @Inject(FreshnessService) private readonly freshness: FreshnessService,
+  ) {}
+
   /** A repository has a system node on the map. */
   @OnEvent(REPOSITORY_CHANGED, { suppressErrors: false })
   async onRepositoryChanged({ actor, teamId, repository }: RepositoryChanged) {
-    await upsertNode(actor, teamId, {
+    await this.graph.upsertNode(actor, teamId, {
       name: repository.displayName,
       layer: "system",
       kind: "service",
@@ -29,6 +34,6 @@ export class MapListeners {
   /** Files pushed to a connected repository's default branch land on the map. */
   @OnEvent(PUSH_LANDED, { suppressErrors: false })
   async onPushLanded({ actor, teamKey, sha, branch, files, repository }: PushLanded) {
-    await land(actor, teamKey, { sha, branch, files, repository });
+    await this.freshness.land(actor, teamKey, { sha, branch, files, repository });
   }
 }
