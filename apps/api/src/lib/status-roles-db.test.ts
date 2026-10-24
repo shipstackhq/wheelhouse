@@ -16,7 +16,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
 import * as svc from "./service";
-import { summary } from "./metrics";
+import { summary } from "../modules/dashboard/metrics";
 import { briefing } from "../modules/map/briefing";
 
 let human: Actor;

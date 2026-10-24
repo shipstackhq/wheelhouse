@@ -20,5 +20,5 @@ export * from "../modules/github/repositories";
 export * from "../modules/map/freshness";
 export * from "../modules/map/decisions";
 export * from "./service-queue";
-export * from "./service-checklist";
+export * from "../modules/dashboard/checklist";
 export * from "../modules/docs/docs";

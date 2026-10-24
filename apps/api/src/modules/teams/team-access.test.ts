@@ -19,7 +19,7 @@ import type { WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { acceptInvite, createInvite, listInvites, type Issuer } from "../auth/invites";
 import { removeMember, updateMember } from "../auth/members";
-import * as metrics from "../../lib/metrics";
+import * as metrics from "../dashboard/metrics";
 import { effectiveRole, roleAllows, roleOnTeam, visibleTeamIds } from "./team-access";
 import * as pmem from "./team-members";
 import { scopeKeyToAllTeams } from "../auth/key-scope";

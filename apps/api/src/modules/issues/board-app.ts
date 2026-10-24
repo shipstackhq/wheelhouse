@@ -6,7 +6,7 @@ import { withCycle, withLabels } from "./links";
 import { cycleOptions, type CycleOption } from "./cycles";
 import { projectsOfTeam, type TeamProjectOption } from "./projects";
 import { ServiceError } from "../../lib/service";
-import type { ChecklistState } from "../../lib/setup-checklist";
+import type { ChecklistState } from "../dashboard/setup-checklist";
 import type { IssueRelative } from "./sub-issues";
 /**
  * What the web app's board and issue dialog read and write (WH-96), as functions of the signed-in person. The API's controllers

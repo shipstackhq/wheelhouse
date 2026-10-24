@@ -32,7 +32,7 @@ import * as members from "../apps/api/src/modules/auth/members";
 import { runTool, tools } from "../apps/api/src/lib/tools";
 import { askMap } from "../apps/api/src/modules/map/ask";
 import { briefing, issueContext } from "../apps/api/src/modules/map/briefing";
-import * as metrics from "../apps/api/src/lib/metrics";
+import * as metrics from "../apps/api/src/modules/dashboard/metrics";
 import { resolveDraft } from "../apps/api/src/modules/map/sync";
 import * as sync from "../apps/api/src/modules/map/sync";
 
@@ -828,9 +828,9 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/teams/team-members.ts": "every query starts from requireTeam(actor, key, need), which answers not_found for a team the person is not a member of (ADR-23); the workspace-wide views (all team names, the audit log) are for workspace owners and admins and filter by the caller's workspace id (tested in team-access.test.ts and over HTTP)",
   "apps/api/src/modules/teams/team-lifecycle.ts": "every action starts from requireTeam(actor, key, admin) (not_found for a team of another workspace or one the person is not in, 403 for a non-admin) and runs inside a transaction that locks the workspace's teams; a parent is resolved with findWorkspaceTeam in the actor's workspace and must be one the person can open (ADR-23, so the hierarchy grants no access); candidates and children are filtered to the teams the person can open, and teams they cannot open are only counted (tested in team-lifecycle.test.ts)",
   "apps/api/src/platform/streams/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
-  "apps/api/src/lib/metrics.ts": "everything derived from the caller's workspace's team ids",
+  "apps/api/src/modules/dashboard/metrics.ts": "everything derived from the caller's workspace's team ids",
   "apps/api/src/modules/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
-  "apps/api/src/lib/service-checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/dashboard/checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/docs/docs.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",

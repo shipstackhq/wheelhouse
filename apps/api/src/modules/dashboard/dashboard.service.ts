@@ -1,8 +1,8 @@
-import { Controller, Get, Param, Query, Req, UseGuards } from "@nestjs/common";
-import * as m from "../lib/metrics";
-import { requireTeam, ServiceError } from "../lib/service";
-import type { Actor } from "../common/actor";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
+import { Injectable } from "@nestjs/common";
+import type { Actor } from "../../common/actor";
+import { ServiceError } from "../../common/service-error";
+import { requireTeam } from "../teams/teams";
+import * as m from "./metrics";
 
 /**
  * One endpoint per dashboard widget, so each paints as soon as its own data arrives. All of them read the signed-in person's
@@ -26,21 +26,18 @@ const TEAM_ONLY: Record<string, (actor: Actor, teamId: string) => Promise<unknow
   focus: m.teamFocus,
 };
 
-@Controller("api/app/dashboard")
-@AppEndpoints()
-@UseGuards(SessionGuard)
-export class DashboardController {
-  @Get(":widget")
-  async widget(@Req() req: SessionRequest, @Param("widget") widget: string, @Query("team") team?: string) {
-    // The team is resolved through requireTeam: another workspace's, or one the person is not in, is a plain 404.
+@Injectable()
+export class DashboardService {
+  /** One widget's data. The team is resolved through requireTeam: another workspace's, or one the person is not in, is a plain 404. */
+  async widget(actor: Actor, widget: string, team?: string) {
     if (team !== undefined && typeof team !== "string") throw new ServiceError("not_found", "Team not found"); // ?team=A&team=B
-    const scoped = team ? (await requireTeam(req.human.actor, team)).id : undefined;
+    const scoped = team ? (await requireTeam(actor, team)).id : undefined;
     if (Object.hasOwn(TEAM_ONLY, widget)) {
       if (!scoped) throw new ServiceError("not_found", "That widget needs a team");
-      return TEAM_ONLY[widget](req.human.actor, scoped);
+      return TEAM_ONLY[widget](actor, scoped);
     }
     const load = Object.hasOwn(WIDGETS, widget) ? WIDGETS[widget] : null;
     if (!load) throw new ServiceError("not_found", "Unknown dashboard widget");
-    return load(req.human.actor, scoped);
+    return load(actor, scoped);
   }
 }

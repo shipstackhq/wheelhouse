@@ -17,7 +17,7 @@ import type { Actor } from "../common/actor";
 import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
 import * as svc from "./service";
 import { runTool } from "./tools";
-import { agentQueues } from "./metrics";
+import { agentQueues } from "../modules/dashboard/metrics";
 import { briefing } from "../modules/map/briefing";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
 

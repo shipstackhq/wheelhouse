@@ -1,9 +1,9 @@
 import { CLOSED_ROLES, idsWithRole, idsWithRoles } from "@wheelhouse/shared/status-roles";
 import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "../common/actor";
-import { roleOnTeam, visibleTeamIds } from "../modules/teams/team-access";
-import { queueStatus } from "./service";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../common/actor";
+import { roleOnTeam, visibleTeamIds } from "../teams/team-access";
+import { queueStatus } from "../../lib/service";
 import type { SessionView } from "@wheelhouse/shared/session-buckets";
 
 /**

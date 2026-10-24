@@ -1,8 +1,8 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "../common/actor";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../common/actor";
 import { checklistStatus, type ChecklistState } from "./setup-checklist";
-import { requireTeam } from "../modules/teams/teams";
+import { requireTeam } from "../teams/teams";
 
 const { nodes, workSessions, repositories } = schema;
 
