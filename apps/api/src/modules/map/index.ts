@@ -7,4 +7,5 @@ export { SessionsService } from "./sessions.service";
 export { AskService } from "./ask.service";
 export { anchorScore, anchoredBy, ACTIVE_SESSION_MS, normPath } from "./map.rules";
 export type { NodeRow } from "./map.repository";
-export { getGraph, landedHashesFor, maybeDraftDoc, noteIssueActivity, resolveNode, upsertNode } from "./map.legacy";
+export { getGraph, landedHashesFor, noteIssueActivity, resolveNode, upsertNode } from "./map.legacy";
+export { CHANGES_REPORTED, FILES_LANDED, SESSION_SYNCED, type ChangesReported, type ChangesReportedResult, type FilesLanded, type FilesLandedResult, type SessionSynced } from "./map.events";

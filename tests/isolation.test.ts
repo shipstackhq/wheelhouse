@@ -31,7 +31,8 @@ import { createRepository, findOrCreateRepository, listRepositories, retireRepos
 import { linkIssueNode } from "../apps/api/src/modules/issues/issues.legacy";
 import { addComment, createIssue, getIssue, updateIssue } from "../apps/api/src/modules/issues/issues.legacy";
 import { upsertDecision, upsertTerm } from "../apps/api/src/modules/map/map.legacy";
-import { listStaleDocs, reportChanges } from "../apps/api/src/modules/map/map.legacy";
+import { reportChanges } from "../apps/api/src/modules/map/map.legacy";
+import { listStaleDocs, resolveDocDraft } from "../apps/api/src/modules/docs/docs.legacy";
 import { upsertEdge, upsertFlow, upsertNode } from "../apps/api/src/modules/map/map.legacy";
 import { createTeam, deleteTeam, requireTeam } from "../apps/api/src/modules/teams/teams.legacy";
 import { scopeKeyToAllTeams } from "../apps/api/src/modules/auth/auth.legacy";
@@ -614,7 +615,7 @@ describe("doc staleness (WH-64) never crosses workspaces", () => {
     await reportChanges(A.owner, A.teamKey, { files: ["src/shared/y.ts"] });
     const before = await fingerprint(A);
     await assert.rejects(markDocFresh(B.owner, A.teamKey, aDoc.id), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
-    await assert.rejects(sync.resolveDocDraft(B.owner, A.teamKey, crypto.randomUUID(), "publish"), ServiceError);
+    await assert.rejects(resolveDocDraft(B.owner, A.teamKey, crypto.randomUUID(), "publish"), ServiceError);
     const bStale = await listStaleDocs(B.owner, B.teamKey);
     assert.ok(!JSON.stringify(bStale).includes(aDoc.id));
     const { doc: stillStale } = await getDoc(A.owner, A.teamKey, aDoc.id);

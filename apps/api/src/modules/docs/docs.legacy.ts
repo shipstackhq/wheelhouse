@@ -1,3 +1,4 @@
+import type { DocFreshnessService } from "./doc-freshness.service";
 import type { DocsService } from "./docs.service";
 
 /**
@@ -6,22 +7,28 @@ import type { DocsService } from "./docs.service";
  * built, so nothing works before the application has booted (tests call `testApp()`). Delete this file when the last caller moves to
  * the service (the MCP redesign moves the tools).
  */
-let live: DocsService | undefined;
+type Live = { docs: DocsService; freshness: DocFreshnessService };
+let live: Live | undefined;
 
-export function bindDocsLegacy(docs: DocsService) {
-  live = docs;
+export function bindDocsLegacy(docs: DocsService, freshness: DocFreshnessService) {
+  live = { docs, freshness };
 }
-const s = (): DocsService => live ?? (() => { throw new Error("The docs module is not booted: start the Nest application (tests: await testApp()) before calling the legacy functions"); })();
+const s = (): Live => live ?? (() => { throw new Error("The docs module is not booted: start the Nest application (tests: await testApp()) before calling the legacy functions"); })();
 
-export const createDoc = (...a: Parameters<DocsService["createDoc"]>) => s().createDoc(...a);
-export const getDoc = (...a: Parameters<DocsService["getDoc"]>) => s().getDoc(...a);
-export const listDocs = (...a: Parameters<DocsService["listDocs"]>) => s().listDocs(...a);
-export const updateDoc = (...a: Parameters<DocsService["updateDoc"]>) => s().updateDoc(...a);
-export const markDocFresh = (...a: Parameters<DocsService["markDocFresh"]>) => s().markDocFresh(...a);
-export const moveDoc = (...a: Parameters<DocsService["moveDoc"]>) => s().moveDoc(...a);
-export const deleteDoc = (...a: Parameters<DocsService["deleteDoc"]>) => s().deleteDoc(...a);
-export const linkDocNode = (...a: Parameters<DocsService["linkDocNode"]>) => s().linkDocNode(...a);
-export const searchDocs = (...a: Parameters<DocsService["searchDocs"]>) => s().searchDocs(...a);
-export const suggestDocAnchors = (...a: Parameters<DocsService["suggestDocAnchors"]>) => s().suggestDocAnchors(...a);
-export const listDocTemplates = (...a: Parameters<DocsService["listDocTemplates"]>) => s().listDocTemplates(...a);
-export const listDocsIndex = (...a: Parameters<DocsService["listDocsIndex"]>) => s().listDocsIndex(...a);
+export const createDoc = (...a: Parameters<DocsService["createDoc"]>) => s().docs.createDoc(...a);
+export const getDoc = (...a: Parameters<DocsService["getDoc"]>) => s().docs.getDoc(...a);
+export const listDocs = (...a: Parameters<DocsService["listDocs"]>) => s().docs.listDocs(...a);
+export const updateDoc = (...a: Parameters<DocsService["updateDoc"]>) => s().docs.updateDoc(...a);
+export const markDocFresh = (...a: Parameters<DocsService["markDocFresh"]>) => s().docs.markDocFresh(...a);
+export const moveDoc = (...a: Parameters<DocsService["moveDoc"]>) => s().docs.moveDoc(...a);
+export const deleteDoc = (...a: Parameters<DocsService["deleteDoc"]>) => s().docs.deleteDoc(...a);
+export const linkDocNode = (...a: Parameters<DocsService["linkDocNode"]>) => s().docs.linkDocNode(...a);
+export const searchDocs = (...a: Parameters<DocsService["searchDocs"]>) => s().docs.searchDocs(...a);
+export const suggestDocAnchors = (...a: Parameters<DocsService["suggestDocAnchors"]>) => s().docs.suggestDocAnchors(...a);
+export const listDocTemplates = (...a: Parameters<DocsService["listDocTemplates"]>) => s().docs.listDocTemplates(...a);
+export const listDocsIndex = (...a: Parameters<DocsService["listDocsIndex"]>) => s().docs.listDocsIndex(...a);
+
+// freshness and drafts
+export const listStaleDocs = (...a: Parameters<DocFreshnessService["listStaleDocs"]>) => s().freshness.listStaleDocs(...a);
+export const listDocDrafts = (...a: Parameters<DocFreshnessService["listDocDrafts"]>) => s().freshness.listDocDrafts(...a);
+export const resolveDocDraft = (...a: Parameters<DocFreshnessService["resolveDocDraft"]>) => s().freshness.resolveDocDraft(...a);

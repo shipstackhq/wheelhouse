@@ -3,10 +3,10 @@ import { CLOSED_ROLES } from "@wheelhouse/shared/status-roles";
 import { timeAgo } from "@wheelhouse/shared/time";
 import type { Actor } from "../../common/actor";
 import { getChanges } from "../../lib/service-queue";
-import { DocsService } from "../docs/index";
+import { DocFreshnessService, DocsService } from "../docs/index";
 import { RepositoriesService } from "../github/index";
 import { IssuesService } from "../issues/index";
-import { FreshnessService, GraphService, type NodeRow } from "../map/index";
+import { GraphService, type NodeRow } from "../map/index";
 import { ChecklistService } from "./checklist.service";
 import { budgeted, clip, firstLine } from "./dashboard.rules";
 import { checklistBriefingLine } from "./setup-checklist";
@@ -21,9 +21,9 @@ import { checklistBriefingLine } from "./setup-checklist";
 export class BriefingService {
   constructor(
     @Inject(GraphService) private readonly graph: GraphService,
-    @Inject(FreshnessService) private readonly freshness: FreshnessService,
     @Inject(IssuesService) private readonly issues: IssuesService,
     @Inject(DocsService) private readonly docs: DocsService,
+    @Inject(DocFreshnessService) private readonly docFreshness: DocFreshnessService,
     @Inject(RepositoriesService) private readonly repositories: RepositoriesService,
     @Inject(ChecklistService) private readonly checklist: ChecklistService,
   ) {}
@@ -36,7 +36,7 @@ export class BriefingService {
       this.repositories.listRepositories(actor, teamRef),
       this.checklist.forTeam(actor, teamRef),
       this.docs.listDocsIndex(actor, teamRef),
-      this.freshness.listStaleDocs(actor, teamRef),
+      this.docFreshness.listStaleDocs(actor, teamRef),
     ]);
     const p = g.team;
     const byId = new Map(g.nodes.map((n) => [n.id, n]));

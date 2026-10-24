@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { pruneSessions } from "../../lib/service-queue";
@@ -6,12 +7,11 @@ import { Database } from "../../platform/database/database";
 import { EventsService } from "../../platform/events/events.service";
 import { RepositoriesService } from "../github/index";
 import { TeamAccessService } from "../teams/index";
-import type { DocRow, DocUpdateInput } from "../docs/index";
 import { ACTIVE_SESSION_MS, anchoredBy, bestMatches, normPath, type NodeInput } from "./map.rules";
+import { SESSION_SYNCED, type SessionSynced } from "./map.events";
 import { MapRepository, type NodeRow, type SessionRow } from "./map.repository";
 
 const EXPLAINER_KEYS = ["summary", "purpose", "responsibilities", "interfaces", "gotchas", "details", "columns", "indexes", "anchors", "status"] as const;
-const DOC_PATCH_KEYS = ["title", "body", "anchors"] as const;
 
 export type Session = SessionRow;
 
@@ -30,9 +30,9 @@ export type SessionReport = {
 /**
  * Deterministic sync between working copies and Wheelhouse. Clients (the wheelhouse CLI, driven by Claude Code hooks and git hooks)
  * report facts: which files a session touched and their content hashes. This service turns them into "in flux" nodes (anchored files
- * changed in an active session, not landed), drafts (map and doc updates written against unlanded code, published on landing by the
- * freshness service) and session debt (what a session still owes: an issue update, map updates). Board state is never deferred; only
- * map explanations wait for landed code.
+ * changed in an active session, not landed), drafts (map updates written against unlanded code, published on landing by the
+ * freshness service; the docs module keeps the doc drafts) and session debt (what a session still owes: an issue update, map
+ * updates). Board state is never deferred; only map explanations wait for landed code.
  */
 @Injectable()
 export class SessionsService {
@@ -42,6 +42,7 @@ export class SessionsService {
     @Inject(TeamAccessService) private readonly access: TeamAccessService,
     @Inject(EventsService) private readonly events: EventsService,
     @Inject(RepositoriesService) private readonly repositories: RepositoriesService,
+    @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
   ) {}
 
   // ───────── sessions ─────────
@@ -101,16 +102,8 @@ export class SessionsService {
         if (!n || !anchoredBy(n, touched, repo?.slug).length) await this.repo.updateNodeDraft(d.id, { status: "discarded", updatedAt: new Date() });
       }
     }
-    // Same for doc drafts (WH-64).
-    const docDraftRows = await this.repo.pendingDocDraftsOfSession(r.session);
-    if (docDraftRows.length) {
-      const ds = await this.repo.liveDocsOf(team.id);
-      const touched = Object.keys(files);
-      for (const d of docDraftRows) {
-        const doc = ds.find((x) => x.id === d.docId);
-        if (!doc || !anchoredBy(doc, touched, repo?.slug).length) await this.repo.updateDocDraft(d.id, { status: "discarded", updatedAt: new Date() });
-      }
-    }
+    // Same for doc drafts (WH-64): the docs module discards the ones this session no longer has in flux.
+    await this.emitter.emitAsync(SESSION_SYNCED, { teamId: team.id, sessionId: r.session, touched: Object.keys(files), repository: repo?.slug } satisfies SessionSynced);
     return { ok: true, inFlux: Object.keys(files).length };
   }
 
@@ -129,8 +122,9 @@ export class SessionsService {
     await this.repo.updateSession(s.id, { issueId, lastSeenAt: new Date() });
   }
 
-  async sessionsForTeam(teamId: string) {
-    return this.repo.activeSessions(teamId, ACTIVE_SESSION_MS);
+  /** The team's sessions that are open and recently seen, all of them or just one key's. */
+  async sessionsForTeam(teamId: string, keyId?: string) {
+    return this.repo.activeSessions(teamId, ACTIVE_SESSION_MS, keyId);
   }
 
   // ───────── node drafts ─────────
@@ -184,61 +178,6 @@ export class SessionsService {
   async listDrafts(actor: Actor, teamRef: string) {
     const team = await this.access.require(actor, teamRef);
     return this.repo.pendingNodeDraftsOf(team.id);
-  }
-
-  // ───────── doc drafts (WH-64) ─────────
-  // Mirrors the node draft flow exactly: an agent session editing a doc whose anchored files are in flux (changed in that session, not
-  // yet landed) gets the edit stored as a draft, published when land() processes those files.
-
-  /** If this agent has an active session changing the doc's anchored files, return it. */
-  private async fluxSessionForDoc(actor: Actor, doc: DocRow) {
-    if (actor.kind !== "agent" || !doc.anchors.length) return null;
-    const sessions = await this.repo.activeSessions(doc.teamId, ACTIVE_SESSION_MS, actor.id);
-    return sessions.find((s) => anchoredBy(doc, Object.keys(s.files)).length) ?? null;
-  }
-
-  /**
-   * Called by updateDoc for agent edits to existing docs. When the agent's own session has the doc's anchored code in flux, the update
-   * is stored as a draft and published when that code lands, so the shared doc never describes code that hasn't merged.
-   */
-  async maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateInput) {
-    const patch: Record<string, unknown> = {};
-    for (const k of DOC_PATCH_KEYS) if (input[k] !== undefined) patch[k] = input[k];
-    const confirm = !!input.markFresh && !Object.keys(patch).length;
-    if (!Object.keys(patch).length && !confirm) return null;
-    const session = await this.fluxSessionForDoc(actor, doc);
-    if (!session) return null;
-    const d = await this.repo.pendingDocDraft(doc.id, session.id);
-    if (d) {
-      await this.repo.updateDocDraft(d.id, { patch: { ...d.patch, ...patch }, confirm: d.confirm && confirm, updatedAt: new Date() });
-    } else {
-      await this.repo.insertDocDraft({
-        teamId: doc.teamId,
-        workspaceId: doc.workspaceId,
-        docId: doc.id,
-        sessionId: session.id,
-        authorName: actor.name,
-        authorKind: actor.kind,
-        patch,
-        confirm,
-      });
-    }
-    await this.events.emit(actor, doc.teamId, {
-      type: "doc.drafted",
-      entity: "doc",
-      entityId: doc.id,
-      summary: `drafted ${confirm ? "a confirmation of" : "an update to"} doc "${doc.title}" (publishes when the code lands)`,
-      data: { title: doc.title, slug: doc.slug, fields: Object.keys(patch) },
-    });
-    return {
-      draft: true,
-      note: "Saved as a draft: this session's changes to the doc's anchored files haven't landed on the default branch yet. It publishes automatically when they do.",
-    };
-  }
-
-  async listDocDrafts(actor: Actor, teamRef: string) {
-    const team = await this.access.require(actor, teamRef);
-    return this.repo.pendingDocDraftsOf(team.id);
   }
 
   // ───────── debt ─────────

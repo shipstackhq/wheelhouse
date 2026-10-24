@@ -23,7 +23,7 @@ import { anchorScore } from "../map/map.rules";
 import { reportChanges } from "../map/map.legacy";
 import { upsertNode } from "../map/map.legacy";
 import { createTeam, requireTeam } from "../teams/teams.legacy";
-import { createDoc, deleteDoc, getDoc, linkDocNode, listDocs, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "./docs.legacy";
+import { createDoc, deleteDoc, getDoc, linkDocNode, listDocDrafts, listDocs, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "./docs.legacy";
 import { extractPathTokens } from "./docs.rules";
 import { runTool } from "../../lib/tools";
 import * as sync from "../map/map.legacy";
@@ -402,7 +402,7 @@ describe("drafts (WH-64): an agent session editing a doc for unlanded code gets 
     const { doc: stillOriginal } = await getDoc(human, teamKey, d.id);
     assert.equal(stillOriginal.body, "original", "the shared doc is untouched while the code is still in flux");
 
-    const pending = await sync.listDocDrafts(human, teamKey);
+    const pending = await listDocDrafts(human, teamKey);
     assert.ok(pending.some((p) => p.docId === d.id && p.status === "pending"));
 
     // The code lands: the draft publishes automatically.

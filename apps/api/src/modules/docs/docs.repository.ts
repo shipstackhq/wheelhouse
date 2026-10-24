@@ -2,14 +2,14 @@ import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
-import { landedHashesFor, resolveNode } from "../map/index";
 
-const { nodes, events, docs, docNodes, apiKeys, users, memberships } = schema;
+const { nodes, events, docs, docDrafts, docNodes, apiKeys, users, memberships } = schema;
 
 export type DocRow = typeof docs.$inferSelect;
+export type DocDraftRow = typeof docDrafts.$inferSelect;
 
 /**
- * Every query on the docs area's tables (docs, doc nodes, and the reads the page needs from keys, users, memberships, nodes and the
+ * Every query on the docs area's tables (docs, doc nodes, doc drafts, and the reads the page needs from keys, users, memberships, nodes and the
  * event log), and the only file in the module that touches Drizzle. Each method reads `this.db.q`, so it runs on the current transaction
  * when the service opened one. It decides nothing: the rules are in the service.
  */
@@ -39,17 +39,7 @@ export class DocsRepository {
     return owner?.name;
   }
 
-  // ───────── map nodes (read by the docs; resolved by the map module) ─────────
-
-  /** A map node of the team by uuid or name, as the map resolves it. */
-  resolveNode(teamId: string, ref: string) {
-    return resolveNode(this.db.q, teamId, ref);
-  }
-
-  /** The content hashes of the anchored files as they have landed. */
-  landedHashes(teamId: string, anchors: string[]) {
-    return landedHashesFor(this.db.q, teamId, anchors);
-  }
+  // ───────── map nodes (read by the docs; resolved by the map module's service) ─────────
 
   nodesLinkedTo(docId: string) {
     return this.db.q.select({ id: nodes.id, name: nodes.name, kind: nodes.kind, layer: nodes.layer }).from(docNodes).innerJoin(nodes, eq(nodes.id, docNodes.nodeId)).where(eq(docNodes.docId, docId));
@@ -216,5 +206,59 @@ export class DocsRepository {
       .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), sql`${vector} @@ ${tsq}`))
       .orderBy(desc(sql`ts_rank(${vector}, ${tsq})`))
       .limit(50);
+  }
+
+  // ───────── freshness ─────────
+
+  /** Every live doc of the team, whole rows (the freshness rules match their anchors). */
+  liveDocRows(teamId: string) {
+    return this.db.q.select().from(docs).where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt)));
+  }
+
+  /** Docs flagged stale, with the reason and the anchors to re-read. */
+  staleDocsOf(teamId: string) {
+    return this.db.q
+      .select({ id: docs.id, slug: docs.slug, title: docs.title, reason: docs.staleReason, anchors: docs.anchors })
+      .from(docs)
+      .where(and(eq(docs.teamId, teamId), eq(docs.stale, true), isNull(docs.deletedAt)));
+  }
+
+  async updateDocFreshness(id: string, set: Partial<typeof docs.$inferInsert>) {
+    await this.db.q.update(docs).set(set).where(eq(docs.id, id));
+  }
+
+  // ───────── doc drafts (the flow mirrors the map's node drafts) ─────────
+
+  pendingDocDraftsOfSession(sessionId: string) {
+    return this.db.q.select().from(docDrafts).where(and(eq(docDrafts.sessionId, sessionId), eq(docDrafts.status, "pending")));
+  }
+
+  pendingDocDraftsOf(teamId: string) {
+    return this.db.q.select().from(docDrafts).where(and(eq(docDrafts.teamId, teamId), eq(docDrafts.status, "pending"))).orderBy(asc(docDrafts.createdAt));
+  }
+
+  pendingDocDraftsFor(docIds: string[]) {
+    return this.db.q.select().from(docDrafts).where(and(inArray(docDrafts.docId, docIds), eq(docDrafts.status, "pending"))).orderBy(asc(docDrafts.createdAt));
+  }
+
+  async pendingDocDraft(docId: string, sessionId: string): Promise<DocDraftRow | undefined> {
+    const [d] = await this.db.q
+      .select()
+      .from(docDrafts)
+      .where(and(eq(docDrafts.docId, docId), eq(docDrafts.sessionId, sessionId), eq(docDrafts.status, "pending")));
+    return d;
+  }
+
+  async findPendingDocDraft(teamId: string, id: string): Promise<DocDraftRow | undefined> {
+    const [d] = await this.db.q.select().from(docDrafts).where(and(eq(docDrafts.id, id), eq(docDrafts.teamId, teamId), eq(docDrafts.status, "pending")));
+    return d;
+  }
+
+  async insertDocDraft(values: typeof docDrafts.$inferInsert) {
+    await this.db.q.insert(docDrafts).values(values);
+  }
+
+  async updateDocDraft(id: string, set: Partial<typeof docDrafts.$inferInsert>) {
+    await this.db.q.update(docDrafts).set(set).where(eq(docDrafts.id, id));
   }
 }

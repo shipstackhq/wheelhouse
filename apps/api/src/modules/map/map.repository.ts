@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gt, gte, inArray, isNull, notInArray, sql } from "d
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 
-const { nodes, edges, flows, decisions, decisionNodes, terms, nodeDrafts, workSessions, teamFiles, issueNodes, issues, events, docs, docDrafts, repositories } = schema;
+const { nodes, edges, flows, decisions, decisionNodes, terms, nodeDrafts, workSessions, teamFiles, issueNodes, issues, events, repositories } = schema;
 
 export type NodeRow = typeof nodes.$inferSelect;
 export type NodeInsert = typeof nodes.$inferInsert;
@@ -13,14 +13,12 @@ export type DecisionRow = typeof decisions.$inferSelect;
 export type TermRow = typeof terms.$inferSelect;
 export type SessionRow = typeof workSessions.$inferSelect;
 export type NodeDraftRow = typeof nodeDrafts.$inferSelect;
-export type DocDraftRow = typeof docDrafts.$inferSelect;
-export type DocRow = typeof docs.$inferSelect;
 type TeamRef = { id: string; workspaceId: string };
 
 /**
  * Every query on the map's tables (nodes, edges, flows, decisions, decision_nodes, terms, node_drafts, work_sessions) and on the rows
- * the map reads or writes next to them: the files that landed (team_files), the docs and doc drafts that follow the same freshness
- * rules, and, as read-only lookups, issues, issue_nodes and the event log. The only file in the module that touches Drizzle. Each
+ * the map reads or writes next to them: the files that landed (team_files), a repository's last activity, and, as read-only lookups,
+ * issues, issue_nodes and the event log. The only file in the module that touches Drizzle. Each
  * method reads `this.db.q`, so it runs on the current transaction when a service opened one. It decides nothing: the rules are in the services.
  */
 @Injectable()
@@ -302,23 +300,6 @@ export class MapRepository {
     await this.db.q.delete(teamFiles).where(and(eq(teamFiles.teamId, teamId), eq(teamFiles.path, path)));
   }
 
-  // ───────── docs (they follow the map's freshness rules; the docs module owns the tables) ─────────
-
-  liveDocsOf(teamId: string) {
-    return this.db.q.select().from(docs).where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt)));
-  }
-
-  staleDocsOf(teamId: string) {
-    return this.db.q
-      .select({ id: docs.id, slug: docs.slug, title: docs.title, reason: docs.staleReason, anchors: docs.anchors })
-      .from(docs)
-      .where(and(eq(docs.teamId, teamId), eq(docs.stale, true), isNull(docs.deletedAt)));
-  }
-
-  async updateDocFreshness(id: string, set: Partial<typeof docs.$inferInsert>) {
-    await this.db.q.update(docs).set(set).where(eq(docs.id, id));
-  }
-
   /** A repository saw activity now (the github module owns the table). */
   async touchRepository(id: string) {
     await this.db.q.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, id));
@@ -402,41 +383,6 @@ export class MapRepository {
       .from(nodeDrafts)
       .where(and(inArray(nodeDrafts.nodeId, nodeIds), eq(nodeDrafts.sessionId, sessionId), eq(nodeDrafts.status, "pending")));
     return rows.map((d) => d.nodeId);
-  }
-
-  // ───────── doc drafts (the docs module owns the table; the flow mirrors node drafts) ─────────
-
-  pendingDocDraftsOfSession(sessionId: string) {
-    return this.db.q.select().from(docDrafts).where(and(eq(docDrafts.sessionId, sessionId), eq(docDrafts.status, "pending")));
-  }
-
-  pendingDocDraftsOf(teamId: string) {
-    return this.db.q.select().from(docDrafts).where(and(eq(docDrafts.teamId, teamId), eq(docDrafts.status, "pending"))).orderBy(asc(docDrafts.createdAt));
-  }
-
-  pendingDocDraftsFor(docIds: string[]) {
-    return this.db.q.select().from(docDrafts).where(and(inArray(docDrafts.docId, docIds), eq(docDrafts.status, "pending"))).orderBy(asc(docDrafts.createdAt));
-  }
-
-  async pendingDocDraft(docId: string, sessionId: string): Promise<DocDraftRow | undefined> {
-    const [d] = await this.db.q
-      .select()
-      .from(docDrafts)
-      .where(and(eq(docDrafts.docId, docId), eq(docDrafts.sessionId, sessionId), eq(docDrafts.status, "pending")));
-    return d;
-  }
-
-  async findPendingDocDraft(teamId: string, id: string): Promise<DocDraftRow | undefined> {
-    const [d] = await this.db.q.select().from(docDrafts).where(and(eq(docDrafts.id, id), eq(docDrafts.teamId, teamId), eq(docDrafts.status, "pending")));
-    return d;
-  }
-
-  async insertDocDraft(values: typeof docDrafts.$inferInsert) {
-    await this.db.q.insert(docDrafts).values(values);
-  }
-
-  async updateDocDraft(id: string, set: Partial<typeof docDrafts.$inferInsert>) {
-    await this.db.q.update(docDrafts).set(set).where(eq(docDrafts.id, id));
   }
 
   // ───────── issues and the event log (read-only lookups for a session's debt) ─────────

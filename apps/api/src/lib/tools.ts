@@ -626,7 +626,7 @@ For enums, list each value as a column (name only). Set \`anchors\` to the schem
     description: "Pending doc drafts: edits/confirmations written against anchored code that hasn't landed on the default branch yet. They publish automatically when it lands.",
     readOnly: true,
     input: z.object({ project }),
-    run: (a, i) => sync.listDocDrafts(a, i.project),
+    run: (a, i) => svc.listDocDrafts(a, i.project),
   }),
 
   list_doc_templates: tool({

@@ -1,14 +1,15 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 import { EventsService } from "../../platform/events/events.service";
-import { updateDoc, type DocRow, type DocUpdateInput } from "../docs/index";
 import { RepositoriesService } from "../github/index";
 import { TeamAccessService } from "../teams/index";
 import { ACTIVE_SESSION_MS, anchorScore, anchoredBy, bestMatches, normPath, type Layer, type NodeInput } from "./map.rules";
-import { MapRepository, type DocDraftRow, type NodeDraftRow, type NodeRow } from "./map.repository";
+import { CHANGES_REPORTED, FILES_LANDED, type ChangesReported, type ChangesReportedResult, type FilesLanded, type FilesLandedResult } from "./map.events";
+import { MapRepository, type NodeDraftRow, type NodeRow } from "./map.repository";
 import { GraphService } from "./graph.service";
 
 export type LandReport = {
@@ -23,9 +24,10 @@ export type LandReport = {
 };
 
 /**
- * Freshness: what keeps the map's (and the docs') explanations honest. Reported changes mark the most specifically anchored nodes and
- * docs stale; landing (a push to the default branch) records the files' hashes, publishes the drafts agents wrote against that code and
- * flags drift where no draft exists. Every method resolves the team through TeamAccessService.
+ * Freshness: what keeps the map's explanations honest. Reported changes mark the most specifically anchored nodes stale; landing (a push
+ * to the default branch) records the files' hashes, publishes the drafts agents wrote against that code and flags drift where no draft
+ * exists. The docs follow the same rules in the docs module, which hears about reports and landings through events (map.events.ts).
+ * Every method resolves the team through TeamAccessService.
  */
 @Injectable()
 export class FreshnessService {
@@ -36,6 +38,7 @@ export class FreshnessService {
     @Inject(EventsService) private readonly events: EventsService,
     @Inject(RepositoriesService) private readonly repositories: RepositoriesService,
     @Inject(GraphService) private readonly graph: GraphService,
+    @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
   ) {}
 
   // ───────── reported changes ─────────
@@ -78,34 +81,15 @@ export class FreshnessService {
       if (input.sha && node.describedSha && (input.sha.startsWith(node.describedSha) || node.describedSha.startsWith(input.sha))) hits.delete(id);
     }
 
-    // Same pipeline for docs (WH-64): a doc anchored to a changed file is flagged, parallel to nodes.
-    // No per-layer "most specific" grouping here (docs aren't layered) — any anchor match flags the doc.
-    const allDocs = await this.repo.liveDocsOf(team.id);
-    const docHits = new Map<string, { doc: DocRow; files: string[] }>();
-    for (const f of files) {
-      for (const d of allDocs) {
-        if (!d.anchors.length) continue;
-        if (Math.max(0, ...d.anchors.map((a) => anchorScore(a, f, repo?.slug))) <= 0) continue;
-        const h = docHits.get(d.id) ?? { doc: d, files: [] };
-        h.files.push(f);
-        docHits.set(d.id, h);
-      }
-    }
-    for (const [id, { doc: d }] of docHits) {
-      if (input.sha && d.describedSha && (input.sha.startsWith(d.describedSha) || d.describedSha.startsWith(input.sha))) docHits.delete(id);
-    }
-
     return this.db.transaction(async () => {
       for (const { node, files: fs } of hits.values()) {
         const reason = `${fs.slice(0, 3).join(", ")}${fs.length > 3 ? ` +${fs.length - 3} more` : ""} changed${short ? ` in ${short}` : ""}${input.summary ? `: ${input.summary}` : ""}`;
         await this.repo.updateNode(node.id, { stale: true, staleSource: "report", staleReason: reason.slice(0, 500) });
       }
-      for (const { doc: d, files: fs } of docHits.values()) {
-        const reason = `${fs.slice(0, 3).join(", ")}${fs.length > 3 ? ` +${fs.length - 3} more` : ""} changed${short ? ` in ${short}` : ""}${input.summary ? `: ${input.summary}` : ""}`;
-        await this.repo.updateDocFreshness(d.id, { stale: true, staleSource: "report", staleReason: reason.slice(0, 500) });
-      }
+      // Same pipeline for docs (WH-64): the docs module flags the docs anchored to a changed file, parallel to nodes.
+      const [docs] = (await this.emitter.emitAsync(CHANGES_REPORTED, { actor, teamId: team.id, files, sha: input.sha, summary: input.summary, repository: repo?.slug } satisfies ChangesReported)) as (ChangesReportedResult | undefined)[];
       const marked = [...hits.values()].map(({ node, files: fs }) => ({ name: node.name, layer: node.layer, files: fs }));
-      const docsMarked = [...docHits.values()].map(({ doc: d, files: fs }) => ({ id: d.id, title: d.title, slug: d.slug, files: fs }));
+      const docsMarked = docs?.marked ?? [];
       await this.events.emit(actor, team.id, {
         type: "code.changed",
         entity: "team",
@@ -116,7 +100,7 @@ export class FreshnessService {
       if (repo) await this.repo.touchRepository(repo.id);
       const anchoredFiles = new Set<string>();
       for (const n of ns) for (const f of files) if (n.anchors.some((a) => anchorScore(a, f, repo?.slug))) anchoredFiles.add(f);
-      for (const d of allDocs) for (const f of files) if (d.anchors.some((a) => anchorScore(a, f, repo?.slug))) anchoredFiles.add(f);
+      for (const f of docs?.anchored ?? []) anchoredFiles.add(f);
       return {
         files: files.length,
         staleMarked: marked,
@@ -135,12 +119,6 @@ export class FreshnessService {
     return this.graph.upsertNode(actor, teamRef, { id: ref, markFresh: true, describedSha: sha });
   }
 
-  /** Docs flagged stale (their anchored code changed since last confirmed), with reason and anchors to re-read. */
-  async listStaleDocs(actor: Actor, teamRef: string) {
-    const team = await this.access.require(actor, teamRef);
-    return this.repo.staleDocsOf(team.id);
-  }
-
   // ───────── drafts ─────────
 
   /** Human action: publish or discard a pending draft now. */
@@ -155,20 +133,6 @@ export class FreshnessService {
 
   private async applyDraft(actor: Actor, teamId: string, d: NodeDraftRow, hashes?: Record<string, string>) {
     await this.graph.upsertNode(actor, teamId, { id: d.nodeId, ...(d.patch as NodeInput), markFresh: true, forcePublish: true, describedHashes: hashes });
-  }
-
-  /** Human action: publish or discard a pending doc draft now. */
-  async resolveDocDraft(actor: Actor, teamRef: string, draftId: string, action: "publish" | "discard") {
-    const team = await this.access.require(actor, teamRef, "edit");
-    const d = await this.repo.findPendingDocDraft(team.id, draftId);
-    if (!d) throw new ServiceError("not_found", "Draft not found or already resolved");
-    if (action === "publish") await this.applyDocDraft(actor, team.id, d);
-    await this.repo.updateDocDraft(d.id, { status: action === "publish" ? "published" : "discarded", updatedAt: new Date() });
-    return { ok: true };
-  }
-
-  private async applyDocDraft(actor: Actor, teamId: string, d: DocDraftRow, hashes?: Record<string, string>) {
-    await updateDoc(actor, teamId, d.docId, { ...(d.patch as DocUpdateInput), markFresh: true, forcePublish: true, describedHashes: hashes });
   }
 
   // ───────── landing ─────────
@@ -205,26 +169,11 @@ export class FreshnessService {
       }
     }
 
-    // Same for docs (WH-64): no per-layer grouping, so any doc anchored to a changed path is affected.
-    const ds = await this.repo.liveDocsOf(team.id);
-    const affectedDocs = new Map<string, { doc: DocRow; files: [string, string | null][] }>();
-    for (const [path, hash] of changed) {
-      for (const d of ds.filter((x) => anchoredBy(x, [path], repo?.slug).length)) {
-        const a = affectedDocs.get(d.id) ?? { doc: d, files: [] };
-        a.files.push([path, hash]);
-        affectedDocs.set(d.id, a);
-      }
-    }
-
     const pending = affected.size ? await this.repo.pendingNodeDraftsFor([...affected.keys()]) : [];
-    const pendingDocs = affectedDocs.size ? await this.repo.pendingDocDraftsFor([...affectedDocs.keys()]) : [];
 
     const published: string[] = [];
     const stale: string[] = [];
     const fresh: string[] = [];
-    const publishedDocs: string[] = [];
-    const staleDocs: string[] = [];
-    const freshDocs: string[] = [];
     const short = r.sha?.slice(0, 8);
 
     for (const { node, files } of affected.values()) {
@@ -277,55 +226,11 @@ export class FreshnessService {
       await this.repo.updateNode(node.id, set);
     }
 
-    for (const { doc, files } of affectedDocs.values()) {
-      const landedHashes: Record<string, string> = { ...doc.describedHashes };
-      for (const [p, h] of files) {
-        if (h) landedHashes[p] = h;
-        else delete landedHashes[p];
-      }
-      const drafts = pendingDocs.filter((d) => d.docId === doc.id);
-      if (drafts.length && !r.baseline) {
-        // The work that was in flux has landed: publish what the agent wrote against it.
-        for (const d of drafts) {
-          await this.applyDocDraft(actor, team.id, d, landedHashes);
-          await this.repo.updateDocDraft(d.id, { status: "published", updatedAt: new Date() });
-        }
-        publishedDocs.push(doc.slug);
-        continue;
-      }
-
-      const neverBaselined = !Object.keys(doc.describedHashes).length;
-      const drift = new Set(doc.driftPaths);
-      const described = { ...doc.describedHashes };
-      for (const [p, h] of files) {
-        if (r.baseline || neverBaselined) {
-          if (h) described[p] = h;
-          continue;
-        }
-        if (!h) {
-          if (p in described) drift.add(p); // a described file was deleted
-          continue;
-        }
-        if (described[p] === h) drift.delete(p);
-        else drift.add(p);
-      }
-      const driftPaths = [...drift];
-      const wasDrift = doc.stale && doc.staleSource === "drift";
-      const nowStale = driftPaths.length > 0;
-      const set: Partial<typeof schema.docs.$inferInsert> = { describedHashes: described, driftPaths };
-      if (nowStale && !(doc.stale && doc.staleSource === "report")) {
-        Object.assign(set, {
-          stale: true,
-          staleSource: "drift",
-          staleReason: `${driftPaths.slice(0, 3).join(", ")}${driftPaths.length > 3 ? ` +${driftPaths.length - 3} more` : ""} changed${short ? ` in ${short}` : ""} since it was described`,
-        });
-        if (!doc.stale) staleDocs.push(doc.slug);
-      } else if (!nowStale && wasDrift) {
-        Object.assign(set, { stale: false, staleSource: null, staleReason: null });
-        freshDocs.push(doc.slug);
-      }
-      await this.repo.updateDocFreshness(doc.id, set);
-    }
+    // Same for docs (WH-64): the docs module records, publishes or flags the docs anchored to the changed paths.
+    const [docs] = (await this.emitter.emitAsync(FILES_LANDED, { actor, teamId: team.id, files: changed, baseline: !!r.baseline, sha: r.sha, repository: repo?.slug } satisfies FilesLanded)) as (FilesLandedResult | undefined)[];
+    const publishedDocs = docs?.published ?? [];
+    const staleDocs = docs?.stale ?? [];
+    const freshDocs = docs?.fresh ?? [];
 
     // Sessions whose in-flux files just landed (same content, or unknown) are no longer in flux for them.
     const landedMap = new Map(changed);

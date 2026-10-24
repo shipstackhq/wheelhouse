@@ -49,19 +49,15 @@ export const deleteTerm = (...a: Parameters<DecisionsService["deleteTerm"]>) => 
 export const reportChanges = (...a: Parameters<FreshnessService["reportChanges"]>) => s().freshness.reportChanges(...a);
 export const listStale = (...a: Parameters<FreshnessService["listStale"]>) => s().freshness.listStale(...a);
 export const markFresh = (...a: Parameters<FreshnessService["markFresh"]>) => s().freshness.markFresh(...a);
-export const listStaleDocs = (...a: Parameters<FreshnessService["listStaleDocs"]>) => s().freshness.listStaleDocs(...a);
 export const land = (...a: Parameters<FreshnessService["land"]>) => s().freshness.land(...a);
 export const resolveDraft = (...a: Parameters<FreshnessService["resolveDraft"]>) => s().freshness.resolveDraft(...a);
-export const resolveDocDraft = (...a: Parameters<FreshnessService["resolveDocDraft"]>) => s().freshness.resolveDocDraft(...a);
 
 // sessions
 export const sessionSync = (...a: Parameters<SessionsService["sessionSync"]>) => s().sessions.sessionSync(...a);
 export const sessionEnd = (...a: Parameters<SessionsService["sessionEnd"]>) => s().sessions.sessionEnd(...a);
 export const sessionStatus = (...a: Parameters<SessionsService["sessionStatus"]>) => s().sessions.sessionStatus(...a);
 export const noteIssueActivity = (...a: Parameters<SessionsService["noteIssueActivity"]>) => s().sessions.noteIssueActivity(...a);
-export const maybeDraftDoc = (...a: Parameters<SessionsService["maybeDraftDoc"]>) => s().sessions.maybeDraftDoc(...a);
 export const listDrafts = (...a: Parameters<SessionsService["listDrafts"]>) => s().sessions.listDrafts(...a);
-export const listDocDrafts = (...a: Parameters<SessionsService["listDocDrafts"]>) => s().sessions.listDocDrafts(...a);
 
 // Ask
 export const askMap = (...a: Parameters<AskService["askMap"]>) => s().ask.askMap(...a);

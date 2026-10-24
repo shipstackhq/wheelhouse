@@ -8,7 +8,7 @@ import { bad, oneOf, text, textList, textOrNull, whole } from "../../lib/web-inp
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
-import { getGraph, maybeDraftDoc } from "../map/index";
+import { GraphService, SessionsService, anchoredBy } from "../map/index";
 import type { Human } from "../auth/index";
 import { TeamAccessService } from "../teams/index";
 import { DocsRepository, type DocRow } from "./docs.repository";
@@ -35,6 +35,8 @@ export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "desc
 
 type Body = Record<string, unknown>;
 
+const DOC_PATCH_KEYS = ["title", "body", "anchors"] as const;
+
 /** Labels as stored: trimmed, no empties or repeats (case-insensitively, first spelling wins), at most 20 of at most 40 characters. */
 const cleanDocLabels = (labels: string[]) => cleanLabels(labels, "doc");
 
@@ -53,6 +55,8 @@ export class DocsService {
     @Inject(DocsRepository) private readonly repo: DocsRepository,
     @Inject(TeamAccessService) private readonly access: TeamAccessService,
     @Inject(EventsService) private readonly events: EventsService,
+    @Inject(GraphService) private readonly graph: GraphService,
+    @Inject(SessionsService) private readonly sessions: SessionsService,
   ) {}
 
   // ───────── access and lookups ─────────
@@ -160,7 +164,7 @@ export class DocsService {
 
   /** The docs page in one read: the tree, and what its side panels offer (map nodes to link, decisions to link, who wrote what). */
   async docsIndex(h: Human, teamKey: string) {
-    const [docs, g, members] = await Promise.all([this.listDocs(h.actor, teamKey), getGraph(h.actor, teamKey), this.repo.workspaceMembers(h.workspace.id)]);
+    const [docs, g, members] = await Promise.all([this.listDocs(h.actor, teamKey), this.graph.getGraph(h.actor, teamKey), this.repo.workspaceMembers(h.workspace.id)]);
     return { docs, nodes: g.nodes, decisions: g.decisions, members };
   }
 
@@ -224,7 +228,7 @@ export class DocsService {
         body,
         position,
         anchors,
-        describedHashes: await this.repo.landedHashes(team.id, anchors),
+        describedHashes: await this.graph.landedHashesFor(team.id, anchors),
         describedSha: input.describedSha ?? null,
         describedAt: new Date(),
         createdByKind: actor.kind,
@@ -263,7 +267,7 @@ export class DocsService {
     if (actor.kind === "agent" && !patch.forcePublish) {
       const existing = await this.resolveDoc(team.id, ref).catch(() => undefined);
       if (existing) {
-        const d = await maybeDraftDoc(actor, existing, patch);
+        const d = await this.maybeDraftDoc(actor, existing, patch);
         if (d) return { ...existing, ...d };
       }
     }
@@ -289,7 +293,7 @@ export class DocsService {
             staleReason: null,
             staleSource: null,
             driftPaths: [],
-            describedHashes: patch.describedHashes ?? (await this.repo.landedHashes(team.id, patch.anchors ?? d.anchors)),
+            describedHashes: patch.describedHashes ?? (await this.graph.landedHashesFor(team.id, patch.anchors ?? d.anchors)),
             describedAt: new Date(),
             describedSha: patch.describedSha ?? d.describedSha,
           }
@@ -383,10 +387,60 @@ export class DocsService {
     const team = await this.access.require(actor, teamRef, "edit");
     await this.assertDocsWritable(actor);
     const d = await this.resolveDoc(team.id, docRef);
-    const n = await this.repo.resolveNode(team.id, nodeRef);
+    const n = await this.graph.resolveNode(team.id, nodeRef);
     if (unlink) await this.repo.unlinkNode(d.id, n.id);
     else await this.repo.linkNode(d.id, n.id);
     return { ok: true };
+  }
+
+  // ───────── doc drafts (WH-64) ─────────
+  // Mirrors the map's node draft flow exactly: an agent session editing a doc whose anchored files are in flux (changed in that
+  // session, not yet landed) gets the edit stored as a draft, published when the map reports those files landed (DocFreshnessService).
+
+  /** If this agent has an active session changing the doc's anchored files, return it. */
+  private async fluxSessionForDoc(actor: Actor, doc: DocRow) {
+    if (actor.kind !== "agent" || !doc.anchors.length) return null;
+    const sessions = await this.sessions.sessionsForTeam(doc.teamId, actor.id);
+    return sessions.find((s) => anchoredBy(doc, Object.keys(s.files)).length) ?? null;
+  }
+
+  /**
+   * Called by updateDoc for agent edits to existing docs. When the agent's own session has the doc's anchored code in flux, the update
+   * is stored as a draft and published when that code lands, so the shared doc never describes code that hasn't merged.
+   */
+  private async maybeDraftDoc(actor: Actor, doc: DocRow, input: DocUpdateInput) {
+    const patch: Record<string, unknown> = {};
+    for (const k of DOC_PATCH_KEYS) if (input[k] !== undefined) patch[k] = input[k];
+    const confirm = !!input.markFresh && !Object.keys(patch).length;
+    if (!Object.keys(patch).length && !confirm) return null;
+    const session = await this.fluxSessionForDoc(actor, doc);
+    if (!session) return null;
+    const d = await this.repo.pendingDocDraft(doc.id, session.id);
+    if (d) {
+      await this.repo.updateDocDraft(d.id, { patch: { ...d.patch, ...patch }, confirm: d.confirm && confirm, updatedAt: new Date() });
+    } else {
+      await this.repo.insertDocDraft({
+        teamId: doc.teamId,
+        workspaceId: doc.workspaceId,
+        docId: doc.id,
+        sessionId: session.id,
+        authorName: actor.name,
+        authorKind: actor.kind,
+        patch,
+        confirm,
+      });
+    }
+    await this.events.emit(actor, doc.teamId, {
+      type: "doc.drafted",
+      entity: "doc",
+      entityId: doc.id,
+      summary: `drafted ${confirm ? "a confirmation of" : "an update to"} doc "${doc.title}" (publishes when the code lands)`,
+      data: { title: doc.title, slug: doc.slug, fields: Object.keys(patch) },
+    });
+    return {
+      draft: true,
+      note: "Saved as a draft: this session's changes to the doc's anchored files haven't landed on the default branch yet. It publishes automatically when they do.",
+    };
   }
 
   // ───────── the web app's functions: input shaping, then the same calls ─────────
