@@ -74,6 +74,36 @@ One build, one or several processes. `SERVICE_ROLE` is `api`, `daemon` or `all` 
 
 `/api/health` and the platform modules are in every role. The sweep runs only where the daemon role runs, so it ticks in one process. Splitting the daemon traffic into its own process is then a deployment choice (`SERVICE_ROLE=daemon`) and not a rewrite. Both processes use the same database; each module still reads and writes only its own tables.
 
+## Module internals (decided 2026-10-24)
+
+The modules exist and their boundaries hold; this is the shape of the code inside them. Principle: less is more. Use what Nest gives (providers, injection, modules, lifecycle) and add as little of our own as possible.
+
+Per module, flat (no sub-folders beyond `dto/`):
+
+| File | Holds | Rule |
+|---|---|---|
+| `<area>.repository.ts` | every query on the module's own tables | the only file in the module that touches Drizzle; reads `this.db.q` (see transactions) |
+| `<area>.service.ts` | the use cases: access checks, rules, events, the transaction | a real `@Injectable()` class; the logic lives here, not in plain functions |
+| `<area>.controller.ts` | HTTP only | parses with a DTO, calls the service, maps with the presenter |
+| `<area>.presenter.ts` | row to API shape (what the `*-app.ts` files did) | pure functions |
+| `dto/` | Zod schemas | the only input validation for HTTP |
+| `<area>.rules.ts` | pure rules worth testing alone (health, loop checks, positions) | only when there is such a rule; no database |
+| `index.ts` | the service class and the types callers need | no plain functions once the module is converted |
+
+A module that is large splits by service, not by layer: `ProjectsService`, `CyclesService` and `IssuesService` can sit side by side, each with its repository, in one module or in their own.
+
+**Cross-module calls** go through the other module's service, injected (`constructor(@Inject(TeamsService) private teams: TeamsService)`; `tsx` emits no decorator metadata, so every injection names its token). A module that only needs to tell others that something happened emits an event instead of calling them; that is how the `map` and `github` cycle goes away.
+
+**Access checks stay in the services** (`this.teams.require(actor, key, "edit")`), not in a guard: the same services serve people over HTTP and agents through the tools, and the isolation audit reads them.
+
+**Transactions:** `platform/database` provides `Database`, with `q` (the current transaction, or the client outside one) and `transaction(fn)` (joins an outer transaction if there is one). It keeps the transaction in `AsyncLocalStorage`, so no `tx` is passed through signatures. `EventsService.emit(actor, teamId, e)` reads `q` itself, so an event still commits with the change.
+
+**Tests** boot the real providers once per file with `NestFactory.createApplicationContext` (`test/app.ts` builds it over the in-memory PGlite) and take services with `app.get(...)`. No new test library.
+
+**While converting (temporary):** code not converted yet still calls plain functions. A converted module keeps those names as one-line shims in `<area>.legacy.ts` that forward to the live service instance (captured in `onModuleInit`), exported from `index.ts` until the last caller moves; the `lib/service.ts` barrel forwards the same way for the tools. Shims and the barrel are deleted when the MCP redesign moves the tools onto the services.
+
+Order: `teams` (everything depends on it; it sets the pattern), then `docs`, `github`, `map`, `issues` (split into issues, projects and cycles services), `auth`, `daemon`, `dashboard` (reads through the other services instead of their tables).
+
 ## Migration
 
 Strangler, one area at a time. `daemon` is the pilot. For each area: create the module, move its service and DTOs, switch its controllers to the service, leave the `src/lib` functions in place for the other callers until they are moved too. Routes, responses and the contract suite (`pnpm test:contract`) must not change in any step.
