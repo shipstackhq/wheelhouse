@@ -1,6 +1,6 @@
 import { Controller, Inject, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { GithubService } from "./github.service";
 
 @Controller("api/webhooks/github")

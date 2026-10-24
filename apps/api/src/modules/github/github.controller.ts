@@ -2,8 +2,8 @@ import { Controller, Get, Inject, Req, Res, UseFilters, UseGuards } from "@nestj
 import type { Response } from "express";
 import { type ConnectReply } from "./connect";
 import { STATE_COOKIE, STATE_COOKIE_PATH } from "./state";
-import { HumanGuard, SignedOutFilter, type HumanRequest } from "../../auth/human.guard";
-import { cookieValue } from "../../http/util";
+import { HumanGuard, SignedOutFilter, type HumanRequest } from "../../common/guards/human.guard";
+import { cookieValue } from "../../common/http/cookies";
 import { GithubService } from "./github.service";
 
 /** Send what the github module decided about connecting GitHub: the redirect or text, and the state cookie. */

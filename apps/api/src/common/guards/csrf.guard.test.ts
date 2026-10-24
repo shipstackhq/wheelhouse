@@ -1,8 +1,8 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { ExecutionContext } from "@nestjs/common";
-import { CsrfGuard } from "./endpoints";
-import { ANONYMOUS_CSRF, CsrfError, csrfToken } from "./csrf";
+import { CsrfGuard } from "./csrf.guard";
+import { ANONYMOUS_CSRF, CsrfError, csrfToken } from "../http/csrf";
 
 /**
  * The guard on every /api/app controller, driven directly: it must read the method, the headers and the session cookie from

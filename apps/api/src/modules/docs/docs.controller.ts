@@ -1,8 +1,9 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { DocsService } from "./docs.service";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 
 /** The docs page. A team, doc or map node of another workspace is a 404. A doc is addressed by its id. */
 @Controller("api/app/teams")

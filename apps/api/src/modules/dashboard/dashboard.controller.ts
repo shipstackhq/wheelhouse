@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Param, Query, Req, UseGuards } from "@nestjs/common";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 import { DashboardService } from "./dashboard.service";
 
 /**

@@ -3,8 +3,8 @@ import type { Response } from "express";
 import { AuthError } from "../modules/auth/access";
 import { mcpAuthFailure } from "../lib/api-errors";
 import { runMcp } from "../lib/mcp";
-import { ActorGuard, type AuthedRequest } from "../auth/actor.guard";
-import type { RawTextRequest } from "../http/raw-text";
+import { ActorGuard, type AuthedRequest } from "../common/guards/actor.guard";
+import type { RawTextRequest } from "../common/http/raw-text";
 
 /** Anything that goes wrong before the protocol takes over is answered as a JSON-RPC error. */
 @Catch()

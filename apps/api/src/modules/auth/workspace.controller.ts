@@ -1,7 +1,8 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Req, UseGuards } from "@nestjs/common";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 import { AuthService } from "./auth.service";
 
 @Controller("api/app/workspace")

@@ -2,7 +2,8 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Query, R
 
 import { TeamsService } from "./teams.service";
 
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { addMemberDto, setMemberRoleDto, type AddMemberDto, type SetMemberRoleDto } from "./dto/teams.dto";

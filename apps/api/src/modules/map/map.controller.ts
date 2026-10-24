@@ -2,9 +2,10 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Put, Query, Req
 import { nodeView } from "./map-app";
 import { ServiceError } from "../../common/service-error";
 import { MapService } from "./map.service";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 
 /** The map, decisions, glossary and activity pages. A team, node, edge, flow, decision or term of another workspace is a 404. */
 @Controller("api/app/teams")

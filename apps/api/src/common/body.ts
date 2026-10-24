@@ -1,5 +1,5 @@
 import { ServiceError } from "./service-error";
-import type { RawTextRequest } from "../http/raw-text";
+import type { RawTextRequest } from "./http/raw-text";
 
 /** The JSON object in a request body. A missing, unparseable or non-object body is a 400 in the usual envelope. */
 export function jsonBody(req: RawTextRequest): Record<string, unknown> {

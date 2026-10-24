@@ -6,7 +6,7 @@ import { clientIp } from "../common/rate-limit";
 import { openStream } from "../platform/streams/stream-open";
 import { teamScope, workspaceScope, type StreamScope } from "../platform/streams/stream-scope";
 import type { Actor } from "../common/actor";
-import { cookieValue, toHeaders } from "../http/util";
+import { cookieValue, toHeaders } from "../common/http/cookies";
 import { StreamRegistry } from "../platform/streams/stream.registry";
 
 @Controller()

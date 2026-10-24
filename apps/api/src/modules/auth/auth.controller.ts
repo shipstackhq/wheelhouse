@@ -2,12 +2,12 @@ import { Controller, Inject, Get, HttpCode, Post, Req, Res } from "@nestjs/commo
 import type { Request, Response } from "express";
 import { SESSION_COOKIE } from "./auth-core";
 import { clientIp } from "../../common/rate-limit";
-import { cookieValue, toHeaders } from "../../http/util";
-import type { RawTextRequest } from "../../http/raw-text";
+import { cookieValue, toHeaders } from "../../common/http/cookies";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
-import { AppEndpoints } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { beginSession } from "./begin";
-import { clearSessionCookie } from "../../web/session-cookie";
+import { clearSessionCookie } from "../../common/http/session-cookie";
 import { AuthService } from "./auth.service";
 
 @Controller("api/app/auth")

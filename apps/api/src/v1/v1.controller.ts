@@ -2,8 +2,8 @@ import { Catch, Controller, Get, HttpCode, Param, Post, Req, Res, UseFilters, Us
 import type { Response } from "express";
 import { v1Failure } from "../lib/api-errors";
 import { listToolDefs, runTool } from "../lib/tools";
-import { ActorGuard, type AuthedRequest } from "../auth/actor.guard";
-import type { RawTextRequest } from "../http/raw-text";
+import { ActorGuard, type AuthedRequest } from "../common/guards/actor.guard";
+import type { RawTextRequest } from "../common/http/raw-text";
 
 /** Every failure becomes `{ error: { code, message, details? } }`, with the status and codes lib/api-errors.ts defines. */
 @Catch()

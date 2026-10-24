@@ -1,8 +1,8 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { clientIp } from "../common/rate-limit";
-import { cookieValue, toHeaders } from "./util";
+import { clientIp } from "../rate-limit";
+import { cookieValue, toHeaders } from "./cookies";
 import { rawText } from "./raw-text";
 
 describe("cookieValue", () => {

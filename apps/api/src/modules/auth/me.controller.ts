@@ -1,10 +1,11 @@
 import { Controller, Inject, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
 import { SESSION_COOKIE } from "./auth-core";
 import { ServiceError } from "../../common/service-error";
-import type { RawTextRequest } from "../../http/raw-text";
-import { cookieValue } from "../../http/util";
+import type { RawTextRequest } from "../../common/http/raw-text";
+import { cookieValue } from "../../common/http/cookies";
 import { jsonBody, str } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 import { meView } from "./me";
 import { AuthService } from "./auth.service";
 

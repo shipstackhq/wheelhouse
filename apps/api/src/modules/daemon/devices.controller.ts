@@ -1,7 +1,8 @@
 import { Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 import { DaemonService } from "./daemon.service";
 
 /** The person's machines (the agent daemon), pairing one, and running an issue on one. A device or job of someone else's is a 404. */

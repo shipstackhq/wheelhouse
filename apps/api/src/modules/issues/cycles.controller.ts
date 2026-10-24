@@ -1,9 +1,10 @@
 import { Controller, Inject, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { ServiceError } from "../../common/service-error";
 import { IssuesService } from "./issues.service";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 
 /** A cycle is addressed by its number inside the team. Anything that is not a whole number is a cycle that does not exist. */
 const cycleNumber = (raw: string) => {

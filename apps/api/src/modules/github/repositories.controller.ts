@@ -1,8 +1,9 @@
 import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
-import { requestOrigin } from "../../web/origin";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { requestOrigin } from "../../common/http/origin";
 import { GithubService } from "./github.service";
 
 /** The repositories page, the Connect GitHub card, and the onboarding wizard. A team or repository of another workspace is a 404. */

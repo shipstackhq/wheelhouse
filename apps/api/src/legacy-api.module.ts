@@ -1,11 +1,12 @@
 import { Module } from "@nestjs/common";
-import { ActorGuard } from "./auth/actor.guard";
-import { HumanGuard } from "./auth/human.guard";
+import { ActorGuard } from "./common/guards/actor.guard";
+import { HumanGuard } from "./common/guards/human.guard";
 import { McpController } from "./mcp/mcp.controller";
 import { StreamsModule } from "./platform/streams/streams.module";
 import { StreamController } from "./stream/stream.controller";
 import { V1Controller } from "./v1/v1.controller";
-import { CsrfGuard, SessionGuard } from "./web/endpoints";
+import { CsrfGuard } from "./common/guards/csrf.guard";
+import { SessionGuard } from "./common/guards/session.guard";
 import { ImagesController } from "./web/images.controller";
 
 /**

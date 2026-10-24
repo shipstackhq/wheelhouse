@@ -2,9 +2,10 @@ import { Controller, Delete, Get, HttpCode, Param, Put, Req, Res, StreamableFile
 import type { Response } from "express";
 import { readImageAs, setAvatarAs, setWorkspaceImageAs } from "../lib/images";
 import { ServiceError } from "../common/service-error";
-import type { RawTextRequest } from "../http/raw-text";
+import type { RawTextRequest } from "../common/http/raw-text";
 import { jsonBody } from "../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";
+import { AppEndpoints } from "../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../common/guards/session.guard";
 
 /** Custom pictures (WH-126). Uploads are `{ data }` in base64; the bytes go to whatever object storage the instance is set up with. */
 @Controller("api/app")

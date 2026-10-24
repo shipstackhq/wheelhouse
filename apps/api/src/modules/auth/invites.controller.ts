@@ -4,12 +4,13 @@ import { isInstanceAdmin } from "./auth-policy";
 import { SESSION_COOKIE } from "./auth-core";
 import { clientIp } from "../../common/rate-limit";
 import { ServiceError } from "../../common/service-error";
-import type { RawTextRequest } from "../../http/raw-text";
-import { cookieValue, toHeaders } from "../../http/util";
+import type { RawTextRequest } from "../../common/http/raw-text";
+import { cookieValue, toHeaders } from "../../common/http/cookies";
 import { jsonBody, str } from "../../common/body";
 import { beginSession } from "./begin";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
-import { requestOrigin } from "../../web/origin";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { requestOrigin } from "../../common/http/origin";
 import { AuthService } from "./auth.service";
 
 @Controller("api/app/invites")

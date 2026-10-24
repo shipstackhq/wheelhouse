@@ -5,7 +5,7 @@ configureEnvironment(); // before the database or the libraries are first used
 
 const { NestFactory } = await import("@nestjs/core");
 const { AppModule } = await import("./app.module");
-const { rawText } = await import("./http/raw-text");
+const { rawText } = await import("./common/http/raw-text");
 const { serveWebApp, webDistDir } = await import("./web-static");
 type App = import("@nestjs/platform-express").NestExpressApplication;
 

@@ -2,9 +2,10 @@ import { Controller, Inject, Get, HttpCode, Param, Post, Req, UseGuards } from "
 import { isInstanceAdmin } from "./auth-policy";
 import { ServiceError } from "../../common/service-error";
 import { type Admin } from "./workspaces-admin";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 import { AuthService } from "./auth.service";
 
 const adminOf = (req: SessionRequest): Admin => ({ userId: req.human.user.id, email: req.human.user.email, workspaceId: req.human.workspace.id });

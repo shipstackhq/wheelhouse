@@ -1,7 +1,7 @@
 import { Catch, Injectable, type CanActivate, type ExceptionFilter, type ExecutionContext, type ArgumentsHost } from "@nestjs/common";
 import type { Request, Response } from "express";
-import { humanFromSession, SESSION_COOKIE, type Human } from "../modules/auth/auth-core";
-import { cookieValue } from "../http/util";
+import { humanFromSession, SESSION_COOKIE, type Human } from "../../modules/auth/auth-core";
+import { cookieValue } from "../http/cookies";
 
 export type HumanRequest = Request & { human: Human };
 

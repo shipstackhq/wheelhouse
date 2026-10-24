@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import "reflect-metadata";
 import type { ArgumentsHost } from "@nestjs/common";
 import { ServiceError } from "../service-error";
-import { AppExceptionFilter } from "../../web/endpoints";
+import { AppExceptionFilter } from "./app-exception.filter";
 import { ServiceErrorFilter } from "./service-error.filter";
 
 /** A fake Express response that records what the filter sent. */

@@ -2,9 +2,10 @@ import { Controller, Inject, Get, HttpCode, Param, Post, Req, UseGuards } from "
 import { statusField, issueInput } from "./board-app";
 import { queueStatus } from "../../lib/service-queue";
 import { IssuesService } from "./issues.service";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 
 @Controller("api/app/teams")
 @AppEndpoints()

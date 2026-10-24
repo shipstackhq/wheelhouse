@@ -2,9 +2,10 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req
 import { statusField, intField, issueInput } from "./board-app";
 import { ServiceError } from "../../common/service-error";
 import { IssuesService } from "./issues.service";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
-import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
+import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
 
 /** An issue is addressed by its ref (WH-12), which already names its team. An issue of another workspace is a 404. */
 @Controller("api/app/issues")

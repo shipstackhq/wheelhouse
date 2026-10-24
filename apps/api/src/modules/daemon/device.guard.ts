@@ -1,7 +1,7 @@
 import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import type { Request } from "express";
 import { deviceForToken, type Device } from "./internal";
-import type { RawTextRequest } from "../../http/raw-text";
+import type { RawTextRequest } from "../../common/http/raw-text";
 
 export type DeviceRequest = Request & RawTextRequest & { device: Device };
 
