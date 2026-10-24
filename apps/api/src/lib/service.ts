@@ -14,7 +14,7 @@ export * from "../modules/teams/teams";
 export * from "../modules/issues/issues";
 export * from "../modules/issues/issue-nodes";
 export * from "../modules/map/graph";
-export * from "./service-repositories";
+export * from "../modules/github/repositories";
 export * from "../modules/map/freshness";
 export * from "../modules/map/decisions";
 export * from "./service-queue";

@@ -150,7 +150,7 @@ export async function getIssue(actor: Actor, ref: string) {
     .orderBy(desc(events.seq))
     .limit(50);
   // Pull requests GitHub reported against this issue (WH-20). Loaded lazily: that module imports this one.
-  const { pullRequestsForIssue } = await import("../../lib/github/service");
+  const { pullRequestsForIssue } = await import("../github/service");
   const pullRequests = await pullRequestsForIssue(issue.id);
   const [withLabel] = await withCycle(db, await withLabels(db, [issue]));
   const { parent, children } = await (await import("./sub-issues")).relatives(db, team, issue);

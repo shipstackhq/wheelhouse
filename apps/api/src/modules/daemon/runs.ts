@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { DeviceJobState } from "../../db/schema";
 import { type Actor } from "../../lib/access";
-import { github } from "../../lib/github/runtime";
+import { github } from "../github/runtime";
 import { serverSigningKey } from "./daemon-crypto";
 import { resolveIssue, ServiceError, type Q } from "../../lib/service";
 import { isUuid } from "../teams/team-access";

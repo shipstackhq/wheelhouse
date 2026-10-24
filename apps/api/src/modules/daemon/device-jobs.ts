@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { DeviceJobState } from "../../db/schema";
-import { GithubApiError, type GithubApi } from "../../lib/github/api";
-import { github } from "../../lib/github/runtime";
+import { GithubApiError, type GithubApi } from "../github/api";
+import { github } from "../github/runtime";
 import { ServiceError } from "../../lib/service";
 import { type Device, MAX_EVENTS_PER_BATCH, MAX_EVENTS_PER_JOB, UNREACHABLE_AFTER_MS, isFinalState, str } from "./device-common";
 import { signalJob } from "./device-stream";

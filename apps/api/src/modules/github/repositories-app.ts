@@ -1,13 +1,13 @@
-import { schema } from "../db";
-import type { Actor } from "./access";
-import type { Human } from "./auth-core";
-import { githubConfig, githubMissing } from "./github/config";
-import { github } from "./github/runtime";
-import { connectGithubRepository, listInstallations } from "./github/service";
+import { schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import type { Human } from "../../lib/auth-core";
+import { githubConfig, githubMissing } from "./config";
+import { github } from "./runtime";
+import { connectGithubRepository, listInstallations } from "./service";
 import { onboarding } from "@wheelhouse/shared/onboarding";
-import * as svc from "./service";
-import { ServiceError } from "./service";
-import { bad, oneOf, text, textOrNull } from "./web-input";
+import * as svc from "../../lib/service";
+import { ServiceError } from "../../lib/service";
+import { bad, oneOf, text, textOrNull } from "../../lib/web-input";
 
 /**
  * What the web app's docs, repositories and onboarding pages read and write (WH-98), as functions of the signed-in person.

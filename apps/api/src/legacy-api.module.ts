@@ -1,8 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ActorGuard } from "./auth/actor.guard";
 import { HumanGuard } from "./auth/human.guard";
-import { GithubController } from "./github/github.controller";
-import { WebhookController } from "./github/webhook.controller";
 import { McpController } from "./mcp/mcp.controller";
 import { StreamsModule } from "./platform/streams/streams.module";
 import { StreamController } from "./stream/stream.controller";
@@ -15,7 +13,6 @@ import { ImagesController } from "./web/images.controller";
 import { InvitesController } from "./web/invites.controller";
 import { KeysController } from "./web/keys.controller";
 import { MeController } from "./web/me.controller";
-import { RepositoriesController } from "./web/repositories.controller";
 import { WorkspaceController } from "./web/workspace.controller";
 
 /**
@@ -25,7 +22,7 @@ import { WorkspaceController } from "./web/workspace.controller";
  */
 @Module({
   imports: [StreamsModule],
-  controllers: [McpController, V1Controller, WebhookController, GithubController, StreamController, AuthController, MeController, ImagesController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController, RepositoriesController],
+  controllers: [McpController, V1Controller, StreamController, AuthController, MeController, ImagesController, AdminController, DashboardController, InvitesController, KeysController, WorkspaceController],
   providers: [ActorGuard, HumanGuard, CsrfGuard, SessionGuard],
 })
 export class LegacyApiModule {}

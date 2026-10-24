@@ -13,9 +13,9 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../access";
-import * as svc from "../service";
-import { land } from "../../modules/map/sync";
+import type { Actor } from "../../lib/access";
+import * as svc from "../../lib/service";
+import { land } from "../map/sync";
 import type { GithubApi } from "./api";
 import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
 

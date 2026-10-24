@@ -1,13 +1,15 @@
-import { Controller, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { Controller, Inject, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Response } from "express";
-import { receiveWebhook } from "../lib/github/webhook";
-import type { RawTextRequest } from "../http/raw-text";
+import type { RawTextRequest } from "../../http/raw-text";
+import { GithubService } from "./github.service";
 
 @Controller("api/webhooks/github")
 export class WebhookController {
+  constructor(@Inject(GithubService) private readonly github: GithubService) {}
+
   /**
    * GitHub's webhook (WH-20). The signature is over the raw bytes, which the raw-text middleware keeps exactly as received;
-   * every rule (signature, size, framing, dispatch) is lib/github's.
+   * every rule (signature, size, framing, dispatch) is the github module's.
    */
   @Post()
   @HttpCode(200)
@@ -16,7 +18,7 @@ export class WebhookController {
       const v = req.headers[name];
       return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
     };
-    const r = await receiveWebhook({
+    const r = await this.github.receiveWebhook({
       declaredLength: Number(header("content-length") ?? 0),
       readBody: async () => req.rawText ?? "",
       signature: header("x-hub-signature-256"),

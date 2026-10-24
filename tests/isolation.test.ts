@@ -365,7 +365,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
-    const { githubActor } = await import("../apps/api/src/lib/github/service");
+    const { githubActor } = await import("../apps/api/src/modules/github/service");
     const gh = githubActor(A.workspaceId, A.teamId);
     assert.ok((await svc.requireTeam(gh, A.teamKey)).id);
     await assert.rejects(svc.requireTeam(gh, "SH"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
@@ -829,14 +829,14 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/teams/team-lifecycle.ts": "every action starts from requireTeam(actor, key, admin) (not_found for a team of another workspace or one the person is not in, 403 for a non-admin) and runs inside a transaction that locks the workspace's teams; a parent is resolved with findWorkspaceTeam in the actor's workspace and must be one the person can open (ADR-23, so the hierarchy grants no access); candidates and children are filtered to the teams the person can open, and teams they cannot open are only counted (tested in team-lifecycle.test.ts)",
   "apps/api/src/lib/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
   "apps/api/src/lib/metrics.ts": "everything derived from the caller's workspace's team ids",
-  "apps/api/src/lib/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
+  "apps/api/src/modules/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
   "apps/api/src/lib/service-checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/docs/docs.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/graph.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/lib/service-repositories.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/github/repositories.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/teams/teams.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/modules/map/sync.ts": "every entry point resolves through requireTeam first (tested)",

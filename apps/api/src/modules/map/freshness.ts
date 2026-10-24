@@ -5,7 +5,7 @@ import { ServiceError } from "../../lib/service-error";
 import { emit } from "../../lib/service-core";
 import { DocRow } from "../docs/docs";
 import { Layer, NodeRow, upsertNode } from "./graph";
-import { findOrCreateRepository } from "../../lib/service-repositories";
+import { findOrCreateRepository } from "../github/repositories";
 import { requireTeam } from "../teams/teams";
 
 const { nodes, docs } = schema;

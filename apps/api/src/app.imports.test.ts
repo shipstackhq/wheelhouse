@@ -9,6 +9,7 @@ import { daemonControllers, daemonProviders, DaemonModule } from "./modules/daem
 import { DocsModule } from "./modules/docs";
 import { IssuesModule } from "./modules/issues";
 import { MapModule } from "./modules/map";
+import { GithubModule } from "./modules/github";
 import { TeamsModule } from "./modules/teams";
 import { DevicesController } from "./modules/daemon/devices.controller";
 
@@ -46,7 +47,7 @@ describe("what each SERVICE_ROLE loads", () => {
 });
 
 describe("the modules that serve people only", () => {
-  for (const [name, mod] of [["teams", TeamsModule], ["docs", DocsModule], ["issues", IssuesModule], ["map", MapModule]] as const) {
+  for (const [name, mod] of [["teams", TeamsModule], ["docs", DocsModule], ["issues", IssuesModule], ["map", MapModule], ["github", GithubModule]] as const) {
     test(`${name} is in the api and all roles and not in the daemon role`, () => {
       assert.ok(buildAppImports("api").includes(mod));
       assert.ok(buildAppImports("all").includes(mod));

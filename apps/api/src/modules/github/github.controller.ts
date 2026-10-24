@@ -1,11 +1,12 @@
-import { Controller, Get, Req, Res, UseFilters, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Req, Res, UseFilters, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { finishConnect, startConnect, type ConnectReply } from "../lib/github/connect";
-import { STATE_COOKIE, STATE_COOKIE_PATH } from "../lib/github/state";
-import { HumanGuard, SignedOutFilter, type HumanRequest } from "../auth/human.guard";
-import { cookieValue } from "../http/util";
+import { type ConnectReply } from "./connect";
+import { STATE_COOKIE, STATE_COOKIE_PATH } from "./state";
+import { HumanGuard, SignedOutFilter, type HumanRequest } from "../../auth/human.guard";
+import { cookieValue } from "../../http/util";
+import { GithubService } from "./github.service";
 
-/** Send what lib/github decided about connecting GitHub: the redirect or text, and the state cookie. */
+/** Send what the github module decided about connecting GitHub: the redirect or text, and the state cookie. */
 function send(res: Response, r: ConnectReply) {
   if (r.setStateCookie) res.cookie(STATE_COOKIE, r.setStateCookie.value, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: STATE_COOKIE_PATH, maxAge: r.setStateCookie.maxAgeSec * 1000 });
   if (r.clearStateCookie) res.clearCookie(STATE_COOKIE, { path: STATE_COOKIE_PATH });
@@ -19,10 +20,12 @@ const query = (req: HumanRequest) => new URL(req.originalUrl, "http://localhost"
 @UseFilters(SignedOutFilter)
 @UseGuards(HumanGuard)
 export class GithubController {
+  constructor(@Inject(GithubService) private readonly github: GithubService) {}
+
   /** Start connecting GitHub for a team: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
   @Get("install")
   async install(@Req() req: HumanRequest, @Res() res: Response) {
-    send(res, await startConnect(req.human, query(req).get("team") ?? ""));
+    send(res, await this.github.startConnect(req.human, query(req).get("team") ?? ""));
   }
 
   /** Where GitHub sends people after they install the App. The checks that make the installation id trustworthy are core's. */
@@ -30,6 +33,6 @@ export class GithubController {
   async callback(@Req() req: HumanRequest, @Res() res: Response) {
     const q = query(req);
     const nonce = cookieValue(req.headers.cookie, STATE_COOKIE);
-    send(res, await finishConnect(req.human, { state: q.get("state"), installationId: q.get("installation_id"), code: q.get("code") }, nonce));
+    send(res, await this.github.finishConnect(req.human, { state: q.get("state"), installationId: q.get("installation_id"), code: q.get("code") }, nonce));
   }
 }

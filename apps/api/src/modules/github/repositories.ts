@@ -1,10 +1,10 @@
 import { and, asc, eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import { ServiceError } from "./service-error";
-import { Q, emit, isUuid } from "./service-core";
-import { upsertNode } from "../modules/map/graph";
-import { requireTeam } from "../modules/teams/teams";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import { ServiceError } from "../../lib/service-error";
+import { Q, emit, isUuid } from "../../lib/service-core";
+import { upsertNode } from "../map/graph";
+import { requireTeam } from "../teams/teams";
 
 const { repositories } = schema;
 

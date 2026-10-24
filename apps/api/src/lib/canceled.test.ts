@@ -18,7 +18,7 @@ import * as cy from "../modules/issues/cycles";
 import * as pr from "../modules/issues/projects";
 import { summary, teamProgress, needsAttention } from "./metrics";
 import { briefing } from "../modules/map/briefing";
-import { decideMove } from "./github/pr-rules";
+import { decideMove } from "../modules/github/pr-rules";
 import { DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
 
 let ada: Actor;

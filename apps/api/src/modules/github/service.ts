@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import type { Actor } from "../access";
-import { addComment, createRepository, emit, requireTeam, moveIssue, ServiceError } from "../service";
-import { land } from "../../modules/map/sync";
+import type { Actor } from "../../lib/access";
+import { addComment, createRepository, emit, requireTeam, moveIssue, ServiceError } from "../../lib/service";
+import { land } from "../map/sync";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { decideMove, ciState, type CheckState } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";

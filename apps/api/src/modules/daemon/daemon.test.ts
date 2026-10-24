@@ -17,7 +17,7 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../lib/access";
 import * as svc from "../../lib/service";
 import * as d from "./internal";
-import { GithubApiError } from "../../lib/github/api";
+import { GithubApiError } from "../github/api";
 import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";
 
 const RUN = Math.random().toString(16).slice(2, 8);

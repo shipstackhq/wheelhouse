@@ -1,5 +1,5 @@
-import type { Human } from "../auth-core";
-import { requireTeam, ServiceError } from "../service";
+import type { Human } from "../../lib/auth-core";
+import { requireTeam, ServiceError } from "../../lib/service";
 import { githubConfig } from "./config";
 import { github } from "./runtime";
 import { makeState, readState, STATE_TTL_MS } from "./state";
