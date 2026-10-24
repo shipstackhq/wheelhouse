@@ -5,7 +5,8 @@ import type { Actor } from "../../common/actor";
 import { bad, day, deriveHealth, oneOf, openProject, text, workspaceEvent, type HealthView, type ProgressCounts } from "./projects";
 import type { Q, Tx } from "../../lib/service";
 import { ServiceError } from "../../common/service-error";
-import { isUuid, workspaceRoleOf } from "../teams/team-access";
+import { workspaceRoleOf } from "../teams/team-access";
+import { isUuid } from "../../common/uuid";
 
 /**
  * Initiatives (WH-119): a goal that groups projects and other initiatives, up to three levels deep. It belongs to the workspace and

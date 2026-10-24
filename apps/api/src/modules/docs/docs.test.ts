@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { sha256 } from "../auth/access";
+import { sha256 } from "../../common/crypto";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
 import * as svc from "../../lib/service";
 import { runTool } from "../../lib/tools";

@@ -1,11 +1,11 @@
 import { and, eq, gt, lt } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { sha256 } from "../auth/access";
-import { randomToken } from "../auth/auth-core";
+import { sha256 } from "../../common/crypto";
+import { randomToken } from "../../common/crypto";
 import { assertionSubject, publicKeyFromRaw, verifyAssertion } from "./daemon-crypto";
 import { rateLimit } from "../../common/rate-limit";
 import { ServiceError } from "../../lib/service";
-import { isUuid } from "../teams/team-access";
+import { isUuid } from "../../common/uuid";
 import { type Device, TOKEN_TTL_S, str } from "./device-common";
 
 /** A paired machine's short-lived tokens: the signed assertion exchange and checking a bearer token. See wheelhouse-cli/daemon/DESIGN.md. */

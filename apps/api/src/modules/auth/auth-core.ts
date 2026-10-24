@@ -1,10 +1,11 @@
-import crypto from "node:crypto";
+import { randomToken } from "../../common/crypto";
 import bcrypt from "bcryptjs";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { actorForKey, AuthError, sessionForToken, sha256 } from "./access";
+import { actorForKey, AuthError, sessionForToken } from "./access";
+import { sha256 } from "../../common/crypto";
 import type { Actor } from "../../common/actor";
-import { isUuid } from "../teams/team-access";
+import { isUuid } from "../../common/uuid";
 
 /**
  * Who is calling, from the raw credentials of a request. Framework-free so the Next app and the API share one
@@ -88,7 +89,6 @@ export async function humanFromSession(token: string | undefined | null) {
 
 export type Human = NonNullable<Awaited<ReturnType<typeof humanFromSession>>>;
 
-export const randomToken = (bytes = 32) => crypto.randomBytes(bytes).toString("base64url");
 
 export const hashPassword = (pw: string) => bcrypt.hash(pw, 10);
 export const verifyPassword = (pw: string, hash: string) => bcrypt.compare(pw, hash);

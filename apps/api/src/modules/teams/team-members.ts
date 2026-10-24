@@ -2,7 +2,9 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
-import { audit, canManagePeople, isUuid, leaveBlock, lockWorkspaceTeams, teamRoleMap, roleOnTeam, workspaceRoleOf } from "./team-access";
+import { audit, leaveBlock, lockWorkspaceTeams, teamRoleMap, roleOnTeam, workspaceRoleOf } from "./team-access";
+import { canManagePeople } from "../../common/roles";
+import { isUuid } from "../../common/uuid";
 import { emit, findWorkspaceTeam, requireTeam, listTeams } from "../../lib/service";
 import { ServiceError } from "../../common/service-error";
 

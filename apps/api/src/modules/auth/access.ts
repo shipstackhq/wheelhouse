@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import { sha256 } from "../../common/crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
@@ -9,7 +9,6 @@ import { rateLimit } from "../../common/rate-limit";
  * APIs in here, so it can be unit-tested; auth.ts adds the cookie and header handling on top.
  */
 
-export const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
 /**
  * Shown to members of a suspended workspace and returned to its API keys. Deliberately says nothing about why.

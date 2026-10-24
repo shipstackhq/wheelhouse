@@ -1,14 +1,16 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { sha256 } from "./access";
+import { sha256 } from "../../common/crypto";
 import { AccountError } from "./accounts";
 import { passwordProblem } from "./auth-policy";
-import { hashPassword, randomToken, switchWorkspace, verifyPassword, type Human } from "./auth-core";
+import { hashPassword, switchWorkspace, verifyPassword, type Human } from "./auth-core";
+import { randomToken } from "../../common/crypto";
 import { acceptInvite, acceptInviteAsMember, createInvite, INVITE_INVALID, listInvites, peekInvite, peekInviteAsMember, revokeInvite, seatInfo, type Issuer, type PendingInvite } from "./invites";
 import * as members from "./members";
 import { onboarding } from "@wheelhouse/shared/onboarding";
 import { minutes, rateLimit } from "../../common/rate-limit";
-import { canManagePeople, isWorkspaceRole, roleAllows, teamRoleMap } from "../teams/team-access";
+import { teamRoleMap } from "../teams/team-access";
+import { canManagePeople, isWorkspaceRole, roleAllows } from "../../common/roles";
 import { listTeams, requireTeam, ServiceError, type Q } from "../../lib/service";
 import type { WorkspaceRole } from "../../db/schema";
 
