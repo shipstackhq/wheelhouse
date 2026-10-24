@@ -4,7 +4,7 @@ import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { audit, canManagePeople, isUuid, leaveBlock, lockWorkspaceTeams, teamRoleMap, roleOnTeam, workspaceRoleOf } from "./team-access";
 import { emit, findWorkspaceTeam, requireTeam, listTeams } from "../../lib/service";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 
 /**
  * Who is in a team and how they got there (ADR-23). Everything here is for people: an agent key cannot add or remove members.

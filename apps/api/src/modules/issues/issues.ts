@@ -2,7 +2,7 @@ import { statusForRole, roleFromText } from "@wheelhouse/shared/status-roles";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { cleanLabels, labelsOf, setIssueLabels, withCycle, withLabels } from "../../lib/links";
 import { assertWritable, type Need, roleAllows, roleOnTeam } from "../teams/team-access";
 import { DEFAULT_STATUSES, Q, Tx, diff, emit, isUuid, lockRow } from "../../lib/service-core";

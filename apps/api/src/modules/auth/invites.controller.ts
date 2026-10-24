@@ -2,7 +2,7 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Query, Req, Res
 import type { Response } from "express";
 import { isInstanceAdmin } from "./auth-policy";
 import { SESSION_COOKIE } from "./auth-core";
-import { clientIp } from "../../lib/rate-limit";
+import { clientIp } from "../../common/rate-limit";
 import { ServiceError } from "../../lib/service";
 import type { RawTextRequest } from "../../http/raw-text";
 import { cookieValue, toHeaders } from "../../http/util";

@@ -3,7 +3,7 @@ import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "@wheelhouse/shared/session-buckets";
 import { bus } from "./event-bus";
-import { ServiceError } from "./service-error";
+import { ServiceError } from "../common/service-error";
 import { Q } from "./service-core";
 import { listTeams, requireTeam } from "../modules/teams/teams";
 

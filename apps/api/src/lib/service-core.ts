@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { schema, type DB } from "../db";
 import type { Actor } from "../common/actor";
 import { deferPublish } from "./event-bus";
-import { ServiceError } from "./service-error";
+import { ServiceError } from "../common/service-error";
 
 const { events } = schema;
 

@@ -1,7 +1,7 @@
 import { Controller, Inject, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { SESSION_COOKIE } from "./auth-core";
-import { clientIp } from "../../lib/rate-limit";
+import { clientIp } from "../../common/rate-limit";
 import { cookieValue, toHeaders } from "../../http/util";
 import type { RawTextRequest } from "../../http/raw-text";
 import { jsonBody, str } from "../../web/body";

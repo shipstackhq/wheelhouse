@@ -1,6 +1,6 @@
 import { AccountError } from "../modules/auth/accounts";
 import { ServiceError } from "./service";
-import { minutes } from "./rate-limit";
+import { minutes } from "../common/rate-limit";
 
 /**
  * Reading a JSON request body for the web app's endpoints: a wrong type is a 400 whose `details.fields` names the field, and

@@ -4,7 +4,7 @@ import type { TeamRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { audit, leaveBlock, lockWorkspaceTeams, roleOnTeam, visibleTeamIds } from "./team-access";
 import { emit, findWorkspaceTeam, requireTeam, type Q } from "../../lib/service";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 
 /**
  * A team's lifecycle (active → retired → deleted) and its place in a hierarchy (WH-128). The guards here are shared by the actions

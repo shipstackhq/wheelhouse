@@ -1,6 +1,6 @@
 import type { Actor } from "../../common/actor";
 import { askEnabled, askMap } from "./ask";
-import { rateLimit } from "../../lib/rate-limit";
+import { rateLimit } from "../../common/rate-limit";
 import * as schema from "../../db/schema";
 import * as svc from "../../lib/service";
 import { ServiceError } from "../../lib/service";

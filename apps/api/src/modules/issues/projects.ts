@@ -4,7 +4,7 @@ import type { Priority, ProjectHealth, ProjectStatus, TeamRole } from "../../db/
 import type { Actor } from "../../common/actor";
 import { avatarUrl } from "../../lib/images";
 import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { isUuid, roleAllows, teamRoleMap, workspaceRoleOf } from "../teams/team-access";
 
 /**

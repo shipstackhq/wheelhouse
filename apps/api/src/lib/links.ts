@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { schema } from "../db";
-import { ServiceError } from "./service-error";
+import { ServiceError } from "../common/service-error";
 import type { Q } from "./service";
 
 /**

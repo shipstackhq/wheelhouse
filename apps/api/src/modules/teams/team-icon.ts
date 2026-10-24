@@ -1,4 +1,4 @@
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { isEmoji, TEAM_ICON_COLORS, TEAM_ICON_NAMES, type TeamIconColor } from "@wheelhouse/shared/team-icon";
 
 // The icons, colours and the emoji check are shared with the web app (packages/shared); only the parsing of a request is the server's.

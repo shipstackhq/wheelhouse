@@ -2,7 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import "reflect-metadata";
 import type { ArgumentsHost } from "@nestjs/common";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../service-error";
 import { AppExceptionFilter } from "../../web/endpoints";
 import { ServiceErrorFilter } from "./service-error.filter";
 

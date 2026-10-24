@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { getDocTemplate, listDocTemplates as listDocTemplatesStatic } from "@wheelhouse/shared/doc-templates";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { cleanLabels } from "../../lib/links";
 import { Q, diff, emit, isUuid, lockRow } from "../../lib/service-core";
 import { normPath } from "../map/freshness";

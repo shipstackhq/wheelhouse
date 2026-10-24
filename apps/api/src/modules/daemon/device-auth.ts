@@ -3,7 +3,7 @@ import { getDb, schema } from "../../db";
 import { sha256 } from "../auth/access";
 import { randomToken } from "../auth/auth-core";
 import { assertionSubject, publicKeyFromRaw, verifyAssertion } from "./daemon-crypto";
-import { rateLimit } from "../../lib/rate-limit";
+import { rateLimit } from "../../common/rate-limit";
 import { ServiceError } from "../../lib/service";
 import { isUuid } from "../teams/team-access";
 import { type Device, TOKEN_TTL_S, str } from "./device-common";

@@ -2,7 +2,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { assertWritable, audit } from "./team-access";
 import { REQUIRED_ROLES, ROLE_ORDER, STATUS_NAME_MAX, roleRank, type StatusRole } from "@wheelhouse/shared/status-roles";
 import { TEAM_ICON_COLORS } from "./team-icon";

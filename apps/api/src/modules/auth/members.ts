@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import { isUuid } from "../teams/team-access";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import type { WorkspaceRole } from "../../db/schema";
 
 /**

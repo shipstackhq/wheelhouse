@@ -5,7 +5,7 @@ import { sha256 } from "../auth/access";
 import type { Actor } from "../../common/actor";
 import { randomToken } from "../auth/auth-core";
 import { publicKeyFromRaw, rawPublicKey, serverSigningKey } from "./daemon-crypto";
-import { rateLimit } from "../../lib/rate-limit";
+import { rateLimit } from "../../common/rate-limit";
 import { ServiceError } from "../../lib/service";
 import { workspaceRoleOf } from "../teams/team-access";
 import { PAIRING_POLL_INTERVAL_S, PAIRING_TTL_MS, str } from "./device-common";

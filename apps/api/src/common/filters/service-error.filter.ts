@@ -1,7 +1,7 @@
 import { Catch, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
 import { appFailure } from "../../lib/api-errors";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../service-error";
 
 /**
  * Renders a ServiceError the way the app answers it today: the same status and `{ error: { code, message, details? } }` that

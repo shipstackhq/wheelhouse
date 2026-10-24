@@ -2,7 +2,7 @@ import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/com
 import type { Request } from "express";
 import type { Actor } from "../common/actor";
 import { actorFromCredentials, SESSION_COOKIE } from "../modules/auth/auth-core";
-import { clientIp } from "../lib/rate-limit";
+import { clientIp } from "../common/rate-limit";
 import { cookieValue, toHeaders } from "../http/util";
 
 export type AuthedRequest = Request & { actor: Actor };

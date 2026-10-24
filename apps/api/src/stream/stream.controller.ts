@@ -2,7 +2,7 @@ import { Controller, Get, Inject, Param, Req, Res } from "@nestjs/common";
 import { Readable } from "node:stream";
 import type { Request, Response } from "express";
 import { actorFromCredentials, SESSION_COOKIE } from "../modules/auth/auth-core";
-import { clientIp } from "../lib/rate-limit";
+import { clientIp } from "../common/rate-limit";
 import { openStream } from "../lib/stream-open";
 import { teamScope, workspaceScope, type StreamScope } from "../lib/stream-scope";
 import type { Actor } from "../common/actor";

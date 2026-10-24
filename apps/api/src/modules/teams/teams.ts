@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { deleteBlock, resolveParent } from "./team-lifecycle";
 import { assertWritable, audit, lockWorkspaceTeams, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
 import { Q, emit, isUuid } from "../../lib/service-core";

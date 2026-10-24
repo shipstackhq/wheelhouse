@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 import { withNodeIds } from "../../lib/links";
 import { Q, diff, emit, isUuid, lockRow } from "../../lib/service-core";
 import { anchorScore } from "./freshness";

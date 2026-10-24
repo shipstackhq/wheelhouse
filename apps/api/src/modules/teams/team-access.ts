@@ -3,7 +3,7 @@ import { schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import type { Q } from "../../lib/service";
-import { ServiceError } from "../../lib/service-error";
+import { ServiceError } from "../../common/service-error";
 
 /**
  * Who can open a team (ADR-23). A team is reachable only through a row in `team_members`; the workspace role never

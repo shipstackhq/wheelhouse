@@ -17,7 +17,7 @@ import { sha256, WORKSPACE_SUSPENDED_MESSAGE } from "./access";
 import { AccountError, logIn, signUp } from "./accounts";
 import { appFailure } from "../../lib/api-errors";
 import { endSession, startSession, verifyPassword } from "./auth-core";
-import { resetRateLimit } from "../../lib/rate-limit";
+import { resetRateLimit } from "../../common/rate-limit";
 
 const PASSWORD = "correct horse battery";
 let n = 0;
