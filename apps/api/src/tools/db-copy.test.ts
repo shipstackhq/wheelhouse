@@ -13,7 +13,7 @@ import { createRequire } from "node:module";
 import { sql } from "drizzle-orm";
 import { closeDb, getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
-import { createDoc } from "../modules/docs/docs";
+import { createDoc } from "../modules/docs/docs.legacy";
 import { addComment, createIssue, updateIssue } from "../modules/issues/issues";
 import { upsertDecision, upsertTerm } from "../modules/map/decisions";
 import { upsertEdge, upsertFlow, upsertNode } from "../modules/map/graph";

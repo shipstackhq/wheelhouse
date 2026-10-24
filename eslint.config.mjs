@@ -22,13 +22,13 @@ export default [
         {
           patterns: [
             {
-              // ../<other>/<file>: a sibling module's file (its index.ts and the folder itself are allowed)
-              regex: "^\\.\\./(?!\\.\\./)[^/]+/(?!index(\\.[jt]sx?)?$).+",
+              // ../<other>/<file>: a sibling module's file (its index.ts, the folder itself and its <area>.module.ts are allowed)
+              regex: "^\\.\\./(?!\\.\\./)[^/]+/(?!index(\\.[jt]sx?)?$)(?![a-z-]+\\.module(\\.[jt]sx?)?$).+",
               message: "Import another module only through its index.ts (its public surface), never its internals.",
             },
             {
               // ../../modules/<other>/<file>: the same, reached from further down the tree
-              regex: "^(\\.\\./)+modules/[^/]+/(?!index(\\.[jt]sx?)?$).+",
+              regex: "^(\\.\\./)+modules/[^/]+/(?!index(\\.[jt]sx?)?$)(?![a-z-]+\\.module(\\.[jt]sx?)?$).+",
               message: "Import another module only through its index.ts (its public surface), never its internals.",
             },
           ],

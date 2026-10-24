@@ -1,5 +1,6 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from "@nestjs/common";
 import { DocsService } from "./docs.service";
+import { docView as view, docsIndexView, withCurrentDoc } from "./docs.presenter";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
@@ -13,32 +14,33 @@ export class DocsController {
 
   /** The tree, and what the page's side panels offer: map nodes to link, decisions to link, the workspace's members. */
   @Get(":key/docs")
-  index(@Req() req: SessionRequest, @Param("key") key: string) {
-    return this.docs.docsIndex(req.human, key);
+  async index(@Req() req: SessionRequest, @Param("key") key: string) {
+    return docsIndexView(await this.docs.docsIndex(req.human, key));
   }
 
   @Get(":key/docs/:ref")
-  get(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string) {
-    return this.docs.getDocAs(req.human.actor, key, ref);
+  async get(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string) {
+    const { doc, nodes, owner, contributors } = await this.docs.getDoc(req.human.actor, key, ref);
+    return { doc: view(doc), nodes, owner, contributors };
   }
 
   /** `{ title, body?, parent?, template? }`: a template fills the body when none is given. */
   @Post(":key/docs")
   async create(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
-    return { doc: await this.docs.createDocAs(req.human.actor, key, body) };
+    return { doc: view(await this.docs.createDocAs(req.human.actor, key, body)) };
   }
 
   /** `{ title?, body?, anchors?, version? }`: with `version`, a doc changed since is a 409 `conflict` and nothing is overwritten. */
   @Patch(":key/docs/:ref")
   async update(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string, @JsonBody() body: JsonObject) {
-    return { doc: await this.docs.updateDocAs(req.human.actor, key, ref, body) };
+    return { doc: view(await withCurrentDoc(() => this.docs.updateDocAs(req.human.actor, key, ref, body))) };
   }
 
   /** "Still accurate": clears the stale flag without changing the doc. */
   @Post(":key/docs/:ref/fresh")
   @HttpCode(200)
   async fresh(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string) {
-    return { doc: await this.docs.markDocFreshAs(req.human.actor, key, ref) };
+    return { doc: view(await this.docs.markDocFresh(req.human.actor, key, ref)) };
   }
 
   /** File paths the doc probably describes: path-like words in its text and the anchors of the map nodes it is linked to. */
@@ -51,7 +53,7 @@ export class DocsController {
   @Post(":key/docs/:ref/move")
   @HttpCode(200)
   async move(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string, @JsonBody() body: JsonObject) {
-    return { doc: await this.docs.moveDocAs(req.human.actor, key, ref, body) };
+    return { doc: view(await withCurrentDoc(() => this.docs.moveDocAs(req.human.actor, key, ref, body))) };
   }
 
   /** Deletes the doc and everything nested under it. */

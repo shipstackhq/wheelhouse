@@ -26,7 +26,7 @@ import { actorForKey, userForSessionToken } from "../apps/api/src/modules/auth/a
 import { sha256 } from "../apps/api/src/common/crypto";
 import { ServiceError } from "../apps/api/src/common/service-error";
 import { listEvents, markAllSeen, queueStatus, removeSession } from "../apps/api/src/lib/service-queue";
-import { createDoc, getDoc, linkDocNode, markDocFresh } from "../apps/api/src/modules/docs/docs";
+import { createDoc, getDoc, linkDocNode, markDocFresh } from "../apps/api/src/modules/docs/docs.legacy";
 import { createRepository, findOrCreateRepository, listRepositories, retireRepository, updateRepository } from "../apps/api/src/modules/github/repositories";
 import { linkIssueNode } from "../apps/api/src/modules/issues/issue-nodes";
 import { addComment, createIssue, getIssue, updateIssue } from "../apps/api/src/modules/issues/issues";
@@ -845,7 +845,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
   "apps/api/src/modules/dashboard/checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/modules/docs/docs.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/docs/docs.repository.ts": "the only file of the docs module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need): a doc, a parent and a linked node are found inside the actor's team only, so another workspace's are not_found (tested in docs.test.ts and in this file's cross-workspace attacks); the members it lists are those of the signed-in person's own workspace, and an agent key's capabilities are read by the key's own id (tested)",
   "apps/api/src/modules/map/freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/graph.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
@@ -859,7 +859,6 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/issues/cycles.ts": "every statement starts from the team found through requireTeam(actor, key, need) and is scoped by that team's id; a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
   "apps/api/src/modules/issues/projects.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
   "apps/api/src/modules/issues/initiatives.ts": "workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
-  "apps/api/src/modules/docs/docs-app.ts": "the web app's docs functions: the only direct query reads the members of the signed-in person's own workspace; everything else goes through the service layer, which resolves the team with requireTeam(actor) and finds docs and nodes inside it (tested)",
   "apps/api/src/modules/auth/workspace-app.ts": "the web app's workspace, key and invite functions: every statement is scoped by the signed-in person's workspace id (members, keys, pending invites), a user or key id from another workspace matches nothing and reads as not found (tested)",
 };
 

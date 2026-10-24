@@ -18,4 +18,4 @@ export * from "../modules/map/freshness";
 export * from "../modules/map/decisions";
 export * from "./service-queue";
 export * from "../modules/dashboard/checklist";
-export * from "../modules/docs/docs";
+export { createDoc, deleteDoc, getDoc, linkDocNode, listDocs, listDocTemplates, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "../modules/docs/docs.legacy";
