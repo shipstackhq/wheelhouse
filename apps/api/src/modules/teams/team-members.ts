@@ -103,7 +103,7 @@ async function adminCount(q: Parameters<typeof audit>[0], teamId: string) {
 }
 
 /** Add a workspace member to the team. Team admins only; the person must already be in the workspace. */
-export async function addTeamMember(actor: Actor, teamRef: string, input: { userId: string; role: unknown }) {
+export async function addTeamMember(actor: Actor, teamRef: string, input: { userId: string; role?: unknown }) {
   people(actor);
   if (!isTeamRole(input.role)) throw new ServiceError("invalid", "Choose a team role: admin, editor or viewer");
   const db = await getDb();

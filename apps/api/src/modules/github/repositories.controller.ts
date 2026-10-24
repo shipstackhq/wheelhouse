@@ -1,6 +1,6 @@
 import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody } from "../../web/body";
+import { jsonBody } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 import { requestOrigin } from "../../web/origin";
 import { GithubService } from "./github.service";

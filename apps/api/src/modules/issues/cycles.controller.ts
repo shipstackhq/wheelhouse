@@ -2,7 +2,7 @@ import { Controller, Inject, Delete, Get, Param, Patch, Post, Req, UseGuards } f
 import { ServiceError } from "../../common/service-error";
 import { IssuesService } from "./issues.service";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody } from "../../web/body";
+import { jsonBody } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 
 /** A cycle is addressed by its number inside the team. Anything that is not a whole number is a cycle that does not exist. */

@@ -26,7 +26,8 @@ The environment is the Next app's: `DATABASE_URL` (a real Postgres) or, without 
 
 ## How it is built
 
-- Everything that decides who may come in, what a tool does and how an error is shaped is `@wheelhouse/core`: `lib/auth-core`, `lib/mcp`, `lib/api-errors`, `lib/tools`. The Next app uses the same functions. Controllers only read the request and write the response; none touches the database, and the isolation audit fails if one does.
+- The code is organised as NestJS modules, one per area (`src/modules/<area>`: daemon, teams, docs, issues, map, github, auth, dashboard), over a platform layer (`src/platform`: config, database, events, streams, storage) and shared plumbing (`src/common`). A module owns its tables, reaches the others only through their `index.ts` (an ESLint error otherwise), and has a service that is the one door to it. `docs/nest-architecture.md` is the decision record and the status of the migration. What is left in `src/lib` is the MCP and v1 tool layer (`tools.ts`, `mcp.ts`, `prompts.ts`, `service.ts`), the agent queue, images and a few helpers.
+- Controllers only read the request and write the response; none touches the database, and the isolation audit fails if one does. A route that takes a body declares a DTO (a Zod schema in the module's `dto/` folder) with `@JsonBody(new ZodValidationPipe(schema))`; the lenient fields in `common/pipes/lenient.ts` keep today's behaviour of leaving the judging to the service.
 - ESM, started with `tsx`, no build step yet. `tsx` does not emit decorator metadata, so every injected dependency uses an explicit `@Inject(...)`.
 - Request bodies are read as text by `http/raw-text.ts` and parsed in the handler, so authentication is judged before the body is, and the webhook signature is checked over exactly the bytes GitHub signed.
 - Routes that are for people in a browser (`/api/github/*`) use `HumanGuard`: a `wh_session` cookie, otherwise a 307 to `/login`. Redirects are relative paths.

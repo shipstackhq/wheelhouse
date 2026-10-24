@@ -4,7 +4,7 @@ import { SESSION_COOKIE } from "./auth-core";
 import { clientIp } from "../../common/rate-limit";
 import { cookieValue, toHeaders } from "../../http/util";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody, str } from "../../web/body";
+import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../web/endpoints";
 import { beginSession } from "./begin";
 import { clearSessionCookie } from "../../web/session-cookie";

@@ -3,7 +3,7 @@ import { nodeView } from "./map-app";
 import { ServiceError } from "../../common/service-error";
 import { MapService } from "./map.service";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody, str } from "../../web/body";
+import { jsonBody, str } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 
 /** The map, decisions, glossary and activity pages. A team, node, edge, flow, decision or term of another workspace is a 404. */

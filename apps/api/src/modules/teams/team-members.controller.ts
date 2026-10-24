@@ -1,10 +1,11 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 
 import { TeamsService } from "./teams.service";
-import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody, str } from "../../web/body";
 
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { addMemberDto, setMemberRoleDto, type AddMemberDto, type SetMemberRoleDto } from "./dto/teams.dto";
 
 
 /**
@@ -32,15 +33,14 @@ export class TeamMembersController {
   /** `{ userId, role }` with role admin, editor or viewer. 201; someone already in is a 409. */
   @Post("teams/:key/members")
   @HttpCode(201)
-  async add(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    const b = jsonBody(req);
-    return { member: await this.teams.addTeamMember(req.human.actor, key, { userId: str(b.userId), role: b.role }) };
+  async add(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody(new ZodValidationPipe(addMemberDto)) body: AddMemberDto) {
+    return { member: await this.teams.addTeamMember(req.human.actor, key, body) };
   }
 
   /** `{ role }`. The last admin cannot be demoted (409). */
   @Patch("teams/:key/members/:userId")
-  async setRole(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("userId") userId: string) {
-    return { member: await this.teams.setTeamMemberRole(req.human.actor, key, userId, jsonBody(req).role) };
+  async setRole(@Req() req: SessionRequest, @Param("key") key: string, @Param("userId") userId: string, @JsonBody(new ZodValidationPipe(setMemberRoleDto)) body: SetMemberRoleDto) {
+    return { member: await this.teams.setTeamMemberRole(req.human.actor, key, userId, body.role) };
   }
 
   /** Remove someone, or leave yourself. The last admin cannot go (409). */

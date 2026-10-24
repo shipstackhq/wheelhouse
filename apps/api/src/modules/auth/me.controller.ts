@@ -3,7 +3,7 @@ import { SESSION_COOKIE } from "./auth-core";
 import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../http/raw-text";
 import { cookieValue } from "../../http/util";
-import { jsonBody, str } from "../../web/body";
+import { jsonBody, str } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 import { meView } from "./me";
 import { AuthService } from "./auth.service";

@@ -6,7 +6,7 @@ import { clientIp } from "../../common/rate-limit";
 import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../http/raw-text";
 import { cookieValue, toHeaders } from "../../http/util";
-import { jsonBody, str } from "../../web/body";
+import { jsonBody, str } from "../../common/body";
 import { beginSession } from "./begin";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 import { requestOrigin } from "../../web/origin";

@@ -2,7 +2,7 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Req, Use
 import { markAllSeen } from "../../lib/service-queue";
 import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody, str } from "../../web/body";
+import { jsonBody, str } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 import { requestOrigin } from "../../web/origin";
 import { AuthService } from "./auth.service";

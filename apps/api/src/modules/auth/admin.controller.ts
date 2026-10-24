@@ -3,7 +3,7 @@ import { isInstanceAdmin } from "./auth-policy";
 import { ServiceError } from "../../common/service-error";
 import { type Admin } from "./workspaces-admin";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody, str } from "../../web/body";
+import { jsonBody, str } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 import { AuthService } from "./auth.service";
 

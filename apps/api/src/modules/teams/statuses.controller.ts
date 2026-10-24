@@ -1,10 +1,11 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 
 import { TeamsService } from "./teams.service";
-import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody } from "../../web/body";
 
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { reorderStatusesDto, statusBodyDto, type ReorderStatusesDto, type StatusBodyDto } from "./dto/teams.dto";
 
 
 /**
@@ -26,20 +27,20 @@ export class StatusesController {
   /** `{ name, role, color? }`: a new status at the end of its role's group; the first of a role is its default. 201 with the status; a taken name is a 409. */
   @Post(":key/statuses")
   @HttpCode(201)
-  async create(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { status: await this.teams.createStatus(req.human.actor, key, jsonBody(req)) };
+  async create(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody(new ZodValidationPipe(statusBodyDto)) body: StatusBodyDto) {
+    return { status: await this.teams.createStatus(req.human.actor, key, body) };
   }
 
   /** `{ ids }`: every status of the team in the order wanted. Roles must stay grouped in their order. Answers the list. */
   @Put(":key/statuses/order")
-  async order(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { statuses: await this.teams.reorderStatuses(req.human.actor, key, jsonBody(req).ids) };
+  async order(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody(new ZodValidationPipe(reorderStatusesDto)) body: ReorderStatusesDto) {
+    return { statuses: await this.teams.reorderStatuses(req.human.actor, key, body.ids) };
   }
 
   /** `{ name?, color?, isDefault? }`: `isDefault` only as true. A role cannot change (400). The status is an id or a name. */
   @Patch(":key/statuses/:id")
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string, @Param("id") id: string) {
-    return { status: await this.teams.updateStatus(req.human.actor, key, id, jsonBody(req)) };
+  async update(@Req() req: SessionRequest, @Param("key") key: string, @Param("id") id: string, @JsonBody(new ZodValidationPipe(statusBodyDto)) body: StatusBodyDto) {
+    return { status: await this.teams.updateStatus(req.human.actor, key, id, body) };
   }
 
   /** `?moveTo=<id or name>`: where its issues go, needed when it has any (409 with their count otherwise). The last status of a required role stays (409). */

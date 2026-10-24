@@ -6,7 +6,7 @@ import { clientIp } from "../../common/rate-limit";
 import type { RawTextRequest } from "../../http/raw-text";
 import { toHeaders } from "../../http/util";
 import { StreamRegistry } from "../../platform/streams/stream.registry";
-import { jsonBody } from "../../web/body";
+import { jsonBody } from "../../common/body";
 import { requestOrigin } from "../../web/origin";
 import { DaemonExceptionFilter } from "./daemon-exception.filter";
 import { DaemonService } from "./daemon.service";

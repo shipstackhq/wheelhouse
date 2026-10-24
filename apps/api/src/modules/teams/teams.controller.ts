@@ -2,10 +2,11 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Que
 
 import { ServiceError } from "../../common/service-error";
 import { TeamsService } from "./teams.service";
-import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody, str } from "../../web/body";
 
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
+import { JsonBody } from "../../common/decorators/json-body.decorator";
+import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
+import { createTeamDto, setOrderDto, setParentDto, updateTeamDto, type CreateTeamDto, type SetOrderDto, type SetParentDto, type UpdateTeamDto } from "./dto/teams.dto";
 
 
 const view = (p: { id: string; key: string; name: string; description: string; createdAt: Date; icon?: string | null; iconColor?: string | null; role?: string; retiredAt?: Date | null; parentId?: string | null }) => ({ id: p.id, key: p.key, name: p.name, description: p.description, createdAt: p.createdAt, icon: p.icon ?? null, iconColor: p.iconColor ?? null, retired: !!p.retiredAt, parentId: p.parentId ?? null, ...(p.role ? { role: p.role } : {}) });
@@ -25,17 +26,16 @@ export class TeamsController {
   /** `{ keys }`: the order this person keeps their teams in, first to last. Theirs alone; the list above comes back in it. */
   @Put("order")
   @UseGuards(SessionGuard)
-  async order(@Req() req: SessionRequest & RawTextRequest) {
-    return this.teams.setTeamOrder(req.human.actor, jsonBody(req).keys);
+  async order(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(setOrderDto)) body: SetOrderDto) {
+    return this.teams.setTeamOrder(req.human.actor, body.keys);
   }
 
   /** `{ name, key?, description? }`. The key defaults from the name. 201 with the team; a taken key is a 409. */
   @Post()
   @UseGuards(SessionGuard)
   @HttpCode(201)
-  async create(@Req() req: SessionRequest & RawTextRequest) {
-    const b = jsonBody(req);
-    return { team: view(await this.teams.createTeam(req.human.actor, { name: str(b.name), key: str(b.key) || undefined, description: str(b.description), parent: str(b.parent) || null })) };
+  async create(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(createTeamDto)) body: CreateTeamDto) {
+    return { team: view(await this.teams.createTeam(req.human.actor, body)) };
   }
 
   /** The teams you can open that could be the parent of a team being created. */
@@ -62,8 +62,8 @@ export class TeamsController {
   /** `{ parent }`: a team key, or null to make the team top-level. Admin of the team, who must be able to open the parent. Cycles are a 400. */
   @Put(":key/parent")
   @UseGuards(SessionGuard)
-  async setParent(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    return { team: view(await this.teams.setTeamParent(req.human.actor, key, str(jsonBody(req).parent) || null)) };
+  async setParent(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody(new ZodValidationPipe(setParentDto)) body: SetParentDto) {
+    return { team: view(await this.teams.setTeamParent(req.human.actor, key, body.parent)) };
   }
 
   /** Retire the team (admins). The last active team, a project lead and a team with active children are a 409. */
@@ -94,9 +94,8 @@ export class TeamsController {
   /** `{ name?, description?, icon?, iconColor? }`: team settings. `icon` is `ri:<name>` or one emoji, `null` clears it. Team admins only (403 otherwise); the key does not change. */
   @Patch(":key")
   @UseGuards(SessionGuard)
-  async update(@Req() req: SessionRequest & RawTextRequest, @Param("key") key: string) {
-    const b = jsonBody(req);
-    return { team: view(await this.teams.updateTeam(req.human.actor, key, { name: typeof b.name === "string" ? b.name : undefined, description: typeof b.description === "string" ? b.description : undefined, icon: b.icon, iconColor: b.iconColor })) };
+  async update(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody(new ZodValidationPipe(updateTeamDto)) body: UpdateTeamDto) {
+    return { team: view(await this.teams.updateTeam(req.human.actor, key, body)) };
   }
 
   /** Teammates remove an agent session from a team (soft delete: if it reconnects it starts at the top of the queue). */

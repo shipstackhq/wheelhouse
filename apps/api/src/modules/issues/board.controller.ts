@@ -3,7 +3,7 @@ import { statusField, issueInput } from "./board-app";
 import { queueStatus } from "../../lib/service-queue";
 import { IssuesService } from "./issues.service";
 import type { RawTextRequest } from "../../http/raw-text";
-import { jsonBody } from "../../web/body";
+import { jsonBody } from "../../common/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";
 
 @Controller("api/app/teams")
