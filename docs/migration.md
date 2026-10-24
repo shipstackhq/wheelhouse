@@ -32,7 +32,7 @@ PGLITE_DIR=<a COPY of a data directory> pnpm exec next dev -p 3456
 - `tests/isolation.test.ts` and `tests/invites.test.ts` are the database suites that used to sit in `src/lib`. The isolation audit now walks `apps/api/src` (the old `packages/core` was folded into the API, see docs/nest-architecture.md).
 - `tests/contract/` is the HTTP contract suite, run against the NestJS API by default (`pnpm test:contract`).
 - `docs/ui-api.md` keeps the inventory of the 59 server actions and the endpoint that replaced each, as a record.
-- `docs/reanchor-rules.json` records how Next paths map to the new layout; `pnpm map:reanchor` uses it to move map nodes and docs.
+- The tool that moved map nodes and docs to the new paths (`map:reanchor`, with its rules file) did its job and was removed.
 
 ## Work parked at the freeze
 

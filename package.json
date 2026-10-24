@@ -17,8 +17,6 @@
     "db:export": "tsx apps/api/src/tools/db-cli.ts export",
     "db:import": "tsx apps/api/src/tools/db-cli.ts import",
     "db:verify": "tsx apps/api/src/tools/db-cli.ts verify",
-    "map:reanchor": "tsx apps/api/src/tools/reanchor-cli.ts",
-    "map:after-migration": "tsx apps/api/src/tools/post-migration-map-cli.ts",
     "db:preflight": "tsx apps/api/src/tools/db-cli.ts preflight"
   },
   "dependencies": {
