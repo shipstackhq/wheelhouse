@@ -3,7 +3,9 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { withNodeIds } from "../../lib/links";
-import { Q, diff, emit, isUuid, lockRow } from "../../lib/service-core";
+import { isUuid } from "../../common/uuid";
+import { Q, lockRow } from "../../platform/database/transaction";
+import { diff, emit } from "../../platform/events/emit";
 import { anchorScore } from "./freshness";
 import { requireTeam } from "../teams/teams";
 

@@ -3,7 +3,8 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { setDecisionNodes, withNodeIds } from "../../lib/links";
-import { diff, emit, isUuid } from "../../lib/service-core";
+import { isUuid } from "../../common/uuid";
+import { diff, emit } from "../../platform/events/emit";
 import { resolveNode } from "./graph";
 import { requireTeam } from "../teams/teams";
 

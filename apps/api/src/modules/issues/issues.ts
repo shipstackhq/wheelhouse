@@ -1,12 +1,16 @@
-import { statusForRole, roleFromText } from "@wheelhouse/shared/status-roles";
+import { statusForRole, roleFromText, DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { cleanLabels, labelsOf, setIssueLabels, withCycle, withLabels } from "../../lib/links";
 import { assertWritable, type Need, roleAllows, roleOnTeam } from "../teams/team-access";
-import { DEFAULT_STATUSES, Q, Tx, diff, emit, isUuid, lockRow } from "../../lib/service-core";
+import { isUuid } from "../../common/uuid";
+import { Q, Tx, lockRow } from "../../platform/database/transaction";
+import { diff, emit } from "../../platform/events/emit";
 import { requireTeam } from "../teams/teams";
+
+export const DEFAULT_STATUSES = DEFAULT_STATUS_DEFS.map((c) => c.name);
 
 const { teams, statuses, issues, comments, nodes, issueNodes, events, projects } = schema;
 

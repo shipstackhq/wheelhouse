@@ -4,7 +4,7 @@ import path from "node:path";
 import { sql } from "drizzle-orm";
 import { drizzle as drizzlePg, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
-import { publishAfterCommit } from "../lib/event-bus";
+import { publishAfterCommit } from "../platform/events/event-bus";
 
 const require = createRequire(import.meta.url); // the drivers are loaded only when used (below), so a PGlite-only run never loads postgres
 

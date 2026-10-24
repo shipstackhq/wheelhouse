@@ -1,13 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
-import { emit, type Q } from "../../lib/service";
+import type { Q } from "../database/transaction";
+import { emit } from "./emit";
 
-/** The shape of one event, as core's emit takes it. */
+/** The shape of one event, as `emit` takes it. */
 export type EventInput = Parameters<typeof emit>[3];
 
 /**
- * Publishes to the event log (events, and the live streams that follow it) without a module importing core's service layer.
- * Same contract as core's emit: pass the transaction (q) when the change is in one, so the event commits with it.
+ * Publishes to the event log (events, and the live streams that follow it) without a module importing the legacy service layer.
+ * Same contract as `emit`: pass the transaction (q) when the change is in one, so the event commits with it.
  */
 @Injectable()
 export class EventsService {

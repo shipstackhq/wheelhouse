@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { emit } from "../../lib/service-core";
+import { emit } from "../../platform/events/emit";
 import { DocRow } from "../docs/docs";
 import { Layer, NodeRow, upsertNode } from "./graph";
 import { findOrCreateRepository } from "../github/repositories";

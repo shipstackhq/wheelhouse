@@ -12,13 +12,13 @@ if (process.env.TEST_DATABASE_URL) {
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "../common/actor";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../common/actor";
 import { bus, type StreamEvent } from "./event-bus";
-import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
-import * as svc from "./service";
-import { runTool } from "./tools";
-import { teamScope, workspaceScope } from "../platform/streams/stream-scope";
+import { scopeKeyToAllTeams } from "../../modules/auth/key-scope";
+import * as svc from "../../lib/service";
+import { runTool } from "../../lib/tools";
+import { teamScope, workspaceScope } from "../streams/stream-scope";
 
 let human: Actor;
 let agent: Actor;

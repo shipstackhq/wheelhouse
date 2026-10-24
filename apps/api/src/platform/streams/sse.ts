@@ -1,4 +1,4 @@
-import type { StreamEvent } from "../../lib/event-bus";
+import type { StreamEvent } from "../events/event-bus";
 
 /** Idle connections are closed by proxies after a minute or so; a comment line this often keeps them open. */
 export const HEARTBEAT_MS = 25_000;

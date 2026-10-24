@@ -2,9 +2,9 @@ import { and, asc, desc, eq, gt, isNull, lt, lte, ne, or, sql } from "drizzle-or
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { bucketOf, REMOVED_KEEP_MS, SESSION_IDLE_LIMIT_MS } from "@wheelhouse/shared/session-buckets";
-import { bus } from "./event-bus";
+import { bus } from "../platform/events/event-bus";
 import { ServiceError } from "../common/service-error";
-import { Q } from "./service-core";
+import { Q } from "../platform/database/transaction";
 import { listTeams, requireTeam } from "../modules/teams/teams";
 
 const { issues, nodes, events, agentCursors, workSessions, docs } = schema;

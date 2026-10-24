@@ -2,7 +2,9 @@ import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { Q, emit, isUuid } from "../../lib/service-core";
+import { isUuid } from "../../common/uuid";
+import { Q } from "../../platform/database/transaction";
+import { emit } from "../../platform/events/emit";
 import { upsertNode } from "../map/graph";
 import { requireTeam } from "../teams/teams";
 

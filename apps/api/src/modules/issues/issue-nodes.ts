@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { emit } from "../../lib/service-core";
+import { emit } from "../../platform/events/emit";
 import { resolveNode } from "../map/graph";
 import { resolveIssue } from "./issues";
 

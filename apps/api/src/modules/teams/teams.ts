@@ -6,7 +6,9 @@ import { parseTeamIcon, parseTeamIconColor } from "./team-icon";
 import { ServiceError } from "../../common/service-error";
 import { deleteBlock, resolveParent } from "./team-lifecycle";
 import { assertWritable, audit, lockWorkspaceTeams, type Need, roleAllows, roleOnTeam, visibleTeamIds, workspaceRoleOf } from "./team-access";
-import { Q, emit, isUuid } from "../../lib/service-core";
+import { isUuid } from "../../common/uuid";
+import { Q } from "../../platform/database/transaction";
+import { emit } from "../../platform/events/emit";
 
 const { teams, statuses, events, projects } = schema;
 

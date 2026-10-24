@@ -1,4 +1,4 @@
-import { ServiceError } from "./service-core";
+import { ServiceError } from "../common/service-error";
 
 /**
  * The single write path for Wheelhouse. UI server actions, the REST API and the
@@ -9,7 +9,9 @@ import { ServiceError } from "./service-core";
  * their modules (docs/nest-architecture.md); this file only re-exports them.
  */
 export { ServiceError };
-export * from "./service-core";
+export * from "../platform/events/emit";
+export * from "../platform/database/transaction";
+export * from "../common/uuid";
 export * from "../modules/teams/teams";
 export * from "../modules/issues/issues";
 export * from "../modules/issues/issue-nodes";

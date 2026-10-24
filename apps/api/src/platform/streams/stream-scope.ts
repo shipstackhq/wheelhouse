@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import type { Scope, StreamEvent } from "../../lib/event-bus";
+import type { Scope, StreamEvent } from "../events/event-bus";
 import { visibleTeamIds } from "../../modules/teams/team-access";
 import { requireTeam, ServiceError } from "../../lib/service";
 
