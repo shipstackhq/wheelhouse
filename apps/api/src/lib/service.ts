@@ -13,7 +13,7 @@ export { createTeam, deleteTeam, listTeams, requireTeam, updateTeam } from "../m
 export * from "../modules/issues/issues";
 export * from "../modules/issues/issue-nodes";
 export * from "../modules/map/graph";
-export * from "../modules/github/repositories";
+export { findOrCreateRepository, listRepositories } from "../modules/github/github.legacy";
 export * from "../modules/map/freshness";
 export * from "../modules/map/decisions";
 export * from "./service-queue";

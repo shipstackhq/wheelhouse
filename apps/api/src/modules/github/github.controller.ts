@@ -1,10 +1,9 @@
 import { Controller, Get, Inject, Req, Res, UseFilters, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
-import { type ConnectReply } from "./connect";
+import { ConnectService, type ConnectReply } from "./connect.service";
 import { STATE_COOKIE, STATE_COOKIE_PATH } from "./state";
 import { HumanGuard, SignedOutFilter, type HumanRequest } from "../../common/guards/human.guard";
 import { cookieValue } from "../../common/http/cookies";
-import { GithubService } from "./github.service";
 
 /** Send what the github module decided about connecting GitHub: the redirect or text, and the state cookie. */
 function send(res: Response, r: ConnectReply) {
@@ -20,12 +19,12 @@ const query = (req: HumanRequest) => new URL(req.originalUrl, "http://localhost"
 @UseFilters(SignedOutFilter)
 @UseGuards(HumanGuard)
 export class GithubController {
-  constructor(@Inject(GithubService) private readonly github: GithubService) {}
+  constructor(@Inject(ConnectService) private readonly connect: ConnectService) {}
 
   /** Start connecting GitHub for a team: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
   @Get("install")
   async install(@Req() req: HumanRequest, @Res() res: Response) {
-    send(res, await this.github.startConnect(req.human, query(req).get("team") ?? ""));
+    send(res, await this.connect.startConnect(req.human, query(req).get("team") ?? ""));
   }
 
   /** Where GitHub sends people after they install the App. The checks that make the installation id trustworthy are core's. */
@@ -33,6 +32,6 @@ export class GithubController {
   async callback(@Req() req: HumanRequest, @Res() res: Response) {
     const q = query(req);
     const nonce = cookieValue(req.headers.cookie, STATE_COOKIE);
-    send(res, await this.github.finishConnect(req.human, { state: q.get("state"), installationId: q.get("installation_id"), code: q.get("code") }, nonce));
+    send(res, await this.connect.finishConnect(req.human, { state: q.get("state"), installationId: q.get("installation_id"), code: q.get("code") }, nonce));
   }
 }

@@ -118,7 +118,7 @@ export type IssueDetail = {
   comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
-  pullRequests: Awaited<ReturnType<typeof import("../github/service").pullRequestsForIssue>>;
+  pullRequests: Awaited<ReturnType<typeof import("../github/index").pullRequestsForIssue>>;
   /** The issue above this one, and the ones directly under it. */
   parent: IssueRelative | null;
   children: IssueRelative[];

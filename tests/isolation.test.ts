@@ -27,7 +27,7 @@ import { sha256 } from "../apps/api/src/common/crypto";
 import { ServiceError } from "../apps/api/src/common/service-error";
 import { listEvents, markAllSeen, queueStatus, removeSession } from "../apps/api/src/lib/service-queue";
 import { createDoc, getDoc, linkDocNode, markDocFresh } from "../apps/api/src/modules/docs/docs.legacy";
-import { createRepository, findOrCreateRepository, listRepositories, retireRepository, updateRepository } from "../apps/api/src/modules/github/repositories";
+import { createRepository, findOrCreateRepository, listRepositories, retireRepository, updateRepository } from "../apps/api/src/modules/github/github.legacy";
 import { linkIssueNode } from "../apps/api/src/modules/issues/issue-nodes";
 import { addComment, createIssue, getIssue, updateIssue } from "../apps/api/src/modules/issues/issues";
 import { upsertDecision, upsertTerm } from "../apps/api/src/modules/map/decisions";
@@ -377,7 +377,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
-    const { githubActor } = await import("../apps/api/src/modules/github/service");
+    const { githubActor } = await import("../apps/api/src/modules/github/deliveries.service");
     const gh = githubActor(A.workspaceId, A.teamId);
     assert.ok((await requireTeam(gh, A.teamKey)).id);
     await assert.rejects(requireTeam(gh, "SH"), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
@@ -842,14 +842,13 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/teams/teams.repository.ts": "the only file of the teams module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need) (the former requireTeam): not_found for a team of another workspace or one the person is not a member of, 403 below the needed role (ADR-23). Members: the workspace-wide views (all team names, the audit log) are for workspace owners and admins and every change checks the caller's role and keeps one admin (tested in team-access.test.ts). Lifecycle: every action runs inside a transaction that locks the workspace's teams, a parent must be one the person can open so the hierarchy grants no access, and children and candidates are filtered to teams the person can open (tested in team-lifecycle.test.ts). Statuses: admin to change anything, humans only, every statement scoped by the found team's id, and a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404 (tested in statuses.test.ts)",
   "apps/api/src/platform/streams/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
   "apps/api/src/modules/dashboard/metrics.ts": "everything derived from the caller's workspace's team ids",
-  "apps/api/src/modules/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
+  "apps/api/src/modules/github/github.repository.ts": "the only file of the github module that queries; it decides nothing, and every caller is a service. Webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace; repositories are found inside the team the caller opened through TeamAccessService.require(actor, key, need), so another workspace's repository is not_found (tested)",
   "apps/api/src/modules/dashboard/checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/docs/docs.repository.ts": "the only file of the docs module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need): a doc, a parent and a linked node are found inside the actor's team only, so another workspace's are not_found (tested in docs.test.ts and in this file's cross-workspace attacks); the members it lists are those of the signed-in person's own workspace, and an agent key's capabilities are read by the key's own id (tested)",
   "apps/api/src/modules/map/freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/map/graph.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/modules/github/repositories.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/platform/streams/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/modules/map/sync.ts": "every entry point resolves through requireTeam first (tested)",
   "apps/api/src/modules/auth/workspaces-admin.ts": "instance admin only; metadata only (tested)",

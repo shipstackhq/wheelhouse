@@ -17,12 +17,23 @@ import type { Actor } from "../../common/actor";
 import { createIssue, getIssue, moveIssue } from "../issues/issues";
 import { getNode, upsertNode } from "../map/graph";
 import { createTeam, deleteTeam, requireTeam } from "../teams/teams.legacy";
-import { retireRepository } from "./repositories";
 import { land } from "../map/sync";
 import type { GithubApi } from "./api";
-import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
+import { ConnectService } from "./connect.service";
+import { DeliveriesService, GITHUB_ACTOR_ID } from "./deliveries.service";
+import { RepositoriesService } from "./repositories.service";
 import { testApp } from "../../test/app";
-await testApp();
+
+const app = await testApp();
+const { registerInstallation, connectGithubRepository, listInstallations } = (() => {
+  const c = app.get(ConnectService);
+  return { registerInstallation: c.registerInstallation.bind(c), connectGithubRepository: c.connectGithubRepository.bind(c), listInstallations: c.listInstallations.bind(c) };
+})();
+const { handleDelivery, targetsFor, pullRequestsForIssue } = (() => {
+  const d = app.get(DeliveriesService);
+  return { handleDelivery: d.handleDelivery.bind(d), targetsFor: d.targetsFor.bind(d), pullRequestsForIssue: d.pullRequestsForIssue.bind(d) };
+})();
+const retireRepository = app.get(RepositoriesService).retireRepository.bind(app.get(RepositoriesService));
 
 type Workspace = { owner: Actor; member: Actor; installation: string; repoSlug: string; repoRowId: string };
 let A: Workspace;
