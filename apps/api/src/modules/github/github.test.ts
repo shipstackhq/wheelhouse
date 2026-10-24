@@ -13,12 +13,14 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
+import "../map/index"; // loads the map before anything that reaches it through the docs module (a load-order cycle between map and docs)
 import type { Actor } from "../../common/actor";
 import { createIssue, getIssue, moveIssue } from "../issues/issues";
 import { getNode, upsertNode } from "../map/map.legacy";
 import { createTeam, deleteTeam, requireTeam } from "../teams/teams.legacy";
 import { land } from "../map/map.legacy";
 import { MapListeners } from "../map/map.listeners";
+import { IssuesListeners } from "../issues/issues.listeners";
 import type { GithubApi } from "./api";
 import { ConnectService } from "./connect.service";
 import { DeliveriesService, GITHUB_ACTOR_ID } from "./deliveries.service";
@@ -292,6 +294,22 @@ describe("pull requests", () => {
     assert.equal(prs.length, 1);
     assert.equal(prs[0].number, 11);
     assert.equal(detail.pullRequests.length, 1, "getIssue carries them for the issue view and agents");
+  });
+
+  test("an error in the issues listener fails the delivery too (the event emitter does not swallow it)", async () => {
+    const t = await issueIn(A, "AA", "Listener target", "In Progress");
+    const num = t.ref.split("-")[1];
+    const listeners = app.get(IssuesListeners);
+    const original = listeners.onMoveRequested;
+    listeners.onMoveRequested = async () => {
+      throw new Error("issues are down");
+    };
+    try {
+      await assert.rejects(deliver("pull_request", prPayload(A, "opened", {}, { title: `AA-${num} do it`, number: 98 })), /issues are down/);
+    } finally {
+      listeners.onMoveRequested = original;
+    }
+    assert.equal(await columnOf(A, t.ref), "In Progress");
   });
 
   test("the branch name links an issue too, and another team's key in the same title does not", async () => {

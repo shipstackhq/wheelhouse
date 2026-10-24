@@ -3,10 +3,9 @@ import { EventEmitter2 } from "@nestjs/event-emitter";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { EventsService } from "../../platform/events/events.service";
-import { addComment, moveIssue } from "../issues/index";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { githubConfig } from "./config";
-import { PUSH_LANDED, type PushLanded } from "./github.events";
+import { ISSUE_COMMENT_REQUESTED, ISSUE_MOVE_REQUESTED, PUSH_LANDED, type IssueCommentRequested, type IssueMoveRequested, type PushLanded } from "./github.events";
 import { GithubRepository } from "./github.repository";
 import { ciState, decideMove, type CheckState } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";
@@ -219,8 +218,8 @@ export class DeliveriesService {
           lastMove: last && last.actorId !== GITHUB_ACTOR_ID ? { at: last.at, by: last.by } : null,
           now: new Date(),
         });
-        if (decision.move) await moveIssue(actor, tk.ref, decision.move);
-        if (decision.note) await addComment(actor, tk.ref, `Pull request [#${pr.number}](${pr.html_url}) ${decision.note}`);
+        if (decision.move) await this.emitter.emitAsync(ISSUE_MOVE_REQUESTED, { actor, ref: tk.ref, status: decision.move } satisfies IssueMoveRequested); // the issues module moves it
+        if (decision.note) await this.emitter.emitAsync(ISSUE_COMMENT_REQUESTED, { actor, ref: tk.ref, body: `Pull request [#${pr.number}](${pr.html_url}) ${decision.note}` } satisfies IssueCommentRequested);
       }
     }
     return { status: "handled", matched: targets.length };
@@ -260,7 +259,7 @@ export class DeliveriesService {
               summary: next === "failure" ? `CI failed on pull request #${pr.number} for ${ref}: ${failed.join(", ")}` : `CI passed on pull request #${pr.number} for ${ref}`,
               data: { ref, number: pr.number, ciState: next, failed },
             });
-            if (next === "failure") await addComment(actor, ref, `CI failed on pull request [#${pr.number}](${pr.url}): ${failed.join(", ")}`);
+            if (next === "failure") await this.emitter.emitAsync(ISSUE_COMMENT_REQUESTED, { actor, ref, body: `CI failed on pull request [#${pr.number}](${pr.url}): ${failed.join(", ")}` } satisfies IssueCommentRequested);
           }
         }
       }
