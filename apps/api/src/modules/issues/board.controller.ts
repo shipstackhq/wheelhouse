@@ -1,15 +1,14 @@
-import { Controller, Inject, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Get, HttpCode, Param, Post, Req } from "@nestjs/common";
 import { statusField, issueInput } from "./board-app";
 import { queueStatus } from "../../lib/service-queue";
 import { IssuesService } from "./issues.service";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 
 @Controller("api/app/teams")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class BoardController {
   constructor(@Inject(IssuesService) private readonly issues: IssuesService) {}
 

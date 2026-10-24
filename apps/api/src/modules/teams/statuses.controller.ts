@@ -1,9 +1,9 @@
-import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Query, Req } from "@nestjs/common";
 
 import { TeamsService } from "./teams.service";
 
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { reorderStatusesDto, statusBodyDto, type ReorderStatusesDto, type StatusBodyDto } from "./dto/teams.dto";
@@ -15,7 +15,6 @@ import { reorderStatusesDto, statusBodyDto, type ReorderStatusesDto, type Status
  */
 @Controller("api/app/teams")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class StatusesController {
   constructor(@Inject(TeamsService) private readonly teams: TeamsService) {}
 

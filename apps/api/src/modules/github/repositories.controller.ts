@@ -1,15 +1,14 @@
-import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 import { requestOrigin } from "../../common/http/origin";
 import { GithubService } from "./github.service";
 
 /** The repositories page, the Connect GitHub card, and the onboarding wizard. A team or repository of another workspace is a 404. */
 @Controller("api/app/teams")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class RepositoriesController {
   constructor(@Inject(GithubService) private readonly github: GithubService) {}
 

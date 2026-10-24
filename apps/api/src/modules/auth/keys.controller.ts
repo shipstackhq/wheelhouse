@@ -1,16 +1,15 @@
-import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
 import { markAllSeen } from "../../lib/service-queue";
 import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 import { requestOrigin } from "../../common/http/origin";
 import { AuthService } from "./auth.service";
 
 @Controller("api/app")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class KeysController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 

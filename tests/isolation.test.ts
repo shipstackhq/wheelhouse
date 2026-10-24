@@ -1068,7 +1068,7 @@ describe("every API route must be audited", () => {
     assert.deepEqual(stale, [], `audit entries for routes that are gone: ${stale.join(", ")}`);
   });
 
-  test("every /api/app controller uses @AppEndpoints(), and every route has SessionGuard unless it is one of the open sign-in or invite routes", () => {
+  test("every /api/app controller uses @AppEndpoints(), which requires a signed-in person; only the open sign-in and invite routes say @Public()", () => {
     const open = new Set([
       "GET /api/app/auth/options",
       "POST /api/app/auth/login",
@@ -1077,26 +1077,32 @@ describe("every API route must be audited", () => {
       "POST /api/app/invites/peek",
       "POST /api/app/invites/accept",
     ]);
+    const marked = new Set<string>();
     let checked = 0;
     for (const f of controllerFiles("apps/api/src")) {
       const src = fs.readFileSync(f, "utf8");
       const prefix = prefixOf(src);
       if (!prefix.startsWith("api/app")) continue;
       checked++;
-      assert.match(src, /@AppEndpoints\(\)/, `${f} must use @AppEndpoints() for CSRF and the error envelope`);
-      if (/@UseGuards\(SessionGuard\)\s*\n\s*export class/.test(src)) continue; // the whole controller needs a signed-in person
-      // Otherwise decide route by route: a method's decorators all sit between the previous method's signature and its own.
+      assert.match(src, /@AppEndpoints\(\)/, `${f} must use @AppEndpoints() for CSRF, the session and the error envelope`);
+      assert.doesNotMatch(src, /@Public\(\)\s*\n\s*export class/, `${f}: a whole controller must not be public; mark the routes`);
+      // A method's decorators all sit between the previous method's signature and its own.
       let from = 0;
       for (const sig of src.matchAll(/^ {2}(?:async )?\w+\(.*$/gm)) {
         const chunk = src.slice(from, sig.index! + sig[0].length);
         from = sig.index! + sig[0].length;
         for (const m of chunk.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(?:"([^"]*)")?\s*\)/g)) {
           const route = `${m[1].toUpperCase()} /${[prefix, m[2] ?? ""].filter(Boolean).join("/")}`;
-          if (open.has(route)) continue;
-          assert.match(chunk, /@UseGuards\(SessionGuard\)/, `${route} in ${f} needs @UseGuards(SessionGuard), or must be listed as an open route here`);
+          if (/@Public\(\)/.test(chunk)) {
+            marked.add(route);
+            assert.ok(open.has(route), `${route} in ${f} is @Public() but is not one of the open routes listed here`);
+          } else {
+            assert.ok(!open.has(route), `${route} in ${f} is listed as open but is not marked @Public()`);
+          }
         }
       }
     }
+    assert.deepEqual([...marked].sort(), [...open].sort(), "every open route must be marked @Public()");
     assert.ok(checked >= 8, "no /api/app controllers found; the scan may be broken");
   });
 });

@@ -1,9 +1,9 @@
-import { Controller, Inject, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Delete, Get, Param, Patch, Post, Req } from "@nestjs/common";
 import { IssuesService } from "./issues.service";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 
 /**
  * Initiatives (WH-119): goals that group projects and other initiatives, up to three levels. They belong to the workspace and every
@@ -12,7 +12,6 @@ import { SessionGuard, type SessionRequest } from "../../common/guards/session.g
  */
 @Controller("api/app/initiatives")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class InitiativesController {
   constructor(@Inject(IssuesService) private readonly issues: IssuesService) {}
 

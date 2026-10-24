@@ -1,11 +1,11 @@
-import { Controller, Inject, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Get, HttpCode, Param, Post, Req } from "@nestjs/common";
 import { isInstanceAdmin } from "./auth-policy";
 import { ServiceError } from "../../common/service-error";
 import { type Admin } from "./workspaces-admin";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 import { AuthService } from "./auth.service";
 
 const adminOf = (req: SessionRequest): Admin => ({ userId: req.human.user.id, email: req.human.user.email, workspaceId: req.human.workspace.id });
@@ -17,7 +17,6 @@ function onlyAdmins(req: SessionRequest) {
 
 @Controller("api/app/admin")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class AdminController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 

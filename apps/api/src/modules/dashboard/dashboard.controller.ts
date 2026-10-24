@@ -1,6 +1,6 @@
-import { Controller, Get, Inject, Param, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Get, Inject, Param, Query, Req } from "@nestjs/common";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 import { DashboardService } from "./dashboard.service";
 
 /**
@@ -9,7 +9,6 @@ import { DashboardService } from "./dashboard.service";
  */
 @Controller("api/app/dashboard")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class DashboardController {
   constructor(@Inject(DashboardService) private readonly dashboard: DashboardService) {}
 

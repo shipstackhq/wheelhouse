@@ -1,9 +1,9 @@
-import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Query, Req } from "@nestjs/common";
 
 import { TeamsService } from "./teams.service";
 
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { addMemberDto, setMemberRoleDto, type AddMemberDto, type SetMemberRoleDto } from "./dto/teams.dto";
@@ -15,7 +15,6 @@ import { addMemberDto, setMemberRoleDto, type AddMemberDto, type SetMemberRoleDt
  */
 @Controller("api/app")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class TeamMembersController {
   constructor(@Inject(TeamsService) private readonly teams: TeamsService) {}
 

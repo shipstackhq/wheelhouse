@@ -1,10 +1,10 @@
-import { Controller, Inject, Delete, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Delete, Get, Param, Patch, Post, Req } from "@nestjs/common";
 import { ServiceError } from "../../common/service-error";
 import { IssuesService } from "./issues.service";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 
 /** A cycle is addressed by its number inside the team. Anything that is not a whole number is a cycle that does not exist. */
 const cycleNumber = (raw: string) => {
@@ -15,7 +15,6 @@ const cycleNumber = (raw: string) => {
 /** A team's cycles (WH-117). A team of another workspace, or one the person is not on, is a 404; changing cycles needs an editor. */
 @Controller("api/app/teams")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class CyclesController {
   constructor(@Inject(IssuesService) private readonly issues: IssuesService) {}
 

@@ -1,16 +1,15 @@
-import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
+import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Put, Query, Req } from "@nestjs/common";
 import { nodeView } from "./map-app";
 import { ServiceError } from "../../common/service-error";
 import { MapService } from "./map.service";
 import type { RawTextRequest } from "../../common/http/raw-text";
 import { jsonBody, str } from "../../common/body";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
-import { SessionGuard, type SessionRequest } from "../../common/guards/session.guard";
+import { type SessionRequest } from "../../common/guards/session.guard";
 
 /** The map, decisions, glossary and activity pages. A team, node, edge, flow, decision or term of another workspace is a 404. */
 @Controller("api/app/teams")
 @AppEndpoints()
-@UseGuards(SessionGuard)
 export class MapController {
   constructor(@Inject(MapService) private readonly map: MapService) {}
 
