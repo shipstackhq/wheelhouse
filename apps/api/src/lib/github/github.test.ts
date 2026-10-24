@@ -15,7 +15,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../access";
 import * as svc from "../service";
-import { land } from "../sync";
+import { land } from "../../modules/map/sync";
 import type { GithubApi } from "./api";
 import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
 

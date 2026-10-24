@@ -392,7 +392,7 @@ export async function claimIssue(actor: Actor, ref: string) {
 /** An agent working an issue binds it to its active session (for the reconciliation check). */
 export async function bindSession<T extends { id: string; teamId: string }>(actor: Actor, t: T): Promise<T> {
   if (actor.kind === "agent") {
-    const { noteIssueActivity } = await import("../../lib/sync");
+    const { noteIssueActivity } = await import("../map/sync");
     await noteIssueActivity(actor, t.teamId, t.id);
   }
   return t;

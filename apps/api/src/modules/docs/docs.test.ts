@@ -19,7 +19,7 @@ import { sha256 } from "../../lib/access";
 import { scopeKeyToAllTeams } from "../../lib/key-scope";
 import * as svc from "../../lib/service";
 import { runTool } from "../../lib/tools";
-import * as sync from "../../lib/sync";
+import * as sync from "../map/sync";
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;

@@ -30,11 +30,11 @@ import * as projects from "../apps/api/src/modules/issues/projects";
 import * as initiatives from "../apps/api/src/modules/issues/initiatives";
 import * as members from "../apps/api/src/lib/members";
 import { runTool, tools } from "../apps/api/src/lib/tools";
-import { askMap } from "../apps/api/src/lib/ask";
-import { briefing, issueContext } from "../apps/api/src/lib/briefing";
+import { askMap } from "../apps/api/src/modules/map/ask";
+import { briefing, issueContext } from "../apps/api/src/modules/map/briefing";
 import * as metrics from "../apps/api/src/lib/metrics";
-import { resolveDraft } from "../apps/api/src/lib/sync";
-import * as sync from "../apps/api/src/lib/sync";
+import { resolveDraft } from "../apps/api/src/modules/map/sync";
+import * as sync from "../apps/api/src/modules/map/sync";
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything workspace A owns carries this
@@ -831,15 +831,15 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/lib/metrics.ts": "everything derived from the caller's workspace's team ids",
   "apps/api/src/lib/github/service.ts": "webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace",
   "apps/api/src/lib/service-checklist.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/lib/service-decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/map/decisions.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/docs/docs.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/lib/service-freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
-  "apps/api/src/lib/service-map.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/map/freshness.ts": "every function resolves through requireTeam / resolveIssue (tested)",
+  "apps/api/src/modules/map/graph.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/service-repositories.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/teams/teams.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/lib/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
-  "apps/api/src/lib/sync.ts": "every entry point resolves through requireTeam first (tested)",
+  "apps/api/src/modules/map/sync.ts": "every entry point resolves through requireTeam first (tested)",
   "apps/api/src/lib/workspaces-admin.ts": "instance admin only; metadata only (tested)",
   "apps/api/src/modules/issues/issues.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/modules/issues/issue-nodes.ts": "the issue is resolved through resolveIssue(actor, ref, edit) and the node inside that issue's own team, so a node of another team or workspace is not_found; only the issue_nodes row of that pair is written or removed (tested)",

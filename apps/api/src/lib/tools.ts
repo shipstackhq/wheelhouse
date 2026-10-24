@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Actor } from "./access";
 import * as svc from "./service";
-import * as sync from "./sync";
+import * as sync from "../modules/map/sync";
 import { PRIORITIES, NODE_KINDS, LAYERS, KINDS_BY_LAYER, EDGE_KINDS, DECISION_STATUSES } from "../db/schema";
 import { DOC_TEMPLATE_IDS } from "@wheelhouse/shared/doc-templates";
 
@@ -318,7 +318,7 @@ For enums, list each value as a column (name only). Set \`anchors\` to the schem
       "START HERE in a new session. A compact briefing of the project: what it is, how it's built, the work in flight (yours first), what changed since you last looked, decisions/gotchas/stale and in-flux areas, flows and glossary. Overview with pointers, sized to a budget. Read this instead of exploring the codebase from scratch.",
     readOnly: true,
     input: z.object({ project, max_chars: z.number().int().optional().describe("Default 6000") }),
-    run: async (a, i) => (await import("./briefing")).briefing(a, i.project, { maxChars: i.max_chars }),
+    run: async (a, i) => (await import("../modules/map/briefing")).briefing(a, i.project, { maxChars: i.max_chars }),
   }),
 
   get_issue_context: tool({
@@ -326,7 +326,7 @@ For enums, list each value as a column (name only). Set \`anchors\` to the schem
       "Everything you need to work one issue: description and discussion, the parts of the system it touches (with explanations and gotchas), what they connect to on other layers, which files to read first, tables involved, flows passing through, and decisions that apply. Call this before starting an issue instead of searching the repo.",
     readOnly: true,
     input: z.object({ issue, max_chars: z.number().int().optional().describe("Default 8000") }),
-    run: async (a, i) => (await import("./briefing")).issueContext(a, i.issue, { maxChars: i.max_chars }),
+    run: async (a, i) => (await import("../modules/map/briefing")).issueContext(a, i.issue, { maxChars: i.max_chars }),
   }),
 
   delete_issue: tool({

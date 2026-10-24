@@ -17,7 +17,7 @@ import type { Actor } from "./access";
 import { scopeKeyToAllTeams } from "./key-scope";
 import * as svc from "./service";
 import { summary } from "./metrics";
-import { briefing } from "./briefing";
+import { briefing } from "../modules/map/briefing";
 
 let human: Actor;
 let agent: Actor;

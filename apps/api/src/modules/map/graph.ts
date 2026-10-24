@@ -1,11 +1,11 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import { ServiceError } from "./service-error";
-import { withNodeIds } from "./links";
-import { Q, diff, emit, isUuid, lockRow } from "./service-core";
-import { anchorScore } from "./service-freshness";
-import { requireTeam } from "../modules/teams/teams";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import { ServiceError } from "../../lib/service-error";
+import { withNodeIds } from "../../lib/links";
+import { Q, diff, emit, isUuid, lockRow } from "../../lib/service-core";
+import { anchorScore } from "./freshness";
+import { requireTeam } from "../teams/teams";
 
 const { issues, nodes, edges, issueNodes, flows, decisions, terms } = schema;
 

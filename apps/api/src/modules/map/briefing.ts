@@ -1,7 +1,7 @@
-import type { Actor } from "./access";
-import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "./service";
+import type { Actor } from "../../lib/access";
+import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "../../lib/service";
 import { timeAgo } from "@wheelhouse/shared/time";
-import { checklistBriefingLine } from "./setup-checklist";
+import { checklistBriefingLine } from "../../lib/setup-checklist";
 import { CLOSED_ROLES } from "@wheelhouse/shared/status-roles";
 /**
  * Context for agents, so a fresh session starts warm instead of re-reading the

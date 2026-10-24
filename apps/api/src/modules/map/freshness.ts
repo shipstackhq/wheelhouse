@@ -1,12 +1,12 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
-import { ServiceError } from "./service-error";
-import { emit } from "./service-core";
-import { DocRow } from "../modules/docs/docs";
-import { Layer, NodeRow, upsertNode } from "./service-map";
-import { findOrCreateRepository } from "./service-repositories";
-import { requireTeam } from "../modules/teams/teams";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
+import { ServiceError } from "../../lib/service-error";
+import { emit } from "../../lib/service-core";
+import { DocRow } from "../docs/docs";
+import { Layer, NodeRow, upsertNode } from "./graph";
+import { findOrCreateRepository } from "../../lib/service-repositories";
+import { requireTeam } from "../teams/teams";
 
 const { nodes, docs } = schema;
 

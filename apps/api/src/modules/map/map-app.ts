@@ -1,10 +1,10 @@
-import type { Actor } from "./access";
+import type { Actor } from "../../lib/access";
 import { askEnabled, askMap } from "./ask";
-import { rateLimit } from "./rate-limit";
-import * as schema from "../db/schema";
-import * as svc from "./service";
-import { ServiceError } from "./service";
-import { bad, finite, oneOf, rateLimited, text, textList, textOrNull, whole } from "./web-input";
+import { rateLimit } from "../../lib/rate-limit";
+import * as schema from "../../db/schema";
+import * as svc from "../../lib/service";
+import { ServiceError } from "../../lib/service";
+import { bad, finite, oneOf, rateLimited, text, textList, textOrNull, whole } from "../../lib/web-input";
 
 /**
  * What the web app's map, decisions, glossary and activity pages read and write (WH-97), as functions of the signed-in person.

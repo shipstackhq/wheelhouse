@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import type { Actor } from "./access";
+import { getDb, schema } from "../../db";
+import type { Actor } from "../../lib/access";
 import {
   anchorScore,
   emit,
@@ -14,7 +14,7 @@ import {
   type DocUpdateInput,
   type NodeInput,
   type NodeRow,
-} from "./service";
+} from "../../lib/service";
 
 /**
  * Deterministic sync between working copies and Wheelhouse.
@@ -94,7 +94,7 @@ export async function sessionSync(actor: Actor, teamRef: string, r: SessionRepor
   const team = await requireTeam(actor, teamRef);
   const [existing] = await db.select().from(workSessions).where(eq(workSessions.id, r.session));
   if (existing && existing.teamId !== team.id) throw new ServiceError("invalid", "session belongs to another team");
-  const repo = r.repository ? await (await import("./service")).findOrCreateRepository(actor, team.id, r.repository) : null;
+  const repo = r.repository ? await (await import("../../lib/service")).findOrCreateRepository(actor, team.id, r.repository) : null;
 
   const reported: Record<string, string | null> = Array.isArray(r.files)
     ? Object.fromEntries(r.files.map((f) => [normPath(f), null]))
@@ -389,7 +389,7 @@ export type LandReport = {
 export async function land(actor: Actor, teamRef: string, r: LandReport) {
   const db = await getDb();
   const team = await requireTeam(actor, teamRef, "edit");
-  const { findOrCreateRepository } = await import("./service");
+  const { findOrCreateRepository } = await import("../../lib/service");
   const repo = await findOrCreateRepository(actor, team.id, r.repository);
   const limit = repo?.pathLimit?.trim().replace(/^\/+/, "").replace(/\/*$/, "/") || null;
   const changed = Object.entries(r.files ?? {})

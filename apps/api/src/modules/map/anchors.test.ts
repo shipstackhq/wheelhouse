@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { anchorScore, parseAnchor } from "./service";
+import { anchorScore, parseAnchor } from "../../lib/service";
 
 test("a bare anchor has no repo qualifier", () => {
   assert.deepEqual(parseAnchor("src/db/**"), { repo: null, pattern: "src/db/**" });
