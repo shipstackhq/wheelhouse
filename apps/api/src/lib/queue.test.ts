@@ -20,11 +20,11 @@ import { addComment, createIssue } from "../modules/issues/issues.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
 import { getChanges, markAllSeen, queueStatus, removeSession } from "./service-queue";
 import { runTool } from "./tools";
-import { agentQueues } from "../modules/dashboard/metrics";
-import { briefing } from "../modules/map/map.legacy";
+import { MetricsService } from "../modules/dashboard/metrics.service";
+import { briefing } from "../modules/dashboard/dashboard.legacy";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
 import { testApp } from "../test/app";
-await testApp();
+const metrics = (await testApp()).get(MetricsService);
 
 type Changes = Awaited<ReturnType<typeof getChanges>>;
 
@@ -134,7 +134,7 @@ describe("session breakdown (WH-45)", () => {
     assert.equal(status.sessions.find((s) => s.id === "sess-C")!.issue, null, "unknown issue stays null");
     assert.ok(!status.sessions.some((s) => s.id === "sess-A"), "an ended session is no longer listed");
 
-    const row = (await agentQueues(human)).find((a) => a.id === key.id)!;
+    const row = (await metrics.agentQueues(human)).find((a) => a.id === key.id)!;
     assert.equal(row.sessions.length, 2, "the dashboard gets the active sessions (B and C), not just the key's total");
     assert.ok(row.sessions.every((s) => s.teamKey === "QQ" && typeof s.lastSeenAt === "string"), "serialisable, tagged with the team");
     assert.deepEqual(

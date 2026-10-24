@@ -8,7 +8,6 @@ import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
-import { checklistForTeam } from "../dashboard/index";
 import { DeliveriesService } from "../github/index";
 import { noteIssueActivity, resolveNode } from "../map/index";
 import { TeamAccessService } from "../teams/index";
@@ -91,13 +90,13 @@ export class IssuesService {
     return { team, statuses: cols, issues: withLinks };
   }
 
-  /** The team page's parts: the board, the map nodes an issue can link to, the team's members (the people an issue can be assigned to), its cycles and projects, and the setup checklist. */
+  /** The team page's parts: the board, the map nodes an issue can link to, the team's members (the people an issue can be assigned to), and its cycles and projects. */
   async boardPage(actor: Actor, teamKey: string) {
-    const [board, checklist] = await Promise.all([this.getBoard(actor, teamKey), checklistForTeam(actor, teamKey)]);
+    const board = await this.getBoard(actor, teamKey);
     const [nodes, members] = await Promise.all([this.repo.boardNodes(board.team.id), this.repo.teamMembersOf(board.team.id)]);
     const cycles = await this.cycles.cycleOptions(board.team.id);
     const projects = await this.projects.projectsOfTeam(board.team.id);
-    return { board, nodes, members, cycles, projects, checklist };
+    return { board, nodes, members, cycles, projects };
   }
 
   // ───────── finding an issue ─────────

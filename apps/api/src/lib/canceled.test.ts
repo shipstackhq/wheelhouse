@@ -17,12 +17,12 @@ import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues
 import { createTeam, requireTeam } from "../modules/teams/teams.legacy";
 import * as cy from "../modules/issues/issues.legacy";
 import * as pr from "../modules/issues/issues.legacy";
-import { summary, teamProgress, needsAttention } from "../modules/dashboard/metrics";
-import { briefing } from "../modules/map/map.legacy";
+import { MetricsService } from "../modules/dashboard/metrics.service";
+import { briefing } from "../modules/dashboard/dashboard.legacy";
 import { decideMove } from "../modules/github/pr-rules";
 import { DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
 import { testApp } from "../test/app";
-await testApp();
+const metrics = (await testApp()).get(MetricsService);
 
 let ada: Actor;
 const DAY = 86_400_000;
@@ -72,15 +72,15 @@ describe("a canceled issue", () => {
     const project = await pr.getProject(ada, p.id);
     assert.deepEqual([project.total, project.done], [2, 1]);
 
-    const [team] = await teamProgress(ada);
+    const [team] = await metrics.teamProgress(ada);
     const scope = team.total;
     assert.ok(scope > 0);
-    const before = await summary(ada);
+    const before = await metrics.summary(ada);
     const dropped = await createIssue(ada, "CX", { title: "newly dropped", status: "canceled", priority: "urgent" });
-    const after = await summary(ada);
+    const after = await metrics.summary(ada);
     assert.equal(after.open, before.open, "creating a canceled issue adds no open work");
-    assert.equal((await teamProgress(ada))[0].total, scope, "nor does it change the team's total");
-    assert.ok(!(await needsAttention(ada)).urgent.some((u) => u.ref === dropped.ref), "an urgent canceled issue needs no attention");
+    assert.equal((await metrics.teamProgress(ada))[0].total, scope, "nor does it change the team's total");
+    assert.ok(!(await metrics.needsAttention(ada)).urgent.some((u) => u.ref === dropped.ref), "an urgent canceled issue needs no attention");
     const brief = await briefing(ada, "CX");
     assert.ok(!brief.markdown.includes(dropped.ref), "and the briefing does not list it");
   });

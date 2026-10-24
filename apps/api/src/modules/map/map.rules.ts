@@ -4,7 +4,7 @@ import { bad, finite, oneOf, text, textList, textOrNull } from "../../lib/web-in
 import type { NodeRow } from "./map.repository";
 import type { Graph } from "./graph.service";
 
-/** Pure rules of the map: no database, so they are tested on their own (anchors, kinds, columns, card heights, the request-body readers, the text the briefing and Ask are made of). */
+/** Pure rules of the map: no database, so they are tested on their own (anchors, kinds, columns, card heights, the request-body readers, the text Ask is made of). */
 
 type Body = Record<string, unknown>;
 export type Layer = schema.Layer;
@@ -219,28 +219,7 @@ export function layoutInput(b: Body): { positions: { id: string; x: number; y: n
   return { positions, placed: b.placed as boolean | undefined };
 }
 
-// ───────── the text of the briefing and of Ask ─────────
-
-export const firstLine = (s: string) => s.split("\n").find((l) => l.trim())?.replace(/^[-*]\s*/, "").trim() ?? "";
-export const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
-
-/** Join sections in priority order until the character budget is spent. */
-export function budgeted(sections: (string | null)[], max: number) {
-  const out: string[] = [];
-  let used = 0;
-  for (const s of sections) {
-    if (!s) continue;
-    if (used + s.length > max) {
-      const room = max - used;
-      if (room > 200) out.push(clip(s, room) + "\n");
-      out.push(`_(briefing trimmed to ${max} chars; drill in with get_graph / get_node / get_flows)_`);
-      break;
-    }
-    out.push(s);
-    used += s.length;
-  }
-  return out.join("\n");
-}
+// ───────── the text of Ask ─────────
 
 export function askEnabled() {
   return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);

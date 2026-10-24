@@ -1,6 +1,6 @@
 import type { Database } from "../../platform/database/database";
 import type { Q } from "../../platform/database/transaction";
-import type { BriefingService } from "./briefing.service";
+import type { AskService } from "./ask.service";
 import type { DecisionsService } from "./decisions.service";
 import type { FreshnessService } from "./freshness.service";
 import type { GraphService } from "./graph.service";
@@ -13,7 +13,7 @@ import type { SessionsService } from "./sessions.service";
  * it through `Database.within`, so a caller's own transaction stays the one the service uses. Delete this file when the last caller
  * moves to the services (the MCP redesign moves the tools).
  */
-type Live = { db: Database; graph: GraphService; decisions: DecisionsService; freshness: FreshnessService; sessions: SessionsService; briefing: BriefingService };
+type Live = { db: Database; graph: GraphService; decisions: DecisionsService; freshness: FreshnessService; sessions: SessionsService; ask: AskService };
 let live: Live | undefined;
 
 export function bindMapLegacy(services: Live) {
@@ -63,7 +63,5 @@ export const maybeDraftDoc = (...a: Parameters<SessionsService["maybeDraftDoc"]>
 export const listDrafts = (...a: Parameters<SessionsService["listDrafts"]>) => s().sessions.listDrafts(...a);
 export const listDocDrafts = (...a: Parameters<SessionsService["listDocDrafts"]>) => s().sessions.listDocDrafts(...a);
 
-// briefing and Ask
-export const briefing = (...a: Parameters<BriefingService["briefing"]>) => s().briefing.briefing(...a);
-export const issueContext = (...a: Parameters<BriefingService["issueContext"]>) => s().briefing.issueContext(...a);
-export const askMap = (...a: Parameters<BriefingService["askMap"]>) => s().briefing.askMap(...a);
+// Ask
+export const askMap = (...a: Parameters<AskService["askMap"]>) => s().ask.askMap(...a);

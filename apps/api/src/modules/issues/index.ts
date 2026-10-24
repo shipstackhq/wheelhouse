@@ -5,3 +5,4 @@ export { CyclesService } from "./cycles.service";
 export { ProjectsService } from "./projects.service";
 export { InitiativesService } from "./initiatives.service";
 export { getBoard, getIssue, resolveIssue } from "./issues.legacy";
+export { boardView } from "./issues.presenter";

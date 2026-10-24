@@ -7,7 +7,7 @@ import { JsonBody } from "../../common/decorators/json-body.decorator";
 import type { JsonObject } from "../../common/body";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { resolveDraftDto, type ResolveDraftDto } from "./dto/map.dto";
-import { BriefingService } from "./briefing.service";
+import { AskService } from "./ask.service";
 import { DecisionsService } from "./decisions.service";
 import { FreshnessService } from "./freshness.service";
 import { GraphService } from "./graph.service";
@@ -23,7 +23,7 @@ export class MapController {
     @Inject(GraphService) private readonly graph: GraphService,
     @Inject(DecisionsService) private readonly decisions: DecisionsService,
     @Inject(FreshnessService) private readonly freshness: FreshnessService,
-    @Inject(BriefingService) private readonly briefing: BriefingService,
+    @Inject(AskService) private readonly askService: AskService,
   ) {}
 
   /** The whole map in one read: nodes, edges, issue links, flows, decisions, terms, what is in flux, and whether Ask is on. */
@@ -117,25 +117,25 @@ export class MapController {
   @Post(":key/ask")
   @HttpCode(200)
   ask(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
-    return this.briefing.askAs(req.human.actor, key, body);
+    return this.askService.askAs(req.human.actor, key, body);
   }
 
   /** The team's last 200 events, newest first; `?who=agent` or `?who=human` narrows it. */
   @Get(":key/activity")
   async activity(@Req() req: SessionRequest, @Param("key") key: string, @Query("who") who?: string) {
-    return { events: activityView(await this.briefing.activity(req.human.actor, key, who)) };
+    return { events: activityView(await this.askService.activity(req.human.actor, key, who)) };
   }
 
   /** The wizard's data: the team, whether it has a repository, and the commands to paste with this team's key in them. */
   @Get(":key/onboarding")
   onboarding(@Req() req: SessionRequest, @Param("key") key: string) {
-    return this.briefing.onboardingPage(req.human.actor, key, requestOrigin(req));
+    return this.askService.onboardingPage(req.human.actor, key, requestOrigin(req));
   }
 
   /** `{ description }`: the "no code yet" path, a few sentences that become the map's first concept. */
   @Post(":key/onboarding/concept")
   @HttpCode(200)
   concept(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
-    return this.briefing.createConceptAs(req.human.actor, key, body);
+    return this.askService.createConceptAs(req.human.actor, key, body);
   }
 }

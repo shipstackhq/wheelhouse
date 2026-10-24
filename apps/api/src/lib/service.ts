@@ -14,5 +14,4 @@ export { addComment, claimIssue, createIssue, deleteIssue, getBoard, getIssue, l
 export { findOrCreateRepository, listRepositories } from "../modules/github/github.legacy";
 export { deleteEdge, deleteFlow, deleteNode, deleteTerm, getGraph, getNode, getSchema, listDecisions, listStale, listStaleDocs, listTerms, markFresh, reportChanges, syncReferences, unlinkNodes, upsertDecision, upsertEdge, upsertFlow, upsertNode, upsertTerm } from "../modules/map/map.legacy";
 export * from "./service-queue";
-export * from "../modules/dashboard/checklist";
 export { createDoc, deleteDoc, getDoc, linkDocNode, listDocs, listDocTemplates, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "../modules/docs/docs.legacy";

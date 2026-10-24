@@ -1,5 +1,4 @@
 import type { PRIORITIES } from "../../db/schema";
-import type { ChecklistState } from "../dashboard/index";
 import type { DeliveriesService } from "../github/index";
 import type { CycleOption } from "./cycles.service";
 import type { IssueRelative, IssueWithLinks } from "./issues.service";
@@ -76,7 +75,6 @@ export type BoardView = {
   cycles: CycleOption[];
   /** The projects this team takes part in, with their milestones: for the card chip and the issue's Project field. */
   projects: TeamProjectOption[];
-  checklist: ChecklistState;
 };
 
 type BoardPage = {
@@ -89,11 +87,10 @@ type BoardPage = {
   members: BoardView["members"];
   cycles: CycleOption[];
   projects: TeamProjectOption[];
-  checklist: ChecklistState;
 };
 
-/** The team page: its statuses, every issue, the map nodes an issue can link to, the team's members and the setup checklist. */
-export const boardView = ({ board, nodes, members, cycles, projects, checklist }: BoardPage): BoardView => ({
+/** The team page: its statuses, every issue, the map nodes an issue can link to, the team's members, its cycles and projects (the dashboard module adds the setup checklist). */
+export const boardView = ({ board, nodes, members, cycles, projects }: BoardPage): BoardView => ({
   team: { id: board.team.id, key: board.team.key, name: board.team.name, description: board.team.description },
   statuses: board.statuses.map((c) => ({ id: c.id, name: c.name, role: c.role, isDefault: c.isDefault, color: c.color, position: c.position })),
   issues: board.issues.map((t) => ({ ...issueView(t), nodeIds: t.nodeIds, commentCount: t.commentCount })),
@@ -101,7 +98,6 @@ export const boardView = ({ board, nodes, members, cycles, projects, checklist }
   members,
   cycles,
   projects,
-  checklist,
 });
 
 export type IssueDetail = {

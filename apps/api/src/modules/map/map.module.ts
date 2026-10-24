@@ -2,7 +2,7 @@ import { Inject, Module, type OnModuleInit } from "@nestjs/common";
 import { EventsModule } from "../../platform/events/events.module";
 import { GithubModule } from "../github/github.module";
 import { TeamsModule } from "../teams/teams.module";
-import { BriefingService } from "./briefing.service";
+import { AskService } from "./ask.service";
 import { DecisionsService } from "./decisions.service";
 import { FreshnessService } from "./freshness.service";
 import { GraphService } from "./graph.service";
@@ -17,8 +17,8 @@ import { Database } from "../../platform/database/database";
 @Module({
   imports: [EventsModule, TeamsModule, GithubModule],
   controllers: [MapController],
-  providers: [MapRepository, GraphService, DecisionsService, FreshnessService, SessionsService, BriefingService, MapListeners],
-  exports: [GraphService, DecisionsService, FreshnessService, SessionsService, BriefingService],
+  providers: [MapRepository, GraphService, DecisionsService, FreshnessService, SessionsService, AskService, MapListeners],
+  exports: [GraphService, DecisionsService, FreshnessService, SessionsService, AskService],
 })
 export class MapModule implements OnModuleInit {
   constructor(
@@ -27,11 +27,11 @@ export class MapModule implements OnModuleInit {
     @Inject(DecisionsService) private readonly decisions: DecisionsService,
     @Inject(FreshnessService) private readonly freshness: FreshnessService,
     @Inject(SessionsService) private readonly sessions: SessionsService,
-    @Inject(BriefingService) private readonly briefing: BriefingService,
+    @Inject(AskService) private readonly ask: AskService,
   ) {}
 
   /** Points the legacy functions (map.legacy.ts) at the live services. */
   onModuleInit() {
-    bindMapLegacy({ db: this.db, graph: this.graph, decisions: this.decisions, freshness: this.freshness, sessions: this.sessions, briefing: this.briefing });
+    bindMapLegacy({ db: this.db, graph: this.graph, decisions: this.decisions, freshness: this.freshness, sessions: this.sessions, ask: this.ask });
   }
 }

@@ -18,10 +18,10 @@ import { scopeKeyToAllTeams } from "../modules/auth/auth.legacy";
 import { ServiceError } from "../common/service-error";
 import { createIssue, getBoard, getIssue, moveIssue } from "../modules/issues/issues.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
-import { summary } from "../modules/dashboard/metrics";
-import { briefing } from "../modules/map/map.legacy";
+import { MetricsService } from "../modules/dashboard/metrics.service";
+import { briefing } from "../modules/dashboard/dashboard.legacy";
 import { testApp } from "../test/app";
-await testApp();
+const metrics = (await testApp()).get(MetricsService);
 
 let human: Actor;
 let agent: Actor;
@@ -80,13 +80,13 @@ describe("status roles", () => {
   });
 
   test("the dashboard counts review and done by role after both were renamed", async () => {
-    const before = await summary(human);
+    const before = await metrics.summary(human);
     const t = await createIssue(human, "RR", { title: "Counted" });
     await moveIssue(human, t.ref, "review");
-    const mid = await summary(human);
+    const mid = await metrics.summary(human);
     assert.equal(mid.inReview, before.inReview + 1, "waiting for review counts the QA status");
     await moveIssue(human, t.ref, "done");
-    const end = await summary(human);
+    const end = await metrics.summary(human);
     assert.equal(end.inReview, before.inReview, "no longer waiting");
     assert.equal(end.open, before.open, "an issue in the renamed done status is not open");
     assert.equal(end.completed7d, before.completed7d + 1, "the move into the renamed done status is a completion");

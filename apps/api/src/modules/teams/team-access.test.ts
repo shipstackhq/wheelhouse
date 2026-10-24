@@ -19,7 +19,7 @@ import type { WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { acceptInvite, createInvite, listInvites, removeMember, updateMember } from "../auth/auth.legacy";
 import type { Issuer } from "../auth/auth.rules";
-import * as metrics from "../dashboard/metrics";
+import { MetricsService } from "../dashboard/metrics.service";
 import { roleOnTeam, visibleTeamIds } from "./teams.legacy";
 import { effectiveRole, roleAllows } from "../../common/roles";
 import * as pmem from "./teams.legacy";
@@ -30,7 +30,7 @@ import { addComment, createIssue, getBoard, getIssue, moveIssue } from "../issue
 import { createTeam, deleteTeam, listTeams, requireTeam, updateTeam } from "./teams.legacy";
 import { teamScope, workspaceScope } from "../../platform/streams/stream-scope";
 import { testApp } from "../../test/app";
-await testApp();
+const metrics = (await testApp()).get(MetricsService);
 
 const RUN = Math.random().toString(16).slice(2, 8);
 /** Two letters unique to this run (team keys are letters only). */
