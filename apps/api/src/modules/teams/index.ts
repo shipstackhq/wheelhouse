@@ -2,3 +2,4 @@
 export { TeamsService } from "./teams.service";
 export { requireTeam } from "./teams";
 export { audit, roleOnTeam, teamRoleMap, visibleTeamIds, workspaceRoleOf } from "./team-access";
+export { listTeams } from "./teams";

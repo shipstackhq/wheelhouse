@@ -1,6 +1,6 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
-import { markAllSeen } from "../../lib/service";
-import { ServiceError } from "../../lib/service";
+import { markAllSeen } from "../../lib/service-queue";
+import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../http/raw-text";
 import { jsonBody, str } from "../../web/body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "../../web/endpoints";

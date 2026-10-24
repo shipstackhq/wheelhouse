@@ -15,7 +15,8 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { createTeam } from "../teams/teams";
+import { createDoc } from "./docs";
 import { runTool } from "../../lib/tools";
 import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "@wheelhouse/shared/doc-templates";
 
@@ -29,7 +30,7 @@ before(async () => {
   const [owner] = await db.insert(schema.users).values({ email: `doc-templates-owner-${RUN}@example.com`, name: "Owner", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: owner.id, workspaceId: workspace.id, role: "owner" });
   human = { kind: "human", id: owner.id, name: "Owner", workspaceId: workspace.id };
-  const team = await svc.createTeam(human, { name: "Templates team", key: "TP" });
+  const team = await createTeam(human, { name: "Templates team", key: "TP" });
   teamKey = team.key;
 });
 
@@ -76,22 +77,22 @@ describe("doc templates: definitions", () => {
 
 describe("createDoc + template", () => {
   test("a `template` id seeds the body when no explicit body is given", async () => {
-    const d = await svc.createDoc(human, teamKey, { title: "Our runbook", template: "runbook" });
+    const d = await createDoc(human, teamKey, { title: "Our runbook", template: "runbook" });
     assert.equal(d.body, getDocTemplate("runbook")!.body);
   });
 
   test("an explicit body overrides the template", async () => {
-    const d = await svc.createDoc(human, teamKey, { title: "Custom", template: "runbook", body: "# Just this" });
+    const d = await createDoc(human, teamKey, { title: "Custom", template: "runbook", body: "# Just this" });
     assert.equal(d.body, "# Just this");
   });
 
   test("no template and no body creates an empty doc (unchanged behavior)", async () => {
-    const d = await svc.createDoc(human, teamKey, { title: "Blank" });
+    const d = await createDoc(human, teamKey, { title: "Blank" });
     assert.equal(d.body, "");
   });
 
   test("an unknown template id is ignored, leaving the doc blank", async () => {
-    const d = await svc.createDoc(human, teamKey, { title: "Bad template", template: "nonsense" });
+    const d = await createDoc(human, teamKey, { title: "Bad template", template: "nonsense" });
     assert.equal(d.body, "");
   });
 });

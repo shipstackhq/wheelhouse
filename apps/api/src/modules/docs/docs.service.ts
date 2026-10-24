@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { deleteDoc, linkDocNode, suggestDocAnchors } from "../../lib/service";
+import { deleteDoc, linkDocNode, suggestDocAnchors } from "./docs";
 import { createDocAs, docsIndex, getDocAs, markDocFreshAs, moveDocAs, updateDocAs } from "./docs-app";
 
 /**

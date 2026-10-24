@@ -1,7 +1,9 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { emit, requireTeam, type Q, type Tx } from "../../lib/service";
+import { type Q, type Tx } from "../../platform/database/transaction";
+import { emit } from "../../platform/events/emit";
+import { requireTeam } from "../teams/index";
 import { ServiceError } from "../../common/service-error";
 
 /**

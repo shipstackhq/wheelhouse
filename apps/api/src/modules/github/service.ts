@@ -1,7 +1,11 @@
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { addComment, createRepository, emit, requireTeam, moveIssue, ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { emit } from "../../platform/events/emit";
+import { addComment, moveIssue } from "../issues/index";
+import { requireTeam } from "../teams/index";
+import { createRepository } from "./repositories";
 import { land } from "../map/index";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { decideMove, ciState, type CheckState } from "./pr-rules";

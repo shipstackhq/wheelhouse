@@ -3,7 +3,7 @@ import { getDb, schema } from "../../db";
 import type { DeviceJobState } from "../../db/schema";
 import { GithubApiError, type GithubApi } from "../github/index";
 import { github } from "../github/index";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { type Device, MAX_EVENTS_PER_BATCH, MAX_EVENTS_PER_JOB, UNREACHABLE_AFTER_MS, isFinalState, str } from "./device-common";
 import { signalJob } from "./device-stream";
 import { revive, supersede, takenOverBy } from "./device-reports";

@@ -1,6 +1,6 @@
 import type { Actor } from "../common/actor";
 import { listToolDefs, runTool } from "./tools";
-import { ServiceError } from "./service";
+import { ServiceError } from "../common/service-error";
 import { getPrompt, listPromptDefs } from "./prompts";
 
 /**

@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { schema } from "../../db";
-import type { Q } from "../../lib/service";
+import type { Q } from "../../platform/database/transaction";
 
 /**
  * Give a key every team its workspace has right now: what migration 0026 did to the keys that existed (WH-120). Later teams are

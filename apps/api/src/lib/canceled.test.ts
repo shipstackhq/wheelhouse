@@ -13,7 +13,8 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
-import * as svc from "./service";
+import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
+import { createTeam, requireTeam } from "../modules/teams/teams";
 import * as cy from "../modules/issues/cycles";
 import * as pr from "../modules/issues/projects";
 import { summary, teamProgress, needsAttention } from "../modules/dashboard/metrics";
@@ -32,35 +33,35 @@ before(async () => {
   const [u] = await db.insert(schema.users).values({ email: `c-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Cass", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: u.id, workspaceId: w.id, role: "owner" });
   ada = { kind: "human", id: u.id, name: "Cass", workspaceId: w.id };
-  await svc.createTeam(ada, { name: "Gamma", key: "CX" });
+  await createTeam(ada, { name: "Gamma", key: "CX" });
 });
 
 describe("a canceled issue", () => {
   test("is out of a cycle's counts and is not handed on when the cycle ends", async () => {
     const first = await cy.createCycle(ada, "CX", { startsAt: at(-1), endsAt: at(6) }, T0);
     const second = await cy.createCycle(ada, "CX", { startsAt: at(6), endsAt: at(13) }, T0);
-    const todo = await svc.createIssue(ada, "CX", { title: "still to do", cycle: first.number });
-    const done = await svc.createIssue(ada, "CX", { title: "finished", cycle: first.number });
-    const dropped = await svc.createIssue(ada, "CX", { title: "dropped", cycle: first.number });
-    await svc.moveIssue(ada, done.ref, "done");
-    await svc.moveIssue(ada, dropped.ref, "canceled");
+    const todo = await createIssue(ada, "CX", { title: "still to do", cycle: first.number });
+    const done = await createIssue(ada, "CX", { title: "finished", cycle: first.number });
+    const dropped = await createIssue(ada, "CX", { title: "dropped", cycle: first.number });
+    await moveIssue(ada, done.ref, "done");
+    await moveIssue(ada, dropped.ref, "canceled");
 
     const during = (await cy.listCycles(ada, "CX", T0)).current!;
     assert.equal(during.number, first.number);
     assert.deepEqual([during.total, during.done, during.open], [2, 1, 1], "canceled is not counted at all");
 
-    const { moved } = await cy.rolloverCycles((await svc.requireTeam(ada, "CX", "read")).id, at(8));
+    const { moved } = await cy.rolloverCycles((await requireTeam(ada, "CX", "read")).id, at(8));
     assert.equal(moved, 1, "only the unfinished issue moves on");
-    assert.equal((await svc.getIssue(ada, todo.ref)).issue.cycle, second.number);
-    assert.equal((await svc.getIssue(ada, done.ref)).issue.cycle, first.number);
-    assert.equal((await svc.getIssue(ada, dropped.ref)).issue.cycle, first.number, "a canceled issue stays where it was");
+    assert.equal((await getIssue(ada, todo.ref)).issue.cycle, second.number);
+    assert.equal((await getIssue(ada, done.ref)).issue.cycle, first.number);
+    assert.equal((await getIssue(ada, dropped.ref)).issue.cycle, first.number, "a canceled issue stays where it was");
   });
 
   test("is out of a project's total, and a team's progress, and is not open work", async () => {
     const p = await pr.createProject(ada, { name: "Counted", leadTeam: "CX" });
     const mk = async (title: string, status: string) => {
-      const t = await svc.createIssue(ada, "CX", { title, status, priority: "urgent" });
-      await svc.updateIssue(ada, t.ref, { projectId: p.id });
+      const t = await createIssue(ada, "CX", { title, status, priority: "urgent" });
+      await updateIssue(ada, t.ref, { projectId: p.id });
       return t;
     };
     await mk("project done", "done");
@@ -73,7 +74,7 @@ describe("a canceled issue", () => {
     const scope = team.total;
     assert.ok(scope > 0);
     const before = await summary(ada);
-    const dropped = await svc.createIssue(ada, "CX", { title: "newly dropped", status: "canceled", priority: "urgent" });
+    const dropped = await createIssue(ada, "CX", { title: "newly dropped", status: "canceled", priority: "urgent" });
     const after = await summary(ada);
     assert.equal(after.open, before.open, "creating a canceled issue adds no open work");
     assert.equal((await teamProgress(ada))[0].total, scope, "nor does it change the team's total");

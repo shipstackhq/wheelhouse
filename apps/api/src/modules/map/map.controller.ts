@@ -1,6 +1,6 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { nodeView } from "./map-app";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { MapService } from "./map.service";
 import type { RawTextRequest } from "../../http/raw-text";
 import { jsonBody, str } from "../../web/body";

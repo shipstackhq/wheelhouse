@@ -1,5 +1,5 @@
 import { AccountError } from "../modules/auth/accounts";
-import { ServiceError } from "./service";
+import { ServiceError } from "../common/service-error";
 import { minutes } from "../common/rate-limit";
 
 /**

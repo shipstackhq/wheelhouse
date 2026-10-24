@@ -16,7 +16,9 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { createTeam, deleteTeam } from "../teams/teams";
+import { IssueInput, createIssue, getIssue, updateIssue } from "./issues";
 import * as pr from "./projects";
 import { addTeamMember, setTeamMemberRole } from "../teams/team-members";
 
@@ -26,7 +28,7 @@ const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUp
 const refusedWith = (code: string) => (e: unknown) => (e as { cause?: { code?: string }; code?: string }).cause?.code === code || (e as { code?: string }).code === code;
 const foreign = refusedWith("23503");
 const checked = refusedWith("23514");
-const code = (c: svc.ServiceError["code"]) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
+const code = (c: ServiceError["code"]) => (e: unknown) => e instanceof ServiceError && e.code === c;
 const D = (s: string) => new Date(`${s}T12:00:00.000Z`);
 
 let db: Awaited<ReturnType<typeof getDb>>;
@@ -63,9 +65,9 @@ before(async () => {
   gus = await person(w.id, "guest", "gus");
   vic = await person(w.id, "viewer", "vic");
   eve = await person(w2.id, "owner", "eve");
-  ta = { ...(await svc.createTeam(ada, { name: "Alpha", key: `${L}A` })), name: "Alpha" };
-  tb = { ...(await svc.createTeam(ada, { name: "Beta", key: `${L}B` })), name: "Beta" };
-  tc = { ...(await svc.createTeam(ada, { name: "Gamma", key: `${L}C` })), name: "Gamma" };
+  ta = { ...(await createTeam(ada, { name: "Alpha", key: `${L}A` })), name: "Alpha" };
+  tb = { ...(await createTeam(ada, { name: "Beta", key: `${L}B` })), name: "Beta" };
+  tc = { ...(await createTeam(ada, { name: "Gamma", key: `${L}C` })), name: "Gamma" };
   await join(ta, bob, "editor");
   await join(tb, cy, "editor");
   await join(ta, gus, "viewer");
@@ -76,7 +78,7 @@ before(async () => {
 });
 
 const project = (over: Record<string, unknown> = {}, as: Actor = ada) => pr.createProject(as, { name: `P ${++n}`, leadTeam: ta.key, ...over });
-const issueIn = async (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { status?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
+const issueIn = async (team: { key: string }, projectId: string | null, over: Partial<IssueInput> & { status?: string } = {}) => createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
 const rawSet = (id: string, set: Partial<typeof schema.issues.$inferInsert>) => db.update(schema.issues).set(set).where(eq(schema.issues.id, id));
 
 describe("making a project", () => {
@@ -109,7 +111,7 @@ describe("making a project", () => {
     await assert.rejects(pr.createProject(ada, { name: "x", leadTeam: ta.key, status: "someday" }), code("invalid"));
     await assert.rejects(pr.createProject(ada, { name: "x", leadTeam: ta.key, leadUser: gus.id }), code("invalid"));
     await assert.rejects(pr.createProject(ada, { name: "x", leadTeam: ta.key, leadUser: eve.id }), code("invalid"));
-    await assert.rejects(pr.createProject(gus, { name: "guest's", leadTeam: ta.key }), (e: unknown) => e instanceof svc.ServiceError);
+    await assert.rejects(pr.createProject(gus, { name: "guest's", leadTeam: ta.key }), (e: unknown) => e instanceof ServiceError);
     await assert.rejects(pr.createProject(vic, { name: "viewer's", leadTeam: ta.key }), code("forbidden"));
   });
 
@@ -129,9 +131,9 @@ describe("what the database refuses", () => {
     const p = await project(); // team A only
     const inB = await issueIn(tb, null);
     await assert.rejects(rawSet(inB.id, { projectId: p.id }), foreign);
-    await assert.rejects(issueIn(tb, p.id), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not take part/.test(e.message));
-    await assert.rejects(svc.updateIssue(ada, inB.ref, { projectId: p.id }), (e: unknown) => /does not take part/.test((e as Error).message));
-    assert.equal((await svc.getIssue(ada, inB.ref)).issue.projectId, null);
+    await assert.rejects(issueIn(tb, p.id), (e: unknown) => e instanceof ServiceError && e.code === "invalid" && /does not take part/.test(e.message));
+    await assert.rejects(updateIssue(ada, inB.ref, { projectId: p.id }), (e: unknown) => /does not take part/.test((e as Error).message));
+    assert.equal((await getIssue(ada, inB.ref)).issue.projectId, null);
     const inA = await issueIn(ta, p.id);
     assert.equal(inA.projectId, p.id);
   });
@@ -142,11 +144,11 @@ describe("what the database refuses", () => {
     const m1 = (await pr.createMilestone(ada, p1.id, { name: "Beta" })).milestones[0];
     const t = await issueIn(ta, p1.id);
     await assert.rejects(rawSet(t.id, { milestoneId: (await pr.createMilestone(ada, p2.id, { name: "Other" })).milestones[0].id }), foreign);
-    await assert.rejects(svc.updateIssue(ada, t.ref, { milestoneId: (await pr.getProject(ada, p2.id)).milestones[0].id }), (e: unknown) => /not in this issue's project/.test((e as Error).message));
+    await assert.rejects(updateIssue(ada, t.ref, { milestoneId: (await pr.getProject(ada, p2.id)).milestones[0].id }), (e: unknown) => /not in this issue's project/.test((e as Error).message));
     const free = await issueIn(ta, null);
     await assert.rejects(rawSet(free.id, { milestoneId: m1.id }), checked);
-    await assert.rejects(svc.updateIssue(ada, free.ref, { milestoneId: m1.id }), (e: unknown) => /needs a project/.test((e as Error).message));
-    assert.equal((await svc.updateIssue(ada, t.ref, { milestoneId: m1.id })).milestoneId, m1.id);
+    await assert.rejects(updateIssue(ada, free.ref, { milestoneId: m1.id }), (e: unknown) => /needs a project/.test((e as Error).message));
+    assert.equal((await updateIssue(ada, t.ref, { milestoneId: m1.id })).milestoneId, m1.id);
   });
 
   test("a project must have its lead team among its teams, checked when the transaction ends", async () => {
@@ -253,7 +255,7 @@ describe("who sees a project (plan section 5)", () => {
     await assert.rejects(pr.updateProject(vic, p1.id, { name: "renamed" }), code("forbidden"));
     assert.deepEqual(await pr.listProjects(eve), []);
     await assert.rejects(pr.getProject(eve, p1.id), code("not_found"));
-    await assert.rejects(pr.createProject(eve, { name: "x", leadTeam: ta.id }), (e: unknown) => e instanceof svc.ServiceError);
+    await assert.rejects(pr.createProject(eve, { name: "x", leadTeam: ta.id }), (e: unknown) => e instanceof ServiceError);
   });
 
   test("only the lead or an editor of the lead team changes a project; the lead team's admin changes who leads", async () => {
@@ -336,7 +338,7 @@ describe("the teams of a project", () => {
   test("a team is brought in by someone who can change the project and edits that team; nobody is pulled in", async () => {
     const p = await project();
     await assert.rejects(pr.addProjectTeam(bob, p.id, tb.key), code("not_found"), "bob is not on B, so it is not even there for him");
-    await assert.rejects(pr.addProjectTeam(bob, p.id, tc.key), (e: unknown) => e instanceof svc.ServiceError);
+    await assert.rejects(pr.addProjectTeam(bob, p.id, tc.key), (e: unknown) => e instanceof ServiceError);
     await assert.rejects(pr.addProjectTeam(cy, p.id, tb.key), code("not_found"), "cy cannot see the project yet");
     const added = await pr.addProjectTeam(ada, p.id, tb.key);
     assert.equal(added.teamCount, 2);
@@ -349,11 +351,11 @@ describe("the teams of a project", () => {
     const p = await project({ teams: [tb.key] });
     const m = (await pr.createMilestone(ada, p.id, { name: "M" })).milestones[0];
     const t = await issueIn(tb, p.id, { milestoneId: m.id });
-    await assert.rejects(pr.removeProjectTeam(ada, p.id, tb.key), (e: unknown) => e instanceof svc.ServiceError && e.code === "conflict" && /has 1 issue/.test(e.message));
-    assert.equal((await svc.getIssue(ada, t.ref)).issue.projectId, p.id, "nothing moved");
+    await assert.rejects(pr.removeProjectTeam(ada, p.id, tb.key), (e: unknown) => e instanceof ServiceError && e.code === "conflict" && /has 1 issue/.test(e.message));
+    assert.equal((await getIssue(ada, t.ref)).issue.projectId, p.id, "nothing moved");
     const gone = await pr.removeProjectTeam(ada, p.id, tb.key, { releaseIssues: true });
     assert.deepEqual([gone.ok, gone.released], [true, 1]);
-    const after = (await svc.getIssue(ada, t.ref)).issue;
+    const after = (await getIssue(ada, t.ref)).issue;
     assert.deepEqual([after.projectId, after.milestoneId], [null, null]);
     assert.equal((await pr.getProject(ada, p.id)).teamCount, 1);
   });
@@ -377,15 +379,15 @@ describe("the teams of a project", () => {
   });
 
   test("a team that leads a live project cannot be deleted; one that led a deleted project can", async () => {
-    const lonely = await svc.createTeam(ada, { name: "Lonely", key: `${L}L` });
+    const lonely = await createTeam(ada, { name: "Lonely", key: `${L}L` });
     const lp = await pr.createProject(ada, { name: "Led by lonely", leadTeam: lonely.key });
-    await assert.rejects(svc.deleteTeam(ada, lonely.key), (e: unknown) => e instanceof svc.ServiceError && e.code === "conflict" && /Led by lonely/.test(e.message));
+    await assert.rejects(deleteTeam(ada, lonely.key), (e: unknown) => e instanceof ServiceError && e.code === "conflict" && /Led by lonely/.test(e.message));
     await pr.deleteProject(ada, lp.id);
-    assert.deepEqual(await svc.deleteTeam(ada, lonely.key), { ok: true, deleted: lonely.key });
+    assert.deepEqual(await deleteTeam(ada, lonely.key), { ok: true, deleted: lonely.key });
     assert.equal((await db.select().from(schema.projects).where(eq(schema.projects.id, lp.id))).length, 0, "the deleted project went with it");
-    const other = await svc.createTeam(ada, { name: "Contributor", key: `${L}K` });
+    const other = await createTeam(ada, { name: "Contributor", key: `${L}K` });
     const p = await pr.createProject(ada, { name: "Has a contributor", leadTeam: ta.key, teams: [other.key] });
-    await svc.deleteTeam(ada, other.key);
+    await deleteTeam(ada, other.key);
     assert.equal((await pr.getProject(ada, p.id)).teamCount, 1);
   });
 });
@@ -430,21 +432,21 @@ describe("milestones and an issue's place in a project", () => {
     const m1 = (await pr.createMilestone(ada, p1.id, { name: "One" })).milestones[0];
     const t = await issueIn(ta, p1.id, { milestoneId: m1.id });
     assert.deepEqual([t.projectId, t.milestoneId], [p1.id, m1.id]);
-    const moved = await svc.updateIssue(ada, t.ref, { projectId: p2.id });
+    const moved = await updateIssue(ada, t.ref, { projectId: p2.id });
     assert.deepEqual([moved.projectId, moved.milestoneId], [p2.id, null]);
-    const back = await svc.updateIssue(ada, t.ref, { projectId: p1.id, milestoneId: m1.id });
+    const back = await updateIssue(ada, t.ref, { projectId: p1.id, milestoneId: m1.id });
     assert.deepEqual([back.projectId, back.milestoneId], [p1.id, m1.id]);
-    const same = await svc.updateIssue(ada, t.ref, { projectId: p1.id });
+    const same = await updateIssue(ada, t.ref, { projectId: p1.id });
     assert.equal(same.version, back.version, "the same project keeps its milestone and changes nothing");
-    const out = await svc.updateIssue(ada, t.ref, { projectId: null });
+    const out = await updateIssue(ada, t.ref, { projectId: null });
     assert.deepEqual([out.projectId, out.milestoneId], [null, null]);
   });
 
   test("an issue joining or leaving a project is said to its team, and to nobody else's", async () => {
     const p = await project({ name: "Said" });
     const t = await issueIn(ta, null);
-    await svc.updateIssue(ada, t.ref, { projectId: p.id });
-    await svc.updateIssue(ada, t.ref, { projectId: null });
+    await updateIssue(ada, t.ref, { projectId: p.id });
+    await updateIssue(ada, t.ref, { projectId: null });
     const mine = (await db.select().from(schema.events).where(and(eq(schema.events.teamId, ta.id), eq(schema.events.entityId, p.id)))).map((e) => e.type);
     assert.deepEqual(mine.filter((x) => x.startsWith("project.issue")), ["project.issue_joined", "project.issue_left"]);
     assert.deepEqual((await db.select().from(schema.events).where(and(eq(schema.events.teamId, tb.id), eq(schema.events.entityId, p.id)))).length, 0);
@@ -456,7 +458,7 @@ describe("changing and deleting a project", () => {
     const p = await project();
     const a = await pr.updateProject(ada, p.id, { name: "Renamed", version: p.version });
     assert.deepEqual([a.name, a.version], ["Renamed", p.version + 1]);
-    await assert.rejects(pr.updateProject(ada, p.id, { name: "Late", version: p.version }), (e: unknown) => e instanceof svc.ServiceError && e.code === "conflict");
+    await assert.rejects(pr.updateProject(ada, p.id, { name: "Late", version: p.version }), (e: unknown) => e instanceof ServiceError && e.code === "conflict");
     assert.equal((await pr.updateProject(ada, p.id, { name: "Renamed" })).version, a.version, "nothing changed");
     await assert.rejects(pr.updateProject(ada, p.id, { targetDate: "2020-01-01", startDate: "2021-01-01" }), code("invalid"));
   });
@@ -479,7 +481,7 @@ describe("changing and deleting a project", () => {
     await assert.rejects(pr.deleteProject(bob, p.id), code("forbidden"), "bob is an editor of the lead team, not its admin");
     const gone = await pr.deleteProject(ada, p.id);
     assert.deepEqual([gone.ok, gone.released], [true, 2]);
-    for (const ref of [a.ref, b.ref]) assert.deepEqual([(await svc.getIssue(ada, ref)).issue.projectId, (await svc.getIssue(ada, ref)).issue.milestoneId], [null, null]);
+    for (const ref of [a.ref, b.ref]) assert.deepEqual([(await getIssue(ada, ref)).issue.projectId, (await getIssue(ada, ref)).issue.milestoneId], [null, null]);
     assert.ok(!(await pr.listProjects(ada)).some((x) => x.id === p.id));
     await assert.rejects(pr.getProject(ada, p.id), code("not_found"));
     await assert.rejects(issueIn(ta, p.id), (e: unknown) => /does not exist/.test((e as Error).message));

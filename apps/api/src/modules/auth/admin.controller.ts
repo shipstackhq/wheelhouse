@@ -1,6 +1,6 @@
 import { Controller, Inject, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { isInstanceAdmin } from "./auth-policy";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { type Admin } from "./workspaces-admin";
 import type { RawTextRequest } from "../../http/raw-text";
 import { jsonBody, str } from "../../web/body";

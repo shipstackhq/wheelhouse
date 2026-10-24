@@ -3,7 +3,9 @@ import { getDb, schema } from "../../db";
 import type { TeamRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { audit, leaveBlock, lockWorkspaceTeams, roleOnTeam, visibleTeamIds } from "./team-access";
-import { emit, findWorkspaceTeam, requireTeam, type Q } from "../../lib/service";
+import { type Q } from "../../platform/database/transaction";
+import { emit } from "../../platform/events/emit";
+import { findWorkspaceTeam, requireTeam } from "./teams";
 import { ServiceError } from "../../common/service-error";
 
 /**

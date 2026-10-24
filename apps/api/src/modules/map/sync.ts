@@ -1,20 +1,13 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import {
-  anchorScore,
-  emit,
-  requireTeam,
-  normPath,
-  pruneSessions,
-  ServiceError,
-  updateDoc,
-  upsertNode,
-  type DocRow,
-  type DocUpdateInput,
-  type NodeInput,
-  type NodeRow,
-} from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { pruneSessions } from "../../lib/service-queue";
+import { emit } from "../../platform/events/emit";
+import { updateDoc, type DocRow, type DocUpdateInput } from "../docs/index";
+import { requireTeam } from "../teams/index";
+import { anchorScore, normPath } from "./freshness";
+import { upsertNode, type NodeInput, type NodeRow } from "./graph";
 
 /**
  * Deterministic sync between working copies and Wheelhouse.

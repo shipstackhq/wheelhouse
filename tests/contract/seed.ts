@@ -13,7 +13,8 @@ import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../apps/api/src/db";
 import { scopeKeyToAllTeams } from "../../apps/api/src/modules/auth/key-scope";
-import * as svc from "../../apps/api/src/lib/service";
+import { createIssue } from "../../apps/api/src/modules/issues/issues";
+import { createTeam } from "../../apps/api/src/modules/teams/teams";
 import type { Actor } from "../../apps/api/src/common/actor";
 import { hashPassword } from "../../apps/api/src/modules/auth/auth-core";
 import type { Fixtures, GithubFixture, WorkspaceFixture } from "./lib/fixtures";
@@ -62,11 +63,11 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
   };
   const actor: Actor = { kind: "human", id: owner.id, name: owner.name, workspaceId: t.id };
   const teamKey = `CT${letter}`;
-  const team = await svc.createTeam(actor, { name: `Contract ${letter}`, key: teamKey });
+  const team = await createTeam(actor, { name: `Contract ${letter}`, key: teamKey });
   // A team is reachable only by its members (ADR-23): the owner got in by creating it, the workspace's other member is added here.
   await db.insert(schema.teamMembers).values({ teamId: team.id, userId: member.id, workspaceId: t.id, role: "editor", addedBy: owner.id });
-  const issue = await svc.createIssue(actor, teamKey, { title: `Contract issue ${letter}` });
-  const webhookIssue = await svc.createIssue(actor, teamKey, { title: `Webhook issue ${letter}` });
+  const issue = await createIssue(actor, teamKey, { title: `Contract issue ${letter}` });
+  const webhookIssue = await createIssue(actor, teamKey, { title: `Webhook issue ${letter}` });
   return {
     workspaceId: t.id,
     userId: owner.id,

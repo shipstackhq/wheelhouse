@@ -15,8 +15,12 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
-import * as svc from "./service";
-import { ServiceError } from "./service";
+import { createDoc, moveDoc, updateDoc } from "../modules/docs/docs";
+import { createIssue, getIssue, moveIssue, updateIssue } from "../modules/issues/issues";
+import { upsertDecision } from "../modules/map/decisions";
+import { upsertFlow, upsertNode } from "../modules/map/graph";
+import { createTeam } from "../modules/teams/teams";
+import { ServiceError } from "../common/service-error";
 
 let actor: Actor;
 const ROUNDS = 6;
@@ -27,7 +31,7 @@ before(async () => {
   const [user] = await db.insert(schema.users).values({ email: `lock-${Math.random().toString(16).slice(2, 8)}@example.com`, name: "Lena", passwordHash: "x" }).returning();
   await db.insert(schema.memberships).values({ userId: user.id, workspaceId: workspace.id, role: "owner" });
   actor = { kind: "human", id: user.id, name: user.name, workspaceId: workspace.id };
-  await svc.createTeam(actor, { name: "Lock", key: "LK" });
+  await createTeam(actor, { name: "Lock", key: "LK" });
 });
 
 /** Run both at once; report which were applied and which were refused as conflicts. */
@@ -43,45 +47,45 @@ async function race(a: () => Promise<unknown>, b: () => Promise<unknown>) {
 describe("two edits from the same version", () => {
   test("issues: one is applied, one is a conflict", async () => {
     for (let i = 0; i < ROUNDS; i++) {
-      const t = await svc.createIssue(actor, "LK", { title: `t${i}` });
-      const r = await race(() => svc.updateIssue(actor, t.id, { title: "A" }, t.version), () => svc.updateIssue(actor, t.id, { title: "B" }, t.version));
+      const t = await createIssue(actor, "LK", { title: `t${i}` });
+      const r = await race(() => updateIssue(actor, t.id, { title: "A" }, t.version), () => updateIssue(actor, t.id, { title: "B" }, t.version));
       assert.deepEqual(r, { applied: 1, refused: 1 }, `round ${i}`);
-      assert.equal((await svc.getIssue(actor, t.id)).issue.version, t.version + 1);
+      assert.equal((await getIssue(actor, t.id)).issue.version, t.version + 1);
     }
   });
 
   test("moving an issue: one is applied, one is a conflict", async () => {
     for (let i = 0; i < ROUNDS; i++) {
-      const t = await svc.createIssue(actor, "LK", { title: `m${i}` });
-      const r = await race(() => svc.moveIssue(actor, t.id, "In Progress", undefined, t.version), () => svc.moveIssue(actor, t.id, "Review", undefined, t.version));
+      const t = await createIssue(actor, "LK", { title: `m${i}` });
+      const r = await race(() => moveIssue(actor, t.id, "In Progress", undefined, t.version), () => moveIssue(actor, t.id, "Review", undefined, t.version));
       assert.deepEqual(r, { applied: 1, refused: 1 }, `round ${i}`);
     }
   });
 
   test("docs: edit and move", async () => {
     for (let i = 0; i < ROUNDS; i++) {
-      const d = await svc.createDoc(actor, "LK", { title: `d${i}`, body: "x" });
-      const edit = await race(() => svc.updateDoc(actor, "LK", d.id, { body: "A" }, d.version), () => svc.updateDoc(actor, "LK", d.id, { body: "B" }, d.version));
+      const d = await createDoc(actor, "LK", { title: `d${i}`, body: "x" });
+      const edit = await race(() => updateDoc(actor, "LK", d.id, { body: "A" }, d.version), () => updateDoc(actor, "LK", d.id, { body: "B" }, d.version));
       assert.deepEqual(edit, { applied: 1, refused: 1 }, `edit ${i}`);
-      const e = await svc.createDoc(actor, "LK", { title: `e${i}`, body: "x" });
-      const f = await svc.createDoc(actor, "LK", { title: `f${i}` });
-      const move = await race(() => svc.moveDoc(actor, "LK", e.id, { parent: f.id }, e.version), () => svc.moveDoc(actor, "LK", e.id, { parent: null, index: 0 }, e.version));
+      const e = await createDoc(actor, "LK", { title: `e${i}`, body: "x" });
+      const f = await createDoc(actor, "LK", { title: `f${i}` });
+      const move = await race(() => moveDoc(actor, "LK", e.id, { parent: f.id }, e.version), () => moveDoc(actor, "LK", e.id, { parent: null, index: 0 }, e.version));
       assert.deepEqual(move, { applied: 1, refused: 1 }, `move ${i}`);
     }
   });
 
   test("map nodes, flows and decisions", async () => {
     for (let i = 0; i < ROUNDS; i++) {
-      const n = await svc.upsertNode(actor, "LK", { name: `Node ${i}`, layer: "system", summary: "s" });
-      const node = await race(() => svc.upsertNode(actor, "LK", { id: n.id, summary: "A", expectedVersion: n.version }), () => svc.upsertNode(actor, "LK", { id: n.id, summary: "B", expectedVersion: n.version }));
+      const n = await upsertNode(actor, "LK", { name: `Node ${i}`, layer: "system", summary: "s" });
+      const node = await race(() => upsertNode(actor, "LK", { id: n.id, summary: "A", expectedVersion: n.version }), () => upsertNode(actor, "LK", { id: n.id, summary: "B", expectedVersion: n.version }));
       assert.deepEqual(node, { applied: 1, refused: 1 }, `node ${i}`);
 
-      const f = await svc.upsertFlow(actor, "LK", { name: `Flow ${i}`, steps: [{ node: n.id, title: "go" }] });
-      const flow = await race(() => svc.upsertFlow(actor, "LK", { id: f.id, name: `Flow ${i}`, description: "A", expectedVersion: f.version }), () => svc.upsertFlow(actor, "LK", { id: f.id, name: `Flow ${i}`, description: "B", expectedVersion: f.version }));
+      const f = await upsertFlow(actor, "LK", { name: `Flow ${i}`, steps: [{ node: n.id, title: "go" }] });
+      const flow = await race(() => upsertFlow(actor, "LK", { id: f.id, name: `Flow ${i}`, description: "A", expectedVersion: f.version }), () => upsertFlow(actor, "LK", { id: f.id, name: `Flow ${i}`, description: "B", expectedVersion: f.version }));
       assert.deepEqual(flow, { applied: 1, refused: 1 }, `flow ${i}`);
 
-      const d = await svc.upsertDecision(actor, "LK", { title: `Decision ${i}` });
-      const decision = await race(() => svc.upsertDecision(actor, "LK", { number: d.number, context: "A", expectedVersion: d.version }), () => svc.upsertDecision(actor, "LK", { number: d.number, context: "B", expectedVersion: d.version }));
+      const d = await upsertDecision(actor, "LK", { title: `Decision ${i}` });
+      const decision = await race(() => upsertDecision(actor, "LK", { number: d.number, context: "A", expectedVersion: d.version }), () => upsertDecision(actor, "LK", { number: d.number, context: "B", expectedVersion: d.version }));
       assert.deepEqual(decision, { applied: 1, refused: 1 }, `decision ${i}`);
     }
   });

@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
-import { createTeam, deleteTeam, removeSession, updateTeam } from "../../lib/service";
+import { removeSession } from "../../lib/service-queue";
+import { createTeam, deleteTeam, updateTeam } from "./teams";
 import { createStatus, deleteStatus, listStatuses, reorderStatuses, updateStatus } from "./statuses";
 import { getTeamSettings, parentCandidates, restoreTeam, retireTeam, setTeamParent } from "./team-lifecycle";
 import { addTeamMember, joinTeamAsWorkspaceAdmin, listAddableMembers, listAudit, listTeamMembers, listTeamsWithRole, listWorkspaceTeams, removeTeamMember, setTeamMemberRole, setTeamOrder } from "./team-members";

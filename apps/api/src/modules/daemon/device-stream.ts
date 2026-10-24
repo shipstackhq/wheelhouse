@@ -2,7 +2,7 @@ import { and, asc, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import { serverSigningKey, signValue } from "./daemon-crypto";
 import { bus } from "../../platform/events/event-bus";
-import { type Q } from "../../lib/service";
+import { type Q } from "../../platform/database/transaction";
 
 /** A device's stream: who is listening, the signed messages sent to it, and the stream itself (SSE with replay). See wheelhouse-cli/daemon/DESIGN.md. */
 const { devices, deviceMessages } = schema;

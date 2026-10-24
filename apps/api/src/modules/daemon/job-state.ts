@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { DeviceJobState } from "../../db/schema";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { ACTIVE, type Device } from "./device-common";
 import { signalJob } from "./device-stream";

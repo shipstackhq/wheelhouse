@@ -3,8 +3,9 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import type { Human } from "../auth/index";
 import { DOC_TEMPLATE_IDS } from "@wheelhouse/shared/doc-templates";
-import * as svc from "../../lib/service";
-import { ServiceError } from "../../lib/service";
+import { getGraph } from "../map/index";
+import { DocInput, createDoc, getDoc, listDocs, markDocFresh, moveDoc, updateDoc } from "./docs";
+import { ServiceError } from "../../common/service-error";
 import { bad, oneOf, text, textList, textOrNull, whole } from "../../lib/web-input";
 
 /**
@@ -62,7 +63,7 @@ async function withCurrent<T>(run: () => Promise<T>): Promise<T> {
 
 /** The docs page in one read: the tree, and what its side panels offer (map nodes to link, decisions to link, who wrote what). */
 export async function docsIndex(h: Human, teamKey: string) {
-  const [docs, g] = await Promise.all([svc.listDocs(h.actor, teamKey), svc.getGraph(h.actor, teamKey)]);
+  const [docs, g] = await Promise.all([listDocs(h.actor, teamKey), getGraph(h.actor, teamKey)]);
   const db = await getDb();
   const members = await db
     .select({ id: schema.users.id, name: schema.users.name })
@@ -78,19 +79,19 @@ export async function docsIndex(h: Human, teamKey: string) {
 }
 
 export async function getDocAs(actor: Actor, teamKey: string, ref: string) {
-  const { doc, nodes, owner, contributors } = await svc.getDoc(actor, teamKey, ref);
+  const { doc, nodes, owner, contributors } = await getDoc(actor, teamKey, ref);
   return { doc: docView(doc), nodes, owner, contributors };
 }
 
 export async function createDocAs(actor: Actor, teamKey: string, b: Body): Promise<DocView> {
   const title = text(b, "title", { required: true, max: 300, trim: true })!;
-  const input: svc.DocInput & { title: string } = {
+  const input: DocInput & { title: string } = {
     title,
     body: text(b, "body"),
     parent: textOrNull(b, "parent"),
     template: oneOf(b, "template", DOC_TEMPLATE_IDS),
   };
-  return docView(await svc.createDoc(actor, teamKey, input));
+  return docView(await createDoc(actor, teamKey, input));
 }
 
 /** `version` is the lock: a change made since is a 409 and nothing is overwritten. */
@@ -103,14 +104,14 @@ export async function updateDocAs(actor: Actor, teamKey: string, ref: string, b:
     labels: textList(b, "labels"),
   };
   if (patch.title !== undefined && !patch.title.trim()) bad("title", "title is required");
-  return docView(await withCurrent(() => svc.updateDoc(actor, teamKey, ref, patch, whole(b, "version"))));
+  return docView(await withCurrent(() => updateDoc(actor, teamKey, ref, patch, whole(b, "version"))));
 }
 
 export async function markDocFreshAs(actor: Actor, teamKey: string, ref: string): Promise<DocView> {
-  return docView(await svc.markDocFresh(actor, teamKey, ref));
+  return docView(await markDocFresh(actor, teamKey, ref));
 }
 
 export async function moveDocAs(actor: Actor, teamKey: string, ref: string, b: Body): Promise<DocView> {
   const opts = { parent: textOrNull(b, "parent"), index: whole(b, "index") };
-  return docView(await withCurrent(() => svc.moveDoc(actor, teamKey, ref, opts, whole(b, "version"))));
+  return docView(await withCurrent(() => moveDoc(actor, teamKey, ref, opts, whole(b, "version"))));
 }

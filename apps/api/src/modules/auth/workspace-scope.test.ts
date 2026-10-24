@@ -16,7 +16,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { createIssue, updateIssue } from "../issues/issues";
+import { createTeam, deleteTeam } from "../teams/teams";
 import * as pmem from "../teams/team-members";
 
 const RUN = Math.random().toString(16).slice(2, 8);
@@ -53,8 +55,8 @@ before(async () => {
   bob = await person(wsA.id, "member", "bob");
   cy = await person(wsA.id, "member", "cy");
   bea = await person(wsB.id, "owner", "bea");
-  a1 = await svc.createTeam(ada, { name: "A one", key: `${L}A` });
-  await svc.createTeam(bea, { name: "B one", key: `${L}B` });
+  a1 = await createTeam(ada, { name: "A one", key: `${L}A` });
+  await createTeam(bea, { name: "B one", key: `${L}B` });
   await pmem.addTeamMember(ada, a1.key, { userId: bob.id, role: "editor" });
 });
 
@@ -97,8 +99,8 @@ describe("a row names its team's own workspace", () => {
   });
 
   test("deleting a team removes its rows through the same key", async () => {
-    const t = await svc.createTeam(ada, { name: "Short lived", key: `${L}S` });
-    await svc.deleteTeam(ada, t.key);
+    const t = await createTeam(ada, { name: "Short lived", key: `${L}S` });
+    await deleteTeam(ada, t.key);
     const db = await getDb();
     assert.equal((await db.select().from(schema.statuses).where(eq(schema.statuses.teamId, t.id))).length, 0);
   });
@@ -108,7 +110,7 @@ describe("a team member is a workspace member", () => {
   test("someone from another workspace cannot be put on a team", async () => {
     const db = await getDb();
     await assert.rejects(db.insert(schema.teamMembers).values({ teamId: a1.id, workspaceId: wsA.id, userId: bea.id, role: "editor" }), refused("23503"));
-    await assert.rejects(pmem.addTeamMember(ada, a1.key, { userId: bea.id, role: "editor" }), (e: unknown) => e instanceof svc.ServiceError);
+    await assert.rejects(pmem.addTeamMember(ada, a1.key, { userId: bea.id, role: "editor" }), (e: unknown) => e instanceof ServiceError);
   });
 
   test("a person who leaves the workspace leaves every team in it", async () => {
@@ -124,15 +126,15 @@ describe("a team member is a workspace member", () => {
 
 describe("an assignee is a member of the issue's team", () => {
   test("a team member can be assigned; a workspace member who is not on the team cannot", async () => {
-    const t = await svc.createIssue(ada, a1.key, { title: "Assign me", assigneeId: bob.id });
+    const t = await createIssue(ada, a1.key, { title: "Assign me", assigneeId: bob.id });
     assert.equal(t.assigneeId, bob.id);
-    await assert.rejects(svc.createIssue(ada, a1.key, { title: "Nope", assigneeId: cy.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /member of this team/.test(e.message));
-    await assert.rejects(svc.updateIssue(ada, t.ref, { assigneeId: cy.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.updateIssue(ada, t.ref, { assigneeId: bea.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(createIssue(ada, a1.key, { title: "Nope", assigneeId: cy.id }), (e: unknown) => e instanceof ServiceError && e.code === "invalid" && /member of this team/.test(e.message));
+    await assert.rejects(updateIssue(ada, t.ref, { assigneeId: cy.id }), (e: unknown) => e instanceof ServiceError && e.code === "invalid");
+    await assert.rejects(updateIssue(ada, t.ref, { assigneeId: bea.id }), (e: unknown) => e instanceof ServiceError && e.code === "invalid");
   });
 
   test("the database refuses a non-member assignee even when the service is bypassed", async () => {
-    const t = await svc.createIssue(ada, a1.key, { title: "Direct" });
+    const t = await createIssue(ada, a1.key, { title: "Direct" });
     const db = await getDb();
     await assert.rejects(db.update(schema.issues).set({ assigneeId: cy.id }).where(eq(schema.issues.id, t.id)), refused("23503"));
   });
@@ -140,8 +142,8 @@ describe("an assignee is a member of the issue's team", () => {
   test("removing someone from a team unassigns their issues there and nothing else", async () => {
     const eli = await person(wsA.id, "member", "eli");
     await pmem.addTeamMember(ada, a1.key, { userId: eli.id, role: "editor" });
-    const mine = await svc.createIssue(ada, a1.key, { title: "Eli's", assigneeId: eli.id });
-    const other = await svc.createIssue(ada, a1.key, { title: "Bob's", assigneeId: bob.id });
+    const mine = await createIssue(ada, a1.key, { title: "Eli's", assigneeId: eli.id });
+    const other = await createIssue(ada, a1.key, { title: "Bob's", assigneeId: bob.id });
     await pmem.removeTeamMember(ada, a1.key, eli.id);
     const db = await getDb();
     const [after] = await db.select().from(schema.issues).where(eq(schema.issues.id, mine.id));
@@ -154,7 +156,7 @@ describe("an assignee is a member of the issue's team", () => {
   test("leaving the workspace unassigns the person too", async () => {
     const fay = await person(wsA.id, "member", "fay");
     await pmem.addTeamMember(ada, a1.key, { userId: fay.id, role: "editor" });
-    const t = await svc.createIssue(ada, a1.key, { title: "Fay's", assigneeId: fay.id });
+    const t = await createIssue(ada, a1.key, { title: "Fay's", assigneeId: fay.id });
     const db = await getDb();
     await db.delete(schema.memberships).where(and(eq(schema.memberships.userId, fay.id), eq(schema.memberships.workspaceId, wsA.id)));
     const [after] = await db.select().from(schema.issues).where(eq(schema.issues.id, t.id));

@@ -19,7 +19,9 @@ import type { Actor } from "../../common/actor";
 import * as projects from "../issues/projects";
 import * as pmem from "./team-members";
 import * as life from "./team-lifecycle";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { addComment, createIssue, getBoard, moveIssue } from "../issues/issues";
+import { createTeam, deleteTeam, listTeams } from "./teams";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();
@@ -45,9 +47,9 @@ async function world() {
 let t = 0;
 const mk = (by: Actor, parent?: string) => {
   const key = `${L}${"ABCDEFGHIJKLMNOPQRSTUVWXYZ"[t++ % 26]}${"ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(t / 26) % 26]}`;
-  return svc.createTeam(by, { name: `Team ${key}`, key, parent });
+  return createTeam(by, { name: `Team ${key}`, key, parent });
 };
-const code = (c: svc.ServiceError["code"]) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
+const code = (c: ServiceError["code"]) => (e: unknown) => e instanceof ServiceError && e.code === c;
 const audits = async (teamId: string) => (await (await getDb()).select().from(schema.auditEvents).where(eq(schema.auditEvents.teamId, teamId))).map((a) => a.action);
 
 describe("leave", () => {
@@ -92,13 +94,13 @@ describe("retire and restore", () => {
     const b = await mk(owner);
     await life.retireTeam(owner, a.key);
     await assert.rejects(() => life.retireTeam(owner, b.key), code("conflict"));
-    await assert.rejects(() => svc.deleteTeam(owner, b.key), code("conflict"));
+    await assert.rejects(() => deleteTeam(owner, b.key), code("conflict"));
     const s = await life.getTeamSettings(owner, b.key);
     assert.equal(s.canRetire.allowed, false);
     assert.equal(s.canDelete.allowed, false);
     assert.match(s.canRetire.reason!, /last active team/);
     assert.deepEqual((await pmem.listTeamsWithRole(owner)).filter((x) => x.retired).map((x) => x.key), [a.key]);
-    assert.ok(!(await svc.listTeams(owner)).some((x) => x.key === a.key), "listTeams leaves retired teams out by default");
+    assert.ok(!(await listTeams(owner)).some((x) => x.key === a.key), "listTeams leaves retired teams out by default");
     await life.restoreTeam(owner, a.key);
     await life.retireTeam(owner, b.key);
     assert.deepEqual((await audits(a.id)).filter((x) => /retired|restored/.test(x)), ["team.retired", "team.restored"]);
@@ -128,22 +130,22 @@ describe("retire and restore", () => {
     const { ws, owner } = await world();
     const a = await mk(owner);
     const b = await mk(owner);
-    const issue = await svc.createIssue(owner, a.key, { title: "before" });
+    const issue = await createIssue(owner, a.key, { title: "before" });
     const db = await getDb();
     const [key] = await db.insert(schema.apiKeys).values({ workspaceId: ws.id, name: "key", prefix: "wh_x", keyHash: `h-${RUN}-${++n}` }).returning();
     await db.insert(schema.apiKeyTeams).values({ apiKeyId: key.id, teamId: a.id, workspaceId: ws.id });
     const agent: Actor = { kind: "agent", id: key.id, name: "key", workspaceId: ws.id };
-    await svc.createIssue(agent, a.key, { title: "agent before" });
+    await createIssue(agent, a.key, { title: "agent before" });
     await life.retireTeam(owner, a.key);
     const ref = `${a.key}-${issue.number}`;
-    await assert.rejects(() => svc.createIssue(owner, a.key, { title: "no" }), (e) => code("conflict")(e) && /retired/.test((e as Error).message));
-    await assert.rejects(() => svc.addComment(owner, ref, "no"), code("conflict"));
-    await assert.rejects(() => svc.moveIssue(owner, ref, "Done"), code("conflict"));
-    await assert.rejects(() => svc.createIssue(agent, a.key, { title: "no" }), code("conflict"));
-    assert.ok((await svc.getBoard(owner, a.key)).issues.length >= 2, "still readable");
-    assert.ok((await svc.getBoard(agent, a.key)).issues.length >= 2, "readable by the key too");
+    await assert.rejects(() => createIssue(owner, a.key, { title: "no" }), (e) => code("conflict")(e) && /retired/.test((e as Error).message));
+    await assert.rejects(() => addComment(owner, ref, "no"), code("conflict"));
+    await assert.rejects(() => moveIssue(owner, ref, "Done"), code("conflict"));
+    await assert.rejects(() => createIssue(agent, a.key, { title: "no" }), code("conflict"));
+    assert.ok((await getBoard(owner, a.key)).issues.length >= 2, "still readable");
+    assert.ok((await getBoard(agent, a.key)).issues.length >= 2, "readable by the key too");
     await life.restoreTeam(owner, a.key);
-    await svc.createIssue(owner, a.key, { title: "after" });
+    await createIssue(owner, a.key, { title: "after" });
     assert.ok(b);
   });
 });
@@ -152,19 +154,19 @@ describe("delete", () => {
   test("the last active team stays; a retired team can go; guards for projects and children", async () => {
     const { ws, owner } = await world();
     const a = await mk(owner);
-    await assert.rejects(() => svc.deleteTeam(owner, a.key), (e) => code("conflict")(e) && /last active team/.test((e as Error).message));
+    await assert.rejects(() => deleteTeam(owner, a.key), (e) => code("conflict")(e) && /last active team/.test((e as Error).message));
     const b = await mk(owner);
     const kid = await mk(owner, b.key);
-    await assert.rejects(() => svc.deleteTeam(owner, b.key), (e) => code("conflict")(e) && /child teams/.test((e as Error).message));
+    await assert.rejects(() => deleteTeam(owner, b.key), (e) => code("conflict")(e) && /child teams/.test((e as Error).message));
     const led = await projects.createProject(owner, { name: "Led", leadTeam: kid.key });
-    await assert.rejects(() => svc.deleteTeam(owner, kid.key), (e) => code("conflict")(e) && /leads "Led"/.test((e as Error).message));
+    await assert.rejects(() => deleteTeam(owner, kid.key), (e) => code("conflict")(e) && /leads "Led"/.test((e as Error).message));
     await projects.deleteProject(owner, led.id);
     await life.retireTeam(owner, kid.key);
-    await assert.rejects(() => svc.deleteTeam(owner, b.key), code("conflict")); // a retired child still blocks a delete
+    await assert.rejects(() => deleteTeam(owner, b.key), code("conflict")); // a retired child still blocks a delete
     await life.setTeamParent(owner, kid.key, null);
     await life.retireTeam(owner, b.key); // b no longer has children
     assert.ok(ws);
-    assert.deepEqual(await svc.deleteTeam(owner, b.key), { ok: true, deleted: b.key }); // retired: not limited by the rule
+    assert.deepEqual(await deleteTeam(owner, b.key), { ok: true, deleted: b.key }); // retired: not limited by the rule
     assert.ok((await audits(b.id)).includes("team.deleted"));
   });
 });
@@ -195,7 +197,7 @@ describe("parent team", () => {
     const top = await mk(owner);
     const child = await mk(owner, top.key);
     await pmem.addTeamMember(owner, top.key, { userId: sam.id, role: "admin" });
-    await assert.rejects(() => svc.getBoard(sam, child.key), code("not_found"));
+    await assert.rejects(() => getBoard(sam, child.key), code("not_found"));
     const samsOwn = await mk(sam);
     await assert.rejects(() => life.setTeamParent(owner, child.key, samsOwn.key), code("not_found"));
     const settings = await life.getTeamSettings(sam, top.key);
@@ -214,6 +216,6 @@ describe("concurrency", () => {
     const b = await mk(owner);
     const results = await Promise.allSettled([life.retireTeam(owner, a.key), life.retireTeam(owner, b.key)]);
     assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
-    assert.equal((await svc.listTeams(owner)).length, 1);
+    assert.equal((await listTeams(owner)).length, 1);
   });
 });

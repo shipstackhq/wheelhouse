@@ -1,7 +1,7 @@
 import { AuthError } from "../modules/auth/access";
 import { AccountError } from "../modules/auth/accounts";
 import { InviteError, InviteFailure, INVITE_INVALID } from "../modules/auth/invites";
-import { ServiceError } from "./service";
+import { ServiceError } from "../common/service-error";
 import { AdminError } from "../modules/auth/workspaces-admin";
 
 /** How a failure is answered over HTTP: shared by every host so the REST and MCP error shapes cannot drift apart. */

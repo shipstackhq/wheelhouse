@@ -2,8 +2,11 @@ import type { Actor } from "../../common/actor";
 import { askEnabled, askMap } from "./ask";
 import { rateLimit } from "../../common/rate-limit";
 import * as schema from "../../db/schema";
-import * as svc from "../../lib/service";
-import { ServiceError } from "../../lib/service";
+import { listEvents } from "../../lib/service-queue";
+import { requireTeam } from "../teams/index";
+import { DecisionInput, upsertDecision, upsertTerm } from "./decisions";
+import { FlowInput, NodeInput, NodeRow, getGraph, saveLayout, upsertEdge, upsertFlow, upsertNode } from "./graph";
+import { ServiceError } from "../../common/service-error";
 import { bad, finite, oneOf, rateLimited, text, textList, textOrNull, whole } from "../../lib/web-input";
 
 /**
@@ -44,7 +47,7 @@ export type NodeView = {
   version: number;
 };
 
-export const nodeView = (n: svc.NodeRow): NodeView => ({
+export const nodeView = (n: NodeRow): NodeView => ({
   id: n.id,
   parentId: n.parentId,
   layer: n.layer,
@@ -138,7 +141,7 @@ export type GraphView = {
 
 /** The whole map of a team in one read: what the map, decisions and glossary pages draw. */
 export async function graphView(actor: Actor, teamKey: string): Promise<GraphView> {
-  const g = await svc.getGraph(actor, teamKey);
+  const g = await getGraph(actor, teamKey);
   return {
     team: { id: g.team.id, key: g.team.key, name: g.team.name, description: g.team.description },
     nodes: g.nodes.map(nodeView),
@@ -186,8 +189,8 @@ function indexesField(b: Body): schema.Index[] | undefined {
 }
 
 /** The node fields a person can set from the panel, checked. `version` is the lock (read separately). */
-export function nodeInput(b: Body): svc.NodeInput {
-  const out: svc.NodeInput = {};
+export function nodeInput(b: Body): NodeInput {
+  const out: NodeInput = {};
   const name = text(b, "name", { max: 200 });
   if (name !== undefined) out.name = name;
   for (const k of ["summary", "purpose", "responsibilities", "interfaces", "gotchas", "details"] as const) {
@@ -235,8 +238,8 @@ export async function upsertNodeAs(actor: Actor, teamKey: string, b: Body & { id
   const version = whole(b, "version");
   if (version !== undefined) input.expectedVersion = version;
   if (!id && !input.name) bad("name", "name is required to create a node");
-  const n = await withCurrent(() => svc.upsertNode(actor, teamKey, input), nodeView as (raw: never) => unknown);
-  return nodeView(n as svc.NodeRow);
+  const n = await withCurrent(() => upsertNode(actor, teamKey, input), nodeView as (raw: never) => unknown);
+  return nodeView(n as NodeRow);
 }
 
 /** Positions (and sizes) of many nodes at once, from a drag, a resize or a Tidy. `placed` says whether a person placed them. */
@@ -257,7 +260,7 @@ export function layoutInput(b: Body): { positions: { id: string; x: number; y: n
 
 export async function saveLayoutAs(actor: Actor, teamKey: string, b: Body) {
   const { positions, placed } = layoutInput(b);
-  await svc.saveLayout(actor, teamKey, positions, placed === undefined ? undefined : { placed });
+  await saveLayout(actor, teamKey, positions, placed === undefined ? undefined : { placed });
   return { ok: true as const };
 }
 
@@ -267,14 +270,14 @@ export async function connectAs(actor: Actor, teamKey: string, b: Body): Promise
   const to = text(b, "to", { required: true });
   const kind = oneOf(b, "kind", ["depends", "implements"] as const) ?? "depends";
   const label = text(b, "label", { max: 200 });
-  return edgeView(await svc.upsertEdge(actor, teamKey, { from: from!, to: to!, label, kind }));
+  return edgeView(await upsertEdge(actor, teamKey, { from: from!, to: to!, label, kind }));
 }
 
 // ───────── flows, decisions, terms ─────────
 
 export async function upsertFlowAs(actor: Actor, teamKey: string, b: Body): Promise<FlowView> {
   const name = text(b, "name", { required: true, max: 200, trim: true })!;
-  let steps: svc.FlowInput["steps"];
+  let steps: FlowInput["steps"];
   if (b.steps !== undefined) {
     if (!Array.isArray(b.steps) || b.steps.length > 200) return bad("steps", "steps must be a list (at most 200)");
     steps = b.steps.map((s, i) => {
@@ -283,14 +286,14 @@ export async function upsertFlowAs(actor: Actor, teamKey: string, b: Body): Prom
       return { node: text(o, "node", { required: true }) ?? bad("steps", `step ${i + 1} needs a node`), title: text(o, "title", { required: true, max: 500 }) ?? "", detail: text(o, "detail", { max: 20_000 }) };
     });
   }
-  const input: svc.FlowInput = { name, description: text(b, "description", { max: 5000 }), steps, expectedVersion: whole(b, "version") };
+  const input: FlowInput = { name, description: text(b, "description", { max: 5000 }), steps, expectedVersion: whole(b, "version") };
   const id = text(b, "id");
   if (id !== undefined) input.id = id;
-  return flowView(await withCurrent(() => svc.upsertFlow(actor, teamKey, input), flowView as (raw: never) => unknown));
+  return flowView(await withCurrent(() => upsertFlow(actor, teamKey, input), flowView as (raw: never) => unknown));
 }
 
 export async function upsertDecisionAs(actor: Actor, teamKey: string, b: Body): Promise<DecisionView> {
-  const input: svc.DecisionInput = {
+  const input: DecisionInput = {
     number: whole(b, "number"),
     title: text(b, "title", { max: 300 }),
     status: oneOf(b, "status", schema.DECISION_STATUSES),
@@ -300,13 +303,13 @@ export async function upsertDecisionAs(actor: Actor, teamKey: string, b: Body): 
     nodes: textList(b, "nodes"),
     expectedVersion: whole(b, "version"),
   };
-  return decisionView(await withCurrent(() => svc.upsertDecision(actor, teamKey, input), decisionView as (raw: never) => unknown));
+  return decisionView(await withCurrent(() => upsertDecision(actor, teamKey, input), decisionView as (raw: never) => unknown));
 }
 
 export async function upsertTermAs(actor: Actor, teamKey: string, term: string, b: Body): Promise<TermView> {
   const definition = text(b, "definition", { required: true, max: 5000 })!;
   const node = textOrNull(b, "node");
-  return termView(await svc.upsertTerm(actor, teamKey, { term, definition, node }));
+  return termView(await upsertTerm(actor, teamKey, { term, definition, node }));
 }
 
 // ───────── Ask the map ─────────
@@ -320,7 +323,7 @@ export const ASK_LIMIT = { count: 20, windowMs: 10 * 60_000 };
  * `askMap` and is in no answer.
  */
 export async function askAs(actor: Actor, teamKey: string, b: Body) {
-  await svc.requireTeam(actor, teamKey);
+  await requireTeam(actor, teamKey);
   const question = text(b, "question", { required: true, max: 4000, trim: true })!;
   const focus = text(b, "focus");
   const hit = rateLimit(`ask:${actor.id}`, ASK_LIMIT.count, ASK_LIMIT.windowMs);
@@ -345,7 +348,7 @@ export type ActivityEvent = {
 /** The team's recent events, newest first, optionally only by agents or only by people. `data` carries only what the page links with. */
 export async function activityView(actor: Actor, teamKey: string, who?: string): Promise<ActivityEvent[]> {
   const actorKind = who === "agent" || who === "human" ? who : undefined;
-  const events = await svc.listEvents(actor, teamKey, { limit: 200, actorKind });
+  const events = await listEvents(actor, teamKey, { limit: 200, actorKind });
   return events.map((e) => {
     const d = (e.data ?? {}) as Record<string, unknown>;
     const data: ActivityEvent["data"] = {};

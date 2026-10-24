@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
-import { deleteEdge, deleteFlow, deleteNode, deleteTerm, markFresh } from "../../lib/service";
+import { deleteTerm } from "./decisions";
+import { markFresh } from "./freshness";
+import { deleteEdge, deleteFlow, deleteNode } from "./graph";
 import { activityView, askAs, connectAs, graphView, saveLayoutAs, upsertDecisionAs, upsertFlowAs, upsertNodeAs, upsertTermAs } from "./map-app";
 import { resolveDraft } from "./sync";
 

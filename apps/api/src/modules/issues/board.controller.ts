@@ -1,6 +1,6 @@
 import { Controller, Inject, Get, HttpCode, Param, Post, Req, UseGuards } from "@nestjs/common";
 import { statusField, issueInput } from "./board-app";
-import { queueStatus } from "../../lib/service";
+import { queueStatus } from "../../lib/service-queue";
 import { IssuesService } from "./issues.service";
 import type { RawTextRequest } from "../../http/raw-text";
 import { jsonBody } from "../../web/body";

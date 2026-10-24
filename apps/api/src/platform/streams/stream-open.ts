@@ -4,7 +4,7 @@ import { AuthError } from "../../modules/auth/access";
 import type { Actor } from "../../common/actor";
 import { bus, type StreamEvent } from "../events/event-bus";
 import type { StreamScope } from "./stream-scope";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { eventStream, parseSince, SSE_HEADERS } from "./sse";
 
 export { SSE_HEADERS };

@@ -24,7 +24,16 @@ import { getDb, schema } from "../apps/api/src/db";
 import type { Actor } from "../apps/api/src/common/actor";
 import { actorForKey, userForSessionToken } from "../apps/api/src/modules/auth/access";
 import { sha256 } from "../apps/api/src/common/crypto";
-import * as svc from "../apps/api/src/lib/service";
+import { ServiceError } from "../apps/api/src/common/service-error";
+import { listEvents, markAllSeen, queueStatus, removeSession } from "../apps/api/src/lib/service-queue";
+import { createDoc, getDoc, linkDocNode, markDocFresh } from "../apps/api/src/modules/docs/docs";
+import { createRepository, findOrCreateRepository, listRepositories, retireRepository, updateRepository } from "../apps/api/src/modules/github/repositories";
+import { linkIssueNode } from "../apps/api/src/modules/issues/issue-nodes";
+import { addComment, createIssue, getIssue, updateIssue } from "../apps/api/src/modules/issues/issues";
+import { upsertDecision, upsertTerm } from "../apps/api/src/modules/map/decisions";
+import { listStaleDocs, reportChanges } from "../apps/api/src/modules/map/freshness";
+import { upsertEdge, upsertFlow, upsertNode } from "../apps/api/src/modules/map/graph";
+import { createTeam, deleteTeam, requireTeam } from "../apps/api/src/modules/teams/teams";
 import { scopeKeyToAllTeams } from "../apps/api/src/modules/auth/key-scope";
 import * as cycles from "../apps/api/src/modules/issues/cycles";
 import * as projects from "../apps/api/src/modules/issues/projects";
@@ -84,33 +93,33 @@ async function seedSide(label: "A" | "B") {
   const human: Actor = { kind: "human", id: owner.id, name: `${tag} owner`, workspaceId: workspace.id };
   const agent: Actor = { kind: "agent", id: k.id, name: `${tag} key`, workspaceId: workspace.id };
   const teamKey = label === "A" ? "AA" : "BB";
-  const team = await svc.createTeam(human, { name: `${tag} team`, key: teamKey });
+  const team = await createTeam(human, { name: `${tag} team`, key: teamKey });
   // Both workspaces also have a team with the same key, to prove keys are per workspace.
-  await svc.createTeam(human, { name: `${tag} shared-key team`, key: "SH" });
-  const t = await svc.createIssue(human, teamKey, { title: `${tag} issue`, body: `${tag} body`, priority: "high" });
-  await svc.createIssue(human, "SH", { title: `${tag} shared issue` });
+  await createTeam(human, { name: `${tag} shared-key team`, key: "SH" });
+  const t = await createIssue(human, teamKey, { title: `${tag} issue`, body: `${tag} body`, priority: "high" });
+  await createIssue(human, "SH", { title: `${tag} shared issue` });
   await scopeKeyToAllTeams(db, k.id, workspace.id);
-  await svc.addComment(human, t.ref, `${tag} comment`);
+  await addComment(human, t.ref, `${tag} comment`);
   return { workspaceId: workspace.id, owner: human, ownerEmail, ownerId: owner.id, agent, keyId: k.id, key, teamKey, teamId: team.id, issueRef: t.ref, issueId: t.id, tag };
 }
 
 async function seedMap(s: Awaited<ReturnType<typeof seedSide>>) {
   const k = s.teamKey;
-  const sys = await svc.upsertNode(s.owner, k, { name: `${s.tag} system`, layer: "system", kind: "service", summary: `${s.tag} summary`, anchors: ["src/a/**"] });
-  const concept = await svc.upsertNode(s.owner, k, { name: `${s.tag} concept`, layer: "concept", kind: "concept", summary: `${s.tag} concept` });
-  const data = await svc.upsertNode(s.owner, k, {
+  const sys = await upsertNode(s.owner, k, { name: `${s.tag} system`, layer: "system", kind: "service", summary: `${s.tag} summary`, anchors: ["src/a/**"] });
+  const concept = await upsertNode(s.owner, k, { name: `${s.tag} concept`, layer: "concept", kind: "concept", summary: `${s.tag} concept` });
+  const data = await upsertNode(s.owner, k, {
     name: `${s.tag} table`,
     layer: "data",
     kind: "table",
     columns: [{ name: "id", type: "uuid", pk: true }] as never,
   });
-  await svc.upsertEdge(s.owner, k, { from: sys.id, to: concept.id, kind: "implements" });
-  await svc.linkIssueNode(s.owner, s.issueRef, sys.name);
-  await svc.upsertFlow(s.owner, k, { name: `${s.tag} flow`, steps: [{ node: sys.name, title: `${s.tag} step` }] });
-  await svc.upsertDecision(s.owner, k, { title: `${s.tag} decision`, nodes: [sys.name] });
-  await svc.upsertTerm(s.owner, k, { term: `${s.tag} term`, definition: `${s.tag} definition`, node: sys.name });
-  const doc = await svc.createDoc(s.owner, k, { title: `${s.tag} doc`, body: `${s.tag} body with a secret word` });
-  await svc.linkDocNode(s.owner, k, doc.id, sys.name);
+  await upsertEdge(s.owner, k, { from: sys.id, to: concept.id, kind: "implements" });
+  await linkIssueNode(s.owner, s.issueRef, sys.name);
+  await upsertFlow(s.owner, k, { name: `${s.tag} flow`, steps: [{ node: sys.name, title: `${s.tag} step` }] });
+  await upsertDecision(s.owner, k, { title: `${s.tag} decision`, nodes: [sys.name] });
+  await upsertTerm(s.owner, k, { term: `${s.tag} term`, definition: `${s.tag} definition`, node: sys.name });
+  const doc = await createDoc(s.owner, k, { title: `${s.tag} doc`, body: `${s.tag} body with a secret word` });
+  await linkDocNode(s.owner, k, doc.id, sys.name);
   return { sys, concept, data, doc };
 }
 
@@ -163,13 +172,13 @@ before(async () => {
     .values({ teamId: a.teamId, workspaceId: a.workspaceId, nodeId: map.sys.id, sessionId, authorName: a.agent.name, authorKind: "agent", patch: { summary: "A-SECRET draft" } })
     .returning();
   await db.insert(schema.teamFiles).values({ teamId: a.teamId, workspaceId: a.workspaceId, path: "src/a/secret.ts", hash: "a".repeat(40) });
-  const repo = await svc.createRepository(a.owner, a.teamKey, { displayName: "A-SECRET backend", role: "backend", slug: `a-secret-repo-${RUN}` });
+  const repo = await createRepository(a.owner, a.teamKey, { displayName: "A-SECRET backend", role: "backend", slug: `a-secret-repo-${RUN}` });
   const [spare] = await db
     .insert(schema.apiKeys)
     .values({ workspaceId: a.workspaceId, name: "A-SECRET spare key", prefix: "wh_spare", keyHash: sha256(`spare-${RUN}`), createdBy: a.ownerId })
     .returning();
   await scopeKeyToAllTeams(db, spare.id, a.workspaceId);
-  await svc.createIssue(a.agent, a.teamKey, { title: "A-SECRET agent issue" }); // an event written by A's agent
+  await createIssue(a.agent, a.teamKey, { title: "A-SECRET agent issue" }); // an event written by A's agent
   A = {
     ...a,
     nodeName: map.sys.name,
@@ -281,7 +290,7 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
           }
           const label = `${name}(${JSON.stringify(args).slice(0, 80)}) as ${asKind}`;
           if (error) {
-            assert.ok(error instanceof svc.ServiceError, `${label}: expected a clean refusal, got ${error}`);
+            assert.ok(error instanceof ServiceError, `${label}: expected a clean refusal, got ${error}`);
             assert.ok(["not_found", "forbidden", "invalid", "conflict"].includes(error.code), `${label}: ${error.code}`);
             assert.ok(!isZodMessage(error.message), `${label}: refused only because the arguments were malformed: ${error.message}`);
             assert.ok(!MARK.test(error.message), `${label}: the refusal leaks workspace A data: ${error.message}`);
@@ -329,7 +338,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
           error = e;
         }
         if (error) {
-          assert.ok(error instanceof svc.ServiceError, `${label}: expected a clean refusal, got ${error}`);
+          assert.ok(error instanceof ServiceError, `${label}: expected a clean refusal, got ${error}`);
           assert.ok(["not_found", "forbidden", "invalid", "conflict"].includes(error.code), `${label}: ${error.code}`);
           assert.ok(!isZodMessage(error.message), `${label}: refused only because the arguments were malformed: ${error.message}`);
         } else {
@@ -346,7 +355,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     assert.ok(!JSON.stringify(listed).includes(A.teamId));
     assert.equal(((await runTool(narrow, "get_issue", { issue: "SH-1" })) as { issue: { title: string } }).issue.title, "A-SECRET shared issue");
     await runTool(narrow, "comment", { issue: "SH-1", body: "from the narrow key" });
-    await assert.rejects(runTool(narrow, "comment", { issue: A.issueRef, body: "no" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(runTool(narrow, "comment", { issue: A.issueRef, body: "no" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("a key with no team and a key scoped to AA each reach only what they are given", async () => {
@@ -360,17 +369,17 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     const none = await mk("A none key", []);
     const aa = await mk("A AA key", [A.teamId]);
     assert.deepEqual(await runTool(none, "list_projects", {}), []);
-    await assert.rejects(runTool(none, "get_issue", { issue: A.issueRef }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(runTool(none, "get_issue", { issue: A.issueRef }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
     assert.equal(((await runTool(aa, "get_issue", { issue: A.issueRef })) as { issue: { title: string } }).issue.title, "A-SECRET issue");
-    await assert.rejects(runTool(aa, "get_issue", { issue: "SH-1" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(runTool(aa, "get_issue", { issue: "SH-1" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
     const { githubActor } = await import("../apps/api/src/modules/github/service");
     const gh = githubActor(A.workspaceId, A.teamId);
-    assert.ok((await svc.requireTeam(gh, A.teamKey)).id);
-    await assert.rejects(svc.requireTeam(gh, "SH"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(svc.requireTeam(githubActor(B.workspaceId, B.teamId), A.teamKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    assert.ok((await requireTeam(gh, A.teamKey)).id);
+    await assert.rejects(requireTeam(gh, "SH"), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(requireTeam(githubActor(B.workspaceId, B.teamId), A.teamKey), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 });
 
@@ -379,7 +388,7 @@ describe("the attacks are real: the same calls work for the owner", () => {
     assert.equal((await runTool(A.agent, "get_issue", { issue: A.issueRef }) as { issue: { title: string } }).issue.title, "A-SECRET issue");
     await runTool(A.owner, "get_node", { project: A.teamKey, node: A.nodeName });
     await runTool(A.agent, "get_board", { project: A.teamId });
-    await runTool(A.agent, "session_status", { project: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof svc.ServiceError));
+    await runTool(A.agent, "session_status", { project: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof ServiceError));
   });
 });
 
@@ -403,8 +412,8 @@ describe("what B can see is only B's", () => {
       runTool(B.agent, "get_changes", { project: B.teamKey }),
       briefing(B.agent, B.teamKey),
       issueContext(B.agent, B.issueRef),
-      svc.listEvents(B.owner, B.teamKey),
-      svc.queueStatus(B.owner, B.teamKey),
+      listEvents(B.owner, B.teamKey),
+      queueStatus(B.owner, B.teamKey),
     ];
     for (const r of await Promise.all(calls)) {
       const text = JSON.stringify(r);
@@ -437,22 +446,22 @@ describe("what B can see is only B's", () => {
   test("B's agent queue never receives workspace A's events", async () => {
     const changes = (await runTool(B.agent, "get_changes", { project: B.teamKey })) as { changes: unknown[] };
     assert.ok(!MARK.test(JSON.stringify(changes)));
-    await assert.rejects(runTool(B.agent, "get_changes", { project: A.teamKey }), svc.ServiceError);
+    await assert.rejects(runTool(B.agent, "get_changes", { project: A.teamKey }), ServiceError);
   });
 });
 
 describe("briefing, context and Ask", () => {
   test("briefing and issue context refuse workspace A's team and issue", async () => {
-    await assert.rejects(briefing(B.agent, A.teamKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(issueContext(B.agent, A.issueRef), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(issueContext(B.owner, A.issueId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(briefing(B.agent, A.teamKey), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(issueContext(B.agent, A.issueRef), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(issueContext(B.owner, A.issueId), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("Ask refuses workspace A's team before it would call the model", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test-not-used";
     try {
-      await assert.rejects(askMap(B.owner, A.teamKey, "what is in here?"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-      await assert.rejects(askMap(B.owner, A.teamId, "x", A.nodeId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+      await assert.rejects(askMap(B.owner, A.teamKey, "what is in here?"), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+      await assert.rejects(askMap(B.owner, A.teamId, "x", A.nodeId), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
     } finally {
       delete process.env.ANTHROPIC_API_KEY;
     }
@@ -462,20 +471,20 @@ describe("briefing, context and Ask", () => {
 describe("human-only and queue actions that take ids", () => {
   test("B cannot reset A's agent queue, remove A's session or resolve A's draft", async () => {
     const before = await fingerprint(A);
-    await assert.rejects(svc.markAllSeen(B.owner, { keyId: A.keyId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(svc.markAllSeen(B.owner, { keyId: A.keyId, teamRef: A.teamKey }), svc.ServiceError);
-    await assert.rejects(svc.markAllSeen(B.owner, { teamRef: A.teamKey }), svc.ServiceError);
-    await assert.rejects(svc.removeSession(B.owner, A.teamKey, A.sessionId), svc.ServiceError);
-    await assert.rejects(svc.removeSession(B.owner, B.teamKey, A.sessionId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(resolveDraft(B.owner, A.teamKey, A.draftId, "publish"), svc.ServiceError);
-    await assert.rejects(resolveDraft(B.owner, B.teamKey, A.draftId, "discard"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(svc.deleteTeam(B.owner, A.teamKey), svc.ServiceError);
+    await assert.rejects(markAllSeen(B.owner, { keyId: A.keyId }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(markAllSeen(B.owner, { keyId: A.keyId, teamRef: A.teamKey }), ServiceError);
+    await assert.rejects(markAllSeen(B.owner, { teamRef: A.teamKey }), ServiceError);
+    await assert.rejects(removeSession(B.owner, A.teamKey, A.sessionId), ServiceError);
+    await assert.rejects(removeSession(B.owner, B.teamKey, A.sessionId), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(resolveDraft(B.owner, A.teamKey, A.draftId, "publish"), ServiceError);
+    await assert.rejects(resolveDraft(B.owner, B.teamKey, A.draftId, "discard"), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(deleteTeam(B.owner, A.teamKey), ServiceError);
     assert.equal(await fingerprint(A), before);
   });
 
   test("a reset of 'all keys' by B only touches B's keys", async () => {
     const before = await fingerprint(A);
-    const r = await svc.markAllSeen(B.owner, {});
+    const r = await markAllSeen(B.owner, {});
     assert.ok(r.ok);
     assert.equal(await fingerprint(A), before);
   });
@@ -485,7 +494,7 @@ describe("human-only and queue actions that take ids", () => {
     for (const tool of ["get_changes", "ack_changes", "get_activity", "session_sync", "session_end", "session_status"] as const) {
       const args: Record<string, unknown> =
         tool === "ack_changes" ? { project: B.teamKey, seq: 5 } : tool.startsWith("session_") ? { project: B.teamKey, session: A.sessionId } : { project: B.teamKey };
-      await assert.rejects(runTool(B.agent, tool, { ...args, session: A.sessionId }), (e: unknown) => e instanceof svc.ServiceError, tool);
+      await assert.rejects(runTool(B.agent, tool, { ...args, session: A.sessionId }), (e: unknown) => e instanceof ServiceError, tool);
     }
     assert.equal(await fingerprint(A), before);
   });
@@ -517,13 +526,13 @@ describe("members, keys and assignees", () => {
 
   test("an issue cannot be assigned to someone outside the workspace (regression)", async () => {
     const before = await fingerprint(A);
-    await assert.rejects(svc.updateIssue(B.owner, B.issueRef, { assigneeId: A.ownerId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.createIssue(B.owner, B.teamKey, { title: "x", assigneeId: A.ownerId }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
-    await assert.rejects(svc.updateIssue(B.owner, B.issueRef, { assigneeId: "not-a-uuid" }), svc.ServiceError);
-    await assert.rejects(svc.updateIssue(B.owner, B.issueRef, { assigneeId: crypto.randomUUID() }), svc.ServiceError);
-    const own = await svc.updateIssue(B.owner, B.issueRef, { assigneeId: B.owner.id });
+    await assert.rejects(updateIssue(B.owner, B.issueRef, { assigneeId: A.ownerId }), (e: unknown) => e instanceof ServiceError && e.code === "invalid");
+    await assert.rejects(createIssue(B.owner, B.teamKey, { title: "x", assigneeId: A.ownerId }), (e: unknown) => e instanceof ServiceError && e.code === "invalid");
+    await assert.rejects(updateIssue(B.owner, B.issueRef, { assigneeId: "not-a-uuid" }), ServiceError);
+    await assert.rejects(updateIssue(B.owner, B.issueRef, { assigneeId: crypto.randomUUID() }), ServiceError);
+    const own = await updateIssue(B.owner, B.issueRef, { assigneeId: B.owner.id });
     assert.equal(own.assigneeId, B.owner.id, "an own-workspace assignee still works");
-    assert.equal((await svc.updateIssue(B.owner, B.issueRef, { assigneeId: null })).assigneeId, null);
+    assert.equal((await updateIssue(B.owner, B.issueRef, { assigneeId: null })).assigneeId, null);
     assert.equal(await fingerprint(A), before);
   });
 });
@@ -531,51 +540,51 @@ describe("members, keys and assignees", () => {
 describe("repositories (WH-68)", () => {
   test("B cannot read, edit or retire A's repositories through the service layer", async () => {
     const before = await fingerprint(A);
-    await assert.rejects(svc.listRepositories(B.owner, A.teamKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(svc.updateRepository(B.owner, A.teamKey, A.repoId, { displayName: "hijacked" }), svc.ServiceError);
-    await assert.rejects(svc.updateRepository(B.owner, B.teamKey, A.repoId, { displayName: "hijacked" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(svc.retireRepository(B.owner, B.teamKey, A.repoId), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(svc.createRepository(B.agent, B.teamKey, { displayName: "x", role: "backend" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden");
-    const list = await svc.listRepositories(B.owner, B.teamKey);
+    await assert.rejects(listRepositories(B.owner, A.teamKey), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(updateRepository(B.owner, A.teamKey, A.repoId, { displayName: "hijacked" }), ServiceError);
+    await assert.rejects(updateRepository(B.owner, B.teamKey, A.repoId, { displayName: "hijacked" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(retireRepository(B.owner, B.teamKey, A.repoId), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(createRepository(B.agent, B.teamKey, { displayName: "x", role: "backend" }), (e: unknown) => e instanceof ServiceError && e.code === "forbidden");
+    const list = await listRepositories(B.owner, B.teamKey);
     assert.ok(!JSON.stringify(list).includes(A.repoId));
     assert.equal(await fingerprint(A), before);
   });
 
   test("B cannot browse A's connected repo's tree by guessing A's repositoryId (WH-82)", async () => {
-    // The web API's repository browse resolves the repository the same way: svc.listRepositories(actor, teamKey)
+    // The web API's repository browse resolves the repository the same way: listRepositories(actor, teamKey)
     // then matches repositoryId against that list. A's repo never appears in B's list, so B's lookup fails
     // closed (not_found) before any GitHub API call would be made — mirrored here at the service layer.
-    const bList = await svc.listRepositories(B.owner, B.teamKey);
+    const bList = await listRepositories(B.owner, B.teamKey);
     assert.ok(!bList.some((r) => r.id === A.repoId), "A's repository must not be visible when listing B's team");
     // Even if B passes A's team key, B isn't a member of A's workspace so requireTeam itself rejects first.
-    await assert.rejects(svc.listRepositories(B.owner, A.teamKey), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(listRepositories(B.owner, A.teamKey), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("B's own repository CRUD works end to end and is scoped to B's team", async () => {
-    const r = await svc.createRepository(B.owner, B.teamKey, { displayName: "B frontend", role: "frontend", pathLimit: "apps/web/" });
+    const r = await createRepository(B.owner, B.teamKey, { displayName: "B frontend", role: "frontend", pathLimit: "apps/web/" });
     assert.equal(r.lifecycle, "live");
-    const updated = await svc.updateRepository(B.owner, B.teamKey, r.id, { lifecycle: "being_replaced" });
+    const updated = await updateRepository(B.owner, B.teamKey, r.id, { lifecycle: "being_replaced" });
     assert.equal(updated.lifecycle, "being_replaced");
-    const retired = await svc.retireRepository(B.owner, B.teamKey, r.id);
+    const retired = await retireRepository(B.owner, B.teamKey, r.id);
     assert.equal(retired.lifecycle, "retired");
-    const list = await svc.listRepositories(B.owner, B.teamKey);
+    const list = await listRepositories(B.owner, B.teamKey);
     assert.ok(list.some((x) => x.id === r.id));
   });
 
   test("find-or-create is per team: the same slug in two teams is two rows, each with its own path limit", async () => {
     const mono = `mono-${RUN}`;
-    const r1 = await svc.findOrCreateRepository(A.owner, A.teamId, mono);
-    const r2 = await svc.findOrCreateRepository(B.owner, B.teamId, mono);
+    const r1 = await findOrCreateRepository(A.owner, A.teamId, mono);
+    const r2 = await findOrCreateRepository(B.owner, B.teamId, mono);
     assert.notEqual(r1.id, r2.id);
     assert.equal(r1.slug, r2.slug);
-    await svc.updateRepository(A.owner, A.teamKey, r1.id, { pathLimit: "packages/billing/" });
-    await svc.updateRepository(B.owner, B.teamKey, r2.id, { pathLimit: "packages/auth/" });
+    await updateRepository(A.owner, A.teamKey, r1.id, { pathLimit: "packages/billing/" });
+    await updateRepository(B.owner, B.teamKey, r2.id, { pathLimit: "packages/auth/" });
 
     // A landed change under packages/auth/ should only register for the team whose path limit matches it.
-    const before1 = (await svc.listRepositories(A.owner, A.teamKey)).find((x) => x.id === r1.id)!.lastEventAt;
+    const before1 = (await listRepositories(A.owner, A.teamKey)).find((x) => x.id === r1.id)!.lastEventAt;
     const landed = await sync.land(A.owner, A.teamKey, { files: { "packages/auth/index.ts": "f".repeat(40) }, repository: mono });
     assert.equal(landed.files, 0, "outside A's path limit: nothing lands for A's team");
-    const after1 = (await svc.listRepositories(A.owner, A.teamKey)).find((x) => x.id === r1.id)!.lastEventAt;
+    const after1 = (await listRepositories(A.owner, A.teamKey)).find((x) => x.id === r1.id)!.lastEventAt;
     assert.equal(before1?.getTime(), after1?.getTime());
 
     const landedForB = await sync.land(B.owner, B.teamKey, { files: { "packages/auth/index.ts": "f".repeat(40) }, repository: mono });
@@ -585,28 +594,28 @@ describe("repositories (WH-68)", () => {
 
 describe("doc staleness (WH-64) never crosses workspaces", () => {
   test("report_changes / land for A's anchored path never flags or touches B's doc", async () => {
-    const aDoc = await svc.createDoc(A.owner, A.teamKey, { title: "A anchored doc", body: "watches src/shared/x.ts", anchors: ["src/shared/x.ts"] });
-    const bDoc = await svc.createDoc(B.owner, B.teamKey, { title: "B anchored doc", body: "watches src/shared/x.ts", anchors: ["src/shared/x.ts"] });
-    await svc.reportChanges(A.owner, A.teamKey, { files: ["src/shared/x.ts"], sha: "a".repeat(40) });
-    const { doc: aAfter } = await svc.getDoc(A.owner, A.teamKey, aDoc.id);
-    const { doc: bAfter } = await svc.getDoc(B.owner, B.teamKey, bDoc.id);
+    const aDoc = await createDoc(A.owner, A.teamKey, { title: "A anchored doc", body: "watches src/shared/x.ts", anchors: ["src/shared/x.ts"] });
+    const bDoc = await createDoc(B.owner, B.teamKey, { title: "B anchored doc", body: "watches src/shared/x.ts", anchors: ["src/shared/x.ts"] });
+    await reportChanges(A.owner, A.teamKey, { files: ["src/shared/x.ts"], sha: "a".repeat(40) });
+    const { doc: aAfter } = await getDoc(A.owner, A.teamKey, aDoc.id);
+    const { doc: bAfter } = await getDoc(B.owner, B.teamKey, bDoc.id);
     assert.equal(aAfter.stale, true, "A's own doc is flagged");
     assert.equal(bAfter.stale, false, "B's doc with the identical anchor is untouched by A's report");
 
     await sync.land(B.owner, B.teamKey, { files: { "src/shared/x.ts": "f".repeat(40) } });
-    const { doc: aAfter2 } = await svc.getDoc(A.owner, A.teamKey, aDoc.id);
+    const { doc: aAfter2 } = await getDoc(A.owner, A.teamKey, aDoc.id);
     assert.equal(aAfter2.stale, true, "B landing the same path never clears or otherwise changes A's doc");
   });
 
   test("B cannot mark A's doc fresh, resolve A's doc draft, or read A's stale docs", async () => {
-    const aDoc = await svc.createDoc(A.owner, A.teamKey, { title: "A fresh-check doc", anchors: ["src/shared/y.ts"] });
-    await svc.reportChanges(A.owner, A.teamKey, { files: ["src/shared/y.ts"] });
+    const aDoc = await createDoc(A.owner, A.teamKey, { title: "A fresh-check doc", anchors: ["src/shared/y.ts"] });
+    await reportChanges(A.owner, A.teamKey, { files: ["src/shared/y.ts"] });
     const before = await fingerprint(A);
-    await assert.rejects(svc.markDocFresh(B.owner, A.teamKey, aDoc.id), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
-    await assert.rejects(sync.resolveDocDraft(B.owner, A.teamKey, crypto.randomUUID(), "publish"), svc.ServiceError);
-    const bStale = await svc.listStaleDocs(B.owner, B.teamKey);
+    await assert.rejects(markDocFresh(B.owner, A.teamKey, aDoc.id), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    await assert.rejects(sync.resolveDocDraft(B.owner, A.teamKey, crypto.randomUUID(), "publish"), ServiceError);
+    const bStale = await listStaleDocs(B.owner, B.teamKey);
     assert.ok(!JSON.stringify(bStale).includes(aDoc.id));
-    const { doc: stillStale } = await svc.getDoc(A.owner, A.teamKey, aDoc.id);
+    const { doc: stillStale } = await getDoc(A.owner, A.teamKey, aDoc.id);
     assert.equal(stillStale.stale, true, "B's failed attempt did not clear A's flag");
     assert.equal(await fingerprint(A), before);
   });
@@ -639,7 +648,7 @@ describe("team keys are per workspace (continued)", () => {
 
 describe("cycles stay inside their workspace and team (WH-117)", () => {
   const refused = (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503";
-  const notFound = (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found";
+  const notFound = (e: unknown) => e instanceof ServiceError && e.code === "not_found";
 
   test("workspace B cannot list, read, make, change or delete a cycle of A's team, and A's cycles are not changed", async () => {
     const a = await cycles.createCycle(A.owner, A.teamKey, { name: "A-SECRET cycle", goal: "A-SECRET goal" });
@@ -665,11 +674,11 @@ describe("cycles stay inside their workspace and team (WH-117)", () => {
   test("an issue of B cannot join A's cycle: the service looks for the number in B's own team, and the database refuses the id", async () => {
     const db = await getDb();
     const aCycle = (await db.select().from(schema.cycles).where(eq(schema.cycles.teamId, A.teamId)))[0];
-    const bIssue = await svc.createIssue(B.owner, B.teamKey, { title: "B wants A's cycle" });
-    await assert.rejects(svc.updateIssue(B.owner, bIssue.ref, { cycle: 99 }), svc.ServiceError);
+    const bIssue = await createIssue(B.owner, B.teamKey, { title: "B wants A's cycle" });
+    await assert.rejects(updateIssue(B.owner, bIssue.ref, { cycle: 99 }), ServiceError);
     await assert.rejects(db.update(schema.issues).set({ cycleId: aCycle.id }).where(eq(schema.issues.id, bIssue.id)), refused);
-    await assert.rejects(svc.updateIssue(B.owner, A.issueRef, { cycle: 1 }), notFound);
-    assert.equal((await svc.getIssue(B.owner, bIssue.ref)).issue.cycle, null);
+    await assert.rejects(updateIssue(B.owner, A.issueRef, { cycle: 1 }), notFound);
+    assert.equal((await getIssue(B.owner, bIssue.ref)).issue.cycle, null);
   });
 
   test("a cycle row cannot name a workspace other than its team's", async () => {
@@ -683,12 +692,12 @@ describe("cycles stay inside their workspace and team (WH-117)", () => {
 
 describe("projects stay inside their workspace, and show other teams only as totals (WH-118)", () => {
   const refused = (e: unknown) => (e as { cause?: { code?: string }; code?: string }).cause?.code === "23503" || (e as { code?: string }).code === "23503";
-  const notFound = (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found";
+  const notFound = (e: unknown) => e instanceof ServiceError && e.code === "not_found";
   let aProject: Awaited<ReturnType<typeof projects.createProject>>;
 
   test("workspace B cannot list, open, change, delete, add to or take from A's project, and A's project is not changed", async () => {
     aProject = await projects.createProject(A.owner, { name: "A-SECRET project", description: "A-SECRET description", leadTeam: A.teamId });
-    await svc.createIssue(A.owner, A.teamKey, { title: "A-SECRET in the project", projectId: aProject.id });
+    await createIssue(A.owner, A.teamKey, { title: "A-SECRET in the project", projectId: aProject.id });
     const before = await fingerprint(A);
     assert.ok(!(await projects.listProjects(B.owner)).some((p) => p.id === aProject.id));
     assert.ok(!JSON.stringify(await projects.listProjects(B.owner)).includes("A-SECRET"));
@@ -712,11 +721,11 @@ describe("projects stay inside their workspace, and show other teams only as tot
 
   test("an issue of B cannot be put in A's project, through the service or around it", async () => {
     const db = await getDb();
-    const bIssue = await svc.createIssue(B.owner, B.teamKey, { title: "B wants A's project" });
-    await assert.rejects(svc.updateIssue(B.owner, bIssue.ref, { projectId: aProject.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid" && /does not exist/.test(e.message));
+    const bIssue = await createIssue(B.owner, B.teamKey, { title: "B wants A's project" });
+    await assert.rejects(updateIssue(B.owner, bIssue.ref, { projectId: aProject.id }), (e: unknown) => e instanceof ServiceError && e.code === "invalid" && /does not exist/.test(e.message));
     await assert.rejects(db.update(schema.issues).set({ projectId: aProject.id }).where(eq(schema.issues.id, bIssue.id)), refused);
-    await assert.rejects(svc.updateIssue(B.owner, A.issueRef, { projectId: aProject.id }), notFound);
-    assert.equal((await svc.getIssue(B.owner, bIssue.ref)).issue.projectId, null);
+    await assert.rejects(updateIssue(B.owner, A.issueRef, { projectId: aProject.id }), notFound);
+    assert.equal((await getIssue(B.owner, bIssue.ref)).issue.projectId, null);
   });
 
   test("project rows cannot be made to name the other workspace", async () => {
@@ -728,14 +737,14 @@ describe("projects stay inside their workspace, and show other teams only as tot
 
   test("two workspaces, two teams in one of them: the member of one team sees the other only as totals, and never in the other workspace", async () => {
     // A's workspace gets a second team and a member of only it; the project spans both teams.
-    const a2 = await svc.createTeam(A.owner, { name: "A-SECOND team", key: `Z${RUN.slice(0, 3).replace(/[0-9a]/g, "q").toUpperCase()}` });
+    const a2 = await createTeam(A.owner, { name: "A-SECOND team", key: `Z${RUN.slice(0, 3).replace(/[0-9a]/g, "q").toUpperCase()}` });
     const db = await getDb();
     const [u] = await db.insert(schema.users).values({ email: `a2-${RUN}@example.com`, name: "second-team member", passwordHash: "x" }).returning();
     await db.insert(schema.memberships).values({ userId: u.id, workspaceId: A.workspaceId, role: "member" });
     const { addTeamMember } = await import("../apps/api/src/modules/teams/team-members");
     await addTeamMember(A.owner, a2.key, { userId: u.id, role: "editor" });
     await projects.addProjectTeam(A.owner, aProject.id, a2.key);
-    await svc.createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, status: "Done" });
+    await createIssue(A.owner, a2.key, { title: "SECOND-SECRET", projectId: aProject.id, status: "Done" });
     const second: Actor = { kind: "human", id: u.id, name: u.name, workspaceId: A.workspaceId };
     const seen = await projects.getProject(second, aProject.id);
     assert.deepEqual(seen.teams.map((t) => t.key), [a2.key]);
@@ -747,7 +756,7 @@ describe("projects stay inside their workspace, and show other teams only as tot
 });
 
 describe("initiatives stay inside their workspace and show projects of other teams only as totals (WH-119)", () => {
-  const notFound = (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found";
+  const notFound = (e: unknown) => e instanceof ServiceError && e.code === "not_found";
   const refused = (e: unknown) => ["23503", "23514"].includes((e as { cause?: { code?: string } }).cause?.code ?? "");
   let aInitiative: Awaited<ReturnType<typeof initiatives.createInitiative>>;
   let aProject: Awaited<ReturnType<typeof projects.createProject>>;
@@ -768,7 +777,7 @@ describe("initiatives stay inside their workspace and show projects of other tea
   });
 
   test("B cannot hang its initiative under A's, nor group A's project, and the database agrees", async () => {
-    await assert.rejects(initiatives.createInitiative(B.owner, { name: "steal", parentId: aInitiative.id }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(initiatives.createInitiative(B.owner, { name: "steal", parentId: aInitiative.id }), (e: unknown) => e instanceof ServiceError && e.code === "invalid");
     const mine = await initiatives.createInitiative(B.owner, { name: "B's own" });
     await assert.rejects(initiatives.linkProject(B.owner, mine.id, aProject.id), notFound);
     const db = await getDb();
@@ -800,7 +809,7 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
 
   test("an issue of A cannot be assigned to someone from B, through the service or around it", async () => {
     const db = await getDb();
-    await assert.rejects(svc.updateIssue(A.owner, A.issueRef, { assigneeId: B.owner.id }), svc.ServiceError);
+    await assert.rejects(updateIssue(A.owner, A.issueRef, { assigneeId: B.owner.id }), ServiceError);
     await assert.rejects(db.update(schema.issues).set({ assigneeId: B.owner.id }).where(eq(schema.issues.id, A.issueId)), refused);
   });
 });
@@ -924,9 +933,9 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/auth/logout": "deletes the session named by the caller's own cookie",
   "GET /api/app/me": "the signed-in person from their session (SessionGuard); nothing taken from the request",
   "GET /api/app/teams": "listTeams(actor) for the signed-in person's workspace (SessionGuard); a workspaceId in the query or a header is ignored (tested)",
-  "POST /api/app/teams": "svc.createTeam(actor): the team is made in the actor's own workspace; the workspace is never taken from the request (tested)",
+  "POST /api/app/teams": "createTeam(actor): the team is made in the actor's own workspace; the workspace is never taken from the request (tested)",
   "PUT /api/app/teams/order": "setTeamOrder(actor): writes only the caller's own team_members rows (user, workspace and team all matched); keys that are not teams the caller can open are ignored, so another workspace's team cannot be touched or learned about (tested in team-access.test.ts)",
-  "PATCH /api/app/teams/:key": "svc.updateTeam(actor): requireTeam(actor, key, admin), so another workspace's team and one the person is not in are 404, a non-admin member is 403, and agents are refused; only name and description change, never the key (tested in team-access.test.ts)",
+  "PATCH /api/app/teams/:key": "updateTeam(actor): requireTeam(actor, key, admin), so another workspace's team and one the person is not in are 404, a non-admin member is 403, and agents are refused; only name and description change, never the key (tested in team-access.test.ts)",
   "GET /api/app/teams/parent-candidates": "parentCandidates(actor): only the teams the person can open, in the actor's workspace (tested)",
   "GET /api/app/teams/:key/parent-candidates": "parentCandidates(actor, key): the team through requireTeam(actor, key, admin); candidates are the teams the person can open, minus the team and its descendants (tested)",
   "GET /api/app/teams/:key/settings": "getTeamSettings(actor, key): the team through requireTeam(actor, key, read); a parent or child the person cannot open is not named, only counted (tested)",
@@ -934,7 +943,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/teams/:key/retire": "retireTeam(actor, key): requireTeam(actor, key, admin), humans only; the last active team, a project lead and active child teams are refused inside a transaction that locks the workspace's teams (tested)",
   "POST /api/app/teams/:key/restore": "restoreTeam(actor, key): requireTeam(actor, key, admin), humans only (tested)",
   "DELETE /api/app/teams/:key": "deleteTeam(actor, key): requireTeam(actor, key, admin), humans only, and the typed key must match; the last active team, a project lead and child teams are refused (tested)",
-  "DELETE /api/app/teams/:key/sessions/:sessionId": "svc.removeSession(actor): the team is resolved through requireTeam(actor) and the session must belong to it, so another workspace's is a 404 (tested)",
+  "DELETE /api/app/teams/:key/sessions/:sessionId": "removeSession(actor): the team is resolved through requireTeam(actor) and the session must belong to it, so another workspace's is a 404 (tested)",
   "POST /api/app/me/password": "changes the signed-in person's own password, after checking the current one; nothing is taken from the request but the two passwords",
   "GET /api/app/workspace": "workspaceOverview(human): the memberships of the person's own workspace; pending invites only for its owners (tested)",
   "GET /api/app/me/workspaces": "the signed-in person's own memberships only (auth-core.listWorkspaces, by their user id)",
@@ -952,7 +961,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "PATCH /api/app/workspace/members/:userId": "owners and admins (only an owner can make or change an owner); members.updateMember is scoped by the caller's workspace id, so another workspace's user matches nothing and is a 404 (tested)",
   "DELETE /api/app/workspace/members/:userId": "owners and admins (only an owner can remove an owner); refused while the person is the only admin of a team; members.removeMember is scoped by the caller's workspace id, so another workspace's user is a 404 (tested)",
   "GET /api/app/agents": "the keys of the caller's own workspace (where workspace_id is the session's workspace) and the printed commands; a key value is never returned (tested)",
-  "POST /api/app/agents/mark-all-seen": "svc.markAllSeen(actor): keys and teams of the actor's workspace only; another workspace's key id is a 404 (tested)",
+  "POST /api/app/agents/mark-all-seen": "markAllSeen(actor): keys and teams of the actor's workspace only; another workspace's key id is a 404 (tested)",
   "POST /api/app/keys": "creates a key in the caller's own workspace; the secret is in this response only and 10 an hour per person (tested)",
   "DELETE /api/app/keys/:id": "members.revokeApiKey is scoped by key id AND the caller's workspace id; another workspace's key is a 404 and keeps working (tested)",
   "PATCH /api/app/keys/:id": "scoped by key id AND the caller's workspace id; another workspace's key is a 404 (tested)",
@@ -971,40 +980,40 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "PATCH /api/app/teams/:key/statuses/:id": "updateStatus(actor, key, id): a human, requireTeam(actor, key, admin); the status is looked up inside that team only, so another team's id is a 404 (tested)",
   "DELETE /api/app/teams/:key/statuses/:id": "deleteStatus(actor, key, id, moveTo): a human, requireTeam(actor, key, admin); the status and the one its issues move to are both looked up inside that team (tested)",
   "GET /api/app/teams/:key/board": "boardView(actor): the team is resolved through requireTeam(actor), so another workspace's is a 404; members are this workspace's memberships only (tested)",
-  "POST /api/app/teams/:key/issues": "svc.createIssue(actor): the team through requireTeam(actor) (another workspace's is a 404), the status resolved inside that team, the assignee must be a member of the actor's workspace (tested)",
-  "GET /api/app/teams/:key/queue": "svc.queueStatus(actor): the team through requireTeam(actor); the keys are this workspace's (tested)",
-  "GET /api/app/issues/:ref": "svc.getIssue(actor): resolveIssue joins the team and requires its workspace to be the actor's, so another workspace's issue is a 404 (tested, including two workspaces with the same key)",
-  "PATCH /api/app/issues/:ref": "svc.updateIssue(actor): resolveIssue is workspace scoped; a stale version is a 409 that returns the trimmed current issue and changes nothing; the assignee must be on the actor's workspace (tested)",
-  "POST /api/app/issues/:ref/move": "svc.moveIssue(actor): resolveIssue is workspace scoped and the status is resolved inside the issue's own team (tested)",
-  "DELETE /api/app/issues/:ref": "svc.deleteIssue(actor): resolveIssue is workspace scoped (tested)",
-  "POST /api/app/issues/:ref/comments": "svc.addComment(actor): resolveIssue is workspace scoped (tested)",
-  "PUT /api/app/issues/:ref/nodes/:nodeId": "svc.linkIssueNode(actor): the issue is workspace scoped and the node is resolved inside the issue's own team, so another workspace's node is a 404 (tested)",
-  "DELETE /api/app/issues/:ref/nodes/:nodeId": "svc.linkIssueNode(actor, unlink): same scoping as linking (tested)",
+  "POST /api/app/teams/:key/issues": "createIssue(actor): the team through requireTeam(actor) (another workspace's is a 404), the status resolved inside that team, the assignee must be a member of the actor's workspace (tested)",
+  "GET /api/app/teams/:key/queue": "queueStatus(actor): the team through requireTeam(actor); the keys are this workspace's (tested)",
+  "GET /api/app/issues/:ref": "getIssue(actor): resolveIssue joins the team and requires its workspace to be the actor's, so another workspace's issue is a 404 (tested, including two workspaces with the same key)",
+  "PATCH /api/app/issues/:ref": "updateIssue(actor): resolveIssue is workspace scoped; a stale version is a 409 that returns the trimmed current issue and changes nothing; the assignee must be on the actor's workspace (tested)",
+  "POST /api/app/issues/:ref/move": "moveIssue(actor): resolveIssue is workspace scoped and the status is resolved inside the issue's own team (tested)",
+  "DELETE /api/app/issues/:ref": "deleteIssue(actor): resolveIssue is workspace scoped (tested)",
+  "POST /api/app/issues/:ref/comments": "addComment(actor): resolveIssue is workspace scoped (tested)",
+  "PUT /api/app/issues/:ref/nodes/:nodeId": "linkIssueNode(actor): the issue is workspace scoped and the node is resolved inside the issue's own team, so another workspace's node is a 404 (tested)",
+  "DELETE /api/app/issues/:ref/nodes/:nodeId": "linkIssueNode(actor, unlink): same scoping as linking (tested)",
   "GET /api/app/teams/:key/graph": "graphView(actor): the team through requireTeam(actor) (another workspace's is a 404); every table is read by that team's id (tested)",
-  "PUT /api/app/teams/:key/nodes": "svc.upsertNode(actor): the team through requireTeam(actor); a node is found only inside that team, so another workspace's node id is a 404; a stale version is a 409 that changes nothing (tested)",
-  "DELETE /api/app/teams/:key/nodes/:id": "svc.deleteNode(actor): the node is resolved inside the actor's team, so another workspace's is a 404 (tested)",
-  "POST /api/app/teams/:key/nodes/:id/fresh": "svc.markFresh(actor): the node is resolved inside the actor's team (tested)",
-  "PUT /api/app/teams/:key/layout": "svc.saveLayout(actor): every update is by node id AND the actor's team id, so another workspace's node ids move nothing (tested)",
-  "POST /api/app/teams/:key/edges": "svc.upsertEdge(actor): both ends are resolved inside the actor's team, so a node of another workspace is a 404 (tested)",
-  "DELETE /api/app/teams/:key/edges/:id": "svc.deleteEdge(actor): deleted by edge id AND the actor's team id, so another workspace's edge is untouched (tested)",
-  "PUT /api/app/teams/:key/flows": "svc.upsertFlow(actor): the flow is matched inside the actor's team and its steps resolve nodes inside it; a stale version is a 409 (tested)",
-  "DELETE /api/app/teams/:key/flows/:id": "svc.deleteFlow(actor): matched inside the actor's team, so another workspace's flow is a 404 (tested)",
-  "PUT /api/app/teams/:key/decisions": "svc.upsertDecision(actor): numbers are per team, matched inside the actor's team; a stale version is a 409 (tested)",
-  "PUT /api/app/teams/:key/terms/:term": "svc.upsertTerm(actor): matched by name inside the actor's team (tested with the same word in two workspaces)",
-  "DELETE /api/app/teams/:key/terms/:term": "svc.deleteTerm(actor): matched inside the actor's team (tested)",
+  "PUT /api/app/teams/:key/nodes": "upsertNode(actor): the team through requireTeam(actor); a node is found only inside that team, so another workspace's node id is a 404; a stale version is a 409 that changes nothing (tested)",
+  "DELETE /api/app/teams/:key/nodes/:id": "deleteNode(actor): the node is resolved inside the actor's team, so another workspace's is a 404 (tested)",
+  "POST /api/app/teams/:key/nodes/:id/fresh": "markFresh(actor): the node is resolved inside the actor's team (tested)",
+  "PUT /api/app/teams/:key/layout": "saveLayout(actor): every update is by node id AND the actor's team id, so another workspace's node ids move nothing (tested)",
+  "POST /api/app/teams/:key/edges": "upsertEdge(actor): both ends are resolved inside the actor's team, so a node of another workspace is a 404 (tested)",
+  "DELETE /api/app/teams/:key/edges/:id": "deleteEdge(actor): deleted by edge id AND the actor's team id, so another workspace's edge is untouched (tested)",
+  "PUT /api/app/teams/:key/flows": "upsertFlow(actor): the flow is matched inside the actor's team and its steps resolve nodes inside it; a stale version is a 409 (tested)",
+  "DELETE /api/app/teams/:key/flows/:id": "deleteFlow(actor): matched inside the actor's team, so another workspace's flow is a 404 (tested)",
+  "PUT /api/app/teams/:key/decisions": "upsertDecision(actor): numbers are per team, matched inside the actor's team; a stale version is a 409 (tested)",
+  "PUT /api/app/teams/:key/terms/:term": "upsertTerm(actor): matched by name inside the actor's team (tested with the same word in two workspaces)",
+  "DELETE /api/app/teams/:key/terms/:term": "deleteTerm(actor): matched inside the actor's team (tested)",
   "POST /api/app/teams/:key/drafts/:id/resolve": "resolveDraft(actor): the draft must belong to the actor's team and be pending, so another workspace's is a 404 and stays pending (tested)",
   "POST /api/app/teams/:key/ask": "askAs(actor): the team is resolved first (another workspace's is a 404 before anything is counted or called); the prompt is built from the actor's own team only; 20 questions per person per 10 minutes; the server's API key is in no answer (tested against a fake Claude)",
-  "GET /api/app/teams/:key/activity": "activityView(actor): svc.listEvents resolves the team through requireTeam(actor); events are by that team's id; data is cut down to what the page links with (tested)",
-  "GET /api/app/teams/:key/docs": "docsIndex(human): svc.listDocs and svc.getGraph resolve the team through requireTeam(actor); members are those of the person's own workspace (tested)",
-  "GET /api/app/teams/:key/docs/:ref": "svc.getDoc(actor): the doc is resolved inside the actor's team (by id or slug), so another workspace's doc is a 404 (tested)",
-  "POST /api/app/teams/:key/docs": "svc.createDoc(actor): the team through requireTeam(actor); the parent is resolved inside it, so another workspace's doc cannot be a parent (tested)",
-  "PATCH /api/app/teams/:key/docs/:ref": "svc.updateDoc(actor): the doc is resolved inside the actor's team; a stale version is a 409 returning the trimmed current doc and changes nothing (tested)",
-  "POST /api/app/teams/:key/docs/:ref/fresh": "svc.markDocFresh(actor): resolved inside the actor's team (tested)",
-  "GET /api/app/teams/:key/docs/:ref/anchor-suggestions": "svc.suggestDocAnchors(actor): the doc and its linked nodes are read inside the actor's team (tested)",
-  "POST /api/app/teams/:key/docs/:ref/move": "svc.moveDoc(actor): doc and new parent are both resolved inside the actor's team; cycles are refused (tested)",
-  "DELETE /api/app/teams/:key/docs/:ref": "svc.deleteDoc(actor): resolved inside the actor's team (tested)",
-  "PUT /api/app/teams/:key/docs/:ref/nodes/:nodeId": "svc.linkDocNode(actor): the doc and the node are both resolved inside the actor's team, so another workspace's node is a 404 (tested)",
-  "DELETE /api/app/teams/:key/docs/:ref/nodes/:nodeId": "svc.linkDocNode(actor, unlink): same scoping as linking (tested)",
+  "GET /api/app/teams/:key/activity": "activityView(actor): listEvents resolves the team through requireTeam(actor); events are by that team's id; data is cut down to what the page links with (tested)",
+  "GET /api/app/teams/:key/docs": "docsIndex(human): listDocs and getGraph resolve the team through requireTeam(actor); members are those of the person's own workspace (tested)",
+  "GET /api/app/teams/:key/docs/:ref": "getDoc(actor): the doc is resolved inside the actor's team (by id or slug), so another workspace's doc is a 404 (tested)",
+  "POST /api/app/teams/:key/docs": "createDoc(actor): the team through requireTeam(actor); the parent is resolved inside it, so another workspace's doc cannot be a parent (tested)",
+  "PATCH /api/app/teams/:key/docs/:ref": "updateDoc(actor): the doc is resolved inside the actor's team; a stale version is a 409 returning the trimmed current doc and changes nothing (tested)",
+  "POST /api/app/teams/:key/docs/:ref/fresh": "markDocFresh(actor): resolved inside the actor's team (tested)",
+  "GET /api/app/teams/:key/docs/:ref/anchor-suggestions": "suggestDocAnchors(actor): the doc and its linked nodes are read inside the actor's team (tested)",
+  "POST /api/app/teams/:key/docs/:ref/move": "moveDoc(actor): doc and new parent are both resolved inside the actor's team; cycles are refused (tested)",
+  "DELETE /api/app/teams/:key/docs/:ref": "deleteDoc(actor): resolved inside the actor's team (tested)",
+  "PUT /api/app/teams/:key/docs/:ref/nodes/:nodeId": "linkDocNode(actor): the doc and the node are both resolved inside the actor's team, so another workspace's node is a 404 (tested)",
+  "DELETE /api/app/teams/:key/docs/:ref/nodes/:nodeId": "linkDocNode(actor, unlink): same scoping as linking (tested)",
   "GET /api/app/teams/:key/cycles": "listCycles(actor, key): requireTeam(actor, key); only that team's cycles and counts (tested)",
   "POST /api/app/teams/:key/cycles": "createCycle(actor, key): requireTeam(actor, key, edit), the team's row locked, the cycle made in that team only (tested)",
   "GET /api/app/teams/:key/cycles/:number": "getCycle(actor, key, number): requireTeam(actor, key); the number is resolved inside that team, so another team's or workspace's cycle is a 404 (tested)",
@@ -1027,12 +1036,12 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/projects/:id/milestones": "createMilestone(actor, id): openProject(edit) (tested)",
   "PATCH /api/app/projects/:id/milestones/:milestoneId": "updateMilestone(actor, id, mid): openProject(edit); the milestone is looked up inside that project only (tested)",
   "DELETE /api/app/projects/:id/milestones/:milestoneId": "deleteMilestone(actor, id, mid): openProject(edit); looked up inside that project only (tested)",
-  "GET /api/app/teams/:key/repositories": "svc.listRepositories(actor): rows are selected by the team found through requireTeam(actor); the answer is a view without installation ids (tested)",
-  "POST /api/app/teams/:key/repositories": "svc.createRepository(actor): the team through requireTeam(actor); humans only (tested)",
+  "GET /api/app/teams/:key/repositories": "listRepositories(actor): rows are selected by the team found through requireTeam(actor); the answer is a view without installation ids (tested)",
+  "POST /api/app/teams/:key/repositories": "createRepository(actor): the team through requireTeam(actor); humans only (tested)",
   "GET /api/app/teams/:key/repositories/github": "githubStatus(human): installations are listed by the person's workspace id, and only for owners; repositories GitHub lists are asked per installation (tested against a fake GitHub)",
   "POST /api/app/teams/:key/repositories/github": "connectGithubRepository(actor): owners only, and the installation must be one of the actor's workspace (ADR-12); name and branch are read from GitHub (tested against a fake GitHub)",
-  "PATCH /api/app/teams/:key/repositories/:id": "svc.updateRepository(actor): the repository is resolved inside the actor's team (tested)",
-  "POST /api/app/teams/:key/repositories/:id/retire": "svc.retireRepository(actor): resolved inside the actor's team (tested)",
+  "PATCH /api/app/teams/:key/repositories/:id": "updateRepository(actor): the repository is resolved inside the actor's team (tested)",
+  "POST /api/app/teams/:key/repositories/:id/retire": "retireRepository(actor): resolved inside the actor's team (tested)",
   "GET /api/app/teams/:key/repositories/:id/tree": "browseRepoTreeAs(actor): the repository is looked up in the actor's own team, so another workspace's repository id is a 404 and no tree is fetched (tested)",
   "GET /api/app/teams/:key/onboarding": "onboardingPage(actor): the team through requireTeam(actor); the commands carry no API key (tested)",
   "POST /api/app/teams/:key/onboarding/concept": "createConceptAs(actor): the team through requireTeam(actor); the node is written to that team (tested)",

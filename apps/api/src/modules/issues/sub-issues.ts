@@ -1,7 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { schema } from "../../db";
 import { ServiceError } from "../../common/service-error";
-import type { Q, Tx } from "../../lib/service";
+import type { Q, Tx } from "../../platform/database/transaction";
 
 /**
  * Sub-issues: an issue can sit under another issue of its own team, as deep as MAX_ISSUE_DEPTH levels (a guard against a runaway

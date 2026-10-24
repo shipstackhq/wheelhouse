@@ -16,7 +16,9 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { createTeam } from "../teams/teams";
+import { IssueInput, createIssue } from "./issues";
 import * as pr from "./projects";
 import * as ini from "./initiatives";
 import { addTeamMember } from "../teams/team-members";
@@ -27,7 +29,7 @@ const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUp
 const refusedWith = (code: string) => (e: unknown) => (e as { cause?: { code?: string }; code?: string }).cause?.code === code || (e as { code?: string }).code === code;
 const foreign = refusedWith("23503");
 const checked = refusedWith("23514");
-const code = (c: svc.ServiceError["code"]) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
+const code = (c: ServiceError["code"]) => (e: unknown) => e instanceof ServiceError && e.code === c;
 const D = (s: string) => new Date(`${s}T12:00:00.000Z`);
 
 let db: Awaited<ReturnType<typeof getDb>>;
@@ -64,8 +66,8 @@ before(async () => {
   gus = await person(w.id, "guest", "gus");
   vic = await person(w.id, "viewer", "vic");
   eve = await person(w2.id, "owner", "eve");
-  ta = { ...(await svc.createTeam(ada, { name: "Alpha", key: `${L}A` })), name: "Alpha" };
-  tb = { ...(await svc.createTeam(ada, { name: "Beta", key: `${L}B` })), name: "Beta" };
+  ta = { ...(await createTeam(ada, { name: "Alpha", key: `${L}A` })), name: "Alpha" };
+  tb = { ...(await createTeam(ada, { name: "Beta", key: `${L}B` })), name: "Beta" };
   await join(ta, bob, "editor");
   await join(tb, cy, "editor");
   await join(ta, gus, "viewer");
@@ -75,7 +77,7 @@ before(async () => {
 });
 
 const project = (over: Record<string, unknown> = {}, as: Actor = ada) => pr.createProject(as, { name: `P ${++n}`, leadTeam: ta.key, ...over });
-const issueIn = (team: { key: string }, projectId: string | null, over: Partial<svc.IssueInput> & { status?: string } = {}) => svc.createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
+const issueIn = (team: { key: string }, projectId: string | null, over: Partial<IssueInput> & { status?: string } = {}) => createIssue(ada, team.key, { title: `t ${++n}`, projectId, ...over });
 const make = (over: Record<string, unknown> = {}, as: Actor = ada) => ini.createInitiative(as, { name: `I ${++n}`, ...over });
 const events = (entityId: string) => db.select().from(schema.workspaceEvents).where(eq(schema.workspaceEvents.entityId, entityId)).orderBy(schema.workspaceEvents.seq);
 

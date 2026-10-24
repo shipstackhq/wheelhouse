@@ -3,7 +3,7 @@ import type { Response } from "express";
 import { isInstanceAdmin } from "./auth-policy";
 import { SESSION_COOKIE } from "./auth-core";
 import { clientIp } from "../../common/rate-limit";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../http/raw-text";
 import { cookieValue, toHeaders } from "../../http/util";
 import { jsonBody, str } from "../../web/body";

@@ -3,3 +3,4 @@ export { MapService } from "./map.service";
 export { landedHashesFor, resolveNode, upsertNode } from "./graph";
 export { normPath } from "./freshness";
 export { land } from "./sync";
+export { getGraph } from "./graph";

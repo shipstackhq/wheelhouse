@@ -14,7 +14,10 @@ import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { createIssue, getIssue, moveIssue } from "../issues/issues";
+import { getNode, upsertNode } from "../map/graph";
+import { createTeam, deleteTeam, requireTeam } from "../teams/teams";
+import { retireRepository } from "./repositories";
 import { land } from "../map/sync";
 import type { GithubApi } from "./api";
 import { connectGithubRepository, GITHUB_ACTOR_ID, handleDelivery, listInstallations, pullRequestsForIssue, registerInstallation, targetsFor } from "./service";
@@ -62,7 +65,7 @@ async function makeWorkspace(name: string, key: string, installation: string, gi
   };
   const owner = await mkUser("owner", `${name} owner`);
   const member = await mkUser("member", `${name} member`);
-  await svc.createTeam(owner, { name: `${name} team`, key });
+  await createTeam(owner, { name: `${name} team`, key });
   fakeGithub.state.repos.set(installation, [{ id: githubRepoId, fullName: `acme/${key.toLowerCase()}-app`, defaultBranch: "main", private: true }]);
   await registerInstallation(owner, { installationId: installation, accountLogin: "acme", accountType: "Organization" });
   const repo = await connectGithubRepository(owner, key, { installationId: installation, githubRepoId, role: "backend" }, fakeGithub.api);
@@ -89,14 +92,14 @@ const deliver = (event: string, payload: Record<string, unknown>, id = `d-${uniq
 
 /** An issue in `status`, as if it had been moved there a while ago (a move in the last ten minutes makes pull requests hold back). */
 async function issueIn(workspace: Workspace, key: string, title: string, status: string) {
-  const t = await svc.createIssue(workspace.owner, key, { title });
-  if (status !== "Backlog") await svc.moveIssue(workspace.owner, t.ref, status);
+  const t = await createIssue(workspace.owner, key, { title });
+  if (status !== "Backlog") await moveIssue(workspace.owner, t.ref, status);
   const db = await getDb();
   await db.update(schema.events).set({ createdAt: new Date(Date.now() - 2 * 3600_000) }).where(and(eq(schema.events.entityId, t.id), eq(schema.events.type, "issue.moved")));
   return t;
 }
 async function columnOf(workspace: Workspace, ref: string) {
-  return (await svc.getIssue(workspace.owner, ref)).issue.status;
+  return (await getIssue(workspace.owner, ref)).issue.status;
 }
 const prPayload = (workspace: Workspace, action: string, over: Record<string, unknown> = {}, pr: Record<string, unknown> = {}) => ({
   action,
@@ -154,7 +157,7 @@ describe("who a webhook can reach", () => {
     // Workspace B's team gets a row pointing at WORKSPACE A's installation, as an owner editing the fields by hand could try.
     const [forged] = await db
       .insert(schema.repositories)
-      .values({ teamId: (await svc.requireTeam(B.owner, "BB")).id, workspaceId: B.owner.workspaceId, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
+      .values({ teamId: (await requireTeam(B.owner, "BB")).id, workspaceId: B.owner.workspaceId, displayName: "forged", role: "x", provider: "github", slug: `forged-${uniq()}`, githubRepoId: "31337", githubInstallationId: A.installation })
       .returning();
     assert.deepEqual(await targetsFor(A.installation, "31337"), [], "the join on the installation's owning workspace excludes it");
     await db.delete(schema.repositories).where(eq(schema.repositories.id, forged.id));
@@ -167,7 +170,7 @@ describe("who a webhook can reach", () => {
       return connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: "5150", role: "old" }, fakeGithub.api);
     })();
     assert.equal((await targetsFor(A.installation, "5150")).length, 1);
-    await svc.retireRepository(A.owner, "AA", extra.id);
+    await retireRepository(A.owner, "AA", extra.id);
     assert.equal((await targetsFor(A.installation, "5150")).length, 0);
     await db.delete(schema.repositories).where(eq(schema.repositories.id, extra.id));
   });
@@ -176,9 +179,9 @@ describe("who a webhook can reach", () => {
 describe("pushes", () => {
   async function describedNode(workspace: Workspace, key: string, name: string, file: string, hash: string) {
     await land(workspace.owner, key, { baseline: true, files: { [file]: hash }, repository: workspace.repoSlug });
-    await svc.upsertNode(workspace.owner, key, { name, layer: "code", kind: "file", anchors: [file], describedHashes: { [file]: hash }, markFresh: true, summary: name });
+    await upsertNode(workspace.owner, key, { name, layer: "code", kind: "file", anchors: [file], describedHashes: { [file]: hash }, markFresh: true, summary: name });
   }
-  const nodeOf = async (workspace: Workspace, key: string, name: string) => (await svc.getNode(workspace.owner, key, name)).node;
+  const nodeOf = async (workspace: Workspace, key: string, name: string) => (await getNode(workspace.owner, key, name)).node;
 
   test("a push to the default branch lands the changed files and flags the node whose code changed, with no plugin involved", async () => {
     await describedNode(A, "AA", "Core", "src/core.ts", "hash-1");
@@ -252,7 +255,7 @@ describe("pull requests", () => {
     const r = await deliver("pull_request", prPayload(A, "opened", {}, { title: `AA-${num} do it`, number: 11 }));
     assert.equal(r.status, "handled");
     assert.equal(await columnOf(A, t.ref), "Review");
-    const detail = await svc.getIssue(A.owner, t.ref);
+    const detail = await getIssue(A.owner, t.ref);
     assert.ok(detail.comments.some((c) => c.authorName === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
     assert.ok(detail.history.some((e) => e.type === "issue.pull_request"));
     const prs = await pullRequestsForIssue(t.id);
@@ -286,7 +289,7 @@ describe("pull requests", () => {
     // The issue moved a moment ago (by GitHub itself), which must not count as "someone else moved it".
     await deliver("pull_request", prPayload(A, "closed", {}, { number: 14, title: `AA-${num} x`, state: "closed", merged: false }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
-    assert.ok((await svc.getIssue(A.owner, t.ref)).comments.some((c) => /closed without merging/.test(c.body)));
+    assert.ok((await getIssue(A.owner, t.ref)).comments.some((c) => /closed without merging/.test(c.body)));
   });
 
   test("merged leaves an issue in Review for a person to close", async () => {
@@ -302,10 +305,10 @@ describe("pull requests", () => {
   test("a person or agent who moved the issue a moment ago is not overruled, and the comment says so", async () => {
     const t = await issueIn(A, "AA", "Just moved", "Todo");
     const num = t.ref.split("-")[1];
-    await svc.moveIssue(A.owner, t.ref, "In Progress"); // by a person, seconds ago
+    await moveIssue(A.owner, t.ref, "In Progress"); // by a person, seconds ago
     await deliver("pull_request", prPayload(A, "opened", {}, { number: 16, title: `AA-${num} z` }));
     assert.equal(await columnOf(A, t.ref), "In Progress");
-    assert.ok((await svc.getIssue(A.owner, t.ref)).comments.some((c) => c.authorName === "GitHub" && /moved it 1 minute ago, so the pull request \(opened\) did not move it/.test(c.body)));
+    assert.ok((await getIssue(A.owner, t.ref)).comments.some((c) => c.authorName === "GitHub" && /moved it 1 minute ago, so the pull request \(opened\) did not move it/.test(c.body)));
   });
 
   test("an issue in Done is never moved", async () => {
@@ -345,13 +348,13 @@ describe("checks", () => {
     await deliver("check_run", runPayload(A, "build", "in_progress", null, sha, 21));
     assert.equal((await pullRequestsForIssue(t.id))[0].ciState, "pending");
     await deliver("check_run", runPayload(A, "tests", "completed", "failure", sha, 21));
-    let d = await svc.getIssue(A.owner, t.ref);
+    let d = await getIssue(A.owner, t.ref);
     assert.equal(d.pullRequests[0].ciState, "failure");
     assert.ok(d.history.some((e) => e.type === "issue.ci" && /CI failed/.test(e.summary)));
     assert.ok(d.comments.some((c) => /CI failed on pull request/.test(c.body) && /tests/.test(c.body)));
     await deliver("check_run", runPayload(A, "tests", "completed", "success", sha, 21));
     await deliver("check_run", runPayload(A, "build", "completed", "success", sha, 21));
-    d = await svc.getIssue(A.owner, t.ref);
+    d = await getIssue(A.owner, t.ref);
     assert.equal(d.pullRequests[0].ciState, "success");
   });
 
@@ -400,8 +403,8 @@ describe("other events", () => {
     const num = t.ref.split("-")[1];
     await handleDelivery({ event: "pull_request", deliveryId: `d-${uniq()}`, payload: { action: "opened", repository: { id: 909090 }, installation: { id: 9004 }, pull_request: { number: 1, title: `DD-${num} x`, html_url: "u", user: { login: "d" }, state: "open", head: { ref: "x", sha: "7".repeat(40) } } } }, fakeGithub.api);
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 1);
-    await svc.createTeam(workspace.owner, { name: "Keep", key: "DK" }); // the last active team of a workspace cannot be deleted
-    await svc.deleteTeam(workspace.owner, "DD");
+    await createTeam(workspace.owner, { name: "Keep", key: "DK" }); // the last active team of a workspace cannot be deleted
+    await deleteTeam(workspace.owner, "DD");
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 0);
   });
 });

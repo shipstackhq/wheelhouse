@@ -17,7 +17,8 @@ import { getDb, schema } from "../../db";
 import { userWorkspaceSuspended } from "./access";
 import { currentMembership, humanFromSession, listWorkspaces, startSession, switchWorkspace } from "./auth-core";
 import { acceptInviteAsMember, createInvite, InviteError, InviteFailure, peekInviteAsMember, type Issuer } from "./invites";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { createTeam, listTeams, requireTeam } from "../teams/teams";
 import * as t from "./workspace-app";
 
 const RUN = Math.random().toString(16).slice(2, 8);
@@ -78,11 +79,11 @@ describe("working in one workspace at a time", () => {
 
   test("teams belong to the workspace you are in: the other one's are not found", async () => {
     const a = (await humanFromSession(token))!;
-    const pa = await svc.createTeam(a.actor, { name: "In Alpha", key: `IA${L}` });
+    const pa = await createTeam(a.actor, { name: "In Alpha", key: `IA${L}` });
     await switchWorkspace(token, pat.id, B.id);
     const b = (await humanFromSession(token))!;
-    await assert.rejects(() => svc.requireTeam(b.actor, pa.key), (e) => e instanceof svc.ServiceError && e.code === "not_found");
-    assert.deepEqual(await svc.listTeams(b.actor), []);
+    await assert.rejects(() => requireTeam(b.actor, pa.key), (e) => e instanceof ServiceError && e.code === "not_found");
+    assert.deepEqual(await listTeams(b.actor), []);
     await switchWorkspace(token, pat.id, A.id);
   });
 
@@ -129,7 +130,7 @@ describe("joining another workspace with the account you already have", () => {
 
   test("an invite sent to your own address is previewed and accepted: you become a member, with its teams, and keep your account", async () => {
     const actor = { kind: "human" as const, id: ownerC.id, name: "Gamma owner", workspaceId: C.id };
-    const proj = await svc.createTeam(actor, { name: "Shared", key: `SH${L}` });
+    const proj = await createTeam(actor, { name: "Shared", key: `SH${L}` });
     const inv = await createInvite(issuer(C.id, ownerC.id), { kind: "join_workspace", email: pat.email, role: "viewer", teams: [{ team: proj.key, role: "editor" }] });
     // pat is not signed out of anything: the public flow does not apply to an existing account, the signed-in one does
     await assert.rejects(() => import("./invites").then((m) => m.acceptInvite({ token: inv.token, name: "Pat", password: "correct horse battery" })), (e) => e instanceof InviteFailure);
@@ -141,7 +142,7 @@ describe("joining another workspace with the account you already have", () => {
     await switchWorkspace(token, pat.id, C.id);
     const h = (await humanFromSession(token))!;
     assert.equal(h.membership.role, "viewer");
-    assert.deepEqual((await svc.listTeams(h.actor)).map((p) => p.key), [proj.key]);
+    assert.deepEqual((await listTeams(h.actor)).map((p) => p.key), [proj.key]);
     await assert.rejects(() => acceptInviteAsMember(pat, inv.token), (e) => e instanceof InviteFailure); // used once
     await switchWorkspace(token, pat.id, A.id);
   });
@@ -189,6 +190,6 @@ describe("joining another workspace with the account you already have", () => {
     const done = await t.acceptInviteAsMemberAs(h, inv.token, tok);
     assert.equal(done.workspace.id, B.id);
     assert.equal((await humanFromSession(tok))!.workspace.id, B.id);
-    await assert.rejects(() => t.peekInviteAsMemberAs(h, "nope"), (e) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(() => t.peekInviteAsMemberAs(h, "nope"), (e) => e instanceof ServiceError && e.code === "invalid");
   });
 });

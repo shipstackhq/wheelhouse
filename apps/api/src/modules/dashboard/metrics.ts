@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { roleOnTeam, visibleTeamIds } from "../teams/index";
-import { queueStatus } from "../../lib/service";
+import { queueStatus } from "../../lib/service-queue";
 import type { SessionView } from "@wheelhouse/shared/session-buckets";
 
 /**

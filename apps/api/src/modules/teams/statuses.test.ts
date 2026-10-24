@@ -15,7 +15,9 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
+import { createTeam, deleteTeam, requireTeam } from "./teams";
 import * as st from "./statuses";
 import { addTeamMember } from "./team-members";
 
@@ -24,7 +26,7 @@ let owner: Actor; // admin of both teams
 let editor: Actor; // an editor of team SA
 let agent: Actor;
 let stranger: Actor; // in another workspace
-const code = (c: svc.ServiceError["code"]) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
+const code = (c: ServiceError["code"]) => (e: unknown) => e instanceof ServiceError && e.code === c;
 const names = async (key = "SA") => (await st.listStatuses(owner, key)).map((s) => s.name);
 const byName = async (name: string, key = "SA") => (await st.listStatuses(owner, key)).find((s) => s.name === name)!;
 
@@ -40,8 +42,8 @@ before(async () => {
   owner = await mk("owner", w, "owner");
   editor = await mk("editor", w, "member");
   stranger = await mk("stranger", w2, "owner");
-  await svc.createTeam(owner, { name: "Alpha", key: "SA" });
-  await svc.createTeam(owner, { name: "Beta", key: "SB" });
+  await createTeam(owner, { name: "Alpha", key: "SA" });
+  await createTeam(owner, { name: "Beta", key: "SB" });
   await addTeamMember(owner, "SA", { userId: editor.id, role: "editor" });
   const [k] = await db.insert(schema.apiKeys).values({ workspaceId: w.id, name: "worker", prefix: "wh_", keyHash: "worker-st" }).returning();
   agent = { kind: "agent", id: k.id, name: "worker", workspaceId: w.id };
@@ -55,7 +57,7 @@ describe("listing", () => {
       ["Backlog", "backlog", true, null, 0], ["Todo", "todo", true, null, 0], ["In Progress", "in_progress", true, null, 0],
       ["Review", "review", true, null, 0], ["Done", "done", true, null, 0], ["Canceled", "canceled", true, null, 0],
     ]);
-    await svc.createIssue(owner, "SA", { title: "counted", status: "todo" });
+    await createIssue(owner, "SA", { title: "counted", status: "todo" });
     assert.equal((await byName("Todo")).issueCount, 1);
     assert.equal((await st.listStatuses(editor, "SA")).length, 6, "an editor can read them");
   });
@@ -90,7 +92,7 @@ describe("adding", () => {
 
   test("a name is needed, at most 40 characters, and unique in the team whatever its case", async () => {
     for (const name of [undefined, "", "   ", 3, "x".repeat(41)]) {
-      await assert.rejects(st.createStatus(owner, "SA", { name, role: "todo" }), (e: unknown) => code("invalid")(e) && "name" in ((e as svc.ServiceError).details as { fields: object }).fields, String(name));
+      await assert.rejects(st.createStatus(owner, "SA", { name, role: "todo" }), (e: unknown) => code("invalid")(e) && "name" in ((e as ServiceError).details as { fields: object }).fields, String(name));
     }
     await assert.rejects(st.createStatus(owner, "SA", { name: "BACKLOG", role: "todo" }), code("conflict"));
     // the same name in another team is fine
@@ -103,7 +105,7 @@ describe("adding", () => {
   });
 
   test("a role that has no status yet (review was deleted) gets its first one as the default", async () => {
-    await svc.createTeam(owner, { name: "Gamma", key: "SG" });
+    await createTeam(owner, { name: "Gamma", key: "SG" });
     await st.deleteStatus(owner, "SG", "Review");
     const again = await st.createStatus(owner, "SG", { name: "Peer review", role: "review" });
     assert.equal(again.isDefault, true);
@@ -120,7 +122,7 @@ describe("editing", () => {
     const cleared = await st.updateStatus(owner, "SA", "Up next", { color: null });
     assert.equal(cleared.color, null);
     await st.updateStatus(owner, "SA", "Up next", { name: "Todo" });
-    assert.equal((await svc.createIssue(owner, "SA", { title: "by role still", status: "todo" })).status, "Todo");
+    assert.equal((await createIssue(owner, "SA", { title: "by role still", status: "todo" })).status, "Todo");
   });
 
   test("a rename cannot take another status's name, and a case change of its own name is fine", async () => {
@@ -150,7 +152,7 @@ describe("the default of a role", () => {
     assert.equal(made.isDefault, true);
     const list = await st.listStatuses(owner, "SA");
     assert.deepEqual(list.filter((s) => s.role === "in_progress").map((s) => [s.name, s.isDefault]), [["In Progress", false], ["Ready for QA", true]]);
-    assert.equal((await svc.moveIssue(owner, (await svc.createIssue(owner, "SA", { title: "to progress" })).ref, "in_progress")).status, "Ready for QA", "a move by role follows the default");
+    assert.equal((await moveIssue(owner, (await createIssue(owner, "SA", { title: "to progress" })).ref, "in_progress")).status, "Ready for QA", "a move by role follows the default");
     await assert.rejects(st.updateStatus(owner, "SA", "In Progress", { isDefault: false }), code("invalid"));
     await st.updateStatus(owner, "SA", "In Progress", { isDefault: true });
     assert.equal((await byName("Ready for QA")).isDefault, false);
@@ -167,7 +169,7 @@ describe("ordering", () => {
     [ids[todo], ids[qa]] = [ids[qa], ids[todo]];
     const after = await st.reorderStatuses(owner, "SB", ids);
     assert.deepEqual(after.map((s) => s.id), ids);
-    assert.deepEqual((await svc.getBoard(owner, "SB")).statuses.map((s) => s.id), ids, "the board reads the same order");
+    assert.deepEqual((await getBoard(owner, "SB")).statuses.map((s) => s.id), ids, "the board reads the same order");
   });
 
   test("it must name every status once, and keep the roles grouped in order", async () => {
@@ -186,7 +188,7 @@ describe("ordering", () => {
 
 describe("deleting", () => {
   test("an empty status goes; if it was its role's default the next one of the role takes over", async () => {
-    await svc.createTeam(owner, { name: "Delta", key: "SD" });
+    await createTeam(owner, { name: "Delta", key: "SD" });
     const second = await st.createStatus(owner, "SD", { name: "Doing more", role: "in_progress" });
     assert.equal(second.isDefault, false);
     const gone = await st.deleteStatus(owner, "SD", "In Progress");
@@ -195,28 +197,28 @@ describe("deleting", () => {
   });
 
   test("a status with issues needs somewhere to move them, which keeps their order and bumps their version", async () => {
-    await svc.createTeam(owner, { name: "Epsilon", key: "SE" });
+    await createTeam(owner, { name: "Epsilon", key: "SE" });
     await st.createStatus(owner, "SE", { name: "Blocked", role: "todo" });
-    const a = await svc.createIssue(owner, "SE", { title: "a", status: "Blocked" });
-    const b = await svc.createIssue(owner, "SE", { title: "b", status: "Blocked" });
-    const c = await svc.createIssue(owner, "SE", { title: "c", status: "Todo" });
-    await assert.rejects(st.deleteStatus(owner, "SE", "Blocked"), (e: unknown) => code("conflict")(e) && (e as svc.ServiceError).details && (e as { details: { issues: number } }).details.issues === 2);
+    const a = await createIssue(owner, "SE", { title: "a", status: "Blocked" });
+    const b = await createIssue(owner, "SE", { title: "b", status: "Blocked" });
+    const c = await createIssue(owner, "SE", { title: "c", status: "Todo" });
+    await assert.rejects(st.deleteStatus(owner, "SE", "Blocked"), (e: unknown) => code("conflict")(e) && (e as ServiceError).details && (e as { details: { issues: number } }).details.issues === 2);
     await assert.rejects(st.deleteStatus(owner, "SE", "Blocked", "Blocked"), code("invalid"));
     await assert.rejects(st.deleteStatus(owner, "SE", "Blocked", "Nowhere"), code("not_found"));
-    assert.equal((await svc.getIssue(owner, a.ref)).issue.status, "Blocked", "nothing moved by the refusals");
+    assert.equal((await getIssue(owner, a.ref)).issue.status, "Blocked", "nothing moved by the refusals");
     const res = await st.deleteStatus(owner, "SE", "Blocked", "Todo");
     assert.equal(res.moved, 2);
-    const board = await svc.getBoard(owner, "SE");
+    const board = await getBoard(owner, "SE");
     const todoId = board.statuses.find((s) => s.name === "Todo")!.id;
     const inTodo = board.issues.filter((t) => t.statusId === todoId).sort((x, y) => x.position - y.position).map((t) => t.title);
     assert.deepEqual(inTodo, ["c", "a", "b"], "they land after what was there, in their own order");
-    assert.equal((await svc.getIssue(owner, a.ref)).issue.version, a.version + 1);
-    assert.equal((await svc.getIssue(owner, c.ref)).issue.version, c.version, "an issue that did not move is untouched");
-    assert.equal((await svc.getIssue(owner, b.ref)).issue.status, "Todo");
+    assert.equal((await getIssue(owner, a.ref)).issue.version, a.version + 1);
+    assert.equal((await getIssue(owner, c.ref)).issue.version, c.version, "an issue that did not move is untouched");
+    assert.equal((await getIssue(owner, b.ref)).issue.status, "Todo");
   });
 
   test("the last status of a required role cannot be deleted; review can", async () => {
-    await svc.createTeam(owner, { name: "Zeta", key: "SZ" });
+    await createTeam(owner, { name: "Zeta", key: "SZ" });
     for (const name of ["Backlog", "Todo", "In Progress", "Done", "Canceled"]) {
       await assert.rejects(st.deleteStatus(owner, "SZ", name), (e: unknown) => code("conflict")(e) && /last .* status/.test((e as Error).message), name);
     }
@@ -224,27 +226,27 @@ describe("deleting", () => {
   });
 
   test("the database will not delete a status that still has issues, even if the service were wrong", async () => {
-    const team = await svc.requireTeam(owner, "SA");
-    const i = await svc.createIssue(owner, "SA", { title: "guarded", status: "Backlog" });
+    const team = await requireTeam(owner, "SA");
+    const i = await createIssue(owner, "SA", { title: "guarded", status: "Backlog" });
     const [backlog] = await db.select().from(schema.statuses).where(and(eq(schema.statuses.teamId, team.id), eq(schema.statuses.name, "Backlog")));
     await assert.rejects(db.delete(schema.statuses).where(eq(schema.statuses.id, backlog.id)), (e: unknown) => (e as { cause?: { code?: string } }).cause?.code === "23503");
-    assert.equal((await svc.getIssue(owner, i.ref)).issue.status, "Backlog");
+    assert.equal((await getIssue(owner, i.ref)).issue.status, "Backlog");
   });
 
   test("deleting a team still works with statuses and issues in it", async () => {
-    await svc.createTeam(owner, { name: "Eta", key: "SH" });
-    await svc.createIssue(owner, "SH", { title: "goes with the team" });
-    assert.deepEqual(await svc.deleteTeam(owner, "SH"), { ok: true, deleted: "SH" });
+    await createTeam(owner, { name: "Eta", key: "SH" });
+    await createIssue(owner, "SH", { title: "goes with the team" });
+    assert.deepEqual(await deleteTeam(owner, "SH"), { ok: true, deleted: "SH" });
   });
 });
 
 describe("what is recorded", () => {
   test("each change is in the team's activity and the audit log", async () => {
-    await svc.createTeam(owner, { name: "Theta", key: "ST" });
+    await createTeam(owner, { name: "Theta", key: "ST" });
     const made = await st.createStatus(owner, "ST", { name: "Spec", role: "backlog" });
     await st.updateStatus(owner, "ST", made.id, { name: "Specs" });
     await st.deleteStatus(owner, "ST", made.id);
-    const team = await svc.requireTeam(owner, "ST");
+    const team = await requireTeam(owner, "ST");
     const types = (await db.select().from(schema.events).where(and(eq(schema.events.teamId, team.id), eq(schema.events.entity, "status")))).map((e) => e.type);
     assert.deepEqual(types, ["status.created", "status.updated", "status.deleted"]);
     const audited = (await db.select().from(schema.auditEvents).where(eq(schema.auditEvents.teamId, team.id))).map((r) => r.action).filter((a) => a.startsWith("status."));

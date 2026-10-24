@@ -1,5 +1,6 @@
 import type { Human } from "../auth/index";
-import { requireTeam, ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { requireTeam } from "../teams/index";
 import { githubConfig } from "./config";
 import { github } from "./runtime";
 import { makeState, readState, STATE_TTL_MS } from "./state";

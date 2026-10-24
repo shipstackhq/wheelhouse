@@ -1,11 +1,12 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { checklistForTeam } from "../dashboard/index";
+import { IssueInput, createIssue, getBoard, getIssue, moveIssue, resolveIssue, updateIssue } from "./issues";
 import { withCycle, withLabels } from "./links";
 import { cycleOptions, type CycleOption } from "./cycles";
 import { projectsOfTeam, type TeamProjectOption } from "./projects";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import type { ChecklistState } from "../dashboard/index";
 import type { IssueRelative } from "./sub-issues";
 /**
@@ -84,7 +85,7 @@ export type BoardView = {
 
 /** The team page: its statuses, every issue, the map nodes an issue can link to, the team's members (the people an issue can be assigned to) and the setup checklist. */
 export async function boardView(actor: Actor, teamKey: string): Promise<BoardView> {
-  const [board, checklist] = await Promise.all([svc.getBoard(actor, teamKey), svc.checklistForTeam(actor, teamKey)]);
+  const [board, checklist] = await Promise.all([getBoard(actor, teamKey), checklistForTeam(actor, teamKey)]);
   const db = await getDb();
   const [nodes, members] = await Promise.all([
     db
@@ -125,7 +126,7 @@ export type IssueDetail = {
 
 /** One issue for the dialog: its fields, discussion, linked map nodes, history and the pull requests GitHub reported against it. */
 export async function issueDetail(actor: Actor, ref: string): Promise<IssueDetail> {
-  const d = await svc.getIssue(actor, ref);
+  const d = await getIssue(actor, ref);
   return {
     issue: { ...issueView(d.issue), status: d.issue.status },
     team: { key: d.team.key, name: d.team.name },
@@ -156,8 +157,8 @@ export function intField(b: Record<string, unknown>, name: string): number | und
  * The issue fields a request may carry, checked the way the MCP tools check them (a string, a known priority, a list of strings,
  * true or false) so a wrong type is a 400 naming the field and never reaches the database. For a new issue the title is required.
  */
-export function issueInput(b: Record<string, unknown>, o: { create: boolean }): svc.IssueInput {
-  const out: svc.IssueInput = {};
+export function issueInput(b: Record<string, unknown>, o: { create: boolean }): IssueInput {
+  const out: IssueInput = {};
   if (b.title !== undefined) {
     if (typeof b.title !== "string") bad("title", "title must be text");
     out.title = (b.title as string).trim();
@@ -219,7 +220,7 @@ async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>):
     return await run();
   } catch (e) {
     if (e instanceof ServiceError && e.code === "conflict" && (e.details as { current?: unknown } | undefined)?.current) {
-      const now = await svc.resolveIssue(actor, ref);
+      const now = await resolveIssue(actor, ref);
       const db = await getDb();
       const [withLabel] = await withCycle(db, await withLabels(db, [now.issue]));
       throw new ServiceError("conflict", e.message, { current: issueView({ ...withLabel, ref: now.ref }) });
@@ -228,19 +229,19 @@ async function withCurrent<T>(actor: Actor, ref: string, run: () => Promise<T>):
   }
 }
 
-export async function createIssueAs(actor: Actor, teamKey: string, input: svc.IssueInput & { title: string }, status?: string) {
-  const t = await svc.createIssue(actor, teamKey, { ...input, status });
+export async function createIssueAs(actor: Actor, teamKey: string, input: IssueInput & { title: string }, status?: string) {
+  const t = await createIssue(actor, teamKey, { ...input, status });
   return { ...issueView(t), status: t.status };
 }
 
 /** Change fields. With `version`, a change made by anyone since is refused (409) and nothing is overwritten. */
-export async function updateIssueAs(actor: Actor, ref: string, patch: svc.IssueInput, version?: number) {
-  const t = await withCurrent(actor, ref, () => svc.updateIssue(actor, ref, patch, version));
+export async function updateIssueAs(actor: Actor, ref: string, patch: IssueInput, version?: number) {
+  const t = await withCurrent(actor, ref, () => updateIssue(actor, ref, patch, version));
   return issueView(t);
 }
 
 /** Move to a status (an id, a name or a role such as "review") at a position (the end when absent). */
 export async function moveIssueAs(actor: Actor, ref: string, status: string, index?: number, version?: number) {
-  const t = await withCurrent(actor, ref, () => svc.moveIssue(actor, ref, status, index, version));
+  const t = await withCurrent(actor, ref, () => moveIssue(actor, ref, status, index, version));
   return { ...issueView(t), status: t.status };
 }

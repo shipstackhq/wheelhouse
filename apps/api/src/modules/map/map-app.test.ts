@@ -2,7 +2,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { layoutInput, nodeInput } from "./map-app";
 import { bad, finite, oneOf, text, textList, textOrNull, whole } from "../../lib/web-input";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 
 /** Reading a request body for the map's endpoints: nothing wrong-typed gets past here to the database. */
 const fieldsOf = (fn: () => unknown) => {

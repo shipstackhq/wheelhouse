@@ -16,7 +16,10 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { bus, type StreamEvent } from "./event-bus";
 import { scopeKeyToAllTeams } from "../../modules/auth/key-scope";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { addComment, createIssue, moveIssue, updateIssue } from "../../modules/issues/issues";
+import { createTeam } from "../../modules/teams/teams";
+import { emit } from "./emit";
 import { runTool } from "../../lib/tools";
 import { teamScope, workspaceScope } from "../streams/stream-scope";
 
@@ -37,7 +40,7 @@ before(async () => {
   const [k] = await db.insert(schema.apiKeys).values({ workspaceId: workspace.id, name: "laptop", prefix: "wh_", keyHash: "live-laptop" }).returning();
   agent = { kind: "agent", id: k.id, name: "laptop", workspaceId: workspace.id };
   human = { kind: "human", id: user.id, name: "Lia", workspaceId: workspace.id };
-  teamId = (await svc.createTeam(human, { name: "Live test", key: "LV" })).id;
+  teamId = (await createTeam(human, { name: "Live test", key: "LV" })).id;
   await scopeKeyToAllTeams(db, agent.id, workspace.id);
 });
 
@@ -60,7 +63,7 @@ describe("who may watch what", () => {
     const stranger: Actor = { kind: "human", id: outsider.id, name: "Out", workspaceId: otherWorkspaceId };
     const own = await teamScope("LV")(human);
     assert.deepEqual(own.scope, { team: teamId });
-    await assert.rejects(teamScope("LV")(stranger), (e: unknown) => e instanceof svc.ServiceError, "another workspace cannot even tell the team exists");
+    await assert.rejects(teamScope("LV")(stranger), (e: unknown) => e instanceof ServiceError, "another workspace cannot even tell the team exists");
   });
 
   test("the workspace stream is always the caller's own workspace, never one named by the request", async () => {
@@ -74,7 +77,7 @@ describe("live events from the service layer", () => {
     const db = await getDb();
     let issue: { ref: string } | undefined;
     const got = await heard(async () => {
-      issue = await svc.createIssue(human, "LV", { title: "Announce me" });
+      issue = await createIssue(human, "LV", { title: "Announce me" });
     });
     const created = got.filter((e) => e.type === "issue.created");
     assert.equal(created.length, 1, "exactly one announcement");
@@ -86,11 +89,11 @@ describe("live events from the service layer", () => {
   });
 
   test("every kind of write announces itself: move, comment, edit", async () => {
-    const t = await svc.createIssue(human, "LV", { title: "Moves around" });
+    const t = await createIssue(human, "LV", { title: "Moves around" });
     const got = await heard(async () => {
-      await svc.moveIssue(human, t.ref, "Todo");
-      await svc.addComment(human, t.ref, "hello");
-      await svc.updateIssue(human, t.ref, { title: "Moved and renamed" });
+      await moveIssue(human, t.ref, "Todo");
+      await addComment(human, t.ref, "hello");
+      await updateIssue(human, t.ref, { title: "Moved and renamed" });
     });
     const types = got.map((e) => e.type);
     for (const want of ["issue.moved", "comment.created", "issue.updated"]) assert.ok(types.includes(want), `${want} was announced`);
@@ -109,7 +112,7 @@ describe("live events from the service layer", () => {
     const got = await heard(async () => {
       await assert.rejects(
         db.transaction(async (tx) => {
-          await svc.emit(tx, human, teamId, { type: "issue.created", entity: "issue", entityId: teamId, summary: "never happened" });
+          await emit(tx, human, teamId, { type: "issue.created", entity: "issue", entityId: teamId, summary: "never happened" });
           throw new Error("boom");
         }),
         /boom/,
@@ -124,7 +127,7 @@ describe("live events from the service layer", () => {
     const theirs: StreamEvent[] = [];
     const a = bus.subscribe({ workspace: workspaceId }, (e) => mine.push(e));
     const b = bus.subscribe({ workspace: otherWorkspaceId }, (e) => theirs.push(e));
-    await svc.createIssue(human, "LV", { title: "Private to the workspace" });
+    await createIssue(human, "LV", { title: "Private to the workspace" });
     a();
     b();
     assert.ok(mine.length > 0);
@@ -139,7 +142,7 @@ describe("live events from the service layer", () => {
   });
 
   test("subscribers do not pile up: after the watchers leave, the bus is empty", async () => {
-    await heard(() => svc.createIssue(human, "LV", { title: "Nobody watching after this" }));
+    await heard(() => createIssue(human, "LV", { title: "Nobody watching after this" }));
     assert.equal(bus.size(), 0);
   });
 });

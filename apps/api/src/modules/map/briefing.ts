@@ -1,5 +1,11 @@
 import type { Actor } from "../../common/actor";
-import { getBoard, getChanges, getGraph, listRepositories, resolveIssue, getIssue, checklistForTeam, listDocsIndex, listStaleDocs, type NodeRow } from "../../lib/service";
+import { getChanges } from "../../lib/service-queue";
+import { checklistForTeam } from "../dashboard/index";
+import { listDocsIndex } from "../docs/index";
+import { listRepositories } from "../github/index";
+import { getBoard, resolveIssue, getIssue } from "../issues/index";
+import { listStaleDocs } from "./freshness";
+import { getGraph, type NodeRow } from "./graph";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { checklistBriefingLine } from "../dashboard/index";
 import { CLOSED_ROLES } from "@wheelhouse/shared/status-roles";

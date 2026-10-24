@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { addComment, deleteIssue } from "../../lib/service";
+import { addComment, deleteIssue } from "./issues";
 import { boardView, createIssueAs, issueDetail, moveIssueAs, updateIssueAs } from "./board-app";
 import { createCycleAs, deleteCycleAs, getCycleAs, listCyclesAs, updateCycleAs } from "./cycles-app";
 import { createInitiativeAs, deleteInitiativeAs, getInitiativeAs, linkProjectAs, listInitiativesAs, unlinkProjectAs, updateInitiativeAs } from "./initiatives-app";

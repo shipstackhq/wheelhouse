@@ -6,7 +6,7 @@ import { inviteTtlHours, isInstanceAdmin, maxWorkspaceMembers, passwordProblem }
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import { audit } from "../teams/index";
 import { canManagePeople, isWorkspaceRole } from "../../common/roles";
-import { requireTeam } from "../../lib/service";
+import { requireTeam } from "../teams/index";
 import { newWorkspaceSlug } from "./workspace-slug";
 
 /**

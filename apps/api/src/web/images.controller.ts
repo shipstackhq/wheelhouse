@@ -1,7 +1,7 @@
 import { Controller, Delete, Get, HttpCode, Param, Put, Req, Res, StreamableFile, UseGuards } from "@nestjs/common";
 import type { Response } from "express";
 import { readImageAs, setAvatarAs, setWorkspaceImageAs } from "../lib/images";
-import { ServiceError } from "../lib/service";
+import { ServiceError } from "../common/service-error";
 import type { RawTextRequest } from "../http/raw-text";
 import { jsonBody } from "./body";
 import { AppEndpoints, SessionGuard, type SessionRequest } from "./endpoints";

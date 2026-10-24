@@ -6,7 +6,7 @@ import type { Actor } from "../../common/actor";
 import { randomToken } from "../../common/crypto";
 import { publicKeyFromRaw, rawPublicKey, serverSigningKey } from "./daemon-crypto";
 import { rateLimit } from "../../common/rate-limit";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { workspaceRoleOf } from "../teams/index";
 import { PAIRING_POLL_INTERVAL_S, PAIRING_TTL_MS, str } from "./device-common";
 import { deviceView } from "./devices";

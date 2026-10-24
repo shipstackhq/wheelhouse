@@ -3,7 +3,7 @@ import { getDb, schema } from "../../db";
 import type { InitiativeStatus, ProjectHealth } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { bad, day, deriveHealth, oneOf, openProject, text, workspaceEvent, type HealthView, type ProgressCounts } from "./projects";
-import type { Q, Tx } from "../../lib/service";
+import type { Q, Tx } from "../../platform/database/transaction";
 import { ServiceError } from "../../common/service-error";
 import { workspaceRoleOf } from "../teams/index";
 import { isUuid } from "../../common/uuid";

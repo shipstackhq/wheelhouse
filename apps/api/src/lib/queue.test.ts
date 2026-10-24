@@ -15,13 +15,16 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
 import { scopeKeyToAllTeams } from "../modules/auth/key-scope";
-import * as svc from "./service";
+import { ServiceError } from "../common/service-error";
+import { addComment, createIssue } from "../modules/issues/issues";
+import { createTeam } from "../modules/teams/teams";
+import { getChanges, markAllSeen, queueStatus, removeSession } from "./service-queue";
 import { runTool } from "./tools";
 import { agentQueues } from "../modules/dashboard/metrics";
 import { briefing } from "../modules/map/briefing";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
 
-type Changes = Awaited<ReturnType<typeof svc.getChanges>>;
+type Changes = Awaited<ReturnType<typeof getChanges>>;
 
 let human: Actor;
 let key: Actor;
@@ -44,9 +47,9 @@ before(async () => {
   key = await mkKey("laptop");
   otherKey = await mkKey("ci");
   human = { kind: "human", id: user.id, name: "Tess", workspaceId: workspace.id };
-  await svc.createTeam(human, { name: "Queue test", key: "QQ" });
+  await createTeam(human, { name: "Queue test", key: "QQ" });
   for (const k of [key, otherKey]) await scopeKeyToAllTeams(db, k.id, workspace.id);
-  issueRef = (await svc.createIssue(human, "QQ", { title: "Shared issue" })).ref;
+  issueRef = (await createIssue(human, "QQ", { title: "Shared issue" })).ref;
 });
 
 describe("per-session queue cursors", () => {
@@ -88,28 +91,28 @@ describe("per-session queue cursors", () => {
     const fresh = await changes(key, "sess-C");
     assert.equal(fresh.total, 0, "a new session doesn't replay history other sessions handled");
 
-    await svc.addComment(human, issueRef, "new work for the agents");
+    await addComment(human, issueRef, "new work for the agents");
     const after = await changes(key, "sess-C");
     assert.deepEqual(after.changes.map((e) => e.type), ["comment.created"], "but it gets changes from then on");
   });
 
   test("a session registered by another key is refused", async () => {
-    await assert.rejects(changes(otherKey, "sess-A"), (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden");
+    await assert.rejects(changes(otherKey, "sess-A"), (e: unknown) => e instanceof ServiceError && e.code === "forbidden");
     await assert.rejects(
       as(otherKey, "update_issue", { issue: issueRef, title: "hijack", session: "sess-A" }),
-      (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden",
+      (e: unknown) => e instanceof ServiceError && e.code === "forbidden",
     );
   });
 
   test("the Bots menu reports each active session's depth", async () => {
-    await svc.addComment(human, issueRef, "one more");
-    const [laptop] = (await svc.queueStatus(human, "QQ")).filter((q) => q.id === key.id);
+    await addComment(human, issueRef, "one more");
+    const [laptop] = (await queueStatus(human, "QQ")).filter((q) => q.id === key.id);
     assert.deepEqual(laptop.sessions.map((s) => s.id).sort(), ["sess-A", "sess-B", "sess-C"]);
     assert.equal(laptop.pending, Math.max(...laptop.sessions.map((s) => s.pending)), "key pending is the furthest-behind session");
   });
 
   test("mark all seen resets every session cursor of the key", async () => {
-    await svc.markAllSeen(human, { keyId: key.id, teamRef: "QQ" });
+    await markAllSeen(human, { keyId: key.id, teamRef: "QQ" });
     for (const s of ["sess-A", "sess-B", "sess-C"]) assert.equal((await changes(key, s)).total, 0, `${s} is caught up`);
   });
 });
@@ -120,9 +123,9 @@ describe("session breakdown (WH-45)", () => {
     const [t] = await db.select().from(schema.issues).where(eq(schema.issues.title, "Shared issue"));
     await as(key, "session_end", { session: "sess-A" }); // a cleanly ended session drops out of the lists
     await db.update(schema.workSessions).set({ branch: "feature/x", issueId: t.id }).where(eq(schema.workSessions.id, "sess-B"));
-    await svc.addComment(human, issueRef, "fresh");
+    await addComment(human, issueRef, "fresh");
 
-    const status = (await svc.queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
+    const status = (await queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
     const b = status.sessions.find((s) => s.id === "sess-B")!;
     assert.equal(b.branch, "feature/x");
     assert.equal(b.issue, issueRef);
@@ -140,14 +143,14 @@ describe("session breakdown (WH-45)", () => {
   });
 
   test("acking in one session changes only that session's queued count", async () => {
-    const before = (await svc.queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
+    const before = (await queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
     const b = before.sessions.find((s) => s.id === "sess-B")!;
     const c = before.sessions.find((s) => s.id === "sess-C")!;
     assert.ok(b.pending > 0 && c.pending > 0, "both have something queued");
 
     await as(key, "ack_changes", { session: "sess-B", seq: (await changes(key, "sess-B")).latestSeq });
 
-    const after = (await svc.queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
+    const after = (await queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
     assert.equal(after.sessions.find((s) => s.id === "sess-B")!.pending, 0);
     assert.equal(after.sessions.find((s) => s.id === "sess-C")!.pending, c.pending, "C is untouched");
   });
@@ -155,7 +158,7 @@ describe("session breakdown (WH-45)", () => {
 
 describe("the model is never asked to handle the session id (ADR-5)", () => {
   test("neither the briefing nor the get_changes description mentions passing a session", async () => {
-    await svc.addComment(human, issueRef, "something to report");
+    await addComment(human, issueRef, "something to report");
     const { markdown } = await briefing({ ...key, sessionId: "sess-C" }, "QQ");
     assert.ok(markdown.includes("Since you last looked"), "the session's queue still shows up");
     assert.ok(!/session/i.test(markdown.split("## Since you last looked")[1] ?? ""), "but without asking the model to pass an id");
@@ -188,7 +191,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     });
   };
   const row = async (id: string) => (await (await getDb()).select().from(schema.workSessions).where(eq(schema.workSessions.id, id)))[0];
-  const listed = async () => (await svc.queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
+  const listed = async () => (await queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
 
   before(async () => {
     const db = await getDb();
@@ -217,20 +220,20 @@ describe("session recency, removal and reconnect (WH-48)", () => {
   });
 
   test("only teammates can remove a session; it disappears everywhere and nobody else's queue changes", async () => {
-    await assert.rejects(svc.removeSession(key, "QQ", "s-day"), (e: unknown) => e instanceof svc.ServiceError && e.code === "forbidden");
+    await assert.rejects(removeSession(key, "QQ", "s-day"), (e: unknown) => e instanceof ServiceError && e.code === "forbidden");
     const before = await listed();
-    await svc.removeSession(human, "QQ", "s-day");
+    await removeSession(human, "QQ", "s-day");
     const after = await listed();
     assert.ok(!after.sessions.some((s) => s.id === "s-day"), "gone from the list");
     for (const s of after.sessions) assert.equal(s.pending, before.sessions.find((x) => x.id === s.id)!.pending, `${s.id} unchanged`);
     assert.ok((await row("s-day")).removedAt, "soft delete: the row is kept");
-    await assert.rejects(svc.removeSession(human, "QQ", "s-day"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found", "already removed");
-    await assert.rejects(svc.removeSession(human, "QQ", "no-such-session"), (e: unknown) => e instanceof svc.ServiceError && e.code === "not_found");
+    await assert.rejects(removeSession(human, "QQ", "s-day"), (e: unknown) => e instanceof ServiceError && e.code === "not_found", "already removed");
+    await assert.rejects(removeSession(human, "QQ", "no-such-session"), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("mark all seen leaves a removed session's cursor alone, so replay still works", async () => {
     const before = (await row("s-day")).lastSeq;
-    await svc.markAllSeen(human, { keyId: key.id, teamRef: "QQ" });
+    await markAllSeen(human, { keyId: key.id, teamRef: "QQ" });
     assert.equal((await row("s-day")).lastSeq, before);
   });
 
@@ -252,9 +255,9 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     await changes(key, "s-rm"); // registers with a cursor
     const seen = (await changes(key, "s-rm")).latestSeq;
     await as(key, "ack_changes", { session: "s-rm", seq: seen });
-    await svc.removeSession(human, "QQ", "s-rm");
-    await svc.addComment(human, issueRef, "while you were gone 1");
-    await svc.addComment(human, issueRef, "while you were gone 2");
+    await removeSession(human, "QQ", "s-rm");
+    await addComment(human, issueRef, "while you were gone 1");
+    await addComment(human, issueRef, "while you were gone 2");
 
     const first = (await changes(key, "s-rm")) as Resumable;
     assert.equal(first.total, 0, "default: top of the queue, nothing replayed");
@@ -274,14 +277,14 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     assert.deepEqual(replayed.changes.map((c) => c.summary).filter((x) => x.includes("comment")).length, 2);
     assert.equal(replayed.total, 2, "exactly what it missed, nothing more");
     assert.equal(replayed.session_removed, undefined);
-    await assert.rejects(as(key, "resume_session", { session: "s-rm", mode: "skip" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid", "nothing left to resume");
+    await assert.rejects(as(key, "resume_session", { session: "s-rm", mode: "skip" }), (e: unknown) => e instanceof ServiceError && e.code === "invalid", "nothing left to resume");
   });
 
   test("skip keeps it at the top of the queue and delivers nothing", async () => {
     await changes(key, "s-skip");
     await as(key, "ack_changes", { session: "s-skip", seq: (await changes(key, "s-skip")).latestSeq });
-    await svc.removeSession(human, "QQ", "s-skip");
-    await svc.addComment(human, issueRef, "missed on purpose");
+    await removeSession(human, "QQ", "s-skip");
+    await addComment(human, issueRef, "missed on purpose");
     assert.equal(((await changes(key, "s-skip")) as Resumable).session_removed?.missedChanges, 1);
     await as(key, "resume_session", { session: "s-skip", mode: "skip" });
     const after = (await changes(key, "s-skip")) as Resumable;
@@ -291,7 +294,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
 
   test("a session that was never removed has nothing to resume", async () => {
     await changes(key, "s-never");
-    await assert.rejects(as(key, "resume_session", { session: "s-never", mode: "replay" }), (e: unknown) => e instanceof svc.ServiceError && e.code === "invalid");
+    await assert.rejects(as(key, "resume_session", { session: "s-never", mode: "replay" }), (e: unknown) => e instanceof ServiceError && e.code === "invalid");
     assert.equal(((await changes(key, "s-never")) as Resumable).session_removed, undefined);
   });
 });

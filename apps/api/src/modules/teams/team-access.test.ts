@@ -24,7 +24,10 @@ import { roleOnTeam, visibleTeamIds } from "./team-access";
 import { effectiveRole, roleAllows } from "../../common/roles";
 import * as pmem from "./team-members";
 import { scopeKeyToAllTeams } from "../auth/key-scope";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { listEvents } from "../../lib/service-queue";
+import { addComment, createIssue, getBoard, getIssue, moveIssue } from "../issues/issues";
+import { createTeam, deleteTeam, listTeams, requireTeam, updateTeam } from "./teams";
 import { teamScope, workspaceScope } from "../../platform/streams/stream-scope";
 
 const RUN = Math.random().toString(16).slice(2, 8);
@@ -49,10 +52,10 @@ async function agentKey(workspaceId: string): Promise<Actor> {
   return { kind: "agent", id: k.id, name: "key", workspaceId };
 }
 /** A team made by `by`, who becomes its admin through createTeam itself. */
-const team = (by: Actor, key: string) => svc.createTeam(by, { name: `Team ${key}`, key });
+const team = (by: Actor, key: string) => createTeam(by, { name: `Team ${key}`, key });
 const addTo = (admin: Actor, key: string, who: Actor, role: "admin" | "editor" | "viewer") => pmem.addTeamMember(admin, key, { userId: who.id, role });
 
-const code = (c: svc.ServiceError["code"]) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
+const code = (c: ServiceError["code"]) => (e: unknown) => e instanceof ServiceError && e.code === c;
 
 let ada: Actor; // owner of A, admin of P1 only
 let bob: Actor; // member of A, editor of P1
@@ -87,9 +90,9 @@ before(async () => {
   p2 = await team(sam, `PB${L}`);
   q1 = await team(zed, `QA${L}`);
   await scopeKeyToAllTeams(await getDb(), keyA.id, A.id); // as migration 0026 did for every key that existed: both teams of A, nothing of B
-  await svc.createIssue(ada, p1.key, { title: "secret of P1" });
-  await svc.createIssue(sam, p2.key, { title: "secret of P2" });
-  await svc.createIssue(zed, q1.key, { title: "secret of workspace B" });
+  await createIssue(ada, p1.key, { title: "secret of P1" });
+  await createIssue(sam, p2.key, { title: "secret of P2" });
+  await createIssue(zed, q1.key, { title: "secret of workspace B" });
 });
 
 describe("the rule", () => {
@@ -107,33 +110,33 @@ describe("the rule", () => {
 
 describe("reading", () => {
   test("a member opens their team; a team they are not in is not_found, the same as one that does not exist", async () => {
-    assert.equal((await svc.requireTeam(ada, p1.key)).id, p1.id);
-    await assert.rejects(() => svc.requireTeam(ada, p2.key), code("not_found"));
-    await assert.rejects(() => svc.requireTeam(ada, "NOPE"), code("not_found"));
-    const a = await svc.requireTeam(ada, p1.key).catch(() => null);
+    assert.equal((await requireTeam(ada, p1.key)).id, p1.id);
+    await assert.rejects(() => requireTeam(ada, p2.key), code("not_found"));
+    await assert.rejects(() => requireTeam(ada, "NOPE"), code("not_found"));
+    const a = await requireTeam(ada, p1.key).catch(() => null);
     assert.ok(a);
-    const msgOther = await svc.requireTeam(ada, p2.key).catch((e) => e.message);
-    const msgNone = await svc.requireTeam(ada, "ZZZZ").catch((e) => e.message);
+    const msgOther = await requireTeam(ada, p2.key).catch((e) => e.message);
+    const msgNone = await requireTeam(ada, "ZZZZ").catch((e) => e.message);
     assert.equal(msgOther.replace(p2.key, "X"), msgNone.replace("ZZZZ", "X")); // same wording: existence does not leak
   });
 
   test("a workspace owner is not a member of a team made by someone else", async () => {
-    await assert.rejects(() => svc.getBoard(ada, p2.key), code("not_found"));
-    await assert.rejects(() => svc.getIssue(ada, `${p2.key}-1`), code("not_found"));
+    await assert.rejects(() => getBoard(ada, p2.key), code("not_found"));
+    await assert.rejects(() => getIssue(ada, `${p2.key}-1`), code("not_found"));
   });
 
   test("a team of another workspace is not_found for everyone here, even by uuid", async () => {
-    await assert.rejects(() => svc.requireTeam(ada, q1.id), code("not_found"));
-    await assert.rejects(() => svc.requireTeam(zed, p1.id), code("not_found"));
-    await assert.rejects(() => svc.getIssue(zed, `${p1.key}-1`), code("not_found"));
+    await assert.rejects(() => requireTeam(ada, q1.id), code("not_found"));
+    await assert.rejects(() => requireTeam(zed, p1.id), code("not_found"));
+    await assert.rejects(() => getIssue(zed, `${p1.key}-1`), code("not_found"));
   });
 
   test("lists show only your own teams: a workspace admin in none sees none; an agent key sees the teams it is scoped to", async () => {
-    assert.deepEqual((await svc.listTeams(ada)).map((p) => p.key), [p1.key]);
-    assert.deepEqual((await svc.listTeams(sam)).map((p) => p.key), [p2.key]);
-    assert.deepEqual(await svc.listTeams(eve), []);
-    assert.deepEqual((await svc.listTeams(keyA)).map((p) => p.key).sort(), [p1.key, p2.key].sort());
-    assert.deepEqual((await svc.listTeams(zed)).map((p) => p.key), [q1.key]);
+    assert.deepEqual((await listTeams(ada)).map((p) => p.key), [p1.key]);
+    assert.deepEqual((await listTeams(sam)).map((p) => p.key), [p2.key]);
+    assert.deepEqual(await listTeams(eve), []);
+    assert.deepEqual((await listTeams(keyA)).map((p) => p.key).sort(), [p1.key, p2.key].sort());
+    assert.deepEqual((await listTeams(zed)).map((p) => p.key), [q1.key]);
   });
 
   test("the dashboard counts only the viewer's teams", async () => {
@@ -150,20 +153,20 @@ describe("reading", () => {
 
 describe("writing", () => {
   test("an editor writes; a viewer, a guest viewer and a workspace viewer made editor can only read", async () => {
-    await svc.createIssue(bob, p1.key, { title: "bob's issue" });
+    await createIssue(bob, p1.key, { title: "bob's issue" });
     for (const [who, label] of [[cy, "team viewer"], [gus, "guest viewer"], [dee, "workspace viewer"]] as const) {
-      await assert.rejects(() => svc.createIssue(who, p1.key, { title: "no" }), code("forbidden"), label);
-      const board = await svc.getBoard(who, p1.key);
+      await assert.rejects(() => createIssue(who, p1.key, { title: "no" }), code("forbidden"), label);
+      const board = await getBoard(who, p1.key);
       assert.ok(board.issues.length >= 1, `${label} can still read`);
     }
-    const t = (await svc.getBoard(ada, p1.key)).issues[0];
-    await assert.rejects(() => svc.addComment(cy, `${p1.key}-${t.number}`, "hi"), code("forbidden"));
-    await assert.rejects(() => svc.moveIssue(dee, `${p1.key}-${t.number}`, "Done"), code("forbidden"));
+    const t = (await getBoard(ada, p1.key)).issues[0];
+    await assert.rejects(() => addComment(cy, `${p1.key}-${t.number}`, "hi"), code("forbidden"));
+    await assert.rejects(() => moveIssue(dee, `${p1.key}-${t.number}`, "Done"), code("forbidden"));
   });
 
   test("an editor cannot change who is in the team or delete it; an admin can", async () => {
     await assert.rejects(() => pmem.addTeamMember(bob, p1.key, { userId: sam.id, role: "viewer" }), code("forbidden"));
-    await assert.rejects(() => svc.deleteTeam(bob, p1.key), code("forbidden"));
+    await assert.rejects(() => deleteTeam(bob, p1.key), code("forbidden"));
     await assert.rejects(() => pmem.listAddableMembers(bob, p1.key), code("forbidden"));
   });
 
@@ -171,21 +174,21 @@ describe("writing", () => {
     const ps = await team(ada, `PS${L}`); // its own team: the others are shared with later tests
     await addTo(ada, ps.key, bob, "editor");
     await addTo(ada, ps.key, cy, "viewer");
-    await assert.rejects(() => svc.updateTeam(bob, ps.key, { name: "Hijacked" }), code("forbidden")); // an editor
-    await assert.rejects(() => svc.updateTeam(cy, ps.key, { name: "Hijacked" }), code("forbidden")); // a viewer
-    await assert.rejects(() => svc.updateTeam(eve, ps.key, { name: "Hijacked" }), code("not_found")); // workspace admin, not a member
-    await assert.rejects(() => svc.updateTeam(zed, ps.key, { name: "Hijacked" }), code("not_found")); // another workspace
-    await assert.rejects(() => svc.updateTeam(keyA, ps.key, { name: "Hijacked" }), code("forbidden")); // an agent key
-    await assert.rejects(() => svc.updateTeam(ada, ps.key, { name: "   " }), code("invalid"));
-    const renamed = await svc.updateTeam(ada, ps.key, { name: "Renamed", description: "  About it  " });
+    await assert.rejects(() => updateTeam(bob, ps.key, { name: "Hijacked" }), code("forbidden")); // an editor
+    await assert.rejects(() => updateTeam(cy, ps.key, { name: "Hijacked" }), code("forbidden")); // a viewer
+    await assert.rejects(() => updateTeam(eve, ps.key, { name: "Hijacked" }), code("not_found")); // workspace admin, not a member
+    await assert.rejects(() => updateTeam(zed, ps.key, { name: "Hijacked" }), code("not_found")); // another workspace
+    await assert.rejects(() => updateTeam(keyA, ps.key, { name: "Hijacked" }), code("forbidden")); // an agent key
+    await assert.rejects(() => updateTeam(ada, ps.key, { name: "   " }), code("invalid"));
+    const renamed = await updateTeam(ada, ps.key, { name: "Renamed", description: "  About it  " });
     assert.deepEqual([renamed.name, renamed.description, renamed.key], ["Renamed", "About it", ps.key]);
-    assert.equal((await svc.requireTeam(sam, p2.key)).name, `Team ${p2.key}`); // another team is untouched
+    assert.equal((await requireTeam(sam, p2.key)).name, `Team ${p2.key}`); // another team is untouched
   });
 
   test("workspace viewers and guests cannot start teams; members can, and become the team's admin", async () => {
-    await assert.rejects(() => svc.createTeam(dee, { name: "No", key: "NOV" }), code("forbidden"));
-    await assert.rejects(() => svc.createTeam(gus, { name: "No", key: "NOG" }), code("forbidden"));
-    const mine = await svc.createTeam(bob, { name: "Bob's", key: `BB${L}` });
+    await assert.rejects(() => createTeam(dee, { name: "No", key: "NOV" }), code("forbidden"));
+    await assert.rejects(() => createTeam(gus, { name: "No", key: "NOG" }), code("forbidden"));
+    const mine = await createTeam(bob, { name: "Bob's", key: `BB${L}` });
     const list = await pmem.listTeamMembers(bob, mine.key);
     assert.deepEqual(list.members.map((m) => [m.name, m.role]), [["bob", "admin"]]);
   });
@@ -193,21 +196,21 @@ describe("writing", () => {
 
 describe("agents and the system", () => {
   test("an agent key reaches the teams it is scoped to and nothing of another workspace", async () => {
-    assert.ok((await svc.getBoard(keyA, p1.key)).team);
-    assert.ok((await svc.getBoard(keyA, p2.key)).team);
-    await assert.rejects(() => svc.requireTeam(keyA, q1.key), code("not_found"));
-    await svc.createIssue(keyA, p2.key, { title: "from a key" });
+    assert.ok((await getBoard(keyA, p1.key)).team);
+    assert.ok((await getBoard(keyA, p2.key)).team);
+    await assert.rejects(() => requireTeam(keyA, q1.key), code("not_found"));
+    await createIssue(keyA, p2.key, { title: "from a key" });
   });
 
   test("a system actor reaches only the one team it is for, and is never mistaken for a member", async () => {
     const sys: Actor = { kind: "human", id: "00000000-0000-4000-8000-000000000001", name: "GitHub", workspaceId: ada.workspaceId, system: true, teamId: p2.id };
-    assert.ok((await svc.requireTeam(sys, p2.key)).id);
-    await assert.rejects(() => svc.requireTeam(sys, p1.key), code("not_found"), "another team of its own workspace");
-    await assert.rejects(() => svc.requireTeam(sys, q1.key), code("not_found"), "a team of another workspace");
-    await assert.rejects(() => svc.requireTeam({ ...sys, teamId: undefined }, p2.key), code("not_found"), "no team, no access");
+    assert.ok((await requireTeam(sys, p2.key)).id);
+    await assert.rejects(() => requireTeam(sys, p1.key), code("not_found"), "another team of its own workspace");
+    await assert.rejects(() => requireTeam(sys, q1.key), code("not_found"), "a team of another workspace");
+    await assert.rejects(() => requireTeam({ ...sys, teamId: undefined }, p2.key), code("not_found"), "no team, no access");
     const notSystem: Actor = { ...sys, system: undefined };
-    await assert.rejects(() => svc.requireTeam(notSystem, p2.key), code("not_found"));
-    assert.deepEqual((await svc.listTeams(sys)).map((t) => t.key), [p2.key]);
+    await assert.rejects(() => requireTeam(notSystem, p2.key), code("not_found"));
+    assert.deepEqual((await listTeams(sys)).map((t) => t.key), [p2.key]);
   });
 });
 
@@ -220,23 +223,23 @@ describe("a key scoped to teams (WH-120)", () => {
   test("a key reaches only its teams: the others answer not_found, in the same words as a team that does not exist", async () => {
     const k = await agentKey(ada.workspaceId);
     await giveKey(k, p1);
-    assert.deepEqual((await svc.listTeams(k)).map((t) => t.key), [p1.key]);
-    assert.ok((await svc.getBoard(k, p1.key)).team);
-    await assert.rejects(() => svc.getBoard(k, p2.key), code("not_found"));
-    await assert.rejects(() => svc.getIssue(k, `${p2.key}-1`), code("not_found"));
-    await assert.rejects(() => svc.createIssue(k, p2.key, { title: "planted" }), code("not_found"));
-    const other = await svc.requireTeam(k, p2.key).catch((e) => e.message);
-    const none = await svc.requireTeam(k, "ZZZZ").catch((e) => e.message);
+    assert.deepEqual((await listTeams(k)).map((t) => t.key), [p1.key]);
+    assert.ok((await getBoard(k, p1.key)).team);
+    await assert.rejects(() => getBoard(k, p2.key), code("not_found"));
+    await assert.rejects(() => getIssue(k, `${p2.key}-1`), code("not_found"));
+    await assert.rejects(() => createIssue(k, p2.key, { title: "planted" }), code("not_found"));
+    const other = await requireTeam(k, p2.key).catch((e) => e.message);
+    const none = await requireTeam(k, "ZZZZ").catch((e) => e.message);
     assert.equal(other.replace(p2.key, "X"), none.replace("ZZZZ", "X"));
-    assert.ok((await svc.createIssue(k, p1.key, { title: "allowed" })).ref);
+    assert.ok((await createIssue(k, p1.key, { title: "allowed" })).ref);
     assert.equal(await roleOnTeam(await db(), k, p1.id), "editor", "an editor on its teams, never an admin");
-    await assert.rejects(() => svc.updateTeam(k, p1.key, { name: "x" }), code("forbidden"));
+    await assert.rejects(() => updateTeam(k, p1.key, { name: "x" }), code("forbidden"));
   });
 
   test("a key with no team reaches nothing", async () => {
     const k = await agentKey(ada.workspaceId);
-    assert.deepEqual(await svc.listTeams(k), []);
-    await assert.rejects(() => svc.requireTeam(k, p1.key), code("not_found"));
+    assert.deepEqual(await listTeams(k), []);
+    await assert.rejects(() => requireTeam(k, p1.key), code("not_found"));
     assert.deepEqual(await visibleTeamIds(await db(), k), []);
     assert.equal((await workspaceScope()(k)).allow?.({ workspaceId: k.workspaceId, teamId: p1.id, type: "x" }), false);
   });
@@ -245,20 +248,20 @@ describe("a key scoped to teams (WH-120)", () => {
     const k = await agentKey(ada.workspaceId);
     const mine = await team(ada, `SC${L}`);
     await giveKey(k, mine);
-    assert.ok((await svc.requireTeam(k, mine.key)).id);
+    assert.ok((await requireTeam(k, mine.key)).id);
     await (await db()).delete(schema.apiKeyTeams).where(eq(schema.apiKeyTeams.apiKeyId, k.id));
-    await assert.rejects(() => svc.requireTeam(k, mine.key), code("not_found"));
+    await assert.rejects(() => requireTeam(k, mine.key), code("not_found"));
     await giveKey(k, mine);
-    await svc.deleteTeam(ada, mine.key);
+    await deleteTeam(ada, mine.key);
     assert.equal((await (await db()).select().from(schema.apiKeyTeams).where(eq(schema.apiKeyTeams.apiKeyId, k.id))).length, 0, "the row went with the team");
   });
 
   test("a key that creates a team can open it; one scoped elsewhere still cannot open the rest", async () => {
     const k = await agentKey(ada.workspaceId);
     await giveKey(k, p1);
-    const made = await svc.createTeam(k, { name: "Agent made", key: `AG${L}` });
-    assert.deepEqual((await svc.listTeams(k)).map((t) => t.key).sort(), [p1.key, made.key].sort());
-    await assert.rejects(() => svc.requireTeam(k, p2.key), code("not_found"));
+    const made = await createTeam(k, { name: "Agent made", key: `AG${L}` });
+    assert.deepEqual((await listTeams(k)).map((t) => t.key).sort(), [p1.key, made.key].sort());
+    await assert.rejects(() => requireTeam(k, p2.key), code("not_found"));
   });
 
   test("the database refuses a key scoped to a team of another workspace", async () => {
@@ -299,17 +302,17 @@ describe("a team's icon", () => {
   test("a team admin sets an icon and colour, or an emoji, or clears it; anything else is refused, and so is a non-admin", async () => {
     const t = await team(ada, `IC${L}`);
     await addTo(ada, t.key, bob, "editor");
-    const set = await svc.updateTeam(ada, t.key, { icon: "ri:rocket-2", iconColor: "violet" });
+    const set = await updateTeam(ada, t.key, { icon: "ri:rocket-2", iconColor: "violet" });
     assert.deepEqual([set.icon, set.iconColor], ["ri:rocket-2", "violet"]);
-    assert.equal((await svc.updateTeam(ada, t.key, { name: "Renamed" })).icon, "ri:rocket-2", "left out means unchanged");
-    const emoji = await svc.updateTeam(ada, t.key, { icon: "🚀" });
+    assert.equal((await updateTeam(ada, t.key, { name: "Renamed" })).icon, "ri:rocket-2", "left out means unchanged");
+    const emoji = await updateTeam(ada, t.key, { icon: "🚀" });
     assert.equal(emoji.icon, "🚀");
-    assert.equal((await svc.updateTeam(ada, t.key, { icon: "👨‍👩‍👧‍👦" })).icon, "👨‍👩‍👧‍👦", "one emoji built from several is still one");
-    for (const bad of ["ri:nonsense", "ab", "🚀🚀", "http://x", 5]) await assert.rejects(() => svc.updateTeam(ada, t.key, { icon: bad }), code("invalid"), String(bad));
-    await assert.rejects(() => svc.updateTeam(ada, t.key, { iconColor: "pink" }), code("invalid"));
-    const cleared = await svc.updateTeam(ada, t.key, { icon: null, iconColor: null });
+    assert.equal((await updateTeam(ada, t.key, { icon: "👨‍👩‍👧‍👦" })).icon, "👨‍👩‍👧‍👦", "one emoji built from several is still one");
+    for (const bad of ["ri:nonsense", "ab", "🚀🚀", "http://x", 5]) await assert.rejects(() => updateTeam(ada, t.key, { icon: bad }), code("invalid"), String(bad));
+    await assert.rejects(() => updateTeam(ada, t.key, { iconColor: "pink" }), code("invalid"));
+    const cleared = await updateTeam(ada, t.key, { icon: null, iconColor: null });
     assert.deepEqual([cleared.icon, cleared.iconColor], [null, null]);
-    await assert.rejects(() => svc.updateTeam(bob, t.key, { icon: "ri:star" }), code("forbidden"));
+    await assert.rejects(() => updateTeam(bob, t.key, { icon: "ri:star" }), code("forbidden"));
     assert.equal((await pmem.listTeamsWithRole(ada)).find((x) => x.key === t.key)!.icon, null, "the list carries it too");
   });
 });
@@ -325,9 +328,9 @@ describe("who is in a team", () => {
     await assert.rejects(() => pmem.addTeamMember(ada, p1.key, { userId: zed.id, role: "viewer" }), code("not_found")); // another workspace
     await assert.rejects(() => pmem.addTeamMember(ada, p1.key, { userId: sam.id, role: "owner" }), code("invalid"));
     await addTo(ada, p1.key, sam, "viewer");
-    assert.equal((await svc.requireTeam(sam, p1.key)).id, p1.id);
+    assert.equal((await requireTeam(sam, p1.key)).id, p1.id);
     await pmem.removeTeamMember(ada, p1.key, sam.id);
-    await assert.rejects(() => svc.requireTeam(sam, p1.key), code("not_found"));
+    await assert.rejects(() => requireTeam(sam, p1.key), code("not_found"));
   });
 
   test("a team keeps at least one admin: the last one cannot be demoted, removed or leave", async () => {
@@ -351,15 +354,15 @@ describe("workspace owners and admins", () => {
     assert.deepEqual(row.admins, ["sam"]);
     assert.equal(row.isMember, false);
     await assert.rejects(() => pmem.listWorkspaceTeams(bob), code("forbidden"));
-    await assert.rejects(() => svc.getBoard(eve, p2.key), code("not_found")); // seeing the name opens nothing
+    await assert.rejects(() => getBoard(eve, p2.key), code("not_found")); // seeing the name opens nothing
   });
 
   test("joining as admin is audited, shows in the team's own activity, and members can see it", async () => {
     await pmem.joinTeamAsWorkspaceAdmin(eve, p2.key);
-    assert.equal((await svc.requireTeam(eve, p2.key)).id, p2.id);
+    assert.equal((await requireTeam(eve, p2.key)).id, p2.id);
     const audit = await pmem.listAudit(ada, { teamRef: p2.key });
     assert.ok(audit.some((a) => a.action === "team.admin_joined" && a.actorName === "eve"));
-    const feed = await svc.listEvents(sam, p2.key);
+    const feed = await listEvents(sam, p2.key);
     assert.ok(JSON.stringify(feed).includes("joined"));
     await assert.rejects(() => pmem.joinTeamAsWorkspaceAdmin(eve, p2.key), code("conflict")); // already in
     await assert.rejects(() => pmem.joinTeamAsWorkspaceAdmin(bob, p2.key), code("forbidden")); // a plain member cannot
@@ -374,14 +377,14 @@ describe("workspace owners and admins", () => {
 describe("removing someone from the workspace", () => {
   test("is refused while they are a team's only admin, then removes every team row", async () => {
     const lee = await person(ada.workspaceId, "member", "lee");
-    const leesTeam = await svc.createTeam(lee, { name: "Lee's", key: `LL${L}` });
+    const leesTeam = await createTeam(lee, { name: "Lee's", key: `LL${L}` });
     await assert.rejects(() => removeMember(ada.workspaceId, ada.id, lee.id), code("conflict"));
     await pmem.joinTeamAsWorkspaceAdmin(eve, leesTeam.key);
     assert.equal(await removeMember(ada.workspaceId, ada.id, lee.id), true);
     const db = await getDb();
     const left = await db.select().from(schema.teamMembers).where(and(eq(schema.teamMembers.userId, lee.id)));
     assert.equal(left.length, 0);
-    await assert.rejects(() => svc.requireTeam(lee, leesTeam.key), code("not_found")); // no workspace membership either
+    await assert.rejects(() => requireTeam(lee, leesTeam.key), code("not_found")); // no workspace membership either
   });
 });
 
@@ -395,9 +398,9 @@ describe("invites that carry teams", () => {
     assert.deepEqual(pending.teams, [{ key: p1.key, name: `Team ${p1.key}`, role: "viewer" }]);
     const { userId } = await acceptInvite({ token: inv.token, name: "Newbie", password: PW });
     const newbie: Actor = { kind: "human", id: userId, name: "Newbie", workspaceId: ada.workspaceId };
-    assert.deepEqual((await svc.listTeams(newbie)).map((p) => p.key), [p1.key]);
-    await assert.rejects(() => svc.requireTeam(newbie, p2.key), code("not_found"));
-    await assert.rejects(() => svc.createIssue(newbie, p1.key, { title: "no" }), code("forbidden")); // the viewer role they were given
+    assert.deepEqual((await listTeams(newbie)).map((p) => p.key), [p1.key]);
+    await assert.rejects(() => requireTeam(newbie, p2.key), code("not_found"));
+    await assert.rejects(() => createIssue(newbie, p1.key, { title: "no" }), code("forbidden")); // the viewer role they were given
     const log = await pmem.listAudit(ada, { teamRef: p1.key });
     const line = log.find((a) => a.action === "team.member_added" && a.targetId === userId)!;
     assert.deepEqual([line.actorName, line.after], ["ada", { role: "viewer", via: "invite" }]);
@@ -406,7 +409,7 @@ describe("invites that carry teams", () => {
   test("an invite with no teams leaves the person in none, as before", async () => {
     const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-2@example.com` });
     const { userId } = await acceptInvite({ token: inv.token, name: "Plain", password: PW });
-    assert.deepEqual(await svc.listTeams({ kind: "human", id: userId, name: "Plain", workspaceId: ada.workspaceId }), []);
+    assert.deepEqual(await listTeams({ kind: "human", id: userId, name: "Plain", workspaceId: ada.workspaceId }), []);
   });
 
   test("you can only hand out teams you administer, never another workspace's, and at most 20", async () => {
@@ -418,11 +421,11 @@ describe("invites that carry teams", () => {
   });
 
   test("a team deleted before the invite is accepted is skipped, not an error", async () => {
-    const mine = await svc.createTeam(ada, { name: "Short lived", key: `SL${L}` });
+    const mine = await createTeam(ada, { name: "Short lived", key: `SL${L}` });
     const inv = await createInvite(issuerOf(ada, "owner"), { kind: "join_workspace", email: `new-${RUN}-7@example.com`, teams: [{ team: mine.key, role: "editor" }, { team: p1.key, role: "viewer" }] });
-    await svc.deleteTeam(ada, mine.key);
+    await deleteTeam(ada, mine.key);
     const { userId } = await acceptInvite({ token: inv.token, name: "Late", password: PW });
-    assert.deepEqual((await svc.listTeams({ kind: "human", id: userId, name: "Late", workspaceId: ada.workspaceId })).map((p) => p.key), [p1.key]);
+    assert.deepEqual((await listTeams({ kind: "human", id: userId, name: "Late", workspaceId: ada.workspaceId })).map((p) => p.key), [p1.key]);
   });
 });
 
@@ -492,13 +495,13 @@ describe("the per-team dashboard (WH-107)", () => {
     two = await team(owner, `DB${L}`);
     await addTo(owner, one.key, viewer, "viewer");
     // team one: 3 issues (one done, one in progress for 9 days, one in review for 4 days); team two: 1 urgent issue
-    const t1 = await svc.createIssue(owner, one.key, { title: "done one" });
-    const t2 = await svc.createIssue(owner, one.key, { title: "slow one", priority: "high" });
-    const t3 = await svc.createIssue(owner, one.key, { title: "waiting one" });
-    await svc.moveIssue(owner, `${one.key}-${t1.number}`, "done");
-    await svc.moveIssue(owner, `${one.key}-${t2.number}`, "in_progress");
-    await svc.moveIssue(owner, `${one.key}-${t3.number}`, "review");
-    await svc.createIssue(owner, two.key, { title: "urgent elsewhere", priority: "urgent" });
+    const t1 = await createIssue(owner, one.key, { title: "done one" });
+    const t2 = await createIssue(owner, one.key, { title: "slow one", priority: "high" });
+    const t3 = await createIssue(owner, one.key, { title: "waiting one" });
+    await moveIssue(owner, `${one.key}-${t1.number}`, "done");
+    await moveIssue(owner, `${one.key}-${t2.number}`, "in_progress");
+    await moveIssue(owner, `${one.key}-${t3.number}`, "review");
+    await createIssue(owner, two.key, { title: "urgent elsewhere", priority: "urgent" });
     // age the moves: the events say when each issue arrived in its status
     const db = await getDb();
     const moved = await db.select().from(schema.events).where(and(eq(schema.events.teamId, one.id), eq(schema.events.type, "issue.moved")));

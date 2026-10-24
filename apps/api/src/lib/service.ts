@@ -1,12 +1,9 @@
 import { ServiceError } from "../common/service-error";
 
 /**
- * The single write path for Wheelhouse. UI server actions, the REST API and the
- * MCP server all call into here, so every mutation is workspace-scoped, versioned
- * where it matters, and recorded in `events` (the activity feed + AI queue).
- *
- * The functions live in the service-* files, one per area, ready to move into
- * their modules (docs/nest-architecture.md); this file only re-exports them.
+ * The legacy barrel, kept for the MCP and v1 tool layer (tools.ts) until its redesign (docs/nest-architecture.md). Nothing else
+ * imports it: every module and test takes what it needs from the file that defines it, and modules reach each other through
+ * their index.ts. Do not add importers.
  */
 export { ServiceError };
 export * from "../platform/events/emit";

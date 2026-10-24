@@ -11,7 +11,9 @@ import { onboarding } from "@wheelhouse/shared/onboarding";
 import { minutes, rateLimit } from "../../common/rate-limit";
 import { teamRoleMap } from "../teams/index";
 import { canManagePeople, isWorkspaceRole, roleAllows } from "../../common/roles";
-import { listTeams, requireTeam, ServiceError, type Q } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { type Q } from "../../platform/database/transaction";
+import { listTeams, requireTeam } from "../teams/index";
 import type { WorkspaceRole } from "../../db/schema";
 
 /**

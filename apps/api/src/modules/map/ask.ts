@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { Actor } from "../../common/actor";
-import { getGraph, ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { getGraph } from "./graph";
 
 /**
  * "Ask about this": answers questions from the knowledge map itself (concepts,

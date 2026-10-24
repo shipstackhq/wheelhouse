@@ -22,7 +22,7 @@ import { AccountError } from "./accounts";
 import { appFailure } from "../../lib/api-errors";
 import { hashPassword, humanFromSession, startSession, type Human } from "./auth-core";
 import { InviteError, InviteFailure } from "./invites";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { AdminError } from "./workspaces-admin";
 import * as t from "./workspace-app";
 

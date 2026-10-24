@@ -23,7 +23,8 @@ import { actorForKey, SuspendedError, WORKSPACE_SUSPENDED_MESSAGE, userForSessio
 import { sha256 } from "../../common/crypto";
 import { acceptInvite, createInvite, InviteError, InviteFailure, peekInvite, type Issuer } from "./invites";
 import { AdminError, getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "./workspaces-admin";
-import * as svc from "../../lib/service";
+import { addComment, createIssue } from "../issues/issues";
+import { createTeam } from "../teams/teams";
 
 const PW = "correct horse battery";
 let n = 0;
@@ -115,9 +116,9 @@ describe("the workspaces list", () => {
 
   test("shows no workspace content: an issue's title and a comment never appear on the admin pages", async () => {
     const human = { kind: "human" as const, id: X.owner.userId, name: "o", workspaceId: X.workspaceId };
-    await svc.createTeam(human, { name: "Secret team", key: "SEC" });
-    const issue = await svc.createIssue(human, "SEC", { title: `TOP-SECRET-TITLE-${RUN}`, body: `TOP-SECRET-BODY-${RUN}` });
-    await svc.addComment(human, issue.ref, `TOP-SECRET-COMMENT-${RUN}`);
+    await createTeam(human, { name: "Secret team", key: "SEC" });
+    const issue = await createIssue(human, "SEC", { title: `TOP-SECRET-TITLE-${RUN}`, body: `TOP-SECRET-BODY-${RUN}` });
+    await addComment(human, issue.ref, `TOP-SECRET-COMMENT-${RUN}`);
     const everything = JSON.stringify([await listWorkspaces(admin), await getWorkspaceDetail(admin, X.workspaceId)]);
     assert.ok(!everything.includes("TOP-SECRET"), "metadata only");
     assert.ok(!everything.includes("Secret team"), "not even team names");

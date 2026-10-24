@@ -4,7 +4,7 @@ import { sha256 } from "../../common/crypto";
 import { randomToken } from "../../common/crypto";
 import { assertionSubject, publicKeyFromRaw, verifyAssertion } from "./daemon-crypto";
 import { rateLimit } from "../../common/rate-limit";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { type Device, TOKEN_TTL_S, str } from "./device-common";
 

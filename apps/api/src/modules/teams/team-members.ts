@@ -5,7 +5,8 @@ import type { Actor } from "../../common/actor";
 import { audit, leaveBlock, lockWorkspaceTeams, teamRoleMap, roleOnTeam, workspaceRoleOf } from "./team-access";
 import { canManagePeople } from "../../common/roles";
 import { isUuid } from "../../common/uuid";
-import { emit, findWorkspaceTeam, requireTeam, listTeams } from "../../lib/service";
+import { emit } from "../../platform/events/emit";
+import { findWorkspaceTeam, requireTeam, listTeams } from "./teams";
 import { ServiceError } from "../../common/service-error";
 
 /**

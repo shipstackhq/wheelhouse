@@ -3,7 +3,8 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import type { Scope, StreamEvent } from "../events/event-bus";
 import { visibleTeamIds } from "../../modules/teams/team-access";
-import { requireTeam, ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { requireTeam } from "../../modules/teams/index";
 
 /** What a stream listens to (`scope`, on the bus) and which rows of the log it may replay (`where`). Always the caller's own workspace. */
 export type StreamScope = {

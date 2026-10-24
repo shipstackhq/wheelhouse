@@ -3,3 +3,4 @@ export { GithubService } from "./github.service";
 export { findOrCreateRepository } from "./repositories";
 export { GithubApiError, type GithubApi } from "./api";
 export { github } from "./runtime";
+export { listRepositories } from "./repositories";

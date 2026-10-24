@@ -15,7 +15,9 @@ import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import * as svc from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
+import { createIssue } from "../issues/issues";
+import { createTeam } from "../teams/teams";
 import * as d from "./internal";
 import { GithubApiError } from "../github/api";
 import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, resetSigningKeyCache, verifyAssertion, verifyValue } from "./daemon-crypto";
@@ -42,7 +44,7 @@ before(async () => {
   teammate = await person(ws.id, "teammate");
   viewer = await person(ws.id, "viewer", "viewer");
   stranger = await person(other.id, "stranger", "owner");
-  const team = await svc.createTeam(owner, { name: "Daemon", key: "DM" });
+  const team = await createTeam(owner, { name: "Daemon", key: "DM" });
   for (const p of [teammate, viewer]) await db.insert(schema.teamMembers).values({ teamId: team.id, userId: p.id, workspaceId: ws.id, role: "editor" });
   const [repo] = await db
     .insert(schema.repositories)
@@ -93,7 +95,7 @@ async function online(device: d.Device, models = ["opus", "sonnet"]) {
 /** The parts of a job offer these tests read. */
 type Offer = { jobId: string; startFrom: string; previous: { jobId: string; state: string; summary: string | null; error: string | null } | null };
 
-const code = (c: string) => (e: unknown) => e instanceof svc.ServiceError && e.code === c;
+const code = (c: string) => (e: unknown) => e instanceof ServiceError && e.code === c;
 
 describe("canonical JSON", () => {
   test("sorts keys at every level and drops undefined, so both ends sign the same bytes", () => {
@@ -210,7 +212,7 @@ describe("devices", () => {
     await d.deviceHello(device, { version: "0.1.0", capabilities: { claude: { installed: false } }, jobs: [] });
     const [v] = (await d.listDevices(owner)).filter((x) => x.id === device.id);
     assert.deepEqual(v.models, []);
-    const issue = await svc.createIssue(owner, "DM", { title: "m" });
+    const issue = await createIssue(owner, "DM", { title: "m" });
     await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" }), code("invalid"));
   });
 });
@@ -268,7 +270,7 @@ describe("jobs", () => {
   test("run on device: a signed offer with the issue and the repository, accepted, run, and finished", async () => {
     const { device, poll } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "Fix the login page", body: "It 500s" });
+    const issue = await createIssue(owner, "DM", { title: "Fix the login page", body: "It 500s" });
     const runnable = await d.issueJobs(owner, issue.ref);
     assert.deepEqual(runnable.repositories.map((r) => [r.id, r.fullName]), [[repoId, "acme/app"]], "only the GitHub repository is runnable");
     assert.ok(runnable.devices.some((x) => x.id === device.id && x.status === "online"));
@@ -315,7 +317,7 @@ describe("jobs", () => {
       const calls: { installationId: string; repoId: string; pr: { title: string; head: string; base: string; body: string } }[] = [];
       const gh = { api: { openPullRequest: async (installationId: string, repoId: string, pr: (typeof calls)[number]["pr"]) => (calls.push({ installationId, repoId, pr }), { number: 42, url: "https://github.com/acme/app/pull/42" }) } };
       const run = async (title: string) => {
-        const issue = await svc.createIssue(owner, "DM", { title });
+        const issue = await createIssue(owner, "DM", { title });
         const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "develop" });
         await d.acceptJob(device, job.id);
         return { issue, job };
@@ -352,7 +354,7 @@ describe("jobs", () => {
 
   test("refused: an offline device, someone else's device, a model it lacks, a viewer, and another workspace", async () => {
     const { device } = await paired();
-    const issue = await svc.createIssue(owner, "DM", { title: "x" });
+    const issue = await createIssue(owner, "DM", { title: "x" });
     await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" }), code("conflict"), "offline");
     await online(device);
     await assert.rejects(d.runOnDevice(teammate, issue.ref, { deviceId: device.id, model: "opus" }), code("invalid"), "not their device");
@@ -365,7 +367,7 @@ describe("jobs", () => {
   test("a run can start from another branch; a name that is not a branch is refused", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "base" });
+    const issue = await createIssue(owner, "DM", { title: "base" });
     const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
     assert.equal(job.baseBranch, "staging");
     const db = await getDb();
@@ -379,7 +381,7 @@ describe("jobs", () => {
   test("continue: a new run on the earlier run's branch, from its commits, keeping its base, told what the last one said", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "continue me" });
+    const issue = await createIssue(owner, "DM", { title: "continue me" });
     const { job: first } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
     await d.acceptJob(device, first.id);
     await d.recordJobEvents(device, first.id, { events: [{ seq: 0, type: "started" }, { seq: 1, type: "result", data: { text: "Edited a.ts; tests still failing" } }] });
@@ -401,7 +403,7 @@ describe("jobs", () => {
     const { job: empty } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     await d.rejectJob(device, empty.id, { reason: "no_free_slot" });
     await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", continuesJobId: empty.id }), code("invalid"));
-    const other = await svc.createIssue(owner, "DM", { title: "other" });
+    const other = await createIssue(owner, "DM", { title: "other" });
     await assert.rejects(d.runOnDevice(owner, other.ref, { deviceId: device.id, model: "opus", continuesJobId: first.id }), code("invalid"));
 
     // A stopped or lost run can be continued even though it pushed nothing: the new run keeps its branch and starts from its base.
@@ -417,7 +419,7 @@ describe("jobs", () => {
   test("a fresh run starts from its base", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "fresh" });
+    const issue = await createIssue(owner, "DM", { title: "fresh" });
     const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", baseBranch: "staging" });
     assert.equal(job.continuesJobId, null);
     const db = await getDb();
@@ -430,7 +432,7 @@ describe("jobs", () => {
     const a = await paired();
     const b = await paired();
     await online(a.device);
-    const issue = await svc.createIssue(owner, "DM", { title: "y" });
+    const issue = await createIssue(owner, "DM", { title: "y" });
     const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: a.device.id, model: "opus" });
     await assert.rejects(d.acceptJob(b.device, job.id), code("not_found"));
     await assert.rejects(d.jobEvents(stranger, job.id), code("not_found"));
@@ -439,7 +441,7 @@ describe("jobs", () => {
   test("an offer nobody takes expires; a silent device's job turns unreachable, never lost; a restart that forgot a job loses it", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "z" });
+    const issue = await createIssue(owner, "DM", { title: "z" });
     const { job: offered } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     await d.sweepDeviceJobs(new Date(Date.now() + d.OFFER_TTL_MS + 1000));
     assert.equal((await d.jobEvents(owner, offered.id)).job.state, "expired");
@@ -466,7 +468,7 @@ describe("jobs", () => {
   test("an unreachable run comes back when the daemon reports it, and is lost when the daemon says it no longer has it", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "back" });
+    const issue = await createIssue(owner, "DM", { title: "back" });
     const start = async () => {
       const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
       await d.acceptJob(device, job.id);
@@ -505,7 +507,7 @@ describe("jobs", () => {
   test("marking an unreachable run lost: only unreachable, by someone who may; the device reporting it brings it back", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "mark" });
+    const issue = await createIssue(owner, "DM", { title: "mark" });
     const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     await d.acceptJob(device, job.id);
     await d.recordJobEvents(device, job.id, { events: [{ seq: 0, type: "started" }] });
@@ -543,7 +545,7 @@ describe("jobs", () => {
   test("a marked-lost run that was continued meanwhile is stopped, not revived, and keeps its result without a pull request", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "takeover" });
+    const issue = await createIssue(owner, "DM", { title: "takeover" });
     const { job: old } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     await d.acceptJob(device, old.id);
     await d.recordJobEvents(device, old.id, { events: [{ seq: 0, type: "started" }] });
@@ -577,7 +579,7 @@ describe("jobs", () => {
   test("cancel: an offer ends at once; a running job is asked to stop with a signed cancel and ends when the daemon says so", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "c" });
+    const issue = await createIssue(owner, "DM", { title: "c" });
     const { job: a } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     assert.equal((await d.cancelJob(owner, a.id)).job.state, "canceled");
 
@@ -597,7 +599,7 @@ describe("jobs", () => {
   test("a rejected offer records why", async () => {
     const { device } = await paired();
     await online(device);
-    const issue = await svc.createIssue(owner, "DM", { title: "r" });
+    const issue = await createIssue(owner, "DM", { title: "r" });
     const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
     await d.rejectJob(device, job.id, { reason: "no_free_slot" });
     const v = (await d.jobEvents(owner, job.id)).job;

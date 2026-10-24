@@ -20,7 +20,7 @@ import { getDb, schema } from "../db";
 import type { WorkspaceRole } from "../db/schema";
 import { hashPassword, humanFromSession, startSession, type Human } from "../modules/auth/auth-core";
 import { readImageAs, setAvatarAs, setWorkspaceImageAs } from "./images";
-import { ServiceError } from "./service";
+import { ServiceError } from "../common/service-error";
 import { LocalStorage, setStorage } from "../platform/storage/storage";
 
 const RUN = Math.random().toString(16).slice(2, 8);

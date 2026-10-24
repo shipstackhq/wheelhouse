@@ -1,6 +1,6 @@
 import { Controller, Inject, Get, HttpCode, Post, Req, UseGuards } from "@nestjs/common";
 import { SESSION_COOKIE } from "./auth-core";
-import { ServiceError } from "../../lib/service";
+import { ServiceError } from "../../common/service-error";
 import type { RawTextRequest } from "../../http/raw-text";
 import { cookieValue } from "../../http/util";
 import { jsonBody, str } from "../../web/body";

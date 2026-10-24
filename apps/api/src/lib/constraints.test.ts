@@ -15,7 +15,8 @@ import { eq, sql } from "drizzle-orm";
 import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 import { getDb, schema } from "../db";
 import type { Actor } from "../common/actor";
-import * as svc from "./service";
+import { createIssue } from "../modules/issues/issues";
+import { createTeam } from "../modules/teams/teams";
 
 const RUN = Math.random().toString(16).slice(2, 8);
 const L = RUN.replace(/[0-9]/g, (c) => "ghijklmnop"[Number(c)]).slice(0, 2).toUpperCase();
@@ -47,8 +48,8 @@ before(async () => {
   };
   ada = await mk(wsA, "ada");
   await mk(wsB, "bea");
-  a1 = await svc.createTeam(ada, { name: "One", key: `${L}A` });
-  a2 = await svc.createTeam(ada, { name: "Two", key: `${L}C` });
+  a1 = await createTeam(ada, { name: "One", key: `${L}A` });
+  a2 = await createTeam(ada, { name: "Two", key: `${L}C` });
 });
 
 describe("unique keys", () => {
@@ -134,7 +135,7 @@ describe("a value outside its enum is refused", () => {
   ];
   before(async () => {
     // rows for the update-style cases to act on
-    await svc.createIssue(ada, a2.key, { title: "for the priority check" });
+    await createIssue(ada, a2.key, { title: "for the priority check" });
     const [x] = await db.insert(schema.nodes).values({ teamId: a2.id, workspaceId: wsA, layer: "system", kind: "service", name: "e1" }).returning();
     const [y] = await db.insert(schema.nodes).values({ teamId: a2.id, workspaceId: wsA, layer: "system", kind: "service", name: "e2" }).returning();
     await db.insert(schema.edges).values({ teamId: a2.id, workspaceId: wsA, fromNodeId: x.id, toNodeId: y.id });
