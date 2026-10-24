@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { buildAppImports } from "./app.imports";
+import { RequestPipelineModule } from "./common/request-pipeline.module";
 import { HealthController } from "./health/health.controller";
 import { readServiceRole } from "./platform/config/service-role";
 
@@ -7,7 +8,7 @@ import { readServiceRole } from "./platform/config/service-role";
 const role = readServiceRole(process.env);
 
 @Module({
-  imports: buildAppImports(role),
+  imports: [RequestPipelineModule, ...buildAppImports(role)],
   controllers: [HealthController],
 })
 export class AppModule {}
