@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../db";
 import type { Human } from "../modules/auth/auth-core";
 import { ServiceError } from "./service";
-import { getStorage, type StoredObject } from "./storage";
+import { getStorage, type StoredObject } from "../platform/storage/storage";
 import { canManagePeople } from "../modules/teams/team-access";
 
 /** Custom pictures: a workspace's image and a person's profile picture. The bytes live in object storage (storage.ts), the key on the row. */

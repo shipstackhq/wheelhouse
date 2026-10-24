@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { LocalStorage, S3Storage, storageFromEnv } from "./storage";
-import { parseUpload, sniffImageType } from "./images";
+import { parseUpload, sniffImageType } from "../../lib/images";
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("rest")]);
 
