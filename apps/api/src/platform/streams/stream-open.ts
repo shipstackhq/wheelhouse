@@ -1,6 +1,6 @@
 import { and, asc, desc, gt } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { AuthError } from "../../modules/auth/access";
+import { AuthError } from "../../modules/auth/auth-errors";
 import type { Actor } from "../../common/actor";
 import { bus, type StreamEvent } from "../events/event-bus";
 import type { StreamScope } from "./stream-scope";

@@ -1,6 +1,4 @@
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
-import { schema, type DB } from "../../db";
 
 /** A name as an address: lowercase letters, digits and single dashes. "Babbage & Co" is "babbage-co". */
 export function slugify(name: string): string {
@@ -8,13 +6,15 @@ export function slugify(name: string): string {
   return s || "workspace";
 }
 
-/** The slug for a new workspace: the name's, with a short random suffix when another workspace already has it. */
-export async function newWorkspaceSlug(db: Pick<DB, "select">, name: string): Promise<string> {
+/**
+ * The slug for a new workspace: the name's, with a short random suffix when `taken` says another workspace already has it. `taken` is
+ * the repository's lookup, so this file stays free of the database.
+ */
+export async function newWorkspaceSlug(name: string, taken: (slug: string) => Promise<boolean>): Promise<string> {
   const base = slugify(name);
   for (let attempt = 0; attempt < 5; attempt++) {
     const slug = attempt === 0 ? base : `${base}-${crypto.randomBytes(3).toString("hex")}`;
-    const [taken] = await db.select({ id: schema.workspaces.id }).from(schema.workspaces).where(eq(schema.workspaces.slug, slug));
-    if (!taken) return slug;
+    if (!(await taken(slug))) return slug;
   }
   return `${base}-${crypto.randomUUID().replace(/-/g, "")}`;
 }

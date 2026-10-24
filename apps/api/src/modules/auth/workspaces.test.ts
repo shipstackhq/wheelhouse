@@ -14,12 +14,12 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { userWorkspaceSuspended } from "./access";
-import { currentMembership, humanFromSession, listWorkspaces, startSession, switchWorkspace } from "./auth-core";
-import { acceptInviteAsMember, createInvite, InviteError, InviteFailure, peekInviteAsMember, type Issuer } from "./invites";
+import { userWorkspaceSuspended, currentMembership, humanFromSession, listWorkspaces, startSession, switchWorkspace, acceptInviteAsMember, createInvite, peekInviteAsMember } from "./auth.legacy";
+import { InviteError, InviteFailure } from "./auth-errors";
+import type { Issuer } from "./auth.rules";
 import { ServiceError } from "../../common/service-error";
 import { createTeam, listTeams, requireTeam } from "../teams/teams.legacy";
-import * as t from "./workspace-app";
+import * as t from "./auth.legacy";
 import { testApp } from "../../test/app";
 await testApp();
 
@@ -135,7 +135,7 @@ describe("joining another workspace with the account you already have", () => {
     const proj = await createTeam(actor, { name: "Shared", key: `SH${L}` });
     const inv = await createInvite(issuer(C.id, ownerC.id), { kind: "join_workspace", email: pat.email, role: "viewer", teams: [{ team: proj.key, role: "editor" }] });
     // pat is not signed out of anything: the public flow does not apply to an existing account, the signed-in one does
-    await assert.rejects(() => import("./invites").then((m) => m.acceptInvite({ token: inv.token, name: "Pat", password: "correct horse battery" })), (e) => e instanceof InviteFailure);
+    await assert.rejects(() => import("./auth.legacy").then((m) => m.acceptInvite({ token: inv.token, name: "Pat", password: "correct horse battery" })), (e) => e instanceof InviteFailure);
     const peek = await peekInviteAsMember(pat, inv.token);
     assert.deepEqual([peek?.workspaceName, peek?.role, peek?.teams.map((p) => [p.key, p.role])], [`Gamma ${RUN}`, "viewer", [[proj.key, "editor"]]]);
     const { workspaceId } = await acceptInviteAsMember(pat, inv.token);

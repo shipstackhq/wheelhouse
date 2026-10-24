@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { bus, type StreamEvent } from "./event-bus";
-import { scopeKeyToAllTeams } from "../../modules/auth/key-scope";
+import { scopeKeyToAllTeams } from "../../modules/auth/auth.legacy";
 import { ServiceError } from "../../common/service-error";
 import { addComment, createIssue, moveIssue, updateIssue } from "../../modules/issues/issues.legacy";
 import { createTeam } from "../../modules/teams/teams.legacy";

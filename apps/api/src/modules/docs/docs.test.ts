@@ -16,7 +16,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { sha256 } from "../../common/crypto";
-import { scopeKeyToAllTeams } from "../auth/key-scope";
+import { scopeKeyToAllTeams } from "../auth/auth.legacy";
 import { ServiceError } from "../../common/service-error";
 import { getChanges, listEvents } from "../../lib/service-queue";
 import { anchorScore } from "../map/map.rules";

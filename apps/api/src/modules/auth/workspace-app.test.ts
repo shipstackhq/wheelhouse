@@ -18,13 +18,14 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { WorkspaceRole } from "../../db/schema";
-import { AccountError } from "./accounts";
+import { AccountError, AdminError, InviteError, InviteFailure } from "./auth-errors";
 import { appFailure } from "../../lib/api-errors";
-import { hashPassword, humanFromSession, startSession, type Human } from "./auth-core";
-import { InviteError, InviteFailure } from "./invites";
+import { hashPassword } from "./passwords";
+import { humanFromSession, startSession } from "./auth.legacy";
+import type { Human } from "./sessions.service";
+import { parseTags } from "./auth.rules";
 import { ServiceError } from "../../common/service-error";
-import { AdminError } from "./workspaces-admin";
-import * as t from "./workspace-app";
+import * as t from "./auth.legacy";
 import { testApp } from "../../test/app";
 await testApp();
 
@@ -70,10 +71,10 @@ const isService = (code: ServiceError["code"]) => (e: unknown) => e instanceof S
 
 describe("parseTags", () => {
   test("lower-cases, trims and drops empties, from a string or a list", () => {
-    assert.deepEqual(t.parseTags(" Backend, design ,,PM "), ["backend", "design", "pm"]);
-    assert.deepEqual(t.parseTags(["Eng", " Lead "]), ["eng", "lead"]);
-    assert.deepEqual(t.parseTags(undefined), []);
-    assert.deepEqual(t.parseTags(42), []);
+    assert.deepEqual(parseTags(" Backend, design ,,PM "), ["backend", "design", "pm"]);
+    assert.deepEqual(parseTags(["Eng", " Lead "]), ["eng", "lead"]);
+    assert.deepEqual(parseTags(undefined), []);
+    assert.deepEqual(parseTags(42), []);
   });
 });
 
@@ -156,7 +157,7 @@ describe("changing your password", () => {
     assert.deepEqual(await t.changePasswordAs(p, { current: PW, next: "another long passphrase" }), { ok: true });
     const db = await getDb();
     const [u] = await db.select().from(schema.users).where(eq(schema.users.id, p.user.id));
-    const { verifyPassword } = await import("./auth-core");
+    const { verifyPassword } = await import("./passwords");
     assert.ok(await verifyPassword("another long passphrase", u.passwordHash));
     assert.ok(!(await verifyPassword(PW, u.passwordHash)));
   });

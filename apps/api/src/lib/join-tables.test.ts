@@ -20,7 +20,8 @@ import { createIssue, deleteIssue, getBoard, getIssue, moveIssue, updateIssue } 
 import { listDecisions, upsertDecision } from "../modules/map/map.legacy";
 import { deleteNode, getGraph, upsertNode } from "../modules/map/map.legacy";
 import { createTeam, deleteTeam } from "../modules/teams/teams.legacy";
-import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember, type Issuer } from "../modules/auth/invites";
+import { createInvite, listInvites, peekInviteAsMember, acceptInviteAsMember } from "../modules/auth/auth.legacy";
+import type { Issuer } from "../modules/auth/auth.rules";
 import { testApp } from "../test/app";
 await testApp();
 

@@ -1,8 +1,9 @@
 import { Inject, Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
-import { AuthError } from "../../modules/auth/access";
-import { humanFromSession, SESSION_COOKIE, type Human } from "../../modules/auth/auth-core";
+import { AuthError } from "../../modules/auth/auth-errors";
+import { SESSION_COOKIE } from "../../modules/auth/auth-policy";
+import { humanFromSession, type Human } from "../../modules/auth/index";
 import { IS_PUBLIC } from "../decorators/public.decorator";
 import { cookieValue } from "../http/cookies";
 

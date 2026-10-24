@@ -22,17 +22,9 @@ import { beforeEach, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../apps/api/src/db";
-import {
-  acceptInvite,
-  createInvite,
-  InviteError,
-  InviteFailure,
-  listInvites,
-  peekInvite,
-  revokeInvite,
-  seatInfo,
-  type Issuer,
-} from "../apps/api/src/modules/auth/invites";
+import { InviteError, InviteFailure } from "../apps/api/src/modules/auth/auth-errors";
+import { acceptInvite, createInvite, listInvites, peekInvite, revokeInvite, seatInfo } from "../apps/api/src/modules/auth/auth.legacy";
+import type { Issuer } from "../apps/api/src/modules/auth/auth.rules";
 import { testApp } from "../apps/api/src/test/app";
 await testApp();
 

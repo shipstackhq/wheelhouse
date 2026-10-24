@@ -1,6 +1,6 @@
 import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import type { Request } from "express";
-import { SESSION_COOKIE } from "../../modules/auth/auth-core";
+import { SESSION_COOKIE } from "../../modules/auth/auth-policy";
 import { cookieValue } from "../http/cookies";
 import { checkCsrf, configuredOrigins, CSRF_HEADER, CsrfError } from "../http/csrf";
 

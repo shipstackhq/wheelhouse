@@ -19,10 +19,11 @@ import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
-import { actorForKey, SuspendedError, WORKSPACE_SUSPENDED_MESSAGE, userForSessionToken, userWorkspaceSuspended } from "./access";
+import { SuspendedError, WORKSPACE_SUSPENDED_MESSAGE, InviteError, InviteFailure, AdminError } from "./auth-errors";
+import { actorForKey, userForSessionToken, userWorkspaceSuspended, acceptInvite, createInvite, peekInvite, getWorkspaceDetail, restoreWorkspace, suspendWorkspace, adminListWorkspaces } from "./auth.legacy";
 import { sha256 } from "../../common/crypto";
-import { acceptInvite, createInvite, InviteError, InviteFailure, peekInvite, type Issuer } from "./invites";
-import { AdminError, getWorkspaceDetail, listWorkspaces, restoreWorkspace, suspendWorkspace, type Admin } from "./workspaces-admin";
+import type { Issuer } from "./auth.rules";
+import type { Admin } from "./workspaces.service";
 import { addComment, createIssue } from "../issues/issues.legacy";
 import { createTeam } from "../teams/teams.legacy";
 import { testApp } from "../../test/app";
@@ -84,7 +85,7 @@ before(async () => {
 describe("who may use the admin functions", () => {
   test("a workspace owner who is not an instance admin is refused by every function", async () => {
     const notAdmin: Admin = { userId: X.owner.userId, email: X.owner.email, workspaceId: X.workspaceId };
-    await adminError(listWorkspaces(notAdmin), "forbidden");
+    await adminError(adminListWorkspaces(notAdmin), "forbidden");
     await adminError(getWorkspaceDetail(notAdmin, Y.workspaceId), "forbidden");
     await adminError(suspendWorkspace(notAdmin, Y.workspaceId, { confirmName: Y.name }), "forbidden");
     await adminError(restoreWorkspace(notAdmin, Y.workspaceId), "forbidden");
@@ -97,7 +98,7 @@ describe("the workspaces list", () => {
     await createInvite(X.owner, { kind: "join_workspace", email: email("pend") }); // one pending invite for Acme
     const db = await getDb();
     await db.insert(schema.teams).values({ workspaceId: X.workspaceId, key: "AC", name: "Acme app" });
-    const rows = await listWorkspaces(admin);
+    const rows = await adminListWorkspaces(admin);
     const x = rows.find((t) => t.id === X.workspaceId)!;
     assert.deepEqual(
       { members: x.members, pending: x.pendingInvites, used: x.seatsUsed, teams: x.teams, suspended: !!x.suspendedAt, yours: x.isYours },
@@ -111,7 +112,7 @@ describe("the workspaces list", () => {
   test("records who invited a workspace that was started from an invite", async () => {
     const inv = await createInvite(adminIssuer, { kind: "new_workspace", email: email("founder"), workspaceName: `Founded ${RUN}` });
     const r = await acceptInvite({ token: inv.token, name: "Founder", password: PW });
-    const t = (await listWorkspaces(admin)).find((x) => x.id === r.workspaceId)!;
+    const t = (await adminListWorkspaces(admin)).find((x) => x.id === r.workspaceId)!;
     assert.deepEqual(t.invitedBy, { name: "Admin", email: ADMIN_EMAIL });
     assert.equal(t.name, `Founded ${RUN}`);
   });
@@ -121,7 +122,7 @@ describe("the workspaces list", () => {
     await createTeam(human, { name: "Secret team", key: "SEC" });
     const issue = await createIssue(human, "SEC", { title: `TOP-SECRET-TITLE-${RUN}`, body: `TOP-SECRET-BODY-${RUN}` });
     await addComment(human, issue.ref, `TOP-SECRET-COMMENT-${RUN}`);
-    const everything = JSON.stringify([await listWorkspaces(admin), await getWorkspaceDetail(admin, X.workspaceId)]);
+    const everything = JSON.stringify([await adminListWorkspaces(admin), await getWorkspaceDetail(admin, X.workspaceId)]);
     assert.ok(!everything.includes("TOP-SECRET"), "metadata only");
     assert.ok(!everything.includes("Secret team"), "not even team names");
   });
@@ -183,7 +184,7 @@ describe("suspending a workspace", () => {
     assert.ok(await userForSessionToken(Y.memberToken));
     assert.ok(await actorForKey(Y.key, "1.1.1.1"));
     assert.equal(await userWorkspaceSuspended(Y.owner.userId), false);
-    const list = await listWorkspaces(admin);
+    const list = await adminListWorkspaces(admin);
     assert.ok(list.find((x) => x.id === X.workspaceId)!.suspendedAt);
     assert.equal(list.find((x) => x.id === Y.workspaceId)!.suspendedAt, null);
   });

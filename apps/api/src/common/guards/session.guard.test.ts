@@ -1,10 +1,16 @@
+/** The guard's two rules (closed by default, @Public() opens a route). Runs on an in-memory PGlite: the session lookup goes through the booted app. */
+process.env.PGLITE_DIR = "memory://";
+delete process.env.DATABASE_URL;
+
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { Controller, Get, type ExecutionContext } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { AuthError } from "../../modules/auth/access";
+import { AuthError } from "../../modules/auth/auth-errors";
 import { Public } from "../decorators/public.decorator";
 import { SessionGuard } from "./session.guard";
+import { testApp } from "../../test/app";
+await testApp();
 
 @Controller("x")
 class Things {

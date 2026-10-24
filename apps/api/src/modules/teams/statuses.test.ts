@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
-import { scopeKeyToAllTeams } from "../auth/key-scope";
+import { scopeKeyToAllTeams } from "../auth/auth.legacy";
 import { ServiceError } from "../../common/service-error";
 import { createIssue, getBoard, getIssue, moveIssue } from "../issues/issues.legacy";
 import { createTeam, deleteTeam, requireTeam } from "./teams.legacy";

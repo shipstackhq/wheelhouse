@@ -1,7 +1,8 @@
 import { Injectable, type CanActivate, type ExecutionContext } from "@nestjs/common";
 import type { Request } from "express";
 import type { Actor } from "../actor";
-import { actorFromCredentials, SESSION_COOKIE } from "../../modules/auth/auth-core";
+import { SESSION_COOKIE } from "../../modules/auth/auth-policy";
+import { actorFromCredentials } from "../../modules/auth/index";
 import { clientIp } from "../rate-limit";
 import { cookieValue, toHeaders } from "../http/cookies";
 

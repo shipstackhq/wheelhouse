@@ -43,3 +43,8 @@ export const adminEmails = (raw = process.env.ADMIN_EMAILS) =>
     .filter(Boolean);
 
 export const isInstanceAdmin = (email: string, raw = process.env.ADMIN_EMAILS) => adminEmails(raw).includes(email.trim().toLowerCase());
+
+/** The session cookie: its value is a random token, the database holds only its sha256 (a session survives a migration). */
+export const SESSION_COOKIE = "wh_session";
+/** How long a session lasts after it starts, in days. */
+export const SESSION_DAYS = 30;

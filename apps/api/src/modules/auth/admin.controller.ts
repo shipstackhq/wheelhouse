@@ -1,10 +1,9 @@
 import { Controller, Inject, Get, HttpCode, Param, Post, Req } from "@nestjs/common";
 import { isInstanceAdmin } from "./auth-policy";
 import { ServiceError } from "../../common/service-error";
-import { type Admin } from "./workspaces-admin";
+import { type Admin, WorkspacesService } from "./workspaces.service";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
-import { AuthService } from "./auth.service";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
 import { suspendWorkspaceDto, type SuspendWorkspaceDto } from "./dto/auth.dto";
@@ -19,19 +18,19 @@ function onlyAdmins(req: SessionRequest) {
 @Controller("api/app/admin")
 @AppEndpoints()
 export class AdminController {
-  constructor(@Inject(AuthService) private readonly auth: AuthService) {}
+  constructor(@Inject(WorkspacesService) private readonly admin: WorkspacesService) {}
 
   /** Every workspace on this server: names, emails and counts only, never what a workspace wrote. */
   @Get("workspaces")
   async workspaces(@Req() req: SessionRequest) {
     onlyAdmins(req);
-    return { workspaces: await this.auth.adminListWorkspaces(adminOf(req)) };
+    return { workspaces: await this.admin.adminListWorkspaces(adminOf(req)) };
   }
 
   @Get("workspaces/:id")
   async workspace(@Req() req: SessionRequest, @Param("id") id: string) {
     onlyAdmins(req);
-    return { workspace: await this.auth.getWorkspaceDetail(adminOf(req), id) };
+    return { workspace: await this.admin.getWorkspaceDetail(adminOf(req), id) };
   }
 
   /** `{ confirm, reason? }`: the workspace's exact name must be typed. Signs its members out; reversible. */
@@ -39,14 +38,14 @@ export class AdminController {
   @HttpCode(200)
   async suspend(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody(new ZodValidationPipe(suspendWorkspaceDto)) body: SuspendWorkspaceDto) {
     onlyAdmins(req);
-    return this.auth.suspendWorkspace(adminOf(req), id, { confirmName: body.confirm, reason: body.reason });
+    return this.admin.suspendWorkspace(adminOf(req), id, { confirmName: body.confirm, reason: body.reason });
   }
 
   @Post("workspaces/:id/restore")
   @HttpCode(200)
   async restore(@Req() req: SessionRequest, @Param("id") id: string) {
     onlyAdmins(req);
-    await this.auth.restoreWorkspace(adminOf(req), id);
+    await this.admin.restoreWorkspace(adminOf(req), id);
     return { ok: true };
   }
 }
