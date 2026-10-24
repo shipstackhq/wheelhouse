@@ -1,11 +1,12 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { EventsService } from "../../platform/events/events.service";
 import { addComment, moveIssue } from "../issues/index";
-import { land } from "../map/index";
 import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./api";
 import { githubConfig } from "./config";
+import { PUSH_LANDED, type PushLanded } from "./github.events";
 import { GithubRepository } from "./github.repository";
 import { ciState, decideMove, type CheckState } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";
@@ -39,6 +40,7 @@ export class DeliveriesService {
   constructor(
     @Inject(GithubRepository) private readonly repo: GithubRepository,
     @Inject(EventsService) private readonly events: EventsService,
+    @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
   ) {}
 
   /** The host reads the body (`readBody`) so the bytes are exactly what GitHub signed. */
@@ -143,7 +145,7 @@ export class DeliveriesService {
       for (let i = 0; i < files.length || i === 0; i += LAND_CHUNK) {
         const chunk = Object.fromEntries(files.slice(i, i + LAND_CHUNK).map((f) => [f.path, f.hash]));
         if (!Object.keys(chunk).length) break;
-        await land(actor, t.team.key, { sha: after, branch, files: chunk, repository: t.repo.slug }); // map module (not converted yet): a github to map edge
+        await this.emitter.emitAsync(PUSH_LANDED, { actor, teamKey: t.team.key, sha: after, branch, files: chunk, repository: t.repo.slug } satisfies PushLanded); // the map module lands them
       }
       await this.repo.touchRepository(t.repo.id);
     }

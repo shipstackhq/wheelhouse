@@ -18,6 +18,7 @@ import { createIssue, getIssue, moveIssue } from "../issues/issues";
 import { getNode, upsertNode } from "../map/graph";
 import { createTeam, deleteTeam, requireTeam } from "../teams/teams.legacy";
 import { land } from "../map/sync";
+import { MapListeners } from "../map/map.listeners";
 import type { GithubApi } from "./api";
 import { ConnectService } from "./connect.service";
 import { DeliveriesService, GITHUB_ACTOR_ID } from "./deliveries.service";
@@ -249,6 +250,22 @@ describe("pushes", () => {
     assert.equal(first.status, "handled");
     assert.equal(again.status, "duplicate");
     assert.equal((await (await getDb()).select().from(schema.events).where(eq(schema.events.type, "code.landed"))).length, landedBefore);
+  });
+
+  test("an error in the map's listener fails the delivery (the event emitter does not swallow it), and the retry is processed", async () => {
+    const listeners = app.get(MapListeners);
+    const original = listeners.onPushLanded;
+    listeners.onPushLanded = async () => {
+      throw new Error("the map is down");
+    };
+    const id = `listener-${uniq()}`;
+    fakeGithub.state.changed = [{ path: "src/core.ts", hash: "hash-6" }];
+    try {
+      await assert.rejects(deliver("push", push(A.installation), id), /the map is down/);
+    } finally {
+      listeners.onPushLanded = original;
+    }
+    assert.equal((await deliver("push", push(A.installation), id)).status, "handled");
   });
 
   test("a delivery that fails is not remembered, so GitHub's retry gets processed", async () => {

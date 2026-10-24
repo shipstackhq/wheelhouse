@@ -1,14 +1,13 @@
 import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
-import { requestOrigin } from "../../common/http/origin";
 import { ConnectService } from "./connect.service";
 import { repositoryView } from "./github.presenter";
 import { RepositoriesService } from "./repositories.service";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import type { JsonObject } from "../../common/body";
 
-/** The repositories page, the Connect GitHub card, and the onboarding wizard. A team or repository of another workspace is a 404. */
+/** The repositories page and the Connect GitHub card. A team or repository of another workspace is a 404. */
 @Controller("api/app/teams")
 @AppEndpoints()
 export class RepositoriesController {
@@ -58,18 +57,5 @@ export class RepositoriesController {
   @Get(":key/repositories/:id/tree")
   tree(@Req() req: SessionRequest, @Param("key") key: string, @Param("id") id: string) {
     return this.repositories.browseRepoTreeAs(req.human.actor, key, id);
-  }
-
-  /** The wizard's data: the team, whether it has a repository, and the commands to paste with this team's key in them. */
-  @Get(":key/onboarding")
-  onboarding(@Req() req: SessionRequest, @Param("key") key: string) {
-    return this.repositories.onboardingPage(req.human.actor, key, requestOrigin(req));
-  }
-
-  /** `{ description }`: the "no code yet" path, a few sentences that become the map's first concept. */
-  @Post(":key/onboarding/concept")
-  @HttpCode(200)
-  concept(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
-    return this.repositories.createConceptAs(req.human.actor, key, body);
   }
 }

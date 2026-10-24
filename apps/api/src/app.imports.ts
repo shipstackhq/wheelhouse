@@ -1,4 +1,5 @@
 import type { DynamicModule, Type } from "@nestjs/common";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { LegacyApiModule } from "./legacy-api.module";
 import { DaemonModule } from "./modules/daemon/daemon.module";
 import { AuthModule } from "./modules/auth/auth.module";
@@ -14,10 +15,10 @@ import { DatabaseModule } from "./platform/database/database.module";
 import { EventsModule } from "./platform/events/events.module";
 
 /**
- * AppModule's imports for a role, a pure function so the choice is testable. The platform modules are in every role. The legacy
+ * AppModule's imports for a role, a pure function so the choice is testable. The platform modules are in every role (`EventEmitterModule.forRoot()` is registered here, once: it is global, and modules tell each other that something happened with `emitAsync` and `@OnEvent`). The legacy
  * group goes before the daemon module on purpose: /api/app routes are matched in the order modules are registered, and the devices
  * routes have always come after the rest.
  */
 export function buildAppImports(role: ServiceRole): Array<Type | DynamicModule> {
-  return [ConfigModule, DatabaseModule, EventsModule, ...(servesApi(role) ? [LegacyApiModule, TeamsModule, DocsModule, IssuesModule, MapModule, GithubModule, AuthModule, DashboardModule] : []), DaemonModule.register(role)];
+  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [LegacyApiModule, TeamsModule, DocsModule, IssuesModule, MapModule, GithubModule, AuthModule, DashboardModule] : []), DaemonModule.register(role)];
 }

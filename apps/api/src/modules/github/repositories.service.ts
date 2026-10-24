@@ -1,13 +1,13 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { onboarding } from "@wheelhouse/shared/onboarding";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import { schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { bad, oneOf, text, textOrNull } from "../../lib/web-input";
 import { EventsService } from "../../platform/events/events.service";
-import { upsertNode } from "../map/index";
 import { TeamAccessService } from "../teams/index";
+import { REPOSITORY_CHANGED, type RepositoryChanged } from "./github.events";
 import { GithubRepository, type RepositoryRow } from "./github.repository";
 import { github } from "./runtime";
 
@@ -28,15 +28,6 @@ type Body = Record<string, unknown>;
 
 export const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "repo";
 
-/** Map a repository's lifecycle to the map-node status its system node should carry. */
-export function statusForLifecycle(lifecycle: (typeof schema.REPO_LIFECYCLES)[number]): (typeof schema.nodes.$inferSelect)["status"] {
-  const map = { live: "live", being_replaced: "deprecated", planned: "planned", retired: "deprecated" } satisfies Record<
-    (typeof schema.REPO_LIFECYCLES)[number],
-    (typeof schema.nodes.$inferSelect)["status"]
-  >;
-  return map[lifecycle];
-}
-
 /**
  * A team's repositories (WH-68): linked by hand, connected through GitHub or registered by a client report; each has a system node on
  * the map. Owners manage them (see createIssue for the human/agent split used elsewhere). Also the onboarding wizard's data and its
@@ -49,18 +40,12 @@ export class RepositoriesService {
     @Inject(GithubRepository) private readonly repo: GithubRepository,
     @Inject(TeamAccessService) private readonly teams: TeamAccessService,
     @Inject(EventsService) private readonly events: EventsService,
+    @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
   ) {}
 
-  /** A repository has a system node on the map (the map module is not converted yet: a github to map edge). */
-  private async systemNode(actor: Actor, teamId: string, repo: RepositoryRow) {
-    await upsertNode(actor, teamId, {
-      name: repo.displayName,
-      layer: "system",
-      kind: "service",
-      summary: `Repository: ${repo.role}`,
-      anchors: [`${repo.slug}:**`],
-      status: statusForLifecycle(repo.lifecycle),
-    });
+  /** A repository has a system node on the map; the map module keeps it (REPOSITORY_CHANGED, see github.events.ts). */
+  private async systemNode(actor: Actor, teamId: string, repository: RepositoryRow) {
+    await this.emitter.emitAsync(REPOSITORY_CHANGED, { actor, teamId, repository } satisfies RepositoryChanged);
   }
 
   async listRepositories(actor: Actor, teamRef: string) {
@@ -184,26 +169,5 @@ export class RepositoriesService {
     if (!gh) throw new ServiceError("invalid", "GitHub is not set up on this server");
     const { files, truncated } = await gh.api.treeAt(repo.githubInstallationId, repo.githubRepoId, repo.defaultBranch || "main");
     return { files: files.map((f) => f.path), truncated };
-  }
-
-  // ───────── onboarding (belongs to the map; moves with it) ─────────
-
-  /** The wizard: the team, whether it already has a repository, and the commands to paste (with this team's key in them). */
-  async onboardingPage(actor: Actor, teamKey: string, origin: string) {
-    const team = await this.teams.require(actor, teamKey);
-    const repos = await this.repo.listRepositories(team.id);
-    return { team: { key: team.key, name: team.name }, hasRepos: repos.length > 0, setup: onboarding({ origin, teamKey }) };
-  }
-
-  /**
-   * The "no code yet" path: a few sentences about what is being built become the first concept on the map, so a team with no
-   * repository still has something there.
-   */
-  async createConceptAs(actor: Actor, teamKey: string, b: Body) {
-    const description = text(b, "description", { max: 20_000, trim: true });
-    if (!description) bad("description", "Write a few sentences about what you're building.");
-    const team = await this.teams.require(actor, teamKey, "edit");
-    await upsertNode(actor, teamKey, { name: team.name, layer: "concept", kind: "concept", summary: description!.slice(0, 200), purpose: description });
-    return { ok: true as const };
   }
 }

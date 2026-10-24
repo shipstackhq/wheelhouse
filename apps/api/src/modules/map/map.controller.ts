@@ -1,4 +1,5 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Post, Put, Query, Req } from "@nestjs/common";
+import { requestOrigin } from "../../common/http/origin";
 import { nodeView } from "./map-app";
 import { ServiceError } from "../../common/service-error";
 import { MapService } from "./map.service";
@@ -113,5 +114,18 @@ export class MapController {
   @Get(":key/activity")
   async activity(@Req() req: SessionRequest, @Param("key") key: string, @Query("who") who?: string) {
     return { events: await this.map.activityView(req.human.actor, key, who) };
+  }
+
+  /** The wizard's data: the team, whether it has a repository, and the commands to paste with this team's key in them. */
+  @Get(":key/onboarding")
+  onboarding(@Req() req: SessionRequest, @Param("key") key: string) {
+    return this.map.onboardingPage(req.human.actor, key, requestOrigin(req));
+  }
+
+  /** `{ description }`: the "no code yet" path, a few sentences that become the map's first concept. */
+  @Post(":key/onboarding/concept")
+  @HttpCode(200)
+  concept(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return this.map.createConceptAs(req.human.actor, key, body);
   }
 }

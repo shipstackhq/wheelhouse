@@ -6,3 +6,5 @@ export { DeliveriesService } from "./deliveries.service";
 export { GithubApiError, type GithubApi } from "./api";
 export { github } from "./runtime";
 export { findOrCreateRepository, listRepositories, pullRequestsForIssue } from "./github.legacy";
+export { REPOSITORY_CHANGED, PUSH_LANDED, type RepositoryChanged, type PushLanded } from "./github.events";
+export type { RepositoryRow } from "./github.repository";
