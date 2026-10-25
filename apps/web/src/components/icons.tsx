@@ -31,6 +31,9 @@ import {
   RiSubtractLine,
   RiCheckLine,
   RiCircleLine,
+  RiArchiveLine,
+  RiDeleteBinLine,
+  RiInboxUnarchiveLine,
   RiCloseLine,
   RiCodeLine,
   RiCodeSSlashLine,
@@ -141,6 +144,11 @@ const icon = (Remix: RemixiconComponentType) =>
 export const AddIcon = icon(RiAddLine);
 export const CheckIcon = icon(RiCheckLine);
 export const CloseIcon = icon(RiCloseLine);
+export const ArchiveIcon = icon(RiArchiveLine);
+export const UnarchiveIcon = icon(RiInboxUnarchiveLine);
+export const TrashIcon = icon(RiDeleteBinLine);
+/** Put a trashed item back where it was (the arrow-back glyph, as Undo uses it). */
+export const RestoreIcon = icon(RiArrowGoBackLine);
 export const EditIcon = icon(RiEditLine);
 export const MenuIcon = icon(RiMenuLine);
 export const MoreIcon = icon(RiMoreLine);

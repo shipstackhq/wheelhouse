@@ -3,6 +3,7 @@ import { useLocation } from "react-router";
 import { Breadcrumbs } from "./breadcrumbs";
 import { TeamQueueMenu } from "./team-queue-menu";
 import { PageMenu } from "./page-menu";
+import { NotificationsMenu } from "./notifications-menu";
 
 /**
  * The bar across the top of every signed-in page: where you are (breadcrumbs), and the bots menu when a team is open. On a phone it clears the sidebar's menu button, which floats at the left.
@@ -20,6 +21,7 @@ export function AppHeader({ workspaceName, teams, collapsed, onToggleCollapsed }
       </div>
       <div className="flex items-center gap-2">
         {team && <TeamQueueMenu teamKey={team.key} />}
+        <NotificationsMenu />
       </div>
     </header>
   );

@@ -64,7 +64,11 @@ export async function openStream(i: {
   const db = await getDb();
   const { scope, where, allow, recheck } = resolved;
   const body = eventStream({
-    subscribe: (fn) => bus.subscribe(scope, (e) => (!allow || allow(e)) && fn(e)),
+    // The scope's events, plus the signals addressed to this person (inbox changes), which no scope carries.
+    subscribe: (fn) => {
+      const stops = [bus.subscribe(scope, (e) => (!allow || allow(e)) && fn(e)), bus.subscribe({ user: actor.id }, fn)];
+      return () => stops.forEach((stop) => stop());
+    },
     replay: async (since, limit) =>
       (await db.select().from(schema.events).where(and(where, gt(schema.events.seq, since))).orderBy(asc(schema.events.seq)).limit(limit)).map(toStreamEvent),
     latestSeq: async () => (await db.select({ seq: schema.events.seq }).from(schema.events).where(where).orderBy(desc(schema.events.seq)).limit(1))[0]?.seq ?? 0,

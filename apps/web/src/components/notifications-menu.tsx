@@ -1,29 +1,27 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { Popover } from "radix-ui";
 import clsx from "clsx";
+import { timeAgo } from "@wheelhouse/shared/time";
+import { BELL_ITEMS, useInbox, useInboxActions, useOpenItem, useUnreadCount } from "../lib/notifications";
 import { NotificationsIcon } from "./icons";
 
-type Notification = { id: string; title: string; body: string; time: string; read: boolean };
-
-/** Placeholder content until notifications have a backend. */
-const SAMPLE: Notification[] = [
-  { id: "1", title: "Issue moved to Review", body: "An agent finished work on an issue and moved it to Review.", time: "5m ago", read: false },
-  { id: "2", title: "New comment", body: "A teammate commented on an issue you follow.", time: "1h ago", read: false },
-  { id: "3", title: "Invite accepted", body: "A teammate joined the workspace.", time: "Yesterday", read: true },
-];
-
-/** The header's notifications tray. Dummy data for now: nothing is fetched and "mark all read" only changes local state. */
+/** The header's notifications tray: the latest few inbox items, with the same unread count and actions as the Inbox page. */
 export function NotificationsMenu() {
-  const [items, setItems] = useState(SAMPLE);
-  const unread = items.filter((n) => !n.read).length;
+  const [open, setOpen] = useState(false);
+  const unread = useUnreadCount().data ?? 0;
+  const query = useInbox(false, BELL_ITEMS);
+  const { markAllRead } = useInboxActions();
+  const openItem = useOpenItem();
+  const items = query.data?.pages[0]?.items ?? [];
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
         className="btn relative h-8 w-8 !rounded-full p-0 text-base data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2"
       >
         <NotificationsIcon />
-        {unread > 0 && <span aria-hidden className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-agent" />}
+        {unread > 0 && <span aria-hidden data-testid="bell-dot" className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-agent" />}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
@@ -39,25 +37,44 @@ export function NotificationsMenu() {
             </div>
             <button
               type="button"
-              disabled={unread === 0}
-              onClick={() => setItems((l) => l.map((n) => ({ ...n, read: true })))}
+              disabled={unread === 0 || markAllRead.isPending}
+              onClick={() => markAllRead.mutate()}
               className="text-xs text-muted outline-none hover:text-fg focus-visible:text-fg disabled:opacity-50 disabled:hover:text-muted"
             >
               Mark all read
             </button>
           </div>
-          <ul className="max-h-80 divide-y divide-line overflow-y-auto">
-            {items.map((n) => (
-              <li key={n.id} className="flex gap-3 px-4 py-3">
-                <span aria-hidden className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.read ? "bg-transparent" : "bg-agent")} />
-                <div className="min-w-0">
-                  <div className={clsx("text-sm", n.read ? "text-muted" : "font-medium text-fg")}>{n.title}</div>
-                  <div className="text-xs text-muted">{n.body}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">{n.time}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {query.isError ? (
+            <p role="alert" className="px-4 py-3 text-xs text-danger">Could not load notifications.</p>
+          ) : query.isPending ? (
+            <div role="status" aria-busy="true" className="px-4 py-3 text-xs text-muted">Loading…</div>
+          ) : (
+            <ul className="max-h-80 divide-y divide-line overflow-y-auto">
+              {items.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      openItem(n);
+                    }}
+                    className="flex w-full gap-3 px-4 py-3 text-left outline-none hover:bg-panel-2 focus-visible:bg-panel-2"
+                  >
+                    <span aria-hidden className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", n.readAt ? "bg-transparent" : "bg-agent")} />
+                    <span className="min-w-0">
+                      <span className={clsx("block text-sm", n.readAt ? "text-muted" : "font-medium text-fg")}>{n.title}</span>
+                      {n.body && <span className="block truncate text-xs text-muted">{n.body}</span>}
+                      <span className="mt-0.5 block text-[11px] text-muted">{timeAgo(n.createdAt)}</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {items.length === 0 && <li className="px-4 py-3 text-xs text-muted">Nothing here yet.</li>}
+            </ul>
+          )}
+          <Link to="/inbox" onClick={() => setOpen(false)} className="block border-t border-line px-4 py-2 text-center text-xs text-muted outline-none hover:text-fg focus-visible:text-fg">
+            View all
+          </Link>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

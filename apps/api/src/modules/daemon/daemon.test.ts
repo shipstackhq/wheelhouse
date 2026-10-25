@@ -9,7 +9,7 @@ if (process.env.TEST_DATABASE_URL) {
   delete process.env.DATABASE_URL;
 }
 
-import { before, describe, test } from "node:test";
+import { before, describe, mock, test } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
@@ -28,6 +28,7 @@ import { jobDelivery } from "./daemon.presenter";
 import { OFFER_TTL_MS, UNREACHABLE_AFTER_MS, type Device } from "./device-common";
 import { GithubApiError } from "../github/api";
 import { ASSERTION_AUDIENCE, canonicalJson, publicKeyFromRaw, rawPublicKey, verifyAssertion, verifyValue } from "./daemon-crypto";
+import { NotificationsService } from "../notifications/index";
 import { testApp } from "../../test/app";
 const app = await testApp();
 const auth = app.get(DeviceAuthService);
@@ -650,5 +651,70 @@ describe("jobs", () => {
     const v = (await d.jobEvents(owner, job.id)).job;
     assert.equal(v.state, "rejected");
     assert.equal(v.error, "no_free_slot");
+  });
+});
+
+describe("run notifications", () => {
+  const inbox = app.get(NotificationsService);
+  const mine = async (who: Actor, issueId: string) =>
+    (await inbox.list({ userId: who.id, workspaceId: who.workspaceId }, { limit: 100 })).items.filter((i) => i.subjectId === issueId);
+
+  /** A run the teammate started on a new issue, taken by the device and under way. */
+  async function started() {
+    const { device } = await paired(teammate);
+    await online(device);
+    const issue = await createIssue(owner, "DM", { title: "Notify me" });
+    const { job } = await d.runOnDevice(teammate, issue.ref, { deviceId: device.id, model: "opus" });
+    await d.acceptJob(device, job.id);
+    return { device, issue, job };
+  }
+
+  test("a finished run tells the person who started it, once; the same finish again, and another person, get nothing", async () => {
+    const { device, issue, job } = await started();
+    await d.finishJob(device, job.id, { state: "succeeded" });
+    await d.finishJob(device, job.id, { state: "succeeded" });
+    const items = await mine(teammate, issue.id);
+    assert.equal(items.length, 1);
+    assert.equal(items[0].type, "run.finished");
+    assert.equal(items[0].title, `Run on ${issue.ref} finished`);
+    assert.equal(items[0].href, `/t/DM?t=${issue.ref}`);
+    assert.equal(items[0].source, "wheelhouse");
+    assert.equal(items[0].subjectEntity, "issue");
+    assert.equal(items[0].actorKind, "agent");
+    assert.equal(items[0].dedupeKey, `run.finished:${job.id}`);
+    assert.deepEqual(await mine(owner, issue.id), [], "the issue's creator did not start the run");
+  });
+
+  test("a failed run says so with its error, and a second run on the same issue is a new item", async () => {
+    const { device, issue, job } = await started();
+    await d.finishJob(device, job.id, { state: "failed", error: "tests did not pass" });
+    const second = await d.runOnDevice(teammate, issue.ref, { deviceId: device.id, model: "opus" });
+    await d.acceptJob(device, second.job.id);
+    await d.finishJob(device, second.job.id, { state: "succeeded" });
+    const items = (await mine(teammate, issue.id)).sort((a, b) => a.type.localeCompare(b.type));
+    assert.deepEqual(items.map((i) => i.type), ["run.failed", "run.finished"]);
+    assert.match(items[0].body, /tests did not pass/);
+  });
+
+  test("a canceled run says nothing", async () => {
+    const { device, issue, job } = await started();
+    await d.finishJob(device, job.id, { state: "canceled" });
+    assert.deepEqual(await mine(teammate, issue.id), []);
+  });
+
+  test("a notification that fails does not fail the finish", async () => {
+    const { device, issue, job } = await started();
+    const fail = mock.method(inbox, "notify", async () => {
+      throw new Error("inbox is down");
+    });
+    try {
+      const out = await d.finishJob(device, job.id, { state: "failed", error: "boom" });
+      assert.equal(out.job.state, "failed");
+      assert.equal(fail.mock.callCount(), 1);
+    } finally {
+      fail.mock.restore();
+    }
+    assert.equal((await d.jobEvents(owner, job.id)).job.state, "failed");
+    assert.deepEqual(await mine(teammate, issue.id), []);
   });
 });

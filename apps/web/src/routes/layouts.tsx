@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import clsx from "clsx";
-import { Navigate, Outlet, useMatches, useParams } from "react-router";
+import { Navigate, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
 import { ProfileMenu } from "../components/profile-menu";
 import { AppHeader } from "../components/app-header";
 import { PwaRegister } from "../components/pwa";
+import { InboxLiveRefresh } from "../components/inbox-live-refresh";
 import { TeamLiveRefresh } from "../components/live-refresh";
 import { PageSkeleton } from "../components/skeleton";
 import { Sidebar } from "../components/sidebar";
@@ -97,6 +98,9 @@ export function AppLayout() {
   const me = useMe().data;
   const teams = useTeams().data;
   const matches = useMatches();
+  // The dashboard and the team pages already have a stream that refreshes the inbox with everything else; the other pages open one for it.
+  const { pathname } = useLocation();
+  const hasStream = pathname === "/" || pathname.startsWith("/t/");
   useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
   const [collapsed, toggleCollapsed] = useSidebarCollapsed(); // the sidebar's rail, toggled from the header
   // The deepest route that names a width wins; a page that names none is full width.
@@ -108,6 +112,7 @@ export function AppLayout() {
     <PageMenuProvider>
       <div className="flex h-dvh">
         <NavigationProgress />
+        {!hasStream && <InboxLiveRefresh />}
         <Sidebar
           collapsed={collapsed}
           teams={teams.map((p) => ({ key: p.key, name: p.name, icon: p.icon, iconColor: p.iconColor, retired: p.retired }))}

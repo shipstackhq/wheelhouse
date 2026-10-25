@@ -8,6 +8,7 @@ import { DaemonRepository, type DeviceRow, type JobRow } from "./daemon.reposito
 import { REJECT_REASONS, cleanCapabilities } from "./daemon.rules";
 import { ACTIVE, type Device, MAX_EVENTS_PER_BATCH, MAX_EVENTS_PER_JOB, UNREACHABLE_AFTER_MS, isFinalState, str } from "./device-common";
 import { DeviceStreamService } from "./device-stream.service";
+import { RunNotifications } from "./runs.notifications";
 
 export type PullRequestOpener = { api: Pick<GithubApi, "openPullRequest"> } | null;
 
@@ -22,6 +23,7 @@ export class DeviceJobsService {
     @Inject(Database) private readonly db: Database,
     @Inject(DaemonRepository) private readonly repo: DaemonRepository,
     @Inject(DeviceStreamService) private readonly stream: DeviceStreamService,
+    @Inject(RunNotifications) private readonly notices: RunNotifications,
   ) {}
 
   // ───────── a job's row ─────────
@@ -201,6 +203,8 @@ export class DeviceJobsService {
       if (j.state === state) return { job: { id: j.id, state: j.state } }; // the same finish, sent again
       throw new ServiceError("conflict", `The job is ${j.state}`);
     }
+    // Only the finish that moved the job tells the person who started it, so a finish sent again does not (and `lost`, `canceled` say nothing).
+    if (state === "succeeded" || state === "failed") await this.notices.finished(device, row);
     // Only the finish that moved the job opens one, so a finish sent again never opens a second.
     if (!supersededBy && state === "succeeded" && result.pushed && result.commit && result.diffStats.files !== 0) await this.openJobPullRequest(row, device, gh);
     return { job: { id: row.id, state: row.state } };

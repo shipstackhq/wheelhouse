@@ -200,7 +200,7 @@ describe("loading and failing", () => {
 });
 
 describe("live updates", () => {
-  test("a team page listens to that team's stream; the dashboard listens to the workspace's; other pages to neither", async () => {
+  test("a team page listens to that team's stream; the dashboard listens to the workspace's; other pages to the workspace's too, only to keep the inbox fresh", async () => {
     const { unmount } = renderApp("/t/AA/docs");
     await screen.findByRole("button", { name: "Plan" });
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/teams/AA/stream"]));
@@ -215,6 +215,6 @@ describe("live updates", () => {
 
     renderApp("/workspace");
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
-    expect(FakeEventSource.open).toEqual([]);
+    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));
   });
 });

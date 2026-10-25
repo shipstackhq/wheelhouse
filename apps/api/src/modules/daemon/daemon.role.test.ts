@@ -10,6 +10,7 @@ import { NestFactory } from "@nestjs/core";
 import { buildAppImports } from "../../app.imports";
 import { IssuesService } from "../issues/index";
 import { RepositoriesService } from "../github/index";
+import { NotificationsService } from "../notifications/index";
 import { TeamAccessService } from "../teams/index";
 import { SessionsService } from "../auth/index";
 import { DaemonSweep } from "./daemon.sweep";
@@ -26,6 +27,8 @@ test("SERVICE_ROLE=daemon starts, resolves the machine side, and loads no other 
   const app = await NestFactory.createApplicationContext(DaemonRoleApp, { logger: false, abortOnError: false });
   try {
     for (const token of [DeviceAuthService, DeviceStreamService, DeviceJobsService, DeviceGuard, DaemonSweep]) assert.ok(app.get(token), token.name);
+    // The inbox is a leaf every role loads: finishing a run tells the person who started it.
+    assert.ok(app.get(NotificationsService, { strict: false }));
     for (const token of [TeamAccessService, IssuesService, RepositoriesService, SessionsService, DevicesService]) assert.throws(() => app.get(token, { strict: false }), token.name);
   } finally {
     await app.close();

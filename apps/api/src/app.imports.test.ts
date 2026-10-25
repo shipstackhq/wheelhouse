@@ -9,6 +9,8 @@ import { daemonControllers, daemonProviders, DaemonModule } from "./modules/daem
 import { DocsModule } from "./modules/docs/docs.module";
 import { IssuesModule } from "./modules/issues/issues.module";
 import { MapModule } from "./modules/map/map.module";
+import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { GithubModule } from "./modules/github/github.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
@@ -51,7 +53,7 @@ describe("what each SERVICE_ROLE loads", () => {
 });
 
 describe("the modules that serve people only", () => {
-  for (const [name, mod] of [["teams", TeamsModule], ["docs", DocsModule], ["issues", IssuesModule], ["map", MapModule], ["github", GithubModule], ["auth", AuthModule], ["dashboard", DashboardModule], ["images", ImagesModule], ["people's stream", StreamApiModule]] as const) {
+  for (const [name, mod] of [["teams", TeamsModule], ["docs", DocsModule], ["issues", IssuesModule], ["map", MapModule], ["github", GithubModule], ["auth", AuthModule], ["dashboard", DashboardModule], ["notifications", NotificationsModule], ["broadcasts", BroadcastsModule], ["images", ImagesModule], ["people's stream", StreamApiModule]] as const) {
     test(`${name} is in the api and all roles and not in the daemon role`, () => {
       assert.ok(buildAppImports("api").includes(mod));
       assert.ok(buildAppImports("all").includes(mod));

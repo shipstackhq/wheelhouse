@@ -96,7 +96,7 @@ export function IssueList(props: {
         </div>
       )}
       {/* Padded like the board, with each group's header a rounded bar and a little space between groups. */}
-      <div className="space-y-2 px-4 pb-8 pt-3">
+      <div className="space-y-2 px-4 pb-8">
         {props.filtered && order.length === 0 && (
           <div className="py-10 text-center text-sm text-muted">
             <p>No issues match.</p>
@@ -178,7 +178,7 @@ function GroupHeader(props: { group: IssueGroup; folded: boolean; onToggle: () =
     setTitle("");
   };
   return (
-    <div className="sticky top-0 z-10 overflow-hidden rounded-lg bg-card/95 backdrop-blur">
+    <div className="sticky top-0 z-10 overflow-hidden rounded-lg bg-panel-2/60 backdrop-blur">
       <div className="flex items-center gap-2">
         {/* The toggle fills the whole bar, so a click anywhere on it, except the add button, folds or opens the group. */}
         <button type="button" aria-expanded={!props.folded} aria-label={`${group.label}, ${count} ${count === 1 ? "issue" : "issues"}`} onClick={props.onToggle} className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-3 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50">

@@ -22,6 +22,7 @@ import { TeamOverviewPage } from "../pages/overview";
 import { TeamSettingsPage } from "../pages/team-settings";
 import { LoginPage, SignupPage } from "../pages/auth";
 import { Dashboard } from "../pages/dashboard";
+import { InboxPage } from "../pages/inbox";
 import { InvitePage } from "../pages/invite";
 import { NewTeamPage } from "../pages/new-team";
 import { WorkspacePage } from "../pages/workspace";
@@ -75,6 +76,7 @@ export function buildRoutes(services: Services): RouteObject[] {
           loader: requireSignedIn(services),
           children: [
             { index: true, Component: Dashboard, handle: { width: "contained" } satisfies PageHandle },
+            { path: "inbox", Component: InboxPage },
             { path: "teams/new", Component: NewTeamPage },
             { path: "initiatives", Component: InitiativesPage },
             { path: "initiatives/:id", Component: InitiativePage },

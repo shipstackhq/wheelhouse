@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   DndContext,
@@ -38,6 +38,7 @@ import { cycleTitle } from "../cycles/cycle-bits";
  */
 const NO_CYCLES: CycleOption[] = [];
 const NO_PROJECTS: TeamProjectOption[] = [];
+const NO_ISSUES: Issue[] = [];
 
 export function Board(props: {
   teamKey: string;
@@ -74,7 +75,7 @@ export function Board(props: {
   // ?t= is the source of truth for the open issue; a value that isn't an issue ref is ignored.
   const openRef = parseIssueParam(search.get("t"));
 
-  const refreshBoard = () => queryClient.invalidateQueries({ queryKey: ["board", teamKey] });
+  const refreshBoard = useCallback(() => queryClient.invalidateQueries({ queryKey: ["board", teamKey] }), [queryClient, teamKey]);
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {
@@ -96,12 +97,13 @@ export function Board(props: {
     return () => clearTimeout(id);
   }, [notice]);
 
-  const changeView = (colId: string, v: View) => {
+  const changeView = useCallback((colId: string, v: View) => {
     setViews((prev) => ({ ...prev, [colId]: v }));
     saveView(viewKey(colId), v);
-  };
+  }, [teamKey]);
 
   const labels = useMemo(() => [...new Set(groups.flatMap((g) => g.issues.flatMap((t) => t.labels)))].sort(), [groups]);
+  const startsById = useMemo(() => new Map(groups.map((g) => [g.id, startingFields(g.what)])), [groups]);
 
   const byId = useMemo(() => {
     const m = new Map<string, Issue>();
@@ -166,12 +168,12 @@ export function Board(props: {
     })();
   };
 
-  const openIssue = (ref: string | null) => {
+  const openIssue = useCallback((ref: string | null) => {
     const sp = new URLSearchParams(search);
     if (ref) sp.set("t", ref);
     else sp.delete("t");
     setSearch(sp, { replace: true, preventScrollReset: true });
-  };
+  }, [search, setSearch]);
 
   const active = activeId ? byId.get(activeId) : null;
 
@@ -199,14 +201,14 @@ export function Board(props: {
           </div>
         )}
         <DndContext id="board-dnd" sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
-          <div className="flex h-full gap-3 p-4">
+          <div className="flex h-full gap-3 px-4 pb-4">
             {columns.map((c) => (
               <Column
                 key={c.id}
                 col={c}
-                issues={items[c.id] ?? []}
+                issues={items[c.id] ?? NO_ISSUES}
                 view={viewOf(c.id)}
-                onViewChange={(v) => changeView(c.id, v)}
+                onViewChange={changeView}
                 members={members}
                 labels={labels}
                 cycles={cycles}
@@ -216,8 +218,8 @@ export function Board(props: {
                 selected={openRef}
                 teamKey={teamKey}
                 relations={relations}
-                starts={startingFields(groups.find((g) => g.id === c.id)!.what)}
-                onCreated={() => void refreshBoard()}
+                starts={startsById.get(c.id)!}
+                onCreated={refreshBoard}
               />
             ))}
           </div>
@@ -243,11 +245,13 @@ export function Board(props: {
   );
 }
 
-function Column(props: {
+const Column = memo(ColumnBody);
+
+function ColumnBody(props: {
   col: Col;
   issues: Issue[];
   view: View;
-  onViewChange: (v: View) => void;
+  onViewChange: (colId: string, v: View) => void;
   members: Member[];
   labels: string[];
   cycles: CycleOption[];
@@ -271,6 +275,7 @@ function Column(props: {
     [props.issues, view, pinFrom],
   );
   useEffect(() => setPinFrom(null), [view]);
+  const ids = useMemo(() => issues.map((t) => t.id), [issues]);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const submitting = useRef(false);
@@ -298,11 +303,11 @@ function Column(props: {
   };
 
   return (
-    <div className={clsx("flex w-72 shrink-0 flex-col rounded-lg bg-panel/60", isOver && "ring-1 ring-accent/40")} data-column={col.id}>
+    <div className={clsx("flex w-72 shrink-0 flex-col rounded-lg bg-panel-2/60", isOver && "ring-1 ring-accent/40")} data-column={col.id}>
       <div className="group/head flex items-center justify-between gap-2 px-3 py-2.5">
         <span className="text-sm font-medium">{col.name}</span>
         <div className="flex min-w-0 items-center gap-2">
-          <ColumnControls view={view} onChange={props.onViewChange} members={props.members} labels={props.labels} cycles={props.cycles} />
+          <ColumnControls view={view} onChange={(v) => props.onViewChange(col.id, v)} members={props.members} labels={props.labels} cycles={props.cycles} />
           <span className="shrink-0 text-xs text-muted">
             {issues.length === props.issues.length ? issues.length : `${issues.length} of ${props.issues.length}`}
           </span>
@@ -310,7 +315,7 @@ function Column(props: {
       </div>
       {view.sort && <div className="px-3 pb-1 text-[11px] text-muted">sorted by {describeSort(view)}; drag order is off</div>}
       <div ref={setNodeRef} className="flex min-h-16 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        <SortableContext items={issues.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {issues.map((t) => (
             <SortableCard key={t.id} t={t} nodes={props.nodes} cycles={props.cycles} projects={props.projects} relations={props.relations} selected={props.selected === t.ref} onOpen={props.onOpen} />
           ))}
@@ -353,7 +358,9 @@ function Column(props: {
   );
 }
 
-function SortableCard({ t, nodes, cycles, projects, relations, selected, onOpen }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected: boolean; onOpen: (ref: string) => void }) {
+const SortableCard = memo(SortableCardBody);
+
+function SortableCardBody({ t, nodes, cycles, projects, relations, selected, onOpen }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected: boolean; onOpen: (ref: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
   return (
     <div
@@ -370,7 +377,9 @@ function SortableCard({ t, nodes, cycles, projects, relations, selected, onOpen 
   );
 }
 
-function Card({ t, nodes, cycles, projects, relations, selected, overlay }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected?: boolean; overlay?: boolean }) {
+const Card = memo(CardBody);
+
+function CardBody({ t, nodes, cycles, projects, relations, selected, overlay }: { t: Issue; nodes: NodeLite[]; cycles: CycleOption[]; projects: TeamProjectOption[]; relations: Relations; selected?: boolean; overlay?: boolean }) {
   const parentRef = relations.parentRef(t);
   const progress = relations.progress(t);
   const linked = t.nodeIds.map((id) => nodes.find((n) => n.id === id)).filter(Boolean) as NodeLite[];

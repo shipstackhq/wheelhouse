@@ -52,6 +52,7 @@ export function crumbsFor(pathname: string, workspaceName: string, teams: { key:
       ? [root, teamCrumb, { label: section, to: `/t/${second}/${third}` }, { label: item }]
       : [root, teamCrumb, { label: section }];
   }
+  if (first === "inbox") return [root, { label: "Inbox" }];
   if (first === "teams" && second === "new") return [root, { label: "Teams" }, { label: "New team" }];
   if (first === "admin") {
     const page = { workspaces: "Workspaces", invites: "Invite a new workspace" }[second ?? ""];
