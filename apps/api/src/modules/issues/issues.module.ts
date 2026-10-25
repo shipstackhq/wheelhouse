@@ -5,20 +5,20 @@ import { GithubModule } from "../github/github.module";
 import { MapModule } from "../map/map.module";
 import { TeamsModule } from "../teams/teams.module";
 import { BoardController } from "./board.controller";
-import { CyclesController } from "./cycles.controller";
-import { CyclesRepository } from "./cycles.repository";
-import { CyclesService } from "./cycles.service";
-import { InitiativesController } from "./initiatives.controller";
-import { InitiativesRepository } from "./initiatives.repository";
-import { InitiativesService } from "./initiatives.service";
+import { CyclesController } from "./cycles/cycles.controller";
+import { CyclesRepository } from "./cycles/cycles.repository";
+import { CyclesService } from "./cycles/cycles.service";
+import { InitiativesController } from "./initiatives/initiatives.controller";
+import { InitiativesRepository } from "./initiatives/initiatives.repository";
+import { InitiativesService } from "./initiatives/initiatives.service";
 import { IssuesController } from "./issues.controller";
 import { bindIssuesLegacy } from "./issues.legacy";
 import { IssuesListeners } from "./issues.listeners";
 import { IssuesRepository } from "./issues.repository";
 import { IssuesService } from "./issues.service";
-import { ProjectsController } from "./projects.controller";
-import { ProjectsRepository } from "./projects.repository";
-import { ProjectsService } from "./projects.service";
+import { ProjectsController } from "./projects/projects.controller";
+import { ProjectsRepository } from "./projects/projects.repository";
+import { ProjectsService } from "./projects/projects.service";
 
 /**
  * Issues and the board, cycles, projects and initiatives around them: the person's side only (/api/app), so it is part of the api role.

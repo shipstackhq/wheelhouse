@@ -16,7 +16,7 @@ import { getDb, schema } from "../../db";
 import { AccountError, WORKSPACE_SUSPENDED_MESSAGE } from "./auth-errors";
 import { sha256 } from "../../common/crypto";
 import { logIn, signUp, endSession, startSession } from "./auth.legacy";
-import { appFailure } from "../../lib/api-errors";
+import { appFailure } from "../../common/errors/api-errors";
 import { verifyPassword } from "./passwords";
 import { resetRateLimit } from "../../common/rate-limit";
 import { testApp } from "../../test/app";

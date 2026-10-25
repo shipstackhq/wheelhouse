@@ -11,11 +11,11 @@ import { EventsService } from "../../platform/events/events.service";
 import { DeliveriesService } from "../github/index";
 import { GraphService, SessionsService } from "../map/index";
 import { TeamAccessService } from "../teams/index";
-import { CyclesService, systemActor } from "./cycles.service";
+import { CyclesService, systemActor } from "./cycles/cycles.service";
 import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
 import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, fitsDepth, parseIssueRef, positionAmong, sameLabels, type IssueInput } from "./issues.rules";
 import { issueView } from "./issues.presenter";
-import { ProjectsService } from "./projects.service";
+import { ProjectsService } from "./projects/projects.service";
 
 export type IssueWithLinks = IssueRow & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
 export type IssueRelative = { ref: string; title: string; priority: IssueRow["priority"]; status: string; done: boolean; canceled: boolean; assigneeId: string | null };

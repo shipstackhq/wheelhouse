@@ -1,7 +1,7 @@
 import { csrfToken } from "../../common/http/csrf";
 import type { WorkspaceRole } from "../../db/schema";
 import { schema } from "../../db";
-import { avatarUrl, workspaceImageUrl } from "../../lib/images";
+import { avatarUrl, workspaceImageUrl } from "../images/index";
 import { isInstanceAdmin } from "./auth-policy";
 import type { Human } from "./sessions.service";
 

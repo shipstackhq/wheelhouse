@@ -1,8 +1,8 @@
 import type { PRIORITIES } from "../../db/schema";
 import type { DeliveriesService } from "../github/index";
-import type { CycleOption } from "./cycles.service";
+import type { CycleOption } from "./cycles/cycles.service";
 import type { IssueRelative, IssueWithLinks } from "./issues.service";
-import type { TeamProjectOption } from "./projects.service";
+import type { TeamProjectOption } from "./projects/projects.service";
 import type { IssueRow } from "./issues.repository";
 
 /**

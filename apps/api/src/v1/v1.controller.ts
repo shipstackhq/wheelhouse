@@ -1,6 +1,6 @@
 import { Catch, Controller, Get, HttpCode, Param, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
-import { v1Failure } from "../lib/api-errors";
+import { v1Failure } from "../common/errors/api-errors";
 import { listToolDefs, runTool } from "../lib/tools";
 import { ActorGuard, type AuthedRequest } from "../common/guards/actor.guard";
 import type { RawTextRequest } from "../common/http/raw-text";

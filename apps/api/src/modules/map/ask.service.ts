@@ -4,7 +4,7 @@ import { onboarding } from "@wheelhouse/shared/onboarding";
 import type { Actor } from "../../common/actor";
 import { rateLimit } from "../../common/rate-limit";
 import { ServiceError } from "../../common/service-error";
-import { bad, rateLimited, text } from "../../lib/web-input";
+import { bad, rateLimited, text } from "../../common/http/web-input";
 import { listEvents } from "../../lib/service-queue";
 import { RepositoriesService } from "../github/index";
 import { TeamAccessService } from "../teams/index";

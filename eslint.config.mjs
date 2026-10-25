@@ -36,6 +36,28 @@ export default [
       ],
     },
   },
+  // The same rule for a file one folder down inside a module (auth/invites/, issues/cycles/, a module's dto/): there "../<x>" is the
+  // module's own, and a sibling module is "../../<other>/<file>".
+  {
+    files: ["apps/api/src/modules/*/*/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^\\.\\./\\.\\./(?!\\.\\./)[^/]+/(?!index(\\.[jt]sx?)?$)(?![a-z-]+\\.module(\\.[jt]sx?)?$).+",
+              message: "Import another module only through its index.ts (its public surface), never its internals.",
+            },
+            {
+              regex: "^(\\.\\./)+modules/[^/]+/(?!index(\\.[jt]sx?)?$)(?![a-z-]+\\.module(\\.[jt]sx?)?$).+",
+              message: "Import another module only through its index.ts (its public surface), never its internals.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ["apps/api/src/modules/**/*.test.ts"],
     rules: { "no-restricted-imports": "off" },

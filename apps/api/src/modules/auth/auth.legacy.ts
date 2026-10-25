@@ -1,9 +1,9 @@
 import type { Database } from "../../platform/database/database";
 import type { Q } from "../../platform/database/transaction";
-import type { InvitesService } from "./invites.service";
-import type { KeysService } from "./keys.service";
+import type { InvitesService } from "./invites/invites.service";
+import type { KeysService } from "./keys/keys.service";
 import type { SessionsService } from "./sessions.service";
-import type { WorkspacesService } from "./workspaces.service";
+import type { WorkspacesService } from "./workspaces/workspaces.service";
 
 /**
  * Temporary. Code that is not converted yet (the request guards and the stream, the other modules' tests, the module's own tests) still

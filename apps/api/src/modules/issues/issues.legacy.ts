@@ -1,9 +1,9 @@
 import type { Database } from "../../platform/database/database";
 import type { Q } from "../../platform/database/transaction";
-import type { CyclesService } from "./cycles.service";
-import type { InitiativesService } from "./initiatives.service";
+import type { CyclesService } from "./cycles/cycles.service";
+import type { InitiativesService } from "./initiatives/initiatives.service";
 import type { IssuesService } from "./issues.service";
-import type { ProjectsService } from "./projects.service";
+import type { ProjectsService } from "./projects/projects.service";
 import { issueDetailView } from "./issues.presenter";
 
 /**
@@ -67,5 +67,5 @@ export const unlinkProject = (...a: Parameters<InitiativesService["unlinkProject
 
 // the pure rules and types the tests read through the same names
 export { deriveHealth, stateOf, type IssueInput } from "./issues.rules";
-export type { CycleDetail, CycleSummary } from "./cycles.service";
-export type { ProjectDetail, ProjectRow } from "./projects.service";
+export type { CycleDetail, CycleSummary } from "./cycles/cycles.service";
+export type { ProjectDetail, ProjectRow } from "./projects/projects.service";

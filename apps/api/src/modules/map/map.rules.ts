@@ -1,6 +1,6 @@
 import * as schema from "../../db/schema";
 import { ServiceError } from "../../common/service-error";
-import { bad, finite, oneOf, text, textList, textOrNull } from "../../lib/web-input";
+import { bad, finite, oneOf, text, textList, textOrNull } from "../../common/http/web-input";
 import type { NodeRow } from "./map.repository";
 import type { Graph } from "./graph.service";
 

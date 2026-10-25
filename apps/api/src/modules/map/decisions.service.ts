@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
-import { oneOf, text, textList, textOrNull, whole } from "../../lib/web-input";
+import { oneOf, text, textList, textOrNull, whole } from "../../common/http/web-input";
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";

@@ -4,7 +4,7 @@ import type { Actor } from "../../common/actor";
 import { cleanLabels } from "../../common/labels";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
-import { bad, oneOf, text, textList, textOrNull, whole } from "../../lib/web-input";
+import { bad, oneOf, text, textList, textOrNull, whole } from "../../common/http/web-input";
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";

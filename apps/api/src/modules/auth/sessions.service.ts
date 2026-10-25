@@ -10,7 +10,7 @@ import { Database } from "../../platform/database/database";
 import { AccountError, AuthError, WORKSPACE_SUSPENDED_MESSAGE } from "./auth-errors";
 import { SESSION_DAYS, signupOpen, passwordProblem } from "./auth-policy";
 import { hashPassword, verifyPassword } from "./passwords";
-import { KeysService } from "./keys.service";
+import { KeysService } from "./keys/keys.service";
 import { emailOk, tooMany } from "./auth.rules";
 
 /** The signed-in person: their user, the workspace they work in and their membership in it, and the actor the work is done as. */

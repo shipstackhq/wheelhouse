@@ -1,7 +1,7 @@
 import { Catch, Controller, Delete, Get, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
 import { AuthError } from "../modules/auth/auth-errors";
-import { mcpAuthFailure } from "../lib/api-errors";
+import { mcpAuthFailure } from "../common/errors/api-errors";
 import { runMcp } from "../lib/mcp";
 import { ActorGuard, type AuthedRequest } from "../common/guards/actor.guard";
 import type { RawTextRequest } from "../common/http/raw-text";

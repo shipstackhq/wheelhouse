@@ -3,7 +3,7 @@ import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, or, sql } from "dri
 import { schema } from "../../db";
 import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import { Database } from "../../platform/database/database";
-import { newWorkspaceSlug } from "./workspace-slug";
+import { newWorkspaceSlug } from "./workspaces/workspace-slug";
 
 const { users, sessions, workspaces, memberships, invites, inviteTeams, apiKeys, apiKeyTeams, teams, teamMembers, auditEvents, events } = schema;
 

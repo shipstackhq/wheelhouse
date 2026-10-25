@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import { configureEnvironment } from "./config";
+import { configureEnvironment } from "./platform/config/environment";
 
 configureEnvironment(); // before the database or the libraries are first used
 

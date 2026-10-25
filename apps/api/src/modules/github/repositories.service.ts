@@ -4,7 +4,7 @@ import { schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
-import { bad, oneOf, text, textOrNull } from "../../lib/web-input";
+import { bad, oneOf, text, textOrNull } from "../../common/http/web-input";
 import { EventsService } from "../../platform/events/events.service";
 import { TeamAccessService } from "../teams/index";
 import { REPOSITORY_CHANGED, type RepositoryChanged } from "./github.events";

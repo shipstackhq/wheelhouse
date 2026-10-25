@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
-import { text, textOrNull } from "../../lib/web-input";
+import { text, textOrNull } from "../../common/http/web-input";
 import type { Human } from "../auth/index";
 import { TeamAccessService } from "../teams/index";
 import type { GithubApi } from "./api";

@@ -1,18 +1,18 @@
 import { Inject, Module, type OnModuleInit } from "@nestjs/common";
 import { Database } from "../../platform/database/database";
 import { TeamsModule } from "../teams/teams.module";
-import { AdminController } from "./admin.controller";
+import { AdminController } from "./workspaces/admin.controller";
 import { AuthController } from "./auth.controller";
 import { AuthRepository } from "./auth.repository";
 import { bindAuthLegacy } from "./auth.legacy";
-import { InvitesController } from "./invites.controller";
-import { InvitesService } from "./invites.service";
-import { KeysController } from "./keys.controller";
-import { KeysService } from "./keys.service";
+import { InvitesController } from "./invites/invites.controller";
+import { InvitesService } from "./invites/invites.service";
+import { KeysController } from "./keys/keys.controller";
+import { KeysService } from "./keys/keys.service";
 import { MeController } from "./me.controller";
 import { SessionsService } from "./sessions.service";
-import { WorkspaceController } from "./workspace.controller";
-import { WorkspacesService } from "./workspaces.service";
+import { WorkspaceController } from "./workspaces/workspace.controller";
+import { WorkspacesService } from "./workspaces/workspaces.service";
 
 /** Sign-in, the person's workspaces, members, invites, API keys and the instance admin pages: the person's side only, so it is part of the api role. */
 @Module({

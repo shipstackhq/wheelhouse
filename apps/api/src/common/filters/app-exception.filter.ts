@@ -1,6 +1,6 @@
 import { Catch, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
-import { appFailure } from "../../lib/api-errors";
+import { appFailure } from "../errors/api-errors";
 import { CsrfError } from "../http/csrf";
 
 @Catch()
