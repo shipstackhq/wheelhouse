@@ -8,6 +8,7 @@ import { StreamRegistry } from "../../platform/streams/stream.registry";
 import { requestOrigin } from "../../common/http/origin";
 import { DaemonExceptionFilter } from "./daemon-exception.filter";
 import { parseLastEventId } from "./daemon.rules";
+import { DeviceChatService } from "./device-chat.service";
 import { DeviceAuthService } from "./device-auth.service";
 import { DeviceJobsService } from "./device-jobs.service";
 import { DeviceStreamService } from "./device-stream.service";
@@ -31,6 +32,7 @@ export class DaemonController {
     @Inject(DeviceAuthService) private readonly auth: DeviceAuthService,
     @Inject(DeviceStreamService) private readonly messages: DeviceStreamService,
     @Inject(DeviceJobsService) private readonly jobs: DeviceJobsService,
+    @Inject(DeviceChatService) private readonly chat: DeviceChatService,
   ) {}
 
   /** `{ publicKey, name, os }` → the device code to poll with and the code the person types in Wheelhouse. */
@@ -116,5 +118,21 @@ export class DaemonController {
   @UseGuards(DeviceGuard)
   finish(@Req() req: DeviceRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
     return this.jobs.finishJob(req.device, id, body);
+  }
+
+  /** `{ events: [{ seq, at, type, data }] }`: an answer's progress, batched. */
+  @Post("chat/:messageId/events")
+  @HttpCode(200)
+  @UseGuards(DeviceGuard)
+  chatEvents(@Req() req: DeviceRequest, @Param("messageId") id: string, @JsonBody() body: JsonObject) {
+    return this.chat.recordChatEvents(req.device, id, body);
+  }
+
+  /** `{ state, sessionId?, text?, costUsd?, error? }`. */
+  @Post("chat/:messageId/finish")
+  @HttpCode(200)
+  @UseGuards(DeviceGuard)
+  chatFinish(@Req() req: DeviceRequest, @Param("messageId") id: string, @JsonBody() body: JsonObject) {
+    return this.chat.finishChat(req.device, id, body);
   }
 }

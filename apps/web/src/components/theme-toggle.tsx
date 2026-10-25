@@ -17,6 +17,7 @@ function readMode(): Mode {
 export function applyTheme(mode: Mode) {
   const resolved = mode === "system" ? systemTheme() : mode;
   document.documentElement.dataset.theme = resolved;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", resolved === "light" ? "#ffffff" : "#0f0f10");
   window.dispatchEvent(new CustomEvent("wheelhouse:theme", { detail: resolved }));
 }
 

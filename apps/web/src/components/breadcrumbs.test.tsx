@@ -7,7 +7,7 @@ const trail = (path: string) => crumbsFor(path, "Analytical Engines", TEAMS).map
 describe("the breadcrumb trail", () => {
   test("starts at the workspace and ends, unlinked, at the page", () => {
     expect(trail("/")).toEqual(["Analytical Engines -> /", "Home"]);
-    expect(trail("/agents")).toEqual(["Analytical Engines -> /", "Agents & API keys"]);
+    expect(trail("/api-keys")).toEqual(["Analytical Engines -> /", "API keys"]);
   });
 
   test("a team's issues page is its own address, and a section sits under the team", () => {

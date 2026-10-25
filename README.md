@@ -41,13 +41,13 @@ No database setup is needed locally. Without `DATABASE_URL`, the app uses embedd
 
 ## Connect Claude Code
 
-Create a key under **Agents & API keys**, then run:
+Create a key under **API keys**, then run:
 
 ```bash
 claude mcp add --transport http wheelhouse http://localhost:3000/mcp --header "Authorization: Bearer wh_..."
 ```
 
-The Agents page also gives you a CLAUDE.md snippet that tells the agent how to work the board.
+The API keys page also gives you a CLAUDE.md snippet that tells the agent how to work the board.
 
 ## Mapping a codebase
 

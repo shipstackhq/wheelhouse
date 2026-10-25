@@ -1,4 +1,4 @@
-import { uuid, text, timestamp, integer, jsonb, bigserial, primaryKey, index, unique, foreignKey, check, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { uuid, text, timestamp, integer, jsonb, bigserial, numeric, primaryKey, index, uniqueIndex, unique, foreignKey, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { table, createdAt, updatedAt } from "./common";
 import { teamScope } from "./team-scope";
@@ -77,7 +77,7 @@ export const deviceTokens = table(
   (t) => [index("device_tokens_device_idx").on(t.deviceId)],
 );
 
-export const DEVICE_MESSAGE_TYPES = ["job.offer", "job.cancel", "settings.update"] as const;
+export const DEVICE_MESSAGE_TYPES = ["job.offer", "job.cancel", "settings.update", "chat.message", "chat.cancel"] as const;
 
 /**
  * What the server has told a device, in order: the device's stream replays it from `Last-Event-ID`. Each message is signed with the
@@ -167,3 +167,67 @@ export const instanceKeys = table("instance_keys", {
   publicKey: text("public_key").notNull(),
   createdAt: createdAt(),
 });
+
+export const CHAT_ROLES = ["user", "assistant"] as const;
+export const CHAT_MESSAGE_STATES = ["done", "pending", "streaming", "failed", "canceled"] as const;
+export type ChatMessageState = (typeof CHAT_MESSAGE_STATES)[number];
+
+/**
+ * A person's chat about a repository, answered by their own machine (docs/chat.md). It belongs to its owner alone, and only on a device
+ * the owner has. `sessionId` is the Claude session the device reports after the first answer, resumed for the next message.
+ */
+export const chatThreads = table(
+  "chat_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    ownerId: uuid("owner_id").notNull(),
+    deviceId: uuid("device_id").notNull(),
+    repositoryId: uuid("repository_id").references(() => repositories.id, { onDelete: "set null" }),
+    model: text("model").notNull(),
+    title: text("title").notNull(),
+    sessionId: text("session_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    teamScope("chat_threads", t),
+    foreignKey({ name: "chat_threads_device_fk", columns: [t.deviceId, t.workspaceId], foreignColumns: [devices.id, devices.workspaceId] }).onDelete("cascade"),
+    foreignKey({ name: "chat_threads_owner_membership_fk", columns: [t.ownerId, t.workspaceId], foreignColumns: [memberships.userId, memberships.workspaceId] }).onDelete("cascade"),
+    index("chat_threads_owner_idx").on(t.ownerId, t.workspaceId, t.updatedAt),
+    index("chat_threads_device_idx").on(t.deviceId),
+  ],
+);
+
+/**
+ * One message of a chat: the person's question (always `done`) or the device's answer, filled in as it streams. `lastEventSeq` is the
+ * highest event number the device sent that was applied, so a batch sent again changes nothing. At most one answer per thread is
+ * `pending` or `streaming`.
+ */
+export const chatMessages = table(
+  "chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id").notNull().references(() => chatThreads.id, { onDelete: "cascade" }),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    seq: integer("seq").notNull(),
+    role: text("role", { enum: CHAT_ROLES }).notNull(),
+    content: text("content").notNull().default(""),
+    state: text("state", { enum: CHAT_MESSAGE_STATES }).notNull().default("done"),
+    error: text("error"),
+    // The latest tool calls the answer made (at most 30).
+    activity: jsonb("activity").$type<{ name: string; summary: string }[]>().notNull().default([]),
+    lastEventSeq: integer("last_event_seq").notNull().default(-1),
+    costUsd: numeric("cost_usd", { precision: 12, scale: 6 }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    teamScope("chat_messages", t),
+    unique("chat_messages_thread_seq_unique").on(t.threadId, t.seq),
+    uniqueIndex("chat_messages_one_running_idx").on(t.threadId).where(sql`"role" = 'assistant' and "state" in ('pending', 'streaming')`),
+    index("chat_messages_state_idx").on(t.state, t.updatedAt),
+  ],
+);

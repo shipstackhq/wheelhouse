@@ -1,5 +1,5 @@
 import type {
-  Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminWorkspace, AdminWorkspaceDetail, AgentsPage, DashboardWidgets, KeyView, PendingInvite, TeamMembers, SetupCommands, WorkspaceOverview } from "@wheelhouse/api-client";
+  AgentsPage, CatalogAgent, CustomAgent, Doc, DocDetail, DocsIndex, GithubStatus, OnboardingPage, Repository, AdminWorkspace, AdminWorkspaceDetail, ApiKeysPage, DashboardWidgets, KeyView, PendingInvite, TeamMembers, SetupCommands, WorkspaceOverview } from "@wheelhouse/api-client";
 
 /** Believable answers from the page endpoints, for tests to start from and bend. */
 
@@ -32,7 +32,7 @@ export const key = (over: Partial<KeyView> = {}): KeyView => ({
   ...over,
 });
 
-export const agentsPage = (keys: KeyView[] = [key()], setup: Partial<SetupCommands> = {}): AgentsPage => ({ keys, setup: { ...SETUP, ...setup } });
+export const apiKeysPage = (keys: KeyView[] = [key()], setup: Partial<SetupCommands> = {}): ApiKeysPage => ({ keys, setup: { ...SETUP, ...setup } });
 
 export const invite = (over: Partial<PendingInvite> = {}): PendingInvite => ({
   id: "i1",
@@ -216,7 +216,7 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
     items: [
       { id: "repos", label: "Repositories", done: true, status: "GitHub connected", href: `/settings/integrations/github?team=${key}` },
       { id: "machines", label: "Machines", done: true, status: "linked", href: `/t/${key}` },
-      { id: "agents", label: "Agents", done: true, status: "1 key", href: "/agents" },
+      { id: "agents", label: "Agents", done: true, status: "1 key", href: "/api-keys" },
       { id: "map", label: "Map", done: true, status: "built", href: `/t/${key}/map` },
       { id: "teammates", label: "Teammates", done: true, status: "invited", href: "/workspace" },
     ],
@@ -530,3 +530,15 @@ export const initiativeDetail = (over: Partial<InitiativeDetail> = {}): Initiati
   linkable: [],
   ...over,
 });
+
+const FACE = { style: "notionists" as const, seed: "seed" };
+export const catalogAgent = (over: Partial<CatalogAgent> = {}): CatalogAgent => ({
+  slug: "backend", name: "Bram", role: "Backend engineer", summary: "Builds server code.", avatar: FACE, color: "blue", description: "Use for server work.",
+  kind: "builder", toolProfile: "edit", model: "inherit", pathScope: [], source: "catalog", latestVersion: 1, pinnedVersion: null, version: 1, ...over,
+});
+export const customAgent = (over: Partial<CustomAgent> = {}): CustomAgent => {
+  const view = { slug: "casey", name: "Casey", role: "Support engineer", summary: "Fixes tickets.", avatar: FACE, color: "blue" as const, description: "Use for support work.", kind: "builder" as const, toolProfile: "edit" as const, model: "inherit" as const, pathScope: [] };
+  const profile = { schemaVersion: 1 as const, ...view, instructions: "Fix tickets carefully.", rules: [{ rule: "Never skip tests" }], style: { verbosity: "normal" as const, explainChanges: true }, done: ["Tests pass"], askWhen: [], skills: [], effort: null, maxTurns: null };
+  return { ...view, profile, source: "custom", teamKey: null, version: 1, createdBy: "u1", can: { edit: true, face: true }, ...over };
+};
+export const agentsPage = (over: Partial<AgentsPage> = {}): AgentsPage => ({ enabled: true, catalog: [catalogAgent()], workspace: [customAgent()], ...over });

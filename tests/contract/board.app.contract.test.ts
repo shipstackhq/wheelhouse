@@ -485,7 +485,7 @@ describe("the Bots menu's queue", () => {
     await make(t.s, { title: "Queued for the agent" });
     const before = (await app("GET", "/api/app/teams/RKT/queue", t.s)).json.bots[0];
     assert.ok(before.pending >= 1, `pending ${before.pending}`);
-    await app("POST", "/api/app/agents/mark-all-seen", t.s, { body: { keyId: before.id, teamKey: "RKT" } });
+    await app("POST", "/api/app/keys/mark-all-seen", t.s, { body: { keyId: before.id, teamKey: "RKT" } });
     assert.equal((await app("GET", "/api/app/teams/RKT/queue", t.s)).json.bots[0].pending, 0);
   });
 });

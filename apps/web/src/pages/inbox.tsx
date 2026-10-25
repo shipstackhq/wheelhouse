@@ -1,9 +1,10 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { ArchiveIcon, ChevronDownIcon, ChevronLeftIcon, FilterIcon, MailIcon, RestoreIcon, TrashIcon, UnarchiveIcon } from "../components/icons";
+import { ColumnDivider, useColumnWidth } from "../components/column-divider";
 import { Markdown } from "../components/markdown";
 import { errorText } from "../components/query-state";
 import { Skeleton } from "../components/skeleton";
@@ -75,28 +76,7 @@ function emptyText(view: InboxView, unreadOnly: boolean): { title: string; detai
   return { title: "All caught up", detail: unreadOnly ? "Nothing unread." : "Nothing has come in yet." };
 }
 
-/** The list column's width, dragged or keyed at md and up. Kept in localStorage so it survives a reload. */
-const LIST = { key: "wh:inbox:list-width", min: 280, max: 560, initial: 384, step: 16 } as const;
-
-const clampWidth = (n: number) => Math.min(LIST.max, Math.max(LIST.min, Math.round(n)));
-
-function readWidth(): number {
-  try {
-    const raw = localStorage.getItem(LIST.key);
-    if (raw !== null && raw.trim() !== "" && Number.isFinite(Number(raw))) return clampWidth(Number(raw));
-  } catch {
-    /* no storage (private mode, blocked): the default width */
-  }
-  return LIST.initial;
-}
-
-function saveWidth(width: number) {
-  try {
-    localStorage.setItem(LIST.key, String(width));
-  } catch {
-    /* no storage: the width still holds for this visit */
-  }
-}
+const LIST = { key: "wh:inbox:list-width", min: 300, max: 560, initial: 384, step: 16 };
 
 /**
  * `/inbox`: the signed-in person's notifications, newest first, as a mail reader. The list is on the left; the one picked (`?n=<id>`)
@@ -105,33 +85,7 @@ function saveWidth(width: number) {
  * At md and up the divider between the two columns can be dragged or moved with the arrow keys.
  */
 export function InboxPage() {
-  const [listWidth, setListWidth] = useState(readWidth);
-  const [dragging, setDragging] = useState(false);
-  const drag = useRef<{ x: number; width: number } | null>(null);
-  const resize = (width: number) => {
-    const next = clampWidth(width);
-    setListWidth(next);
-    saveWidth(next);
-  };
-  const onDividerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { x: e.clientX, width: listWidth };
-    setDragging(true);
-  };
-  const onDividerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (drag.current) resize(drag.current.width + e.clientX - drag.current.x);
-  };
-  const onDividerEnd = () => {
-    drag.current = null;
-    setDragging(false);
-  };
-  const onDividerKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    resize(listWidth + (e.key === "ArrowRight" ? LIST.step : -LIST.step));
-  };
-
+  const { width: listWidth, dividerProps } = useColumnWidth(LIST);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [params, setParams] = useSearchParams();
   const view = viewOf(params.get("view"));
@@ -248,22 +202,7 @@ export function InboxPage() {
         </div>
       </section>
 
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize the notification list"
-        aria-valuenow={listWidth}
-        aria-valuemin={LIST.min}
-        aria-valuemax={LIST.max}
-        tabIndex={0}
-        data-dragging={dragging || undefined}
-        onPointerDown={onDividerDown}
-        onPointerMove={onDividerMove}
-        onPointerUp={onDividerEnd}
-        onPointerCancel={onDividerEnd}
-        onKeyDown={onDividerKey}
-        className="relative hidden w-px shrink-0 cursor-col-resize touch-none bg-line outline-none before:absolute before:inset-y-0 before:-inset-x-1.5 before:content-[''] hover:bg-accent focus-visible:bg-accent data-dragging:bg-accent md:block"
-      />
+      <ColumnDivider label="Resize the notification list" {...dividerProps} />
 
       <section aria-label="Notification" className={clsx("min-w-0 flex-1 overflow-y-auto md:block", selected ? "block" : "hidden")}>
         {selected ? (

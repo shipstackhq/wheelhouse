@@ -32,8 +32,9 @@ Every table in `apps/api/src/db/schema.ts` has exactly one owner. The first cut 
 
 | Module | Tables |
 |---|---|
-| `daemon` | devices, device_pairings, device_tokens, device_messages, device_jobs, device_job_events, instance_keys |
+| `daemon` | devices, device_pairings, device_tokens, device_messages, device_jobs, device_job_events, instance_keys, chat_threads, chat_messages |
 | `teams` | teams, team_members, statuses, audit_events |
+| `agents` | workspace_agents, team_agents |
 | `issues` | issues, comments, cycles, labels, issue_labels, projects, project_teams, project_milestones, initiatives, initiative_projects; view project_visibility |
 | `map` | nodes, edges, flows, decisions, decision_nodes, terms, node_drafts, work_sessions |
 | `docs` | docs, doc_nodes, doc_drafts |

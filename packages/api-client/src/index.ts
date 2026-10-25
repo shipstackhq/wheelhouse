@@ -37,7 +37,13 @@ import type {
   AcceptInviteInput,
   AdminWorkspace,
   AdminWorkspaceDetail,
+  AgentEntry,
+  AgentProfile,
   AgentsPage,
+  CatalogAgent,
+  CatalogVersion,
+  CustomAgent,
+  ApiKeysPage,
   BoardView,
   Bot,
   CreatedInvite,
@@ -80,6 +86,10 @@ import type {
   IssuePatch,
   IssueView,
   DeviceView,
+  ChatMessageView,
+  ChatOptions,
+  ChatThreadView,
+  NewChat,
   IssueRuns,
   JobEvent,
   JobView,
@@ -284,6 +294,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<{ member: { userId: string; role: TeamRole } }>("PATCH", `${team(teamKey)}/members/${encodeURIComponent(userId)}`, { role }),
       /** Remove someone from the team, or leave it yourself. */
       removeMember: (teamKey: string, userId: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/members/${encodeURIComponent(userId)}`),
+      /** The team's agents; empty while the workspace has agents off. */
+      agents: async (teamKey: string) => (await request<{ agents: AgentEntry[] }>("GET", `${team(teamKey)}/agents`)).agents,
+      addAgent: async (teamKey: string, slug: string) => (await request<{ agent: AgentEntry }>("POST", `${team(teamKey)}/agents`, { slug })).agent,
+      removeAgent: (teamKey: string, slug: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/agents/${encodeURIComponent(slug)}`),
       /** A workspace owner or admin joins the team as its admin (audited). */
       join: (teamKey: string) => request<{ team: { id: string; key: string; name: string } }>("POST", `${team(teamKey)}/join`, {}),
       /** Team settings read: parent, children and, for each Danger zone action, whether it is allowed and why not. */
@@ -468,17 +482,31 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Owners only. `tags` as a list or a comma-separated string. */
       updateMember: async (userId: string, input: { role: Role; tags: string[] | string }) =>
         (await request<{ member: WorkspaceMember }>("PATCH", `/api/app/workspace/members/${encodeURIComponent(userId)}`, input)).member,
+      /** Workspace owners and admins: turn agents on or off for the workspace (data is kept). */
+      setAgentsEnabled: (agentsEnabled: boolean) => request<{ settings: { agentsEnabled: boolean } }>("PATCH", "/api/app/workspace/settings", { agentsEnabled }),
       removeMember: (userId: string) => request<{ ok: true }>("DELETE", `/api/app/workspace/members/${encodeURIComponent(userId)}`),
     },
 
+    /** Agents (docs/agents-plan.md): the catalog, the workspace's own agents, and the guardrails every agent is rendered with. */
     agents: {
-      /** The workspace's keys (never their values) and the commands for connecting an agent. */
-      page: () => request<AgentsPage>("GET", "/api/app/agents"),
-      /** Reset an agent's queue: one key and/or one team, or everything. */
-      markAllSeen: (input: { keyId?: string; teamKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/agents/mark-all-seen", input),
+      list: () => request<AgentsPage>("GET", "/api/app/agents"),
+      guardrails: () => request<{ version: number; text: string }>("GET", "/api/app/agents/guardrails"),
+      versions: async (slug: string) => (await request<{ versions: CatalogVersion[] }>("GET", `/api/app/agents/catalog/${encodeURIComponent(slug)}/versions`)).versions,
+      /** Workspace admins: pin a catalog agent's version, or `null` to follow the latest. */
+      pin: async (slug: string, version: number | null) => (await request<{ agent: CatalogAgent }>("PUT", `/api/app/agents/catalog/${encodeURIComponent(slug)}/pin`, { version })).agent,
+      /** A custom agent: workspace-wide, or one team's own with `teamKey`. */
+      create: async (profile: AgentProfile, teamKey?: string) => (await request<{ agent: CustomAgent }>("POST", "/api/app/agents", teamKey ? { profile, teamKey } : { profile })).agent,
+      /** Edit a custom agent: the whole profile, or only its face. */
+      update: async (slug: string, patch: { profile: AgentProfile } | { avatar: AgentProfile["avatar"] }) =>
+        (await request<{ agent: CustomAgent }>("PATCH", `/api/app/agents/${encodeURIComponent(slug)}`, patch)).agent,
+      remove: (slug: string) => request<{ ok: true }>("DELETE", `/api/app/agents/${encodeURIComponent(slug)}`),
     },
 
     keys: {
+      /** The API keys page: the workspace's keys (never their values) and the commands for connecting an agent. */
+      page: () => request<ApiKeysPage>("GET", "/api/app/keys"),
+      /** Reset an agent's queue: one key and/or one team, or everything. */
+      markAllSeen: (input: { keyId?: string; teamKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/keys/mark-all-seen", input),
       /** The secret is in this response only. `teams` are the keys of the teams it can open (teams you edit, at least one); left out, all of them. */
       create: (name: string, teams?: string[]) => request<CreatedKey>("POST", "/api/app/keys", teams ? { name, teams } : { name }),
       /** Set the teams the key can open; takes effect on its next call. */
@@ -539,6 +567,20 @@ export function createApiClient(options: ApiClientOptions = {}) {
       cancel: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/cancel`, {})).job,
       /** Mark a run that cannot be reached lost. If the device reports it after all, it comes back. */
       markLost: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/mark-lost`, {})).job,
+    },
+
+    /** Chat with the codebase: a thread with Claude on one of the person's devices, read-only over a repository. */
+    chats: {
+      options: (teamKey: string) => request<ChatOptions>("GET", `/api/app/chats/options?teamKey=${encodeURIComponent(teamKey)}`),
+      list: async () => (await request<{ chats: ChatThreadView[] }>("GET", "/api/app/chats")).chats,
+      create: (input: NewChat) => request<{ chat: ChatThreadView; messages: ChatMessageView[] }>("POST", "/api/app/chats", input),
+      get: (id: string) => request<{ chat: ChatThreadView; messages: ChatMessageView[] }>("GET", `/api/app/chats/${encodeURIComponent(id)}`),
+      /** The new question and its (pending) answer; refused with 409 while an answer is running. `model` switches the thread's model from this question on. */
+      send: async (id: string, message: string, model?: string) =>
+        (await request<{ messages: ChatMessageView[] }>("POST", `/api/app/chats/${encodeURIComponent(id)}/messages`, model ? { message, model } : { message })).messages,
+      /** Asks the device to stop the running answer. */
+      cancel: async (id: string) => (await request<{ chat: ChatThreadView }>("POST", `/api/app/chats/${encodeURIComponent(id)}/cancel`, {})).chat,
+      remove: (id: string) => request<void>("DELETE", `/api/app/chats/${encodeURIComponent(id)}`),
     },
 
     dashboard: {

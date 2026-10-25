@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import clsx from "clsx";
 import { Navigate, Outlet, useLocation, useMatches, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
@@ -84,27 +83,21 @@ export function InviteLayout() {
   );
 }
 
-/**
- * A route's `handle`: how wide its page is in the app. `full` (the default) fills the space beside the sidebar; `contained` is a
- * centred column no wider than Tailwind's 7xl.
- */
-export type PageWidth = "full" | "contained";
+/** The signed-in app: the sidebar, the header with its breadcrumbs, and whichever page the address calls for. */
+/** A route's `handle`: `fullWidth` pages fill the space beside the sidebar; the others sit in a centred column no wider than 7xl. */
 export interface PageHandle {
-  width?: PageWidth;
+  fullWidth?: boolean;
 }
 
-/** The signed-in app: the sidebar, the header with its breadcrumbs, and whichever page the address calls for. */
 export function AppLayout() {
   const me = useMe().data;
   const teams = useTeams().data;
-  const matches = useMatches();
+  const fullWidth = useMatches().some((m) => (m.handle as PageHandle | undefined)?.fullWidth);
   // The dashboard and the team pages already have a stream that refreshes the inbox with everything else; the other pages open one for it.
   const { pathname } = useLocation();
   const hasStream = pathname === "/" || pathname.startsWith("/t/");
   useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
   const [collapsed, toggleCollapsed] = useSidebarCollapsed(); // the sidebar's rail, toggled from the header
-  // The deepest route that names a width wins; a page that names none is full width.
-  const width = matches.map((m) => (m.handle as PageHandle | undefined)?.width).filter(Boolean).at(-1) ?? "full";
   // The session ended while the page was open (signed out in another tab, expired): the cache says so, go and sign in.
   if (me === null) return <Navigate to="/login" replace />;
   if (!me || !teams) return <FullPageSkeleton />;
@@ -124,7 +117,7 @@ export function AppLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
           <main className="min-h-0 flex-1 overflow-hidden">
-            <div className={clsx("h-full", width === "contained" && "mx-auto max-w-7xl")}>
+            <div className={fullWidth ? "h-full" : "mx-auto h-full max-w-7xl"}>
               <Outlet />
             </div>
           </main>

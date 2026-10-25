@@ -11,6 +11,9 @@
     "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@wheelhouse/shared": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^20",
     "tsx": "^4.23.15",

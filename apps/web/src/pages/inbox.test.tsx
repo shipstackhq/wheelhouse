@@ -214,7 +214,7 @@ describe("the inbox page", () => {
     const sep = screen.getByRole("separator", { name: "Resize the notification list" });
     expect(sep.getAttribute("aria-orientation")).toBe("vertical");
     expect(sep.getAttribute("aria-valuenow")).toBe("384");
-    expect(sep.getAttribute("aria-valuemin")).toBe("280");
+    expect(sep.getAttribute("aria-valuemin")).toBe("300");
     expect(sep.getAttribute("aria-valuemax")).toBe("560");
   });
 
@@ -237,9 +237,9 @@ describe("the inbox page", () => {
     for (let i = 0; i < 20; i++) await user.keyboard("{ArrowRight}");
     expect(sep.getAttribute("aria-valuenow")).toBe("560");
     for (let i = 0; i < 30; i++) await user.keyboard("{ArrowLeft}");
-    expect(sep.getAttribute("aria-valuenow")).toBe("280");
+    expect(sep.getAttribute("aria-valuenow")).toBe("300");
     expect(sep.previousElementSibling).toBeTruthy();
-    expect((sep.previousElementSibling as HTMLElement).style.getPropertyValue("--inbox-list-w")).toBe("280px");
+    expect((sep.previousElementSibling as HTMLElement).style.getPropertyValue("--inbox-list-w")).toBe("300px");
   });
 
   test("a stored width is restored, and an out-of-range one is clamped", async () => {

@@ -3,9 +3,9 @@ import type { ApiClient, DashboardWidgets } from "@wheelhouse/api-client";
 import { useDashboardTeam } from "./dashboard-scope";
 import { useServices } from "./services";
 
-/** What each page reads. Keys are grouped (workspace, agents, invites, admin, dashboard) so a change can refresh a whole group. */
+/** What each page reads. Keys are grouped (workspace, api-keys, invites, admin, dashboard) so a change can refresh a whole group. */
 export const workspaceQuery = (api: ApiClient) => ({ queryKey: ["workspace"] as const, queryFn: () => api.workspace.overview() });
-export const agentsQuery = (api: ApiClient) => ({ queryKey: ["agents"] as const, queryFn: () => api.agents.page() });
+export const apiKeysQuery = (api: ApiClient) => ({ queryKey: ["api-keys"] as const, queryFn: () => api.keys.page() });
 export const invitesQuery = (api: ApiClient, kind: "join_workspace" | "new_workspace") => ({ queryKey: ["invites", kind] as const, queryFn: () => api.invites.list(kind) });
 export const adminWorkspacesQuery = (api: ApiClient) => ({ queryKey: ["admin", "workspaces"] as const, queryFn: () => api.admin.workspaces() });
 export const adminWorkspaceQuery = (api: ApiClient, id: string) => ({ queryKey: ["admin", "workspace", id] as const, queryFn: () => api.admin.workspace(id) });
@@ -15,7 +15,7 @@ export const widgetQuery = <W extends keyof DashboardWidgets>(api: ApiClient, wi
 });
 
 export const useWorkspace = () => useQuery(workspaceQuery(useServices().api));
-export const useAgentsPage = () => useQuery(agentsQuery(useServices().api));
+export const useApiKeysPage = () => useQuery(apiKeysQuery(useServices().api));
 export const useInvites = (kind: "join_workspace" | "new_workspace") => useQuery(invitesQuery(useServices().api, kind));
 export const useAdminWorkspaces = () => useQuery(adminWorkspacesQuery(useServices().api));
 export const useAdminWorkspace = (id: string) => useQuery(adminWorkspaceQuery(useServices().api, id));
@@ -88,3 +88,16 @@ export const runBranchesQuery = (api: ApiClient, ref: string, repositoryId: stri
 });
 export const runEventsQuery = (api: ApiClient, id: string) => ({ queryKey: ["run", id] as const, queryFn: () => api.runs.events(id) });
 export const useDevices = () => useQuery(devicesQuery(useServices().api));
+
+/** Chat with the codebase: the person's threads, one thread with its messages, and what a new chat can use. Threads share the "chats" key so the live signal refreshes them all. */
+export const chatsQuery = (api: ApiClient) => ({ queryKey: ["chats"] as const, queryFn: () => api.chats.list() });
+export const chatQuery = (api: ApiClient, id: string) => ({ queryKey: ["chats", id] as const, queryFn: () => api.chats.get(id) });
+export const chatOptionsQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["chat-options", teamKey] as const, queryFn: () => api.chats.options(teamKey) });
+export const useChats = () => useQuery(chatsQuery(useServices().api));
+
+/** Agents (docs/agents-plan.md): the catalog and the workspace's own, the guardrails, a catalog agent's versions, and a team's roster. */
+export const agentsQuery = (api: ApiClient) => ({ queryKey: ["agents"] as const, queryFn: () => api.agents.list() });
+export const guardrailsQuery = (api: ApiClient) => ({ queryKey: ["agents", "guardrails"] as const, queryFn: () => api.agents.guardrails() });
+export const agentVersionsQuery = (api: ApiClient, slug: string) => ({ queryKey: ["agents", "versions", slug] as const, queryFn: () => api.agents.versions(slug) });
+export const teamAgentsQuery = (api: ApiClient, teamKey: string) => ({ queryKey: ["agents", "team", teamKey] as const, queryFn: () => api.teams.agents(teamKey) });
+export const useAgents = () => useQuery(agentsQuery(useServices().api));

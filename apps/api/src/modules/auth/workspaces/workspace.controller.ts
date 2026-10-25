@@ -5,7 +5,7 @@ import { type SessionRequest } from "../../../common/guards/session.guard";
 import { WorkspacesService } from "./workspaces.service";
 import { JsonBody } from "../../../common/decorators/json-body.decorator";
 import { ZodValidationPipe } from "../../../common/pipes/zod-validation.pipe";
-import { updateMemberDto, type UpdateMemberDto } from "../dto/auth.dto";
+import { updateMemberDto, updateSettingsDto, type UpdateMemberDto, type UpdateSettingsDto } from "../dto/auth.dto";
 
 @Controller("api/app/workspace")
 @AppEndpoints()
@@ -16,6 +16,12 @@ export class WorkspaceController {
   @Get()
   overview(@Req() req: SessionRequest) {
     return this.workspaces.workspaceOverview(req.human);
+  }
+
+  /** `{ agentsEnabled? }`: workspace settings. Owners and admins only (403 otherwise). Answers the settings. */
+  @Patch("settings")
+  async settings(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(updateSettingsDto)) body: UpdateSettingsDto) {
+    return { settings: await this.workspaces.updateSettingsAs(req.human, body) };
   }
 
   /** Owners change a member's role and tags: `{ role, tags }` (tags as a list or a comma-separated string). */

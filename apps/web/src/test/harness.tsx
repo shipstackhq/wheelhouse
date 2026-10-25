@@ -3,7 +3,7 @@ import { createMemoryRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { createApiClient, type Me, type Team } from "@wheelhouse/api-client";
 import { createServices, ServicesProvider } from "../lib/services";
-import { activityEvent, adminWorkspace, adminWorkspaceDetail, agentsPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, teamMembers, statusSettings, repo, serveWidgets, workspace } from "./data";
+import { activityEvent, agentsPage, adminWorkspace, adminWorkspaceDetail, apiKeysPage, board, docDetail, DOCS, docsIndex, githubStatus, graph, onboardingPage, teamMembers, statusSettings, repo, serveWidgets, workspace } from "./data";
 import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
@@ -80,7 +80,9 @@ export class FakeServer {
 export function serverWithData() {
   const server = new FakeServer();
   server.on("GET /api/app/workspace", workspace());
+  server.on("GET /api/app/keys", apiKeysPage());
   server.on("GET /api/app/agents", agentsPage());
+  server.on("GET /api/app/agents/guardrails", { version: 1, text: "Stay inside the task." });
   server.on("GET /api/app/invites", { invites: [] });
   server.on("GET /api/app/notifications", { items: [], nextCursor: null });
   server.on("GET /api/app/notifications/unread-count", { count: 0 });

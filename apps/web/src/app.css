@@ -216,3 +216,16 @@ body {
 .react-flow.connecting .react-flow__node-table .erd-handle {
   opacity: 0.85;
 }
+
+/* Installed PWA only (windowed or full screen): a hairline between the window's title bar and the page. Fixed, so it takes no layout space. */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: var(--border);
+    z-index: 100;
+    pointer-events: none;
+  }
+}

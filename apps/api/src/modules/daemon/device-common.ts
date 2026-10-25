@@ -25,3 +25,11 @@ export const isFinalState = (s: DeviceJobState) => FINAL.includes(s);
 export type Device = typeof schema.devices.$inferSelect;
 
 export const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** A chat answer no event has started by this long after it was sent is failed; one that then goes quiet this long is too. */
+export const CHAT_PENDING_MS = 60_000;
+export const CHAT_QUIET_MS = 3 * 60_000;
+/** The latest tool calls an answer keeps, and the most characters of one answer. */
+export const CHAT_ACTIVITY_MAX = 30;
+export const CHAT_CONTENT_MAX = 400_000;
+export const CHAT_MESSAGE_MAX = 8_000;

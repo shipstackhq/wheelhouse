@@ -65,7 +65,7 @@ export function KpiRow() {
       {team ? (
         <StatTile label="Agents active" value={s.agentsActive7d} hint="changed something in 7 days" />
       ) : (
-        <StatTile label="Agents connected" value={s.agents} hint="active API keys" href="/agents" />
+        <StatTile label="Agents connected" value={s.agents} hint="active API keys" href="/api-keys" />
       )}
     </div>
   );
@@ -166,10 +166,10 @@ export function AgentQueues() {
   if (q.isError) return <Failed title="Agents" query={q} />;
   const agents = q.data;
   return (
-    <Widget title="Agents" subtitle="Changes each agent hasn't picked up yet" action={<Link to="/agents" className="text-xs text-muted hover:text-fg">Manage <ArrowRightIcon /></Link>}>
+    <Widget title="Agents" subtitle="Changes each agent hasn't picked up yet" action={<Link to="/api-keys" className="text-xs text-muted hover:text-fg">Manage <ArrowRightIcon /></Link>}>
       {agents.length === 0 ? (
         <Empty>
-          No agents connected. <Link className="text-accent" to="/agents">Create an API key</Link>.
+          No agents connected. <Link className="text-accent" to="/api-keys">Create an API key</Link>.
         </Empty>
       ) : (
         <List inset="card" className="text-sm">
@@ -218,7 +218,7 @@ export function AgentQueues() {
                     </Tip>
                     <form
                       action={async () => {
-                        await api.agents.markAllSeen({ keyId: a.id });
+                        await api.keys.markAllSeen({ keyId: a.id });
                         await refreshAll(queryClient);
                       }}
                     >

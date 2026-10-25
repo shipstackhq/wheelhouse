@@ -21,7 +21,7 @@ import {
 } from "../../lib/issue-view";
 
 const PANEL = "z-50 max-h-[26rem] overflow-y-auto rounded-lg border border-line bg-panel text-sm text-fg shadow-xl";
-const TRIGGER = "btn h-[34px] gap-1.5 !rounded-full !border-transparent !bg-card py-0 text-xs data-[state=open]:!border-transparent data-[state=open]:!bg-card";
+const TRIGGER = "btn h-[34px] gap-1.5 !rounded-full !border-transparent !bg-panel-2 py-0 text-xs data-[state=open]:!border-transparent data-[state=open]:!bg-panel-2";
 const ROW = "flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 hover:bg-panel-2";
 
 /**
@@ -77,7 +77,7 @@ export function IssueViewBar(props: { view: IssueView; onChange: (v: IssueView) 
       <div className="relative w-full min-w-48 max-w-xs sm:w-72">
         <input
           type="search"
-          className="input !h-[34px] !rounded-full !border-transparent !bg-card !py-0 !pl-9 text-sm focus:!border-transparent"
+          className="input !h-[34px] !rounded-full !border-transparent !bg-panel-2 !py-0 !pl-9 text-sm focus:!border-transparent"
           placeholder="Search issues"
           aria-label="Search issues"
           value={view.search}

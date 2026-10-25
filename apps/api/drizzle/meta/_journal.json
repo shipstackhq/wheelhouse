@@ -316,6 +316,20 @@
       "when": 1792899172414,
       "tag": "0044_broadcasts",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792901014130,
+      "tag": "0045_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792955830832,
+      "tag": "0046_agents",
+      "breakpoints": true
     }
   ]
 }

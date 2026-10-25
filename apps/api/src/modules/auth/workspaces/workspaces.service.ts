@@ -60,7 +60,7 @@ export class WorkspacesService {
     const rows = await this.repo.membersOf(h.workspace.id);
     const pendingInvites = canManagePeople(h.membership.role) ? (await this.invites.listInvites(issuerOf(h))).filter((i) => i.kind === "join_workspace") : [];
     return {
-      workspace: { id: h.workspace.id, name: h.workspace.name },
+      workspace: { id: h.workspace.id, name: h.workspace.name, agentsEnabled: h.workspace.settings.agentsEnabled !== false },
       role: h.membership.role,
       members: rows.map(({ user: u, m }) => memberView(u, m)),
       seats: await this.invites.seatInfo(h.workspace.id),
@@ -126,6 +126,12 @@ export class WorkspacesService {
       });
       return true;
     });
+  }
+
+  /** Owners and admins change workspace settings: `{ agentsEnabled }`. Answers the settings. */
+  async updateSettingsAs(h: Human, input: { agentsEnabled?: boolean }) {
+    requireManager(h.membership.role);
+    return this.repo.mergeSettings(h.workspace.id, input);
   }
 
   /** Owners and admins change a member's role and tags; only an owner can make or unmake an owner. The last owner cannot be demoted. */

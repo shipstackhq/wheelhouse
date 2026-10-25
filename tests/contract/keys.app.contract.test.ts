@@ -27,13 +27,13 @@ before(async () => {
 });
 
 describe("choosing a key's teams", () => {
-  test("a key is made for the teams you pick; left out, it gets every team you can edit; the Agents page lists them", async () => {
+  test("a key is made for the teams you pick; left out, it gets every team you can edit; the API keys page lists them", async () => {
     const narrow = await makeKey({ teams: [t1] });
     assert.equal(narrow.status, 201, narrow.text);
     assert.deepEqual((narrow.json.key as Key).teams.map((t) => t.key), [t1]);
     const wide = await makeKey({});
     assert.deepEqual((wide.json.key as Key).teams.map((t) => t.key).sort(), [t1, t2].sort());
-    const page = (await app("GET", "/api/app/agents", owner)).json.keys as Key[];
+    const page = (await app("GET", "/api/app/keys", owner)).json.keys as Key[];
     assert.deepEqual(page.find((x) => x.id === narrow.json.key.id)!.teams.map((t) => t.key), [t1]);
   });
 

@@ -48,3 +48,7 @@ export type AcceptInviteDto = z.infer<typeof acceptInviteDto>;
 /** `{ role, tags }`: change a workspace member. */
 export const updateMemberDto = z.object({ role: anything, tags: anything });
 export type UpdateMemberDto = z.infer<typeof updateMemberDto>;
+
+/** `{ agentsEnabled? }`: workspace settings. */
+export const updateSettingsDto = z.object({ agentsEnabled: z.boolean().optional() });
+export type UpdateSettingsDto = z.infer<typeof updateSettingsDto>;

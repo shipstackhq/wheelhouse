@@ -38,8 +38,8 @@ describe("what the sidebar shows", () => {
     const order = [...nav().querySelectorAll("a, button")].map((a) => a.textContent ?? "");
     expect(order.indexOf("Initiatives")).toBeLessThan(order.indexOf("Projects"));
     expect(order.indexOf("Projects")).toBeLessThan(order.indexOf("Members"));
-    expect(order.indexOf("Members")).toBeLessThan(order.indexOf("Agents & API keys"));
-    expect(order.indexOf("Agents & API keys")).toBeLessThan(order.findIndex((t) => t.startsWith("Alpha"))); // the whole Workspace group is above the teams
+    expect(order.indexOf("Members")).toBeLessThan(order.indexOf("API keys"));
+    expect(order.indexOf("API keys")).toBeLessThan(order.findIndex((t) => t.startsWith("Alpha"))); // the whole Workspace group is above the teams
     expect(screen.getByRole("button", { name: /^Workspace menu/ }).getAttribute("title")).toBe("Analytical Engines");
   });
 
@@ -115,7 +115,7 @@ describe("what the sidebar shows", () => {
   test("a team's sections are grouped under it, with the current one marked and Issues only on the exact address", () => {
     renderIn(sidebar(), "/t/AA/docs");
     const links = Object.fromEntries(within(nav()).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]));
-    expect(links).toMatchObject({ Home: "/", Issues: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "Agents & API keys": "/agents" });
+    expect(links).toMatchObject({ Home: "/", Issues: "/t/AA", Activity: "/t/AA/activity", Map: "/t/AA/map", Docs: "/t/AA/docs", Decisions: "/t/AA/decisions", Glossary: "/t/AA/glossary", "Team members": "/t/AA/members", "Team settings": "/t/AA/settings", Members: "/workspace", "API keys": "/api-keys" });
     expect(within(nav()).getByRole("link", { name: "Docs" }).classList.contains("bg-panel-2")).toBe(true);
     expect(within(nav()).getByRole("link", { name: "Issues" }).classList.contains("bg-panel-2")).toBe(false);
     expect(screen.getByRole("button", { name: /^Workspace menu/ })).toBeTruthy();
@@ -277,7 +277,7 @@ describe("icons: the place you are on is solid, the others are outline", () => {
     renderIn(sidebar({ isAdmin: true }), "/t/AA/docs");
     const expected: Record<string, keyof typeof NAV_ICONS> = {
       Home: "home", Overview: "overview", Issues: "issues", Activity: "activity", Map: "map", Docs: "docs", Decisions: "decisions", Glossary: "glossary",
-      "Team members": "teamMembers", "Team settings": "teamSettings", Members: "people", "Agents & API keys": "agents", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
+      "Team members": "teamMembers", "Team settings": "teamSettings", Members: "people", "API keys": "apiKeys", Workspaces: "workspaces", "Invite a new workspace": "inviteWorkspace",
     };
     for (const [label, key] of Object.entries(expected)) {
       const link = within(nav()).getByRole("link", { name: label });
@@ -391,7 +391,7 @@ describe("collapsing to the icon-only rail", () => {
   test("the sections, workspace and admin links all keep working when collapsed", () => {
     localStorage.setItem("wh:sidebar-collapsed", "1");
     renderIn(sidebar({ isAdmin: true }), "/t/AA");
-    for (const [name, href] of [["Home", "/"], ["Overview", "/t/AA/overview"], ["Map", "/t/AA/map"], ["Members", "/workspace"], ["Agents & API keys", "/agents"], ["Workspaces", "/admin/workspaces"], ["Invite a new workspace", "/admin/invites"]]) {
+    for (const [name, href] of [["Home", "/"], ["Overview", "/t/AA/overview"], ["Map", "/t/AA/map"], ["Members", "/workspace"], ["API keys", "/api-keys"], ["Workspaces", "/admin/workspaces"], ["Invite a new workspace", "/admin/invites"]]) {
       expect(within(nav()).getByRole("link", { name }).getAttribute("href")).toBe(href);
     }
   });

@@ -14,7 +14,7 @@ describe("the Bots menu in the team header", () => {
     expect(t.getAttribute("title")).toBe("No bots connected");
     await userEvent.setup().click(t);
     expect(await screen.findByText("No agents connected yet.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Create an API key" }).getAttribute("href")).toBe("/agents");
+    expect(screen.getByRole("link", { name: "Create an API key" }).getAttribute("href")).toBe("/api-keys");
   });
 
   test("with a queue it shows the total, and in the menu who is behind", async () => {
@@ -27,7 +27,7 @@ describe("the Bots menu in the team header", () => {
     const list = screen.getByText("Ada's agent").closest("li") as HTMLElement;
     expect(within(list).getByText("3 queued")).toBeTruthy();
     expect((screen.getByText("CI bot").closest("li") as HTMLElement).textContent).toContain("in sync");
-    expect(screen.getByRole("link", { name: "Manage agents & API keys" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Manage API keys" })).toBeTruthy();
   });
 
   test("when everyone is caught up it says all in sync", async () => {
@@ -40,14 +40,14 @@ describe("the Bots menu in the team header", () => {
   test("'mark all seen' resets that agent's queue in this team only, and reads the queue again", async () => {
     const { server } = renderApp("/t/AA", (s) => {
       queue([bot({ id: "k1", name: "Ada's agent", pending: 2 })])(s);
-      s.on("POST /api/app/agents/mark-all-seen", { ok: true });
+      s.on("POST /api/app/keys/mark-all-seen", { ok: true });
     });
     const user = userEvent.setup();
     await user.click(await trigger(/^Bots: 2 queued/));
     const row = (await screen.findByText("Ada's agent")).closest("li") as HTMLElement;
     await user.click(within(row).getByRole("button", { name: "mark all seen" }));
-    await waitFor(() => expect(server.sent("POST /api/app/agents/mark-all-seen")).toHaveLength(1));
-    expect(server.sent("POST /api/app/agents/mark-all-seen")[0].body).toEqual({ keyId: "k1", teamKey: "AA" });
+    await waitFor(() => expect(server.sent("POST /api/app/keys/mark-all-seen")).toHaveLength(1));
+    expect(server.sent("POST /api/app/keys/mark-all-seen")[0].body).toEqual({ keyId: "k1", teamKey: "AA" });
     await waitFor(() => expect(server.sent("GET /api/app/teams/AA/queue").length).toBeGreaterThan(1));
   });
 

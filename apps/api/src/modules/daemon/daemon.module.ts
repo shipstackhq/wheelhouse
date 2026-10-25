@@ -5,6 +5,9 @@ import { GithubModule } from "../github/github.module";
 import { IssuesModule } from "../issues/issues.module";
 import { NotificationsCoreModule } from "../notifications/index";
 import { TeamsModule } from "../teams/teams.module";
+import { ChatController } from "./chat.controller";
+import { ChatService } from "./chat.service";
+import { DeviceChatService } from "./device-chat.service";
 import { DaemonController } from "./daemon.controller";
 import { DaemonRepository } from "./daemon.repository";
 import { DaemonSweep } from "./daemon.sweep";
@@ -21,7 +24,7 @@ import { RunsService } from "./runs.service";
  * The controllers a process of this role serves: the paired machine's API (/api/daemon) where the daemon role runs, and the
  * person's side (/api/app/devices, runs on an issue) where the api role runs, since that is where sessions and CSRF live.
  */
-export const daemonControllers = (role: ServiceRole): Type[] => [...(servesDaemon(role) ? [DaemonController] : []), ...(servesApi(role) ? [DevicesController] : [])];
+export const daemonControllers = (role: ServiceRole): Type[] => [...(servesDaemon(role) ? [DaemonController] : []), ...(servesApi(role) ? [DevicesController, ChatController] : [])];
 
 /**
  * The machine side (device auth, the guard, the stream, jobs, the sweep) depends only on this module's own providers and the platform
@@ -33,10 +36,11 @@ export const daemonProviders = (role: ServiceRole): Provider[] => [
   DaemonRepository,
   DeviceStreamService,
   DeviceJobsService,
+  DeviceChatService,
   RunNotifications,
   DeviceAuthService,
   ...(servesDaemon(role) ? [DeviceGuard, DaemonSweep] : []),
-  ...(servesApi(role) ? [DevicesService, RunsService] : []),
+  ...(servesApi(role) ? [DevicesService, RunsService, ChatService] : []),
 ];
 
 @Module({})

@@ -6,7 +6,7 @@ Teams are the unit of access (ADR-23). A person opens a team through `team_membe
 
 - A key's role on a scoped team is `editor`. Settings, members and deleting a team need a person who is an admin of it.
 - A key with no rows reaches nothing. It is not "all teams".
-- Keys are scoped when created (default: every team the creator edits) and can be changed from the Agents page. The person needs to edit a team to give it to a key; teams they do not edit are left as they are.
+- Keys are scoped when created (default: every team the creator edits) and can be changed from the API keys page. The person needs to edit a team to give it to a key; teams they do not edit are left as they are.
 - Nothing is cached: scope is read on every call.
 
 ## Routing (design; the dispatcher is WH-32)

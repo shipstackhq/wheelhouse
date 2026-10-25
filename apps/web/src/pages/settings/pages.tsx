@@ -5,7 +5,8 @@ import { ImageUpload } from "../../components/image-upload";
 import { Avatar } from "../../components/profile-menu";
 import { useServices } from "../../lib/services";
 import { ThemeSwitch } from "../../components/theme-toggle";
-import { useWorkspace } from "../../lib/queries";
+import { useAgents, useWorkspace } from "../../lib/queries";
+import { refreshAll } from "../../lib/refresh";
 import { canManagePeople } from "../../lib/roles";
 import { useMe, useTeams } from "../../lib/session";
 
@@ -71,9 +72,10 @@ export function PasswordSettingsPage() {
 
 /** `/settings/workspace`: the workspace, your place in it, and its seats (for those who manage people). */
 export function WorkspaceSettingsPage() {
-  const { api } = useServices();
+  const { api, queryClient } = useServices();
   const me = useMe().data;
   const workspace = useWorkspace().data;
+  const agents = useAgents().data;
   if (!me) return null;
   const manages = canManagePeople(me.role);
   return (
@@ -116,6 +118,23 @@ export function WorkspaceSettingsPage() {
         </dl>
         <p className="mt-3 text-xs text-muted">To switch workspace, go back to the app and use the round icon at the top of its sidebar.</p>
       </div>
+      {manages && agents && (
+        <div className="card p-5">
+          <h2 className="font-medium">Agents</h2>
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={agents.enabled}
+              onChange={(e) => void api.workspace.setAgentsEnabled(e.target.checked).catch(() => {}).then(() => refreshAll(queryClient))}
+            />
+            <span>
+              Agents
+              <span className="block text-xs text-muted">Wheelhouse&apos;s agents and your own, on the Agents page and each team&apos;s roster. Turning them off hides them and keeps everything.</span>
+            </span>
+          </label>
+        </div>
+      )}
     </Section>
   );
 }

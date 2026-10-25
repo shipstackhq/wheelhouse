@@ -18,7 +18,7 @@ export function NotificationsMenu() {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
         aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
-        className="btn relative h-8 w-8 !rounded-full p-0 text-base data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2"
+        className="btn btn-ghost relative h-8 w-8 !rounded-full p-0 text-base data-[state=open]:bg-panel-2 data-[state=open]:text-fg"
       >
         <NotificationsIcon />
         {unread > 0 && <span aria-hidden data-testid="bell-dot" className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-agent" />}
