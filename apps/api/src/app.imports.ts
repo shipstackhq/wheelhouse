@@ -1,6 +1,7 @@
 import type { DynamicModule, Type } from "@nestjs/common";
 import { EventEmitterModule } from "@nestjs/event-emitter";
 import { LegacyApiModule } from "./legacy-api.module";
+import { AgentsModule } from "./modules/agents/agents.module";
 import { DaemonModule } from "./modules/daemon/daemon.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module";
@@ -24,5 +25,5 @@ import { StreamApiModule } from "./platform/streams/stream-api.module";
  * routes have always come after the rest.
  */
 export function buildAppImports(role: ServiceRole): Array<Type | DynamicModule> {
-  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [LegacyApiModule, StreamApiModule, ImagesModule, TeamsModule, DocsModule, IssuesModule, MapModule, GithubModule, AuthModule, DashboardModule, NotificationsModule, BroadcastsModule] : []), DaemonModule.register(role)];
+  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [LegacyApiModule, StreamApiModule, ImagesModule, TeamsModule, DocsModule, IssuesModule, MapModule, GithubModule, AuthModule, DashboardModule, NotificationsModule, BroadcastsModule, AgentsModule] : []), DaemonModule.register(role)];
 }

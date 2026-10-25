@@ -1,10 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { schema } from "../../db";
-import type { DeviceJobState } from "../../db/schema";
+import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 
-const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, workspaces, issues, teams, repositories } = schema;
+const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, workspaces, issues, teams, repositories, chatThreads, chatMessages } = schema;
 
 export type DeviceRow = typeof devices.$inferSelect;
 export type PairingRow = typeof devicePairings.$inferSelect;
@@ -12,11 +12,17 @@ export type MessageRow = typeof deviceMessages.$inferSelect;
 export type JobRow = typeof deviceJobs.$inferSelect;
 export type JobInsert = typeof deviceJobs.$inferInsert;
 export type JobPatch = Partial<JobInsert>;
+export type ChatThreadRow = typeof chatThreads.$inferSelect;
+export type ChatMessageRow = typeof chatMessages.$inferSelect;
+export type ChatMessagePatch = Partial<typeof chatMessages.$inferInsert>;
 
 /**
  * Every query on the daemon module's tables (devices, device_pairings, device_tokens, device_messages, device_jobs, device_job_events,
  * instance_keys), and the only file of the module that touches Drizzle. Each method reads `this.db.q`, so it runs on the current
  * transaction when a service opened one. It decides nothing: the rules are in the services and in daemon.rules.ts.
+ *
+ * A chat thread is reached by thread id AND its owner AND the caller's workspace id (the person's side), a chat message by message id AND
+ * the token's device id (the machine's side). The thread list joins the team (its key), the device and the repository (names), read only.
  *
  * Three reads join another area's table, read only: a device's workspace (its name and whether it is suspended), and the issue, team
  * and repository a job's pull request is opened for. The machine side runs in a process of its own (SERVICE_ROLE=daemon) and may not
@@ -372,6 +378,112 @@ export class DaemonRepository {
       .set({ state: "unreachable", unreachableSince: now, updatedAt: now })
       .where(and(inArray(deviceJobs.state, ["accepted", "running"]), inArray(deviceJobs.deviceId, silent)))
       .returning();
+  }
+
+  // ───────── chats ─────────
+
+  private threadSelect() {
+    return {
+      thread: chatThreads,
+      teamKey: teams.key,
+      repositoryName: repositories.displayName,
+      deviceName: devices.name,
+      deviceLastSeenAt: devices.lastSeenAt,
+      deviceRevokedAt: devices.revokedAt,
+      running: sql<boolean>`exists (select 1 from ${chatMessages} m where m.thread_id = ${chatThreads.id} and m.role = 'assistant' and m.state in ('pending', 'streaming'))`,
+    };
+  }
+
+  private threadsWhere(where: SQL | undefined) {
+    return this.db.q
+      .select(this.threadSelect())
+      .from(chatThreads)
+      .innerJoin(teams, eq(teams.id, chatThreads.teamId))
+      .innerJoin(devices, eq(devices.id, chatThreads.deviceId))
+      .leftJoin(repositories, eq(repositories.id, chatThreads.repositoryId))
+      .where(where);
+  }
+
+  /** The person's threads, newest first. */
+  ownThreads(ownerId: string, workspaceId: string) {
+    return this.threadsWhere(and(eq(chatThreads.ownerId, ownerId), eq(chatThreads.workspaceId, workspaceId))).orderBy(desc(chatThreads.updatedAt)).limit(200);
+  }
+
+  /** A thread of the person's own: thread id AND owner id AND workspace id. */
+  async ownThread(id: string, ownerId: string, workspaceId: string) {
+    const [row] = await this.threadsWhere(and(eq(chatThreads.id, id), eq(chatThreads.ownerId, ownerId), eq(chatThreads.workspaceId, workspaceId)));
+    return row;
+  }
+
+  async insertThread(values: typeof chatThreads.$inferInsert) {
+    const [t] = await this.db.q.insert(chatThreads).values(values).returning();
+    return t;
+  }
+
+  async touchThread(id: string, set: { sessionId?: string; model?: string; updatedAt: Date }) {
+    await this.db.q.update(chatThreads).set(set).where(eq(chatThreads.id, id));
+  }
+
+  async deleteThread(id: string) {
+    await this.db.q.delete(chatThreads).where(eq(chatThreads.id, id));
+  }
+
+  threadMessages(threadId: string) {
+    return this.db.q.select().from(chatMessages).where(eq(chatMessages.threadId, threadId)).orderBy(asc(chatMessages.seq));
+  }
+
+  async lastMessageSeq(threadId: string) {
+    const [r] = await this.db.q.select({ n: sql<number>`coalesce(max(${chatMessages.seq}), 0)::int` }).from(chatMessages).where(eq(chatMessages.threadId, threadId));
+    return r.n;
+  }
+
+  async insertMessages(rows: (typeof chatMessages.$inferInsert)[]) {
+    return this.db.q.insert(chatMessages).values(rows).returning();
+  }
+
+  /** The thread's answer that is still being written, if any. */
+  async runningAnswer(threadId: string) {
+    const [m] = await this.db.q
+      .select()
+      .from(chatMessages)
+      .where(and(eq(chatMessages.threadId, threadId), eq(chatMessages.role, "assistant"), inArray(chatMessages.state, ["pending", "streaming"])));
+    return m;
+  }
+
+  /** A message and its thread, only when the thread is on this device: message id AND device id. */
+  async messageOfDevice(messageId: string, deviceId: string) {
+    const [row] = await this.db.q
+      .select({ message: chatMessages, thread: chatThreads })
+      .from(chatMessages)
+      .innerJoin(chatThreads, eq(chatThreads.id, chatMessages.threadId))
+      .where(and(eq(chatMessages.id, messageId), eq(chatThreads.deviceId, deviceId)));
+    return row;
+  }
+
+  /** Changes a message only while it is still in one of `from` (and, when given, at that event number); nothing when something else got there first. */
+  async moveMessage(id: string, from: ChatMessageState[], set: ChatMessagePatch, atEventSeq?: number) {
+    const [row] = await this.db.q
+      .update(chatMessages)
+      .set({ ...set, updatedAt: new Date() })
+      .where(and(eq(chatMessages.id, id), inArray(chatMessages.state, from), atEventSeq === undefined ? undefined : eq(chatMessages.lastEventSeq, atEventSeq)))
+      .returning();
+    return row;
+  }
+
+  /** Answers nobody has started by `pendingBefore`, and ones that went quiet since `quietBefore`, fail with the reason. */
+  async failStaleAnswers(pendingBefore: Date, quietBefore: Date, now: Date) {
+    const stale = (state: ChatMessageState, when: Date, error: string, col: typeof chatMessages.createdAt | typeof chatMessages.updatedAt) =>
+      this.db.q
+        .update(chatMessages)
+        .set({ state: "failed", error, updatedAt: now })
+        .where(and(eq(chatMessages.role, "assistant"), eq(chatMessages.state, state), lt(col, when)))
+        .returning();
+    return [...(await stale("pending", pendingBefore, "Your device did not answer", chatMessages.createdAt)), ...(await stale("streaming", quietBefore, "Your device went quiet", chatMessages.updatedAt))];
+  }
+
+  async threadById(id: string) {
+    const [t] = await this.db.q.select().from(chatThreads).where(eq(chatThreads.id, id));
+    return t;
   }
 
   // ───────── the server's signing key ─────────

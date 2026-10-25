@@ -2,7 +2,7 @@
 export const HOSTED_URL = "https://wheelhouse.shipstack.run";
 
 /**
- * Every command the Agents page asks someone to paste. Kept apart from the page so a test can check them: none may carry
+ * Every command the API keys page asks someone to paste. Kept apart from the page so a test can check them: none may carry
  * an API key (shell history, screen shares), and the project key and server URL must be the real ones.
  */
 export function onboarding({ origin, teamKey }: { origin: string; teamKey?: string | null }) {

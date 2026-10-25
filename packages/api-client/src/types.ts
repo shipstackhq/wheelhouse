@@ -1,3 +1,5 @@
+import type { AgentView } from "@wheelhouse/shared/agents/render";
+import type { AgentProfile } from "@wheelhouse/shared/agents/schema";
 /** The shapes the web app's API answers with (JSON: every date is an ISO string). Kept by hand and checked by the contract suite. */
 
 export type Role = "owner" | "admin" | "member" | "viewer" | "guest";
@@ -59,7 +61,7 @@ export type WorkspaceOverview = {
 
 export type KeyView = { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; canWriteDocs: boolean; /** The teams the key can open (and nothing else). */ teams: { key: string; name: string }[] };
 
-/** Every command the Agents page asks someone to paste. None of them carries a key. */
+/** Every command the API keys page asks someone to paste. None of them carries a key. */
 export type SetupCommands = {
   teamKey: string;
   url: string;
@@ -77,7 +79,7 @@ export type SetupCommands = {
   rest: string;
 };
 
-export type AgentsPage = { keys: KeyView[]; setup: SetupCommands };
+export type ApiKeysPage = { keys: KeyView[]; setup: SetupCommands };
 export type CreatedKey = { key: KeyView; secret: string };
 
 export type CreateInviteInput = { kind: "join_workspace" | "new_workspace"; email: string; role?: Role; tags?: string[] | string; workspace?: string; /** join_workspace only: the teams the person joins on accepting, by key. The caller must administer each. */ teams?: { team: string; role: TeamRole }[] };
@@ -721,3 +723,58 @@ export type IssueRuns = {
 };
 /** The branches a run can start from. `listed` is false when they could not be read from GitHub: then only the default is known. */
 export type RunBranches = { defaultBranch: string; branches: string[]; listed: boolean };
+
+/** A chat with the codebase (Chat, docs/chat.md): the person's thread with Claude on one of their own devices. */
+export type ChatMessageState = "done" | "pending" | "streaming" | "failed" | "canceled";
+export type ChatThreadView = {
+  id: string;
+  title: string;
+  teamKey: string;
+  repositoryId: string | null;
+  repositoryName: string | null;
+  deviceId: string;
+  deviceName: string;
+  deviceStatus: DeviceStatus;
+  model: string;
+  /** An answer is being made right now. */
+  running: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type ChatMessageView = {
+  id: string;
+  /** Order in the thread. */
+  seq: number;
+  role: "user" | "assistant";
+  content: string;
+  state: ChatMessageState;
+  error: string | null;
+  /** The latest tool calls the answer made ("Read", "src/x.ts"), oldest first. */
+  activity: { name: string; summary: string }[];
+  costUsd: number | null;
+  createdAt: string;
+};
+/** What a new chat can use: the person's devices (with the models each offers) and the team's runnable repositories. */
+export type ChatOptions = {
+  devices: { id: string; name: string; status: DeviceStatus; models: string[] }[];
+  repositories: { id: string; name: string; fullName: string; defaultBranch: string }[];
+};
+export type NewChat = { teamKey: string; repositoryId: string; deviceId: string; model: string; message: string };
+
+/** Agents (docs/agents-plan.md). Profiles and views come from the shared schema. */
+export type { AgentProfile };
+export type CatalogAgent = AgentView & { source: "catalog"; latestVersion: number; pinnedVersion: number | null; /** The version in use. */ version: number };
+export type CustomAgent = AgentView & {
+  source: "custom";
+  /** The whole profile, for the edit form. */
+  profile: AgentProfile;
+  /** Null: workspace-wide. */
+  teamKey: string | null;
+  version: number;
+  createdBy: string;
+  /** On the agents list and after a change; not on a roster. */
+  can?: { edit: boolean; face: boolean };
+};
+export type AgentEntry = CatalogAgent | CustomAgent;
+export type AgentsPage = { enabled: boolean; catalog: CatalogAgent[]; workspace: CustomAgent[] };
+export type CatalogVersion = { version: number; summary: string; changelog: string };

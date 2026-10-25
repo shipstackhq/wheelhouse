@@ -146,7 +146,7 @@ the reason.
 | `updateRepositoryAction` | `PATCH /api/app/teams/:key/repositories/:id` | WH-98 | any teammate (as before) |
 | `retireRepositoryAction` | `POST /api/app/teams/:key/repositories/:id/retire` | WH-98 | any teammate (as before) |
 | `browseRepoTreeAction` | `GET /api/app/teams/:key/repositories/:id/tree` | WH-98 | for the anchor picker |
-| `markAllSeenAction` | `POST /api/app/agents/mark-all-seen` | WH-95 | `{ keyId?, teamKey? }`; also used by the bots menu on the board (WH-96) |
+| `markAllSeenAction` | `POST /api/app/keys/mark-all-seen` | WH-95 | `{ keyId?, teamKey? }`; also used by the bots menu on the board (WH-96) |
 | `removeSessionAction` | `DELETE /api/app/teams/:key/sessions/:sessionId` | WH-95 | built with the dashboard, whose agents widget uses it; the board's bots menu (WH-96) calls the same endpoint |
 
 ## Built by WH-95
@@ -157,7 +157,7 @@ issue. Anything not marked public needs a session.
 | Endpoint | What it is |
 |---|---|
 | `GET /api/app/workspace` | the workspace page: members with roles and tags, seats, and (owners only) the pending join invites |
-| `GET /api/app/agents` | the Agents page: the workspace's keys (name, prefix, last used, `canWriteDocs`, `teams`; never a key value) and the printed setup commands |
+| `GET /api/app/keys` | the API keys page: the workspace's keys (name, prefix, last used, `canWriteDocs`, `teams`; never a key value) and the printed setup commands |
 | `GET /api/app/invites?kind=join_workspace\|new_workspace` | pending invites. `new_workspace` is for instance admins; anyone else gets a 404 |
 | `GET /api/app/admin/workspaces`, `GET /api/app/admin/workspaces/:id` | instance admins only; anyone else gets a 404. Names, emails and counts, never what a workspace wrote |
 | `GET /api/app/dashboard/:widget` | one dashboard widget's data: `kpis`, `progress`, `throughput`, `activity-split`, `agents`, `attention`, `recent`, `sync`. An unknown widget is a 404 |
@@ -395,7 +395,7 @@ for the one team that owns the repository, and the cycle sweep for the one team 
 |---|---|
 | `POST /api/app/keys` | `{ name, teams? }`; 201 `{ key, secret }`. `teams` are keys of teams **you edit**, at least one (`400` naming `teams` otherwise; a team you cannot see or edit is a `404`). Left out, the key gets every team you edit |
 | `PATCH /api/app/keys/:id` | `{ docsWrite?, teams? }`: `teams` replaces the key's teams. Teams of the key that you cannot edit stay as they are (they are not yours to give or take); `{ key }` comes back with its `teams` |
-| `GET /api/app/agents` | each key now carries `teams: [{ key, name }]` |
+| `GET /api/app/keys` | each key now carries `teams: [{ key, name }]` |
 
 A key that creates a team (`create_project`) is scoped to it, or it could not open what it made. Migration 0026 gave every existing key every team of its workspace, so nobody lost access; an owner narrows them afterwards.
 Design for routing work by team (the dispatcher itself is WH-32): [agent-keys-and-routing.md](agent-keys-and-routing.md).

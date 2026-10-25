@@ -202,8 +202,8 @@ describe("API keys", () => {
     assert.deepEqual(await t.revokeKeyAs(A.owner, key.id), { ok: true });
     assert.ok((await t.listKeys(A.owner)).find((k) => k.id === key.id)!.revokedAt);
   });
-  test("the Agents page carries commands with the server's address, and no key in them", async () => {
-    const page = await t.agentsPage(A.owner, "https://wh.example.test/");
+  test("the API keys page carries commands with the server's address, and no key in them", async () => {
+    const page = await t.keysPage(A.owner, "https://wh.example.test/");
     assert.equal(page.setup.url, "https://wh.example.test");
     assert.ok(page.setup.mcp.includes("https://wh.example.test/mcp"));
     assert.ok(!JSON.stringify(page.setup).includes("wh_"), "no key value in any command");

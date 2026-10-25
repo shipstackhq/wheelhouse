@@ -36,6 +36,7 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
   {
     group: "Team",
     items: [
+      { path: "/agents", label: "Agents", icon: NAV_ICONS.agents },
       { path: "/members", label: "Team members", icon: NAV_ICONS.teamMembers },
       { path: "/settings", label: "Team settings", icon: NAV_ICONS.teamSettings },
     ],
@@ -212,14 +213,15 @@ export function Sidebar({
           <div className="space-y-0.5">
             <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
             <NavLink href="/inbox" icon={NAV_ICONS.inbox} collapsed={collapsed} badge={unread}>Inbox</NavLink>
-            <NavButton icon={NAV_ICONS.agent} collapsed={collapsed}>Agent</NavButton>
+            <NavLink href="/chat" prefix icon={NAV_ICONS.agent} collapsed={collapsed}>Chat</NavLink>
             <NavButton icon={NAV_ICONS.myIssues} collapsed={collapsed}>My issues</NavButton>
           </div>
           <SidebarGroup title="Workspace" collapsed={collapsed} gap="mt-3">
             <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
             <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
             <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>
-            <NavLink href="/agents" icon={NAV_ICONS.agents} collapsed={collapsed}>Agents &amp; API keys</NavLink>
+            <NavLink href="/agents" prefix icon={NAV_ICONS.agents} collapsed={collapsed}>Agents</NavLink>
+            <NavLink href="/api-keys" icon={NAV_ICONS.apiKeys} collapsed={collapsed}>API keys</NavLink>
           </SidebarGroup>
           <div className={clsx("relative", collapsed ? "md:mt-3 md:border-t md:border-line md:pt-3" : "")}>
             <SectionLabel
@@ -342,7 +344,7 @@ export function Sidebar({
             <NavLink href="/settings" icon={NAV_ICONS.settings} collapsed={collapsed}>Settings</NavLink>
           </div>
         </nav>
-        <div className="border-t border-line p-2">{typeof profile === "function" ? profile(collapsed) : profile}</div>
+        <div className="p-2">{typeof profile === "function" ? profile(collapsed) : profile}</div>
       </SidebarFrame>
     </>
   );

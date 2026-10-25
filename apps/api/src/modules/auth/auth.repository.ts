@@ -132,6 +132,16 @@ export class AuthRepository {
     return row;
   }
 
+  /** Merges `patch` into the workspace's settings. */
+  async mergeSettings(workspaceId: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const [row] = await this.db.q
+      .update(schema.workspaces)
+      .set({ settings: sql`${schema.workspaces.settings} || ${JSON.stringify(patch)}::jsonb` })
+      .where(eq(schema.workspaces.id, workspaceId))
+      .returning({ settings: schema.workspaces.settings });
+    return row.settings;
+  }
+
   async ownerCount(workspaceId: string): Promise<number> {
     const [{ n }] = await this.db.q
       .select({ n: sql<number>`count(*)::int` })

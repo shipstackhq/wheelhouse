@@ -87,6 +87,15 @@ export class DeviceStreamService {
     bus.publish({ workspaceId: job.workspaceId, teamId: job.teamId, type: "job.updated", entity: "issue", entityId: job.issueId });
   }
 
+  /** A chat thread changed: tell its owner's browsers (a transient signal). Deltas are throttled; a state change goes at once. */
+  signalChat(thread: { id: string; workspaceId: string; teamId: string; ownerId: string }, throttleMs = 0) {
+    const now = Date.now();
+    if (throttleMs && now - (lastSignal.get(thread.id) ?? 0) < throttleMs) return;
+    lastSignal.set(thread.id, now);
+    if (lastSignal.size > 5_000) lastSignal.clear();
+    bus.publish({ workspaceId: thread.workspaceId, teamId: thread.teamId, type: "chat.updated", entity: "chat", entityId: thread.id, recipientUserId: thread.ownerId });
+  }
+
   private listen(deviceId: string, fn: Listener) {
     let set = listeners.get(deviceId);
     if (!set) listeners.set(deviceId, (set = new Set()));

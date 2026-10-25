@@ -181,8 +181,25 @@ describe("the page endpoints (WH-95)", () => {
     const scoped = script([{ status: 201, json: { key: { id: "k2" }, secret: "wh_s" } }]);
     await createApiClient({ fetch: scoped.f }).keys.create("CI", ["AA"]);
     assert.deepEqual(scoped.calls[0].body, { name: "CI", teams: ["AA"] });
-    assert.deepEqual(await sent((a) => a.agents.page(), { json: { keys: [], setup: {} } }), { method: "GET", url: "/api/app/agents", body: undefined });
-    assert.deepEqual(await sent((a) => a.agents.markAllSeen({ keyId: "k1" })), { method: "POST", url: "/api/app/agents/mark-all-seen", body: { keyId: "k1" } });
+    assert.deepEqual(await sent((a) => a.keys.page(), { json: { keys: [], setup: {} } }), { method: "GET", url: "/api/app/keys", body: undefined });
+    assert.deepEqual(await sent((a) => a.keys.markAllSeen({ keyId: "k1" })), { method: "POST", url: "/api/app/keys/mark-all-seen", body: { keyId: "k1" } });
+  });
+
+  test("agents: calls hit the agents routes, slugs are encoded, a custom agent is created with an optional team and a face is patched alone", async () => {
+    assert.deepEqual(await sent((a) => a.agents.list(), { json: { enabled: true, catalog: [], workspace: [] } }), { method: "GET", url: "/api/app/agents", body: undefined });
+    assert.deepEqual(await sent((a) => a.agents.versions("backend"), { json: { versions: [] } }), { method: "GET", url: "/api/app/agents/catalog/backend/versions", body: undefined });
+    assert.deepEqual(await sent((a) => a.agents.pin("backend", 1), { json: { agent: {} } }), { method: "PUT", url: "/api/app/agents/catalog/backend/pin", body: { version: 1 } });
+    assert.deepEqual(await sent((a) => a.agents.pin("backend", null), { json: { agent: {} } }), { method: "PUT", url: "/api/app/agents/catalog/backend/pin", body: { version: null } });
+    const profile = { slug: "x" } as never;
+    assert.deepEqual(await sent((a) => a.agents.create(profile, "AA"), { status: 201, json: { agent: {} } }), { method: "POST", url: "/api/app/agents", body: { profile, teamKey: "AA" } });
+    assert.deepEqual(await sent((a) => a.agents.create(profile), { status: 201, json: { agent: {} } }), { method: "POST", url: "/api/app/agents", body: { profile } });
+    const avatar = { style: "lorelei", seed: "s" } as const;
+    assert.deepEqual(await sent((a) => a.agents.update("a b", { avatar }), { json: { agent: {} } }), { method: "PATCH", url: "/api/app/agents/a%20b", body: { avatar } });
+    assert.deepEqual(await sent((a) => a.agents.remove("x")), { method: "DELETE", url: "/api/app/agents/x", body: undefined });
+    assert.deepEqual(await sent((a) => a.teams.agents("AA"), { json: { agents: [] } }), { method: "GET", url: "/api/app/teams/AA/agents", body: undefined });
+    assert.deepEqual(await sent((a) => a.teams.addAgent("AA", "backend"), { status: 201, json: { agent: {} } }), { method: "POST", url: "/api/app/teams/AA/agents", body: { slug: "backend" } });
+    assert.deepEqual(await sent((a) => a.teams.removeAgent("AA", "backend")), { method: "DELETE", url: "/api/app/teams/AA/agents/backend", body: undefined });
+    assert.deepEqual(await sent((a) => a.workspace.setAgentsEnabled(false), { json: { settings: { agentsEnabled: false } } }), { method: "PATCH", url: "/api/app/workspace/settings", body: { agentsEnabled: false } });
   });
 
   test("invites: list picks the kind and unwraps; peek is a POST so the token never sits in a URL; accept adopts the new session's token", async () => {

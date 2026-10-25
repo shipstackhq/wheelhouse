@@ -20,7 +20,7 @@ export function BotsMenu({ teamKey, bots }: { teamKey: string; bots: Bot[] }) {
   return (
     <Popover.Root>
       <Popover.Trigger
-        className="btn relative h-8 w-8 shrink-0 !rounded-full p-0 text-base data-[state=open]:border-muted/60 data-[state=open]:bg-panel-2"
+        className="btn btn-ghost relative h-8 w-8 shrink-0 !rounded-full p-0 text-base data-[state=open]:bg-panel-2 data-[state=open]:text-fg"
         aria-label={`Bots: ${state === "none" ? "none connected" : state === "queued" ? `${total} queued change(s)` : "all in sync"}`}
         title={state === "none" ? "No bots connected" : state === "queued" ? `${total} queued` : `${bots.length} in sync`}
       >
@@ -48,15 +48,15 @@ export function BotsMenu({ teamKey, bots }: { teamKey: string; bots: Bot[] }) {
               teamKey={teamKey}
               bots={bots}
               markAllSeen={async (fd) => {
-                await api.agents.markAllSeen({ keyId: field(fd, "keyId"), teamKey: field(fd, "team") || teamKey });
+                await api.keys.markAllSeen({ keyId: field(fd, "keyId"), teamKey: field(fd, "team") || teamKey });
                 await refreshAll(queryClient);
               }}
               sessionAction={(x) => <SessionRemoveButton teamKey={x.teamKey ?? teamKey} sessionId={x.id} />}
             />
           )}
           <div className="border-t border-line px-4 py-2.5 text-xs">
-            <Link to="/agents" className="text-muted hover:text-fg">
-              {bots.length ? "Manage agents & API keys" : "Create an API key"} <ArrowRightIcon />
+            <Link to="/api-keys" className="text-muted hover:text-fg">
+              {bots.length ? "Manage API keys" : "Create an API key"} <ArrowRightIcon />
             </Link>
           </div>
         </Popover.Content>

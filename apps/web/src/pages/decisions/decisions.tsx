@@ -76,7 +76,7 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
 
   return (
     <GlossaryProvider terms={props.terms}>
-      <div className="flex h-full flex-col overflow-hidden bg-bg">
+      <div className="flex h-full flex-col overflow-hidden bg-page">
         {props.number === undefined ? (
           <section className="min-h-0 flex-1 overflow-y-auto">
             <div className="w-full px-4 py-8 sm:px-8 lg:py-12">

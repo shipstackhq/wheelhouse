@@ -51,7 +51,7 @@ describe("settings as a screen of its own", () => {
       ["Devices", "/settings/devices"],
       ["General", "/settings/workspace"],
       ["Members", "/settings/members"],
-      ["Agents & API keys", "/settings/agents"],
+      ["API keys", "/settings/api-keys"],
       ["Teams", "/settings/teams"],
       ["GitHub", "/settings/integrations/github"],
     ]);
@@ -82,14 +82,14 @@ describe("settings as a screen of its own", () => {
     expect(screen.queryByRole("link", { name: "Repos" })).toBeNull();
   });
 
-  test("Members and Agents & API keys are the same pages, inside settings", async () => {
+  test("Members and API keys are the same pages, inside settings", async () => {
     const members = renderApp("/settings/members");
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
     expect(screen.getByText("Grace Hopper")).toBeTruthy();
     members.unmount();
-    renderApp("/settings/agents");
-    await screen.findByRole("heading", { level: 1, name: "Agents & API keys" });
-    expect(panel().getByRole("link", { name: "Agents & API keys" }).getAttribute("aria-current")).toBe("page");
+    renderApp("/settings/api-keys");
+    await screen.findByRole("heading", { level: 1, name: "API keys" });
+    expect(panel().getByRole("link", { name: "API keys" }).getAttribute("aria-current")).toBe("page");
   });
 
   test("the workspace section shows your role and, for an owner, the seats; a member sees no seats", async () => {

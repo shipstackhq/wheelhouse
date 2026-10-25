@@ -114,15 +114,15 @@ describe("the dashboard", () => {
     const quiet = (within(card).getByText("CI bot").closest("li")) as HTMLElement;
     expect(within(quiet).getByText("in sync")).toBeTruthy();
     expect(within(quiet).getByText("never connected")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "Manage" }).getAttribute("href")).toBe("/agents");
+    expect(within(card).getByRole("link", { name: "Manage" }).getAttribute("href")).toBe("/api-keys");
   });
 
   test("mark all seen resets that agent's queue and reads the dashboard again", async () => {
-    const { server } = renderApp("/", (s) => s.on("POST /api/app/agents/mark-all-seen", { ok: true }));
+    const { server } = renderApp("/", (s) => s.on("POST /api/app/keys/mark-all-seen", { ok: true }));
     const busy = (await within(await widget("Agents")).findByText("Claude — Ada's laptop")).closest("li") as HTMLElement;
     await userEvent.setup().click(within(busy).getByRole("button", { name: "mark all seen" }));
-    await waitFor(() => expect(server.sent("POST /api/app/agents/mark-all-seen")).toHaveLength(1));
-    expect(server.sent("POST /api/app/agents/mark-all-seen")[0].body).toEqual({ keyId: "k1" });
+    await waitFor(() => expect(server.sent("POST /api/app/keys/mark-all-seen")).toHaveLength(1));
+    expect(server.sent("POST /api/app/keys/mark-all-seen")[0].body).toEqual({ keyId: "k1" });
     await waitFor(() => expect(server.sent("GET /api/app/dashboard/agents").length).toBe(2));
   });
 

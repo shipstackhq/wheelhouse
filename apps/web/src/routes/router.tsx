@@ -1,7 +1,10 @@
 import { Navigate, type RouteObject } from "react-router";
 import type { Services } from "../lib/services";
 import { AdminInvitesPage, AdminWorkspacePage, AdminWorkspacesPage } from "../pages/admin";
-import { AgentsPage } from "../pages/agents";
+import { AgentPage, AgentsPage } from "../pages/agents/agents";
+import { TeamAgentsPage } from "../pages/agents/team-agents";
+import { ApiKeysPage } from "../pages/api-keys";
+import { ChatLayout, ChatThreadPane, NewChatPane } from "../pages/chat";
 import { DevicePairPage, DevicesSettingsPage } from "../pages/devices";
 import { PasswordSettingsPage, ProfileSettingsPage, TeamsSettingsPage, WorkspaceSettingsPage } from "../pages/settings/pages";
 import { SettingsLayout } from "../pages/settings/settings-layout";
@@ -64,7 +67,7 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "devices", Component: DevicesSettingsPage },
             { path: "workspace", Component: WorkspaceSettingsPage },
             { path: "members", Component: WorkspacePage },
-            { path: "agents", Component: AgentsPage },
+            { path: "api-keys", Component: ApiKeysPage },
             { path: "teams", Component: TeamsSettingsPage },
             { path: "integrations", Component: IntegrationsPage },
             { path: "integrations/github", Component: GithubIntegrationPage },
@@ -75,16 +78,27 @@ export function buildRoutes(services: Services): RouteObject[] {
           Component: AppLayout,
           loader: requireSignedIn(services),
           children: [
-            { index: true, Component: Dashboard, handle: { width: "contained" } satisfies PageHandle },
-            { path: "inbox", Component: InboxPage },
+            { index: true, Component: Dashboard },
+            { path: "inbox", Component: InboxPage, handle: { fullWidth: true } satisfies PageHandle },
             { path: "teams/new", Component: NewTeamPage },
             { path: "initiatives", Component: InitiativesPage },
             { path: "initiatives/:id", Component: InitiativePage },
-            { path: "projects", Component: ProjectsPage, handle: { width: "contained" } satisfies PageHandle },
-            { path: "projects/:id", Component: ProjectPage, handle: { width: "contained" } satisfies PageHandle },
+            { path: "projects", Component: ProjectsPage },
+            { path: "projects/:id", Component: ProjectPage },
             { path: "workspace", Component: WorkspacePage },
             { path: "agents", Component: AgentsPage },
+            { path: "agents/:slug", Component: AgentPage },
+            { path: "api-keys", Component: ApiKeysPage },
             { path: "devices/pair", Component: DevicePairPage },
+            {
+              path: "chat",
+              Component: ChatLayout,
+              handle: { fullWidth: true } satisfies PageHandle,
+              children: [
+                { index: true, Component: NewChatPane },
+                { path: ":id", Component: ChatThreadPane },
+              ],
+            },
             {
               Component: RequireAdmin,
               children: [
@@ -97,8 +111,8 @@ export function buildRoutes(services: Services): RouteObject[] {
               path: "t/:key",
               Component: TeamLayout,
               children: [
-                { index: true, Component: BoardPage },
-                { path: "overview", Component: TeamOverviewPage, handle: { width: "contained" } satisfies PageHandle },
+                { index: true, Component: BoardPage, handle: { fullWidth: true } satisfies PageHandle },
+                { path: "overview", Component: TeamOverviewPage },
                 { path: "activity", Component: ActivityPage },
                 { path: "map", Component: MapPage },
                 { path: "docs", Component: DocsPage },
@@ -109,6 +123,7 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "glossary/:termId", Component: GlossaryPage },
                 { path: "cycles", Component: CyclesPage },
                 { path: "cycles/:number", Component: CyclePage },
+                { path: "agents", Component: TeamAgentsPage },
                 { path: "members", Component: TeamMembersPage },
                 { path: "settings", Component: TeamSettingsPage },
                 { path: "onboarding", Component: OnboardingPage },

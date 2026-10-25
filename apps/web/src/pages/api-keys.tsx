@@ -7,18 +7,18 @@ import { SecretBox } from "../components/secret-box";
 import { SetupGuide } from "../components/setup-guide";
 import { SubmitButton } from "../components/submit-button";
 import { failure, field, type FormState } from "../lib/form-state";
-import { useAgentsPage } from "../lib/queries";
+import { useApiKeysPage } from "../lib/queries";
 import { useTeams } from "../lib/session";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 
-export function AgentsPage() {
+export function ApiKeysPage() {
   const { api, queryClient } = useServices();
-  const query = useAgentsPage();
+  const query = useApiKeysPage();
   // Teams the person edits are the ones they may give a key (the server refuses the rest).
   const teamOptions = (useTeams().data ?? []).filter((t) => t.role !== "viewer").map((t) => ({ key: t.key, name: t.name }));
   return (
-    <Loaded query={query} label="Loading agents">
+    <Loaded query={query} label="Loading API keys">
       {({ keys, setup: cmd }) => {
         const rows: KeyRow[] = keys.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, lastUsedAt: k.lastUsedAt, revokedAt: k.revokedAt, canWriteDocs: k.canWriteDocs, teams: k.teams }));
         const { active, revoked } = splitKeys(rows);
@@ -26,7 +26,7 @@ export function AgentsPage() {
           <div className="h-full overflow-y-auto">
             <div className="w-full space-y-8 px-6 py-10">
               <div>
-                <h1 className="text-xl font-semibold">Agents &amp; API keys</h1>
+                <h1 className="text-xl font-semibold">API keys</h1>
                 <p className="mt-1 text-sm text-muted">
                   Give each agent (each dev&apos;s Claude Code, a CI bot…) its own key. Every key gets its own change queue, and everything it does is
                   attributed to it on the board.
@@ -40,7 +40,7 @@ export function AgentsPage() {
                 <ActiveKeys
                   keys={active}
                   markAllSeen={async (fd) => {
-                    await api.agents.markAllSeen({ keyId: field(fd, "keyId") });
+                    await api.keys.markAllSeen({ keyId: field(fd, "keyId") });
                     await refreshAll(queryClient);
                   }}
                   revoke={async (fd) => {

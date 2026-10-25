@@ -1,7 +1,7 @@
 import type { Request } from "express";
 
 /**
- * The address people use to reach this server, for links we hand out (invites) and commands we print (the Agents page).
+ * The address people use to reach this server, for links we hand out (invites) and commands we print (the API keys page).
  * APP_URL when it is set; otherwise what the proxy says it forwarded, else the Host header.
  */
 export function requestOrigin(req: Request): string {

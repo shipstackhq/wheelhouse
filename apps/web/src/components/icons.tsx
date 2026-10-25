@@ -62,6 +62,7 @@ import {
   RiNodeTree,
   RiParagraph,
   RiRobot2Line,
+  RiKey2Line,
   RiRobot3Line,
   RiSearchLine,
   RiFilter3Line,
@@ -277,6 +278,7 @@ export const NAV_ICONS = {
   settings: { line: SettingsIcon, fill: SettingsFillIcon },
   people: { line: PeopleIcon, fill: PeopleFillIcon },
   agents: { line: icon(RiRobot3Line), fill: icon(RiRobot3Fill) },
+  apiKeys: { line: icon(RiKey2Line), fill: icon(RiKey2Fill) },
   inbox: { line: icon(RiInboxLine), fill: icon(RiInboxFill) },
   // The Agent placeholder in the sidebar's main section (a bard, not the robot the Agents page uses).
   agent: { line: icon(RiBardLine), fill: icon(RiBardFill) },

@@ -79,7 +79,7 @@ export function checklistStatus(input: ChecklistInput): ChecklistState {
       status: agentsDone
         ? `${input.activeAgentKeyCount} active API key${input.activeAgentKeyCount === 1 ? "" : "s"} for this workspace.`
         : "No agent API key yet.",
-      href: "/agents",
+      href: "/api-keys",
     },
     {
       id: "map",

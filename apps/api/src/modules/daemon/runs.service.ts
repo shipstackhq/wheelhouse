@@ -32,7 +32,7 @@ export class RunsService {
   ) {}
 
   /** The repositories of a team an agent can work in from a fresh clone: connected to GitHub and not retired. */
-  private async runnableRepositories(actor: Actor, teamKey: string): Promise<{ all: RepositoryRow[]; runnable: RepositoryRow[] }> {
+  async runnableRepositories(actor: Actor, teamKey: string): Promise<{ all: RepositoryRow[]; runnable: RepositoryRow[] }> {
     const all = await this.repositories.listRepositories(actor, teamKey);
     return { all, runnable: all.filter((r) => r.provider === "github" && r.githubFullName && r.lifecycle !== "retired") };
   }

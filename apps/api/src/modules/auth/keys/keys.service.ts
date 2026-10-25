@@ -20,7 +20,7 @@ const KEY_CALL_LIMIT = 600;
 const KEY_CALL_WINDOW_MS = 60_000;
 
 /**
- * API keys (agents): the lookup behind a bearer token, the Agents page, creating, scoping, changing and revoking keys. A key reaches a
+ * API keys (agents): the lookup behind a bearer token, the API keys page, creating, scoping, changing and revoking keys. A key reaches a
  * team only through its api_key_teams rows (WH-120); the scope is always chosen from teams the signed-in person can edit.
  */
 @Injectable()
@@ -47,7 +47,7 @@ export class KeysService {
     return { kind: "agent", id: row.key.id, name: row.key.name, workspaceId: row.key.workspaceId };
   }
 
-  /** The teams of each key, by key id. The Agents page shows all of them: a workspace member sees which teams an agent reaches, not what is in them. */
+  /** The teams of each key, by key id. The API keys page shows all of them: a workspace member sees which teams an agent reaches, not what is in them. */
   private async teamsOfKeys(keyIds: string[]): Promise<Map<string, KeyView["teams"]>> {
     const out = new Map<string, KeyView["teams"]>(keyIds.map((id) => [id, []]));
     if (!keyIds.length) return out;
@@ -81,8 +81,8 @@ export class KeysService {
     return rows.map((r) => keyView(r, teams.get(r.id)));
   }
 
-  /** The Agents page: the keys and the commands to paste. With one team its real key goes in the commands, with several a KEY placeholder. */
-  async agentsPage(h: Human, origin: string) {
+  /** The API keys page: the keys and the commands to paste. With one team its real key goes in the commands, with several a KEY placeholder. */
+  async keysPage(h: Human, origin: string) {
     const workspaceTeams = (await this.teams.list(h.actor)).map((p) => ({ key: p.key }));
     return { keys: await this.listKeys(h), setup: onboarding({ origin, teamKey: workspaceTeams.length === 1 ? workspaceTeams[0].key : null }) };
   }
@@ -147,7 +147,7 @@ export class KeysService {
 
   /**
    * Give a key every team its workspace has right now: what migration 0026 did to the keys that existed (WH-120). Later teams are not
-   * added; a key that creates a team gets that one, and a person narrows or widens a key from the Agents page.
+   * added; a key that creates a team gets that one, and a person narrows or widens a key from the API keys page.
    */
   scopeKeyToAllTeams(keyId: string, workspaceId: string) {
     return this.repo.scopeKeyToAllTeams(keyId, workspaceId);

@@ -38,7 +38,7 @@ export const changePasswordAs = (...a: Parameters<SessionsService["changePasswor
 export const actorForKey = (...a: Parameters<KeysService["actorForKey"]>) => s().keys.actorForKey(...a);
 export const scopeKeyToAllTeams = (q: Q, keyId: string, workspaceId: string) => s().db.within(q, () => s().keys.scopeKeyToAllTeams(keyId, workspaceId));
 export const listKeys = (...a: Parameters<KeysService["listKeys"]>) => s().keys.listKeys(...a);
-export const agentsPage = (...a: Parameters<KeysService["agentsPage"]>) => s().keys.agentsPage(...a);
+export const keysPage = (...a: Parameters<KeysService["keysPage"]>) => s().keys.keysPage(...a);
 export const createKeyAs = (...a: Parameters<KeysService["createKeyAs"]>) => s().keys.createKeyAs(...a);
 export const setKeyTeamsAs = (...a: Parameters<KeysService["setKeyTeamsAs"]>) => s().keys.setKeyTeamsAs(...a);
 export const revokeKeyAs = (...a: Parameters<KeysService["revokeKeyAs"]>) => s().keys.revokeKeyAs(...a);

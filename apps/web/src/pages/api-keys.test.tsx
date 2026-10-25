@@ -2,16 +2,16 @@ import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { apiError, renderApp } from "../test/harness";
-import { agentsPage, key } from "../test/data";
+import { apiKeysPage, key } from "../test/data";
 
 const SECRET = "wh_" + "S3cr3t".repeat(6);
 
-describe("the Agents page", () => {
+describe("the API keys page", () => {
   test("lists the active keys with name, prefix and when each was used, never a key value", async () => {
-    renderApp("/agents", (s) =>
-      s.on("GET /api/app/agents", agentsPage([key({ id: "k1", name: "Ada's laptop", lastUsedAt: new Date().toISOString() }), key({ id: "k2", name: "CI bot", prefix: "wh_zzzzzzz" })])),
+    renderApp("/api-keys", (s) =>
+      s.on("GET /api/app/keys", apiKeysPage([key({ id: "k1", name: "Ada's laptop", lastUsedAt: new Date().toISOString() }), key({ id: "k2", name: "CI bot", prefix: "wh_zzzzzzz" })])),
     );
-    await screen.findByRole("heading", { level: 1, name: "Agents & API keys" });
+    await screen.findByRole("heading", { level: 1, name: "API keys" });
     expect(await screen.findByText("Ada's laptop")).toBeTruthy();
     expect(screen.getByText("used just now")).toBeTruthy();
     expect(screen.getByText("never used")).toBeTruthy();
@@ -20,12 +20,12 @@ describe("the Agents page", () => {
   });
 
   test("with no keys it says so", async () => {
-    renderApp("/agents", (s) => s.on("GET /api/app/agents", agentsPage([])));
+    renderApp("/api-keys", (s) => s.on("GET /api/app/keys", apiKeysPage([])));
     await screen.findByText("No active keys. Create one above.");
   });
 
   test("revoked keys stay out of the way until asked for, struck through, with no actions", async () => {
-    renderApp("/agents", (s) => s.on("GET /api/app/agents", agentsPage([key(), key({ id: "k2", name: "Old bot", revokedAt: "2026-10-10T00:00:00.000Z" })])));
+    renderApp("/api-keys", (s) => s.on("GET /api/app/keys", apiKeysPage([key(), key({ id: "k2", name: "Old bot", revokedAt: "2026-10-10T00:00:00.000Z" })])));
     const show = await screen.findByRole("button", { name: "Show revoked keys (1)" });
     expect(screen.queryByText("Old bot")).toBeNull();
     await userEvent.setup().click(show);
@@ -37,8 +37,8 @@ describe("the Agents page", () => {
   test("creating a key shows the secret once, with a note, and the list reads again without it", async () => {
     const created = key({ id: "k9", name: "CI bot", prefix: SECRET.slice(0, 10) });
     let keys = [key()];
-    const { server } = renderApp("/agents", (s) => {
-      s.on("GET /api/app/agents", () => agentsPage(keys));
+    const { server } = renderApp("/api-keys", (s) => {
+      s.on("GET /api/app/keys", () => apiKeysPage(keys));
       s.on("POST /api/app/keys", () => {
         keys = [created, ...keys];
         return Response.json({ key: created, secret: SECRET }, { status: 201 });
@@ -56,8 +56,8 @@ describe("the Agents page", () => {
   });
 
   test("a key is made for the teams ticked, and with none ticked nothing is sent", async () => {
-    const { server } = renderApp("/agents", (s) => {
-      s.on("GET /api/app/agents", agentsPage([key()]));
+    const { server } = renderApp("/api-keys", (s) => {
+      s.on("GET /api/app/keys", apiKeysPage([key()]));
       s.on("POST /api/app/keys", Response.json({ key: key({ id: "k9", name: "CI bot" }), secret: SECRET }, { status: 201 }));
     });
     const user = userEvent.setup();
@@ -74,8 +74,8 @@ describe("the Agents page", () => {
   });
 
   test("each key shows the teams it can open; one with none says it reaches nothing", async () => {
-    renderApp("/agents", (s) =>
-      s.on("GET /api/app/agents", agentsPage([key({ id: "k1", name: "Wide", teams: [{ key: "AA", name: "Alpha" }, { key: "BB", name: "Beta" }] }), key({ id: "k2", name: "Orphan", teams: [] })])),
+    renderApp("/api-keys", (s) =>
+      s.on("GET /api/app/keys", apiKeysPage([key({ id: "k1", name: "Wide", teams: [{ key: "AA", name: "Alpha" }, { key: "BB", name: "Beta" }] }), key({ id: "k2", name: "Orphan", teams: [] })])),
     );
     const wide = (await screen.findByText("Wide")).closest("li") as HTMLElement;
     expect(within(wide).getByText("AA")).toBeTruthy();
@@ -85,8 +85,8 @@ describe("the Agents page", () => {
   });
 
   test("changing a key's teams starts from its own, saves the list, and an empty list cannot be saved", async () => {
-    const { server } = renderApp("/agents", (s) => {
-      s.on("GET /api/app/agents", agentsPage([key({ id: "k1", name: "Narrow", teams: [{ key: "AA", name: "Alpha" }] })]));
+    const { server } = renderApp("/api-keys", (s) => {
+      s.on("GET /api/app/keys", apiKeysPage([key({ id: "k1", name: "Narrow", teams: [{ key: "AA", name: "Alpha" }] })]));
       s.on("PATCH /api/app/keys/k1", { key: key({ id: "k1", teams: [{ key: "AA", name: "Alpha" }, { key: "BB", name: "Beta" }] }) });
     });
     const user = userEvent.setup();
@@ -104,16 +104,16 @@ describe("the Agents page", () => {
   });
 
   test("a key the server refuses (too many) is explained, with no secret shown", async () => {
-    renderApp("/agents", (s) => s.on("POST /api/app/keys", apiError(429, "rate_limited", "Too many attempts. Try again in 60 minutes.")));
+    renderApp("/api-keys", (s) => s.on("POST /api/app/keys", apiError(429, "rate_limited", "Too many attempts. Try again in 60 minutes.")));
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Create key" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Too many attempts. Try again in 60 minutes.");
   });
 
   test("Revoke, Mark all seen and the docs:write switch each call the API for that key and read the page again", async () => {
-    const { server } = renderApp("/agents", (s) => {
+    const { server } = renderApp("/api-keys", (s) => {
       s.on("DELETE /api/app/keys/k1", { ok: true });
-      s.on("POST /api/app/agents/mark-all-seen", { ok: true });
+      s.on("POST /api/app/keys/mark-all-seen", { ok: true });
       s.on("PATCH /api/app/keys/k1", { key: key({ canWriteDocs: true }) });
     });
     const user = userEvent.setup();
@@ -122,15 +122,15 @@ describe("the Agents page", () => {
     await waitFor(() => expect(server.sent("PATCH /api/app/keys/k1")).toHaveLength(1));
     expect(server.sent("PATCH /api/app/keys/k1")[0].body).toEqual({ docsWrite: true });
     await user.click(within(row).getByRole("button", { name: "Mark all seen" }));
-    await waitFor(() => expect(server.sent("POST /api/app/agents/mark-all-seen")).toHaveLength(1));
-    expect(server.sent("POST /api/app/agents/mark-all-seen")[0].body).toEqual({ keyId: "k1" });
+    await waitFor(() => expect(server.sent("POST /api/app/keys/mark-all-seen")).toHaveLength(1));
+    expect(server.sent("POST /api/app/keys/mark-all-seen")[0].body).toEqual({ keyId: "k1" });
     await user.click(within(row).getByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/keys/k1")).toHaveLength(1));
-    await waitFor(() => expect(server.sent("GET /api/app/agents").length).toBeGreaterThan(3));
+    await waitFor(() => expect(server.sent("GET /api/app/keys").length).toBeGreaterThan(3));
   });
 
   test("the setup guide carries the commands from the server, and none of them holds a key", async () => {
-    renderApp("/agents", (s) => s.on("GET /api/app/agents", agentsPage([key()], { teamKey: "WH", linkRepo: "/wheelhouse:setup WH" })));
+    renderApp("/api-keys", (s) => s.on("GET /api/app/keys", apiKeysPage([key()], { teamKey: "WH", linkRepo: "/wheelhouse:setup WH" })));
     await screen.findByText("2. Pick your setup");
     expect(document.body.textContent).toContain("/wheelhouse:setup WH");
     expect(document.body.textContent).toContain("https://wh.example.test/mcp");

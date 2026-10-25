@@ -12,6 +12,7 @@ const TEAM_SECTIONS: Record<string, string> = {
   decisions: "Decisions",
   glossary: "Glossary",
   cycles: "Cycles",
+  agents: "Agents",
   members: "Team members",
   settings: "Team settings",
   onboarding: "Onboarding",
@@ -29,7 +30,8 @@ const WORKSPACE_PAGES: Record<string, { label: string; item?: string }> = {
   initiatives: { label: "Initiatives", item: "Initiative" },
   projects: { label: "Projects", item: "Project" },
   workspace: { label: "Members" },
-  agents: { label: "Agents & API keys" },
+  agents: { label: "Agents", item: "Agent" },
+  "api-keys": { label: "API keys" },
 };
 
 /**

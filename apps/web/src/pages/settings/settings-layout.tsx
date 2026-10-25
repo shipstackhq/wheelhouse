@@ -23,7 +23,7 @@ const ITEMS: { group: string; items: { to: string; label: string; icon?: IconPai
     items: [
       { to: "/settings/workspace", label: "General", icon: SETTINGS_ICONS.general },
       { to: "/settings/members", label: "Members", icon: SETTINGS_ICONS.members },
-      { to: "/settings/agents", label: "Agents & API keys", icon: SETTINGS_ICONS.agents },
+      { to: "/settings/api-keys", label: "API keys", icon: SETTINGS_ICONS.agents },
       { to: "/settings/teams", label: "Teams", icon: SETTINGS_ICONS.teams },
     ],
   },

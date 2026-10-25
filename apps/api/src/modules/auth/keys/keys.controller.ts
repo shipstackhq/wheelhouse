@@ -14,14 +14,14 @@ import { createKeyDto, markAllSeenDto, patchKeyDto, type CreateKeyDto, type Mark
 export class KeysController {
   constructor(@Inject(KeysService) private readonly keys: KeysService) {}
 
-  /** The Agents page: the workspace's keys (never the key values) and the commands to connect an agent. */
-  @Get("agents")
-  agents(@Req() req: SessionRequest) {
-    return this.keys.agentsPage(req.human, requestOrigin(req));
+  /** The API keys page: the workspace's keys (never the key values) and the commands to connect an agent. */
+  @Get("keys")
+  page(@Req() req: SessionRequest) {
+    return this.keys.keysPage(req.human, requestOrigin(req));
   }
 
   /** Reset an agent's queue (`keyId`), in one team (`teamKey`) or everywhere. */
-  @Post("agents/mark-all-seen")
+  @Post("keys/mark-all-seen")
   @HttpCode(200)
   async markAllSeen(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(markAllSeenDto)) body: MarkAllSeenDto) {
     await markAllSeen(req.human.actor, { keyId: body.keyId, teamRef: body.teamKey });

@@ -47,7 +47,7 @@ function Members({ teamKey, teamName, myRole, members }: { teamKey: string; team
   const admins = members.filter((m) => m.role === "admin").length;
 
   return (
-    <div className="h-full overflow-y-auto bg-bg">
+    <div className="h-full overflow-y-auto bg-page">
       <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
         <div className="mb-2 flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold tracking-tight">Team members</h1>

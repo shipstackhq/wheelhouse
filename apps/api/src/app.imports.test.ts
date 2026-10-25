@@ -16,8 +16,8 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { ImagesModule } from "./modules/images/images.module";
 import { StreamApiModule } from "./platform/streams/stream-api.module";
+import { AgentsModule } from "./modules/agents/agents.module";
 import { TeamsModule } from "./modules/teams/teams.module";
-import { DevicesController } from "./modules/daemon/devices.controller";
 
 const names = (xs: unknown[]) => xs.map((x) => (x as { name: string }).name);
 
@@ -25,13 +25,13 @@ describe("what each SERVICE_ROLE loads", () => {
   test("all (the default) loads everything: the legacy group and both sides of the daemon module", () => {
     const imports = buildAppImports("all");
     assert.ok(imports.includes(LegacyApiModule));
-    assert.deepEqual(names(daemonControllers("all")), ["DaemonController", "DevicesController"]);
+    assert.deepEqual(names(daemonControllers("all")), ["DaemonController", "DevicesController", "ChatController"]);
     assert.ok(daemonProviders("all").includes(DaemonSweep));
   });
 
   test("api serves people: the legacy group and the devices routes, but not the machine API or the sweep", () => {
     assert.ok(buildAppImports("api").includes(LegacyApiModule));
-    assert.deepEqual(daemonControllers("api"), [DevicesController]);
+    assert.deepEqual(names(daemonControllers("api")), ["DevicesController", "ChatController"]);
     assert.ok(!daemonProviders("api").includes(DaemonSweep));
   });
 
@@ -53,7 +53,7 @@ describe("what each SERVICE_ROLE loads", () => {
 });
 
 describe("the modules that serve people only", () => {
-  for (const [name, mod] of [["teams", TeamsModule], ["docs", DocsModule], ["issues", IssuesModule], ["map", MapModule], ["github", GithubModule], ["auth", AuthModule], ["dashboard", DashboardModule], ["notifications", NotificationsModule], ["broadcasts", BroadcastsModule], ["images", ImagesModule], ["people's stream", StreamApiModule]] as const) {
+  for (const [name, mod] of [["teams", TeamsModule], ["docs", DocsModule], ["issues", IssuesModule], ["map", MapModule], ["github", GithubModule], ["auth", AuthModule], ["dashboard", DashboardModule], ["notifications", NotificationsModule], ["agents", AgentsModule], ["broadcasts", BroadcastsModule], ["images", ImagesModule], ["people's stream", StreamApiModule]] as const) {
     test(`${name} is in the api and all roles and not in the daemon role`, () => {
       assert.ok(buildAppImports("api").includes(mod));
       assert.ok(buildAppImports("all").includes(mod));

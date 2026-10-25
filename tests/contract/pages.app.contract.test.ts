@@ -37,8 +37,8 @@ describe("every endpoint needs a signed-in person", () => {
     ["PATCH", `/api/app/workspace/members/${sid}`, { role: "member" }],
     ["DELETE", `/api/app/workspace/members/${sid}`],
     ["POST", "/api/app/me/password", { current: PW, next: PW + "x" }],
-    ["GET", "/api/app/agents"],
-    ["POST", "/api/app/agents/mark-all-seen", {}],
+    ["GET", "/api/app/keys"],
+    ["POST", "/api/app/keys/mark-all-seen", {}],
     ["POST", "/api/app/keys", { name: "x" }],
     ["DELETE", `/api/app/keys/${sid}`],
     ["PATCH", `/api/app/keys/${sid}`, { docsWrite: true }],
@@ -85,7 +85,7 @@ describe("a forged request is refused before anything happens", () => {
     }
     const workspace = await app("GET", "/api/app/workspace", o.sess);
     assert.equal(workspace.json.members.length, 2, "nobody was removed");
-    assert.equal((await app("GET", "/api/app/agents", o.sess)).json.keys.length, 0, "no key was made");
+    assert.equal((await app("GET", "/api/app/keys", o.sess)).json.keys.length, 0, "no key was made");
     assert.deepEqual((await app("GET", "/api/app/teams", o.sess)).json, { teams: [] });
     assert.equal((await login(o.email)).status, 401, "the password was not changed");
     assert.equal((await login(o.email, PW)).status, 200);
@@ -200,7 +200,7 @@ describe("POST /api/app/me/password", () => {
   });
 });
 
-describe("API keys and the Agents page", () => {
+describe("API keys and the API keys page", () => {
   test("the secret is in the creation response only; the page lists names and prefixes, never values", async () => {
     const p = await signUp();
     const created = await app("POST", "/api/app/keys", p.sess, { body: { name: "  CI bot " } });
@@ -211,7 +211,7 @@ describe("API keys and the Agents page", () => {
     assert.equal(created.json.key.prefix, created.json.secret.slice(0, 10));
     assert.equal(created.json.key.canWriteDocs, false);
 
-    const page = await app("GET", "/api/app/agents", p.sess);
+    const page = await app("GET", "/api/app/keys", p.sess);
     assert.equal(page.status, 200);
     assert.equal(page.json.keys.length, 1);
     assert.ok(!page.text.includes(created.json.secret), "the value never comes back");
@@ -228,16 +228,16 @@ describe("API keys and the Agents page", () => {
     assert.deepEqual(before.json.data, [], "the new workspace has no teams, and sees none of workspace A's");
     assert.deepEqual((await app("DELETE", `/api/app/keys/${json.key.id}`, p.sess)).json, { ok: true });
     assert.equal((await v1({ key: json.secret }, "list_projects")).status, 401);
-    const listed = (await app("GET", "/api/app/agents", p.sess)).json.keys[0];
+    const listed = (await app("GET", "/api/app/keys", p.sess)).json.keys[0];
     assert.ok(listed.revokedAt);
   });
 
-  test("a blank name gets a default; the Agents page's commands carry the team key when there is exactly one team", async () => {
+  test("a blank name gets a default; the API keys page's commands carry the team key when there is exactly one team", async () => {
     const p = await signUp();
     assert.equal((await app("POST", "/api/app/keys", p.sess, { body: { name: "  " } })).json.key.name, "Claude agent");
-    assert.equal((await app("GET", "/api/app/agents", p.sess)).json.setup.teamKey, "KEY");
+    assert.equal((await app("GET", "/api/app/keys", p.sess)).json.setup.teamKey, "KEY");
     await app("POST", "/api/app/teams", p.sess, { body: { name: "Rocket", key: "RKT" } });
-    const setup = (await app("GET", "/api/app/agents", p.sess)).json.setup;
+    const setup = (await app("GET", "/api/app/keys", p.sess)).json.setup;
     assert.equal(setup.teamKey, "RKT");
     assert.ok(setup.linkRepo.includes("RKT"));
     assert.ok(!/wh_[A-Za-z0-9_-]{10}/.test(JSON.stringify(setup)), "no key in any command");
@@ -248,7 +248,7 @@ describe("API keys and the Agents page", () => {
     const k = (await app("POST", "/api/app/keys", p.sess, { body: { name: "writer" } })).json.key;
     const on = await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { docsWrite: true } });
     assert.equal(on.json.key.canWriteDocs, true);
-    assert.equal((await app("GET", "/api/app/agents", p.sess)).json.keys[0].canWriteDocs, true);
+    assert.equal((await app("GET", "/api/app/keys", p.sess)).json.keys[0].canWriteDocs, true);
     assert.equal((await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { docsWrite: false } })).json.key.canWriteDocs, false);
     const bad = await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { docsWrite: "yes" } });
     assert.equal(bad.status, 400);
@@ -261,17 +261,17 @@ describe("API keys and the Agents page", () => {
     const k = (await app("POST", "/api/app/keys", theirs.sess, { body: { name: "theirs" } })).json;
     assert.equal((await app("DELETE", `/api/app/keys/${k.key.id}`, mine.sess)).status, 404);
     assert.equal((await app("PATCH", `/api/app/keys/${k.key.id}`, mine.sess, { body: { docsWrite: true } })).status, 404);
-    assert.equal((await app("POST", "/api/app/agents/mark-all-seen", mine.sess, { body: { keyId: k.key.id } })).status, 404);
+    assert.equal((await app("POST", "/api/app/keys/mark-all-seen", mine.sess, { body: { keyId: k.key.id } })).status, 404);
     assert.equal((await v1({ key: k.secret }, "list_projects")).status, 200);
-    assert.equal((await app("GET", "/api/app/agents", theirs.sess)).json.keys[0].canWriteDocs, false);
-    assert.deepEqual((await app("GET", "/api/app/agents", mine.sess)).json.keys, [], "and it is not in my list");
+    assert.equal((await app("GET", "/api/app/keys", theirs.sess)).json.keys[0].canWriteDocs, false);
+    assert.deepEqual((await app("GET", "/api/app/keys", mine.sess)).json.keys, [], "and it is not in my list");
   });
 
   test("marking all seen answers ok, for one key and for everything", async () => {
     const p = await signUp();
     const k = (await app("POST", "/api/app/keys", p.sess, { body: { name: "a" } })).json.key;
-    assert.deepEqual((await app("POST", "/api/app/agents/mark-all-seen", p.sess, { body: { keyId: k.id } })).json, { ok: true });
-    assert.deepEqual((await app("POST", "/api/app/agents/mark-all-seen", p.sess, { body: {} })).json, { ok: true });
+    assert.deepEqual((await app("POST", "/api/app/keys/mark-all-seen", p.sess, { body: { keyId: k.id } })).json, { ok: true });
+    assert.deepEqual((await app("POST", "/api/app/keys/mark-all-seen", p.sess, { body: {} })).json, { ok: true });
   });
 
   test("ten keys an hour per person, then 429 with a Retry-After", async () => {

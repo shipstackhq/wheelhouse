@@ -30,7 +30,7 @@ A run today is *(issue, device, repository, model)*. It becomes *(issue, assista
 - **The offer:** the signed `job.offer` gains an `agent` block. The daemon's runner already builds the prompt (`daemon/src/runner/claude.mjs`), so the instructions go in there.
 - **The run:** `device_jobs` records `agent_id` and a **snapshot** of the instructions it ran with, so a run can be audited after the assistant is edited.
 - **Instructions only narrow.** The daemon's local allow and deny lists (no `git push`, `curl`, `sudo`, …) always win. An assistant can restrict what a run may do, never widen it.
-- **Naming:** the existing "Agents & API keys" page is about outside agents that connect by key. Assistants need their own name in the UI ("Team agents") so the two are not confused.
+- **Naming:** the existing API keys page is about outside agents that connect by key. Assistants need their own name in the UI ("Team agents") so the two are not confused.
 
 ## Two kinds
 

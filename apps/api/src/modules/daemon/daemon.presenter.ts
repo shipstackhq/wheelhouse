@@ -1,6 +1,6 @@
-import type { DeviceJobState } from "../../db/schema";
+import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { DEFAULT_MODELS, ONLINE_WINDOW_MS, type Device } from "./device-common";
-import type { JobRow, MessageRow } from "./daemon.repository";
+import type { ChatMessageRow, ChatThreadRow, JobRow, MessageRow } from "./daemon.repository";
 
 /** Row to API shape for devices and runs, and a signed message to its stream frame. Pure functions. */
 
@@ -70,3 +70,60 @@ export function jobView(j: JobRow, extra: { deviceName?: string | null; reposito
 export type JobView = ReturnType<typeof jobView>;
 
 export const formatMessage = (m: MessageRow) => `id: ${m.seq}\nevent: ${m.type}\ndata: ${JSON.stringify({ message: m.message, signature: m.signature })}\n\n`;
+
+/** The chat views: the shapes `ChatThreadView` and `ChatMessageView` in @wheelhouse/api-client mirror (docs/chat.md). */
+export type ChatThreadView = {
+  id: string;
+  title: string;
+  teamKey: string;
+  repositoryId: string | null;
+  repositoryName: string | null;
+  deviceId: string;
+  deviceName: string;
+  deviceStatus: "online" | "offline" | "revoked";
+  model: string;
+  running: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+export type ChatMessageView = {
+  id: string;
+  seq: number;
+  role: "user" | "assistant";
+  content: string;
+  state: ChatMessageState;
+  error: string | null;
+  activity: { name: string; summary: string }[];
+  costUsd: number | null;
+  createdAt: string;
+};
+
+export function chatThreadView(r: { thread: ChatThreadRow; teamKey: string; repositoryName: string | null; deviceName: string; deviceLastSeenAt: Date | null; deviceRevokedAt: Date | null; running: boolean }): ChatThreadView {
+  const d = { lastSeenAt: r.deviceLastSeenAt, revokedAt: r.deviceRevokedAt };
+  return {
+    id: r.thread.id,
+    title: r.thread.title,
+    teamKey: r.teamKey,
+    repositoryId: r.thread.repositoryId,
+    repositoryName: r.repositoryName,
+    deviceId: r.thread.deviceId,
+    deviceName: r.deviceName,
+    deviceStatus: d.revokedAt ? "revoked" : deviceOnline(d) ? "online" : "offline",
+    model: r.thread.model,
+    running: !!r.running,
+    createdAt: r.thread.createdAt.toISOString(),
+    updatedAt: r.thread.updatedAt.toISOString(),
+  };
+}
+
+export const chatMessageView = (m: ChatMessageRow): ChatMessageView => ({
+  id: m.id,
+  seq: m.seq,
+  role: m.role,
+  content: m.content,
+  state: m.state,
+  error: m.error,
+  activity: m.activity,
+  costUsd: m.costUsd === null ? null : Number(m.costUsd),
+  createdAt: m.createdAt.toISOString(),
+});
