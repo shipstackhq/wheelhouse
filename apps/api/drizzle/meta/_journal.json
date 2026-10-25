@@ -288,6 +288,34 @@
       "when": 1792711941057,
       "tag": "0040_team_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792893662933,
+      "tag": "0041_notifications_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792896803418,
+      "tag": "0042_notifications_trash",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792897835882,
+      "tag": "0043_notifications_body_format",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792899172414,
+      "tag": "0044_broadcasts",
+      "breakpoints": true
     }
   ]
 }

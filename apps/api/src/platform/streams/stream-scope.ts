@@ -50,7 +50,7 @@ export function workspaceScope() {
     return {
       scope: { workspace: actor.workspaceId },
       where: and(inWorkspace, visible.length ? inArray(schema.events.teamId, visible) : sql`false`) as ReturnType<typeof eq>,
-      allow: (e) => set.has(e.teamId),
+      allow: (e) => e.teamId !== null && set.has(e.teamId),
       // Teams joined or left while the page is open: the live set follows, so a removal stops events within a few seconds.
       recheck: async () => {
         set = new Set((await visibleTeamIds(await getDb(), actor)) ?? []);

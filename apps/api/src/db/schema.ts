@@ -11,3 +11,5 @@ export * from "./tables/docs";
 export * from "./tables/github";
 export * from "./tables/daemon";
 export * from "./tables/events";
+export * from "./tables/broadcasts";
+export * from "./tables/notifications";

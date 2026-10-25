@@ -10,8 +10,10 @@
  */
 
 export type StreamEvent = {
-  workspaceId: string;
-  teamId: string;
+  /** Null on a signal for one person that belongs to no workspace (an instance-level inbox item). */
+  workspaceId: string | null;
+  /** The team, or null for a workspace-level signal (an inbox item that belongs to no team). */
+  teamId: string | null;
   /** The events-table sequence. Absent on transient signals (an agent acked its queue), which are not in the log. */
   seq?: number;
   type: string;
@@ -20,9 +22,14 @@ export type StreamEvent = {
   actorKind?: string;
   actorName?: string;
   summary?: string;
+  /**
+   * Set on a signal meant for one person only (an inbox change). It goes to that user's streams alone, whatever their scope
+   * (the `user` key below), and carries no content. Absent on everything else, which every stream of the scope receives.
+   */
+  recipientUserId?: string;
 };
 
-export type Scope = { team: string } | { workspace: string };
+export type Scope = { team: string } | { workspace: string } | { user: string };
 
 export interface EventBus {
   publish(e: StreamEvent): void;
@@ -31,13 +38,17 @@ export interface EventBus {
   size(): number;
 }
 
-const key = (s: Scope) => ("team" in s ? `team:${s.team}` : `workspace:${s.workspace}`);
+const key = (s: Scope) => ("team" in s ? `team:${s.team}` : "workspace" in s ? `workspace:${s.workspace}` : `user:${s.user}`);
 
 export class MemoryBus implements EventBus {
   private subs = new Map<string, Set<(e: StreamEvent) => void>>();
 
   publish(e: StreamEvent) {
-    for (const k of [`team:${e.teamId}`, `workspace:${e.workspaceId}`]) {
+    // A signal for one person reaches that person's streams only; everything else goes to its team and workspace.
+    const keys = e.recipientUserId
+      ? [`user:${e.recipientUserId}`]
+      : [...(e.teamId ? [`team:${e.teamId}`] : []), ...(e.workspaceId ? [`workspace:${e.workspaceId}`] : [])];
+    for (const k of keys) {
       for (const fn of [...(this.subs.get(k) ?? [])]) {
         try {
           fn(e);

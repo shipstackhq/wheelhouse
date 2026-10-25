@@ -6,7 +6,9 @@ contract (`/mcp`, `/api/v1`, webhooks, streams), and the Next app does not have 
 `@wheelhouse/api-client`; the CSRF rules are in `apps/api/src/common/http/csrf.ts`.
 
 Built so far: `GET /api/app/auth/options`, `POST /api/app/auth/login`, `POST /api/app/auth/signup`,
-`POST /api/app/auth/logout`, `GET /api/app/me`, `GET /api/app/teams` (WH-93), and everything under "Built by WH-95" below. The
+`POST /api/app/auth/logout`, `GET /api/app/me`, `GET /api/app/teams` (WH-93), the inbox (`GET /api/app/notifications`, `GET
+/api/app/notifications/unread-count`, `POST /api/app/notifications/read-all`, `POST /api/app/notifications/:id/read`,
+`POST /api/app/notifications/:id/archive`, `POST /api/app/notifications/:id/unarchive`, `DELETE /api/app/notifications/:id` (to the trash; purged after 30 days), `POST /api/app/notifications/:id/restore`; the list takes `view=inbox|archived|trash`; always the signed-in person's own items), and everything under "Built by WH-95" below. The
 other page-port issues add the rest (inventory below).
 
 ## Conventions

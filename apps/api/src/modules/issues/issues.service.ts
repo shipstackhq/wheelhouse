@@ -12,6 +12,7 @@ import { DeliveriesService } from "../github/index";
 import { GraphService, SessionsService } from "../map/index";
 import { TeamAccessService } from "../teams/index";
 import { CyclesService, systemActor } from "./cycles/cycles.service";
+import { IssueNotifications } from "./issues.notifications";
 import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
 import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, fitsDepth, parseIssueRef, positionAmong, sameLabels, type IssueInput } from "./issues.rules";
 import { issueView } from "./issues.presenter";
@@ -31,6 +32,8 @@ export type IssueRelative = { ref: string; title: string; priority: IssueRow["pr
  * lookups as the chain is long. A closure table would make it constant, but every re-parent would then rewrite the moved issue's whole
  * subtree, and that is the common edit. Two people moving A under B and B under A at the same moment would each pass the check, so a
  * re-parent takes the team's row lock first, as cycles do, and the second one checks against the first one's result.
+ *
+ * Inbox items (assigned, commented, ready for review) are sent by `IssueNotifications` after the change commits, never inside its transaction.
  */
 @Injectable()
 export class IssuesService {
@@ -44,6 +47,7 @@ export class IssuesService {
     @Inject(DeliveriesService) private readonly deliveries: DeliveriesService,
     @Inject(GraphService) private readonly graph: GraphService,
     @Inject(SessionsService) private readonly sessions: SessionsService,
+    @Inject(IssueNotifications) private readonly notices: IssueNotifications,
   ) {}
 
   // ───────── the board ─────────
@@ -222,7 +226,7 @@ export class IssuesService {
   async createIssue(actor: Actor, teamRef: string, input: IssueInput & { title: string; status?: string }) {
     const team = await this.access.require(actor, teamRef, "edit");
     if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
-    return this.db.transaction(async () => {
+    const made = await this.db.transaction(async () => {
       await this.assertAssignee(team.id, input.assigneeId);
       const cycle = input.cycle == null ? null : await this.cycles.cycleForIssue(team.id, input.cycle);
       const inProject =
@@ -262,8 +266,10 @@ export class IssuesService {
         data: { ref, status: col.name, title: t.title, ...(parentId ? { parent: input.parent } : {}) },
       });
       const [withLabel] = await this.decorate([t]);
-      return { ...withLabel, ref, status: col.name };
+      return { row: t, out: { ...withLabel, ref, status: col.name } };
     });
+    if (made.row.assigneeId) await this.notices.assigned(actor, team, made.row, made.out.ref);
+    return made.out;
   }
 
   /**
@@ -272,9 +278,12 @@ export class IssuesService {
    * the current state instead of silently overwriting their change.
    */
   async updateIssue(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
-    return this.bindSession(actor, await this.applyUpdate(actor, ref, patch, expectedVersion));
+    const { out, assigned } = await this.applyUpdate(actor, ref, patch, expectedVersion);
+    if (assigned) await this.notices.assigned(actor, assigned.team, assigned.row, out.ref);
+    return this.bindSession(actor, out);
   }
 
+  /** The updated issue, and (when its assignee changed to someone) what the inbox needs to tell them, once the transaction has committed. */
   private applyUpdate(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
     return this.db.transaction(async () => {
       const resolved = await this.resolveIssue(actor, ref, "edit");
@@ -301,7 +310,7 @@ export class IssuesService {
           ? undefined
           : await this.projects.resolveIssueProject(team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
       const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange } as Record<string, unknown>);
-      if (!Object.keys(changes).length) return { ...issue, ref: r };
+      if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null };
       const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
       const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await this.cycles.cycleForIssue(team.id, newCycle)).id };
       const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, version: issue.version + 1, updatedAt: new Date() });
@@ -315,12 +324,15 @@ export class IssuesService {
         summary: `updated ${r}: ${Object.keys(changes).join(", ")}`,
         data: { ref: r, changes },
       });
-      return { ...t, ref: r };
+      const assigned = "assigneeId" in changes && row.assigneeId ? { team, row } : null;
+      return { out: { ...t, ref: r }, assigned };
     });
   }
 
   async moveIssue(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
-    return this.bindSession(actor, await this.applyMove(actor, ref, status, index, expectedVersion));
+    const { out, review } = await this.applyMove(actor, ref, status, index, expectedVersion);
+    if (review) await this.notices.movedToReview(actor, review.team, review.row, out.ref);
+    return this.bindSession(actor, out);
   }
 
   private applyMove(actor: Actor, ref: string, status: string, index?: number, expectedVersion?: number) {
@@ -346,7 +358,8 @@ export class IssuesService {
           data: { ref: r, from: from.name, to: to.name, fromRole: from.role, toRole: to.role },
         });
       }
-      return { ...t, ref: r, status: to.name };
+      const review = from.id !== to.id && to.role === "review" ? { team, row: moved } : null;
+      return { out: { ...t, ref: r, status: to.name }, review };
     });
   }
 
@@ -388,7 +401,7 @@ export class IssuesService {
 
   async addComment(actor: Actor, ref: string, body: string) {
     if (!body?.trim()) throw new ServiceError("invalid", "Comment body is required");
-    const { c, issue } = await this.db.transaction(async () => {
+    const { c, issue, team, r } = await this.db.transaction(async () => {
       const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "edit");
       const c = await this.repo.insertComment({ issueId: issue.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() });
       await this.events.emit(actor, team.id, {
@@ -398,8 +411,9 @@ export class IssuesService {
         summary: `commented on ${r}`,
         data: { ref: r, commentId: c.id, body: c.body },
       });
-      return { c, issue };
+      return { c, issue, team, r };
     });
+    await this.notices.commented(actor, team, issue, r, c);
     await this.bindSession(actor, issue);
     return c;
   }

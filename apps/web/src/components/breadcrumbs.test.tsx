@@ -24,6 +24,7 @@ describe("the breadcrumb trail", () => {
   test("admin and new-team pages, and a team that is not in the list falls back to its key", () => {
     expect(trail("/admin/invites")).toEqual(["Analytical Engines -> /", "Admin", "Invite a new workspace"]);
     expect(trail("/teams/new")).toEqual(["Analytical Engines -> /", "Teams", "New team"]);
+    expect(trail("/inbox")).toEqual(["Analytical Engines -> /", "Inbox"]);
     expect(trail("/t/ZZ/map")[1]).toBe("ZZ -> /t/ZZ");
   });
 });

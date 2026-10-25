@@ -82,6 +82,8 @@ export function serverWithData() {
   server.on("GET /api/app/workspace", workspace());
   server.on("GET /api/app/agents", agentsPage());
   server.on("GET /api/app/invites", { invites: [] });
+  server.on("GET /api/app/notifications", { items: [], nextCursor: null });
+  server.on("GET /api/app/notifications/unread-count", { count: 0 });
   server.on("GET /api/app/teams/AA/members", teamMembers());
   server.on("GET /api/app/me/workspaces", { workspaces: [{ id: "t1", name: "Analytical Engines", role: "owner", active: true }] });
   server.on("GET /api/app/access/teams", { teams: [] });

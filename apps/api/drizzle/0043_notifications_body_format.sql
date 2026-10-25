@@ -1,0 +1,2 @@
+ALTER TABLE "notifications" ADD COLUMN "body_format" text DEFAULT 'text' NOT NULL;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_body_format_check" CHECK ("body_format" in ('text', 'markdown'));

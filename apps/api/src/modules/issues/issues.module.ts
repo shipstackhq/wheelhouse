@@ -3,6 +3,7 @@ import { Database } from "../../platform/database/database";
 import { EventsModule } from "../../platform/events/events.module";
 import { GithubModule } from "../github/github.module";
 import { MapModule } from "../map/map.module";
+import { NotificationsCoreModule } from "../notifications/index";
 import { TeamsModule } from "../teams/teams.module";
 import { BoardController } from "./board.controller";
 import { CyclesController } from "./cycles/cycles.controller";
@@ -14,6 +15,7 @@ import { InitiativesService } from "./initiatives/initiatives.service";
 import { IssuesController } from "./issues.controller";
 import { bindIssuesLegacy } from "./issues.legacy";
 import { IssuesListeners } from "./issues.listeners";
+import { IssueNotifications } from "./issues.notifications";
 import { IssuesRepository } from "./issues.repository";
 import { IssuesService } from "./issues.service";
 import { ProjectsController } from "./projects/projects.controller";
@@ -26,9 +28,9 @@ import { ProjectsService } from "./projects/projects.service";
  * through events (`IssuesListeners`), and the map never reaches it (its graph only reads the `issue_nodes` table).
  */
 @Module({
-  imports: [EventsModule, TeamsModule, GithubModule, MapModule],
+  imports: [EventsModule, TeamsModule, GithubModule, MapModule, NotificationsCoreModule],
   controllers: [BoardController, IssuesController, CyclesController, ProjectsController, InitiativesController],
-  providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners],
+  providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners, IssueNotifications],
   exports: [IssuesService, CyclesService, ProjectsService, InitiativesService],
 })
 export class IssuesModule implements OnModuleInit {

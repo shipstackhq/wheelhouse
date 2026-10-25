@@ -323,6 +323,16 @@ export class DaemonRepository {
     return row;
   }
 
+  /** What a run's notice names: its issue's number and title and its team's key and workspace. Read only; undefined when the issue is gone. */
+  async issueForNotice(issueId: string) {
+    const [row] = await this.db.q
+      .select({ number: issues.number, title: issues.title, teamId: issues.teamId, workspaceId: issues.workspaceId, teamKey: teams.key })
+      .from(issues)
+      .innerJoin(teams, eq(teams.id, issues.teamId))
+      .where(eq(issues.id, issueId));
+    return row;
+  }
+
   /** The pull request of an earlier run on the same branch and repository, if there is one. */
   async earlierPullRequest(j: JobRow) {
     const [earlier] = await this.db.q

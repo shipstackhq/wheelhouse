@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { NAV_ICON, NAV_ICON_RAIL, NAV_ITEM, NAV_ITEM_RAIL, NavLink } from "./nav-link";
 import { AddIcon, ChevronRightIcon, MoreFillIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
 import { SectionLabel, SidebarCloseButton, SidebarFrame, SidebarGroup, useFolded } from "./sidebar-frame";
+import { useUnreadCount } from "../lib/notifications";
 import { useServices } from "../lib/services";
 import { TeamIcon } from "./team-icon";
 import { Tip } from "./tip";
@@ -117,6 +118,7 @@ export function Sidebar({
   const [teamsClosed, toggleTeamsClosed] = useFolded("Teams");
   // The person's own order of their teams: the server's, until they drag one. Kept in step with the server after each drop.
   const { api, queryClient } = useServices();
+  const unread = useUnreadCount().data ?? 0;
   const [orderKeys, setOrderKeys] = useState<string[] | null>(null);
   const latest = useRef<string[]>([]);
   const signature = teams.map((t) => t.key).join(",");
@@ -206,10 +208,10 @@ export function Sidebar({
           <SidebarCloseButton onClose={() => setOpen(false)} />
         </div>
         <nav aria-label="Main" className="flex-1 overflow-y-auto px-2 text-sm">
-          {/* The main items space themselves like the links in a section. The last three are placeholders: buttons with nothing behind them yet. */}
+          {/* The main items space themselves like the links in a section. The last two are placeholders: buttons with nothing behind them yet. */}
           <div className="space-y-0.5">
             <NavLink href="/" icon={NAV_ICONS.home} collapsed={collapsed}>Home</NavLink>
-            <NavButton icon={NAV_ICONS.inbox} collapsed={collapsed}>Inbox</NavButton>
+            <NavLink href="/inbox" icon={NAV_ICONS.inbox} collapsed={collapsed} badge={unread}>Inbox</NavLink>
             <NavButton icon={NAV_ICONS.agent} collapsed={collapsed}>Agent</NavButton>
             <NavButton icon={NAV_ICONS.myIssues} collapsed={collapsed}>My issues</NavButton>
           </div>
@@ -416,7 +418,7 @@ function TeamRow({ t, here, isOpen, collapsed, dragEnabled, onToggle, onMove, on
             id={`team-${t.key}`}
             className={clsx("ml-3 border-l border-line pl-1.5", collapsed && "md:ml-0 md:border-0 md:pl-0")}
           >
-            <div className="mt-0.5 space-y-2">
+            <div className="mt-0.5 space-y-0.5">
               {SECTIONS.map((g) => (
                 <div key={g.group} className={clsx("space-y-0.5", collapsed && "md:border-t md:border-line md:pt-1")}>
                   {g.items.map((i) => (

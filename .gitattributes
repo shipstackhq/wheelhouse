@@ -1,0 +1,3 @@
+# Drizzle writes a full copy of the schema for every migration. Generated, never edited by hand: GitHub collapses these in pull
+# request diffs and leaves them out of the line count.
+apps/api/drizzle/meta/*_snapshot.json linguist-generated=true
