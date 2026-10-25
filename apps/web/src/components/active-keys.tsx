@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { List } from "./list";
 import { SubmitButton } from "./submit-button";
 import { AgentIcon } from "./icons";

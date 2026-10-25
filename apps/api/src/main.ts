@@ -1,17 +1,15 @@
 import "reflect-metadata";
-import { configureEnvironment } from "./config";
+import { configureEnvironment } from "./platform/config/environment";
 
-configureEnvironment(); // before @wheelhouse/core is first used
+configureEnvironment(); // before the database or the libraries are first used
 
 const { NestFactory } = await import("@nestjs/core");
 const { AppModule } = await import("./app.module");
-const { rawText } = await import("./http/raw-text");
 const { serveWebApp, webDistDir } = await import("./web-static");
 type App = import("@nestjs/platform-express").NestExpressApplication;
 
 const app = await NestFactory.create<App>(AppModule, { bodyParser: false, logger: ["log", "warn", "error"] });
 app.disable("x-powered-by");
-app.use(rawText());
 // The React app, when it has been built (the image has it; in development Vite serves it): same origin, one port.
 const webDir = webDistDir();
 if (webDir) app.use(serveWebApp(webDir));

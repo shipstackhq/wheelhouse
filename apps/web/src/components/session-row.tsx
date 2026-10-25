@@ -1,6 +1,6 @@
 import clsx from "clsx";
-import { timeAgo } from "@wheelhouse/core/lib/time";
-import { groupByBucket, type SessionView } from "@wheelhouse/core/lib/session-buckets";
+import { timeAgo } from "@wheelhouse/shared/time";
+import { groupByBucket, type SessionView } from "@wheelhouse/shared/session-buckets";
 
 export type { SessionView };
 import { Tip } from "./tip";

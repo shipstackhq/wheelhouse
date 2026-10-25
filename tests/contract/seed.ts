@@ -11,11 +11,13 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "@wheelhouse/core/db";
-import { scopeKeyToAllTeams } from "@wheelhouse/core/lib/key-scope";
-import * as svc from "@wheelhouse/core/lib/service";
-import type { Actor } from "@wheelhouse/core/lib/access";
-import { hashPassword } from "@wheelhouse/core/lib/auth-core";
+import { getDb, schema } from "../../apps/api/src/db";
+import { scopeKeyToAllTeams } from "../../apps/api/src/modules/auth/auth.legacy";
+import { createIssue } from "../../apps/api/src/modules/issues/issues.legacy";
+import { createTeam } from "../../apps/api/src/modules/teams/teams.legacy";
+import { testApp } from "../../apps/api/src/test/app";
+import type { Actor } from "../../apps/api/src/common/actor";
+import { hashPassword } from "../../apps/api/src/modules/auth/passwords";
 import type { Fixtures, GithubFixture, WorkspaceFixture } from "./lib/fixtures";
 
 const arg = (name: string) => {
@@ -62,11 +64,11 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
   };
   const actor: Actor = { kind: "human", id: owner.id, name: owner.name, workspaceId: t.id };
   const teamKey = `CT${letter}`;
-  const team = await svc.createTeam(actor, { name: `Contract ${letter}`, key: teamKey });
+  const team = await createTeam(actor, { name: `Contract ${letter}`, key: teamKey });
   // A team is reachable only by its members (ADR-23): the owner got in by creating it, the workspace's other member is added here.
   await db.insert(schema.teamMembers).values({ teamId: team.id, userId: member.id, workspaceId: t.id, role: "editor", addedBy: owner.id });
-  const issue = await svc.createIssue(actor, teamKey, { title: `Contract issue ${letter}` });
-  const webhookIssue = await svc.createIssue(actor, teamKey, { title: `Webhook issue ${letter}` });
+  const issue = await createIssue(actor, teamKey, { title: `Contract issue ${letter}` });
+  const webhookIssue = await createIssue(actor, teamKey, { title: `Webhook issue ${letter}` });
   return {
     workspaceId: t.id,
     userId: owner.id,
@@ -85,6 +87,7 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
 }
 
 async function main() {
+  await testApp(); // the converted modules' functions (createTeam) run on the booted services
   const db = await getDb();
   const passwordHash = await hashPassword(PASSWORD);
   const a = await workspace("A", passwordHash);

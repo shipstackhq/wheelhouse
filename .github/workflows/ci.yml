@@ -56,15 +56,15 @@ jobs:
       - name: Migrations are in sync with the schema
         run: |
           pnpm db:generate
-          git status --porcelain packages/core/drizzle
-          test -z "$(git status --porcelain packages/core/drizzle)" || { echo "::error::packages/core/src/db/schema.ts changed without a migration. Run pnpm db:generate and commit packages/core/drizzle/."; exit 1; }
+          git status --porcelain apps/api/drizzle
+          test -z "$(git status --porcelain apps/api/drizzle)" || { echo "::error::apps/api/src/db/schema.ts changed without a migration. Run pnpm db:generate and commit apps/api/drizzle/."; exit 1; }
       - name: The React app builds
         run: pnpm build
 
   # The test suites, split so they run at the same time instead of one after another. The runner has 2 cores, so each job runs two
   # test files at once. Together these run exactly what `pnpm test` runs.
-  core-tests:
-    name: Core tests (${{ matrix.shard }}/3)
+  api-tests:
+    name: API tests (${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
@@ -81,7 +81,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - working-directory: packages/core
+      - working-directory: apps/api
         run: pnpm exec tsx --test --test-force-exit --test-concurrency=2 --test-shard=${{ matrix.shard }}/3 "src/**/*.test.ts"
 
   web-tests:
@@ -104,7 +104,7 @@ jobs:
         run: pnpm exec vitest run --shard=${{ matrix.shard }}/2 --maxWorkers=2
 
   server-tests:
-    name: API, client and repository tests
+    name: Shared, client and repository tests
     needs: changes
     if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
@@ -117,7 +117,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @wheelhouse/api test
+      - run: pnpm --filter @wheelhouse/shared test
       - run: pnpm --filter @wheelhouse/api-client test
       - run: pnpm exec tsx --conditions=react-server --test --test-concurrency=2 "tests/*.test.ts"
 
@@ -154,15 +154,15 @@ jobs:
           TEST_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/wheelhouse_test
         run: >-
           pnpm exec tsx --conditions=react-server --test --test-force-exit --test-concurrency=1
-          packages/core/src/lib/queue.test.ts tests/invites.test.ts packages/core/src/lib/workspaces-admin.test.ts tests/isolation.test.ts
-          packages/core/src/lib/version-lock.test.ts packages/core/src/tools/db-copy.test.ts packages/core/src/lib/workspace-scope.test.ts
-          packages/core/src/lib/constraints.test.ts packages/core/src/lib/join-tables.test.ts packages/core/src/lib/cycles.test.ts packages/core/src/lib/projects.test.ts packages/core/src/lib/initiatives.test.ts packages/core/src/lib/team-access.test.ts
+          apps/api/src/lib/queue.test.ts tests/invites.test.ts apps/api/src/lib/workspaces-admin.test.ts tests/isolation.test.ts
+          apps/api/src/lib/version-lock.test.ts apps/api/src/tools/db-copy.test.ts apps/api/src/lib/workspace-scope.test.ts
+          apps/api/src/lib/constraints.test.ts apps/api/src/lib/join-tables.test.ts apps/api/src/lib/cycles.test.ts apps/api/src/lib/projects.test.ts apps/api/src/lib/initiatives.test.ts apps/api/src/lib/team-access.test.ts
 
   # One check that says whether everything above passed, skipped suites counting as passed. Point branch rules here.
   tests:
     name: Lint, types, tests, build
     if: always()
-    needs: [changes, check, core-tests, web-tests, server-tests, postgres-tests]
+    needs: [changes, check, api-tests, web-tests, server-tests, postgres-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -217,7 +217,7 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/assets/missing-123.js)" = 404
       - name: Every migration was applied
         run: |
-          expected=$(node -p "require('./packages/core/drizzle/meta/_journal.json').entries.length")
+          expected=$(node -p "require('./apps/api/drizzle/meta/_journal.json').entries.length")
           applied=$(docker exec -e PGPASSWORD=ci $(docker ps -qf ancestor=postgres:18) psql -U postgres -d wheelhouse -tAc 'select count(*) from drizzle.__drizzle_migrations')
           echo "expected=$expected applied=$applied"
           test "$expected" = "$applied"

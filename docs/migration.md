@@ -8,7 +8,7 @@ Epic WH-87, reasoning in ADR-16, finished in WH-102. This page is a short record
 |---|---|
 | One Next.js app: pages, server actions, `/mcp`, `/api/v1`, webhooks and streams in one process | `apps/api` (NestJS) serves `/mcp`, `/api/v1`, `/api/app`, the GitHub webhook and connect flow and the live streams, and also serves the React build |
 | UI in `src/app` and `src/components`, 59 server actions | `apps/web` (React, Vite, React Router, TanStack Query) talking to `/api/app` through `@wheelhouse/api-client` |
-| Schema, service layer and libraries in `src/` | `packages/core`: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries |
+| Schema, service layer and libraries in `src/` | `packages/core`: schema, migrations, service layer, tools, sync, GitHub, the framework-free libraries (since folded into `apps/api`; the few files the web app shares are in `packages/shared`) |
 
 The data was moved by an exact export and import (`docs/cutover.md`), rehearsed on copies of the real data. The URLs, API key hashing, cookie names and environment variables did not change, so the plugin, the CLI, the GitHub App and existing keys needed no reconfiguration.
 
@@ -29,10 +29,10 @@ PGLITE_DIR=<a COPY of a data directory> pnpm exec next dev -p 3456
 
 ## What the migration left behind
 
-- `tests/isolation.test.ts` and `tests/invites.test.ts` are the database suites that used to sit in `src/lib`. The isolation audit now walks `packages/core/src` and `apps/api/src`.
+- `tests/isolation.test.ts` and `tests/invites.test.ts` are the database suites that used to sit in `src/lib`. The isolation audit now walks `apps/api/src` (the old `packages/core` was folded into the API, see docs/nest-architecture.md).
 - `tests/contract/` is the HTTP contract suite, run against the NestJS API by default (`pnpm test:contract`).
 - `docs/ui-api.md` keeps the inventory of the 59 server actions and the endpoint that replaced each, as a record.
-- `docs/reanchor-rules.json` records how Next paths map to the new layout; `pnpm map:reanchor` uses it to move map nodes and docs.
+- The tool that moved map nodes and docs to the new paths (`map:reanchor`, with its rules file) did its job and was removed.
 
 ## Work parked at the freeze
 

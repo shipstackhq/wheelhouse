@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { Dialog } from "radix-ui";
-import { LAYER_ORDER } from "@wheelhouse/core/lib/map-shared";
+import { LAYER_ORDER } from "@wheelhouse/shared/map-shared";
 import { Select } from "../../components/ui";
 import type { Graph } from "./knowledge-map";
 import { ArrowDownIcon, ArrowUpIcon, CloseIcon } from "../../components/icons";

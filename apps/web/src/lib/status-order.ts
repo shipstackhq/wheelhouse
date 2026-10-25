@@ -1,4 +1,4 @@
-import { ROLE_ORDER, type StatusRole } from "@wheelhouse/core/lib/status-roles";
+import { ROLE_ORDER, type StatusRole } from "@wheelhouse/shared/status-roles";
 
 /** What a status's role is called on screen. */
 export const ROLE_LABEL: Record<StatusRole, string> = {

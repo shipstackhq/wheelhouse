@@ -5,8 +5,8 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from "@dnd-kit/utilities";
 import { Dialog, DropdownMenu } from "radix-ui";
 import type { StatusColor, StatusRole, StatusSetting } from "@wheelhouse/api-client";
-import { REQUIRED_ROLES, STATUS_NAME_MAX } from "@wheelhouse/core/lib/status-roles";
-import { TEAM_ICON_COLORS } from "@wheelhouse/core/lib/team-icon";
+import { REQUIRED_ROLES, STATUS_NAME_MAX } from "@wheelhouse/shared/status-roles";
+import { TEAM_ICON_COLORS } from "@wheelhouse/shared/team-icon";
 import { Loaded } from "../components/query-state";
 import { AddIcon, CloseIcon, MenuIcon } from "../components/icons";
 import { StatusIcon } from "../components/status-icon";

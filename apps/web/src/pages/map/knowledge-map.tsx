@@ -41,7 +41,7 @@ import {
   tableHeight,
   type Column,
   type LayerId,
-} from "@wheelhouse/core/lib/map-shared";
+} from "@wheelhouse/shared/map-shared";
 import dagre from "@dagrejs/dagre";
 import { NodePanel } from "./node-panel";
 import { FlowEditor, type FlowDraft } from "./flow-editor";

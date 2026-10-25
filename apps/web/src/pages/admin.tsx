@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { InviteForm } from "../components/invite-form";
 import { PendingInvites } from "../components/pending-invites";
 import { Loaded } from "../components/query-state";

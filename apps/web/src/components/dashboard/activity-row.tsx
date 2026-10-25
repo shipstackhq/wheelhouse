@@ -1,4 +1,4 @@
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { TwoLineRow } from "./limited-list";
 import { AgentIcon } from "../icons";
 

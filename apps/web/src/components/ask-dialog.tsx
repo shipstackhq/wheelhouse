@@ -1,6 +1,6 @@
 import { useState, useTransition } from "react";
 import { Dialog } from "radix-ui";
-import { linkifyRefs } from "@wheelhouse/core/lib/map-shared";
+import { linkifyRefs } from "@wheelhouse/shared/map-shared";
 import { describeFailure } from "../lib/form-state";
 import { useServices } from "../lib/services";
 import { Markdown } from "./markdown";

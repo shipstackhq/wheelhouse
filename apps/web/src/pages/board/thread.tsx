@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { Avatar } from "../../components/profile-menu";
 import { AgentIcon, MoreIcon } from "../../components/icons";
 

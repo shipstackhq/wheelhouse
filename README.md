@@ -67,10 +67,10 @@ Wheelhouse runs as a single container on a VPS behind your own Caddy, using a Po
 ## Layout
 
 ```
-packages/core/src/db/schema.ts   Drizzle schema (users, workspaces, teams, issues, nodes, edges, events, agent_cursors…)
-packages/core/drizzle/           migrations
-packages/core/src/lib/service.ts single write path: access checks, optimistic locking, event emission
-packages/core/src/lib/tools.ts   tool registry → exposed via /mcp and /api/v1/<tool>
+apps/api/src/db/schema.ts    Drizzle schema (users, workspaces, teams, issues, nodes, edges, events, agent_cursors…)
+apps/api/drizzle/            migrations
+apps/api/src/lib/service.ts single write path: access checks, optimistic locking, event emission
+apps/api/src/lib/tools.ts   tool registry → exposed via /mcp and /api/v1/<tool>
 apps/api                         NestJS: /mcp, /api/v1, /api/app, the GitHub webhook and connect flow, live streams; serves the React build
 apps/web                         the React app (Vite): board, map, docs, decisions, glossary, workspace, agents
 packages/api-client              the typed client the React app uses for /api/app
@@ -78,7 +78,7 @@ tests/                           the HTTP contract suite (tests/contract) and th
 docs/                            deploy, cutover, isolation audit, the web app's API, migration history
 ```
 
-Schema change: edit `packages/core/src/db/schema.ts`, run `pnpm db:generate`, then commit the new file in `packages/core/drizzle/`.
+Schema change: edit `apps/api/src/db/schema.ts`, run `pnpm db:generate`, then commit the new file in `apps/api/drizzle/`.
 
 The app used to be a single Next.js app. It is archived at the git tag `archive/next-app` (see [docs/migration.md](docs/migration.md)).
 

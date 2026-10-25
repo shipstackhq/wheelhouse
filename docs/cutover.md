@@ -1,5 +1,7 @@
 # Moving the data and cutting over (WH-100)
 
+> **History.** The cutover is finished. The map re-anchoring tool (`map:reanchor`, `map:after-migration`, `docs/reanchor-rules.json`) and the rehearsal script (`scripts/rehearse-data-move.sh`) this runbook uses were removed afterwards. The data tools (`pnpm db:migrate`, `db:export`, `db:import`, `db:verify`, `db:preflight`) are still in `apps/api/src/tools`.
+
 > **Four additive migrations came after the freeze: 0014 (WH-103, `docs.labels`) and, for WH-105, 0015 (project members and the access audit log), 0016 (`invites.projects`) and 0017 (`sessions.active_workspace_id`), and `db:import` refuses a target whose migrations differ from the export's.**
 > Before exporting, bring a **copy** of the source database to this code's migrations with `pnpm db:migrate --to <copy>` (all are additive; 0015 also gives every current member access to the projects they could already see,
 > so the old app keeps working on a database that has them). Otherwise the import stops with "the target's migrations (18) are not the export's (14)".
@@ -37,7 +39,7 @@ deleted, and a ticket assigned to someone who is not on the ticket's team is una
 
 The address of a team is now `/t/<KEY>/…` (was `/p/<KEY>/…`) and its API `/api/app/teams/…` (was `/api/app/projects/…`), the team stream `/api/teams/<KEY>/stream`.
 **Links printed by the plugin and CLI that still say `/p/` stop working** (no compatibility shim; dev only). `/api/v1` and the MCP are unchanged: the tool names, the `project`
-argument and every response shape stay, and `runTool` in `packages/core/src/lib/tools.ts` is the one place that maps them.
+argument and every response shape stay, and `runTool` in `apps/api/src/lib/tools.ts` is the one place that maps them.
 
 The rehearsal script below does all of this on a copy (steps 0 and 0b) and then the same checks as before on the new schema.
 
@@ -91,7 +93,7 @@ Both are rehearsed on every run of the rehearsal script below. They are applied 
 landing only counts on `main`. The map events they create (about 35 for the real data) will appear in each agent's queue as changes by the owner, which is right: agents should hear that the architecture description changed.
 
 Checksums are the md5 of a table's rows as JSON in byte order of that text, so they do not depend on collation or storage order. PGlite → Postgres → PGlite
-is tested to be the identity (`packages/core/src/tools/db-copy.test.ts`, with a real Postgres in CI).
+is tested to be the identity (`apps/api/src/tools/db-copy.test.ts`, with a real Postgres in CI).
 
 Scale: a table is read into memory at once, which is fine for Wheelhouse (about 3,200 rows and 6 MB exported for the real data). It would need batching for a database a thousand times larger.
 

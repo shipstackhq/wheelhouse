@@ -1,0 +1,19 @@
+{
+  "name": "@wheelhouse/shared",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Code the server and the web app both use: pure TypeScript with no framework and no database (time formatting, team icons, map and status shapes, doc templates, onboarding steps).",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}

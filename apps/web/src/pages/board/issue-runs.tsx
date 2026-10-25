@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
 import type { IssueRuns, JobEvent, JobView } from "@wheelhouse/api-client";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { ClaudeIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";

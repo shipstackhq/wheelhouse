@@ -2,7 +2,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SetupGuide } from "./setup-guide";
-import { HOSTED_URL, onboarding } from "@wheelhouse/core/lib/onboarding";
+import { HOSTED_URL, onboarding } from "@wheelhouse/shared/onboarding";
 
 const html = (origin = HOSTED_URL, teamKey: string | null = "WH") => renderToStaticMarkup(<SetupGuide cmd={onboarding({ origin, teamKey })} />);
 /** What a reader sees: tags become spaces, entities are decoded, whitespace is collapsed. */

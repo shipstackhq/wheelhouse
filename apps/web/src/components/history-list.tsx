@@ -1,6 +1,6 @@
 import { useState } from "react";
 import clsx from "clsx";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { groupHistory, type HistoryGroup } from "../lib/history-groups";
 import { AgentIcon } from "./icons";
 

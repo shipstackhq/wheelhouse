@@ -3,7 +3,7 @@
 The React app talks to the NestJS API through this API. It replaces the Next app's 59 server actions (`src/app/actions.ts`, now archived at tag `archive/next-app`) and
 the data its pages read on the server. It is **new surface, used only by the web app**: it is not part of the frozen external
 contract (`/mcp`, `/api/v1`, webhooks, streams), and the Next app does not have it. The typed client is
-`@wheelhouse/api-client`; the CSRF rules are in `apps/api/src/web/csrf.ts`.
+`@wheelhouse/api-client`; the CSRF rules are in `apps/api/src/common/http/csrf.ts`.
 
 Built so far: `GET /api/app/auth/options`, `POST /api/app/auth/login`, `POST /api/app/auth/signup`,
 `POST /api/app/auth/logout`, `GET /api/app/me`, `GET /api/app/teams` (WH-93), and everything under "Built by WH-95" below. The
@@ -64,7 +64,7 @@ token for you and, if the server says it went stale (signed in or out in another
 
 ## Adding an endpoint
 
-1. The logic goes in `@wheelhouse/core`, as a function that takes the actor. A controller reads the request and writes the
+1. The logic goes in the API's `src/lib`, as a function that takes the actor. A controller reads the request and writes the
    response and **never touches the database**; the isolation audit fails if a file under `apps/api/src` calls `getDb()`.
 2. `@Controller("api/app/...")` and `@AppEndpoints()` (CSRF and the error envelope); `@UseGuards(SessionGuard)` on anything for
    a signed-in person. Take the actor from `req.human`.
@@ -171,7 +171,7 @@ Rules worth knowing:
   non-owner gets a 403.
 - **Every bad invite link reads the same** (`400 invalid`, "This invite link is invalid or has expired."), so a link cannot be probed.
 - The dashboard's widgets are separate requests so each one paints as soon as its own data arrives. They do not share a snapshot the
-  way the Next app's single render did; if that matters under load, memoise per request in `@wheelhouse/core/lib/metrics` (`setRequestMemo`).
+  way the Next app's single render did; if that matters under load, memoise per request in `apps/api/src/lib/metrics.ts` (`setRequestMemo`).
 
 ## Built by WH-96
 

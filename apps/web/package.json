@@ -30,7 +30,7 @@
     "@remixicon/react": "^4.9.0",
     "@tanstack/react-query": "^5.104.3",
     "@wheelhouse/api-client": "workspace:*",
-    "@wheelhouse/core": "workspace:*",
+    "@wheelhouse/shared": "workspace:*",
     "@xyflow/react": "^12.12.0",
     "clsx": "^2.1.1",
     "elkjs": "^0.12.0",

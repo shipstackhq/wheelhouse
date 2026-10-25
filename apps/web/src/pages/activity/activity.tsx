@@ -1,7 +1,7 @@
 import { Link, useParams, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { timeAgo } from "@wheelhouse/core/lib/time";
+import { timeAgo } from "@wheelhouse/shared/time";
 import { Loaded } from "../../components/query-state";
 import { activityQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";

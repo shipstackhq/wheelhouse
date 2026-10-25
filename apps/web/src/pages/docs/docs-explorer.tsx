@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import clsx from "clsx";
 import { Dialog } from "radix-ui";
 import { ApiError, type DocDetail, type DocPerson, type DocsIndex, type DocTemplateId } from "@wheelhouse/api-client";
-import { DOC_TEMPLATES, extractActionItems } from "@wheelhouse/core/lib/doc-templates";
+import { DOC_TEMPLATES, extractActionItems } from "@wheelhouse/shared/doc-templates";
 import { DescriptionEditor } from "../../components/description-editor";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";

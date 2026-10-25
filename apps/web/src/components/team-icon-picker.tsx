@@ -1,6 +1,6 @@
 import { useState } from "react";
 import clsx from "clsx";
-import { isEmoji, TEAM_ICON_COLORS, TEAM_ICON_NAMES, type TeamIconColor } from "@wheelhouse/core/lib/team-icon";
+import { isEmoji, TEAM_ICON_COLORS, TEAM_ICON_NAMES, type TeamIconColor } from "@wheelhouse/shared/team-icon";
 import { TEAM_ICONS } from "./icons";
 import { ICON_COLOR_CLASS, TeamIcon } from "./team-icon";
 
