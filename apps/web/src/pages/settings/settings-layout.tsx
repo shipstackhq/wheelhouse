@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Navigate, Outlet, useNavigate } from "react-router";
+import { Navigate, Outlet } from "react-router";
+import { useNavigate, wsPathFor } from "../../lib/workspace";
 import { ArrowLeftIcon, SETTINGS_ICONS, type IconPair } from "../../components/icons";
 import { NavLink } from "../../components/nav-link";
 import { SidebarCloseButton, SidebarFrame, SidebarGroup } from "../../components/sidebar-frame";
 import { NavigationProgress } from "../../components/navigation-progress";
 import { FullPageSkeleton } from "../../routes/layouts";
 import { lastAppLocation } from "../../lib/app-location";
+import { canSeePeople } from "../../lib/roles";
 import { useMe } from "../../lib/session";
 import { INTEGRATIONS } from "../integrations/integrations";
 
@@ -31,7 +33,7 @@ const ITEMS: { group: string; items: { to: string; label: string; icon?: IconPai
 ];
 
 /**
- * Settings as a screen of its own: a left panel with Back to app (to the page you were on) and the settings sections, and the chosen
+ * Settings as a screen of its own (the Workspace and Integrations sections are the workspace's: /w/:slug/settings/...): a left panel with Back to app (to the page you were on) and the settings sections, and the chosen
  * section beside it. The panel is the app sidebar's frame (same width, same phone drawer) with Settings' own links in it. It is not inside the app's sidebar and header. Signed-out and not-found behave as everywhere else.
  */
 export function SettingsLayout() {
@@ -60,8 +62,8 @@ export function SettingsLayout() {
         <nav aria-label="Settings" className="flex-1 overflow-y-auto px-2 pb-3 text-sm" onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}>
           {ITEMS.map((g) => (
             <SidebarGroup key={g.group} title={g.group} scope="settings" gap="mt-3">
-              {g.items.map((i) => (
-                <NavLink key={i.to} href={i.to} icon={i.icon}>
+              {g.items.filter((i) => i.to !== "/settings/members" || canSeePeople(me.role)).map((i) => (
+                <NavLink key={i.to} href={wsPathFor(me.workspace.slug, i.to) as string} icon={i.icon}>
                   {i.label}
                 </NavLink>
               ))}

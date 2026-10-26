@@ -63,11 +63,11 @@ describe("the team page's layout", () => {
     await user.click(toggle().getByRole("button", { name: "Board" }));
     await closeDisplay(user);
     await waitFor(() => expect(isBoard()).toBe(true));
-    await router.navigate("/t/BB");
+    await router.navigate("/w/ae/t/BB");
     await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Beta" })).toBeTruthy());
     await waitFor(() => expect(isList()).toBe(true)); // Beta has not chosen
     expect(localStorage.getItem("wh:layout:BB")).toBeNull();
-    await router.navigate("/t/AA");
+    await router.navigate("/w/ae/t/AA");
     await waitFor(() => expect(isBoard()).toBe(true)); // Alpha still has the board
   });
 

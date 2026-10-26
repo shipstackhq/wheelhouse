@@ -28,7 +28,7 @@ export class DevicesController {
     return this.devices.peekPairing(req.human.actor, code);
   }
 
-  /** `{ code, name? }`: approve the machine into this workspace. */
+  /** `{ code, name? }`: approve the machine as the caller's own. */
   @Post("devices/pair")
   @HttpCode(201)
   approve(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(approveDeviceDto)) body: ApproveDeviceDto) {

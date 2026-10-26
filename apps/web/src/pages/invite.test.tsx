@@ -93,7 +93,7 @@ describe("the invite page", () => {
     await user.type(screen.getByLabelText("Password (12+ characters)"), "correct horse battery");
     await user.type(screen.getByLabelText("Repeat password"), "correct horse battery");
     await user.click(screen.getByRole("button", { name: "Create account" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae"));
     expect(server.sent("POST /api/app/invites/accept")[0].body).toEqual({ token: TOKEN, name: "Grace Hopper", password: "correct horse battery", confirm: "correct horse battery" });
     expect(services.queryClient.getQueryData(["me"])).toEqual(ADA);
   });
@@ -160,7 +160,7 @@ describe("the invite page, for someone who already has an account", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Join Difference Engines" }));
     await waitFor(() => expect(server.sent("POST /api/app/invites/accept-existing")).toHaveLength(1));
     expect(server.sent("POST /api/app/invites/accept-existing")[0].body).toEqual({ token: TOKEN });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae"));
     expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing read in the old workspace lingers
     expect(server.requests.every((r) => !r.includes(TOKEN))).toBe(true); // still never in a URL
   });

@@ -13,8 +13,8 @@ import { makeState, readState, STATE_TTL_MS } from "./state";
 
 type Body = Record<string, unknown>;
 
-/** Paths are relative to the app (`/settings/integrations/github?team=KEY&...`); the GitHub address is absolute. */
-const integrationPage = (team: string, query = "") => `/settings/integrations/github?team=${encodeURIComponent(team)}${query ? `&${query}` : ""}`;
+/** Paths are relative to the app (`/w/<slug>/settings/integrations/github?team=KEY&...`); the GitHub address is absolute. */
+const integrationPage = (workspace: string, team: string, query = "") => `/w/${encodeURIComponent(workspace)}/settings/integrations/github?team=${encodeURIComponent(team)}${query ? `&${query}` : ""}`;
 
 /** What the connect flow tells the host to send: the redirect or text, and the state cookie. */
 export type ConnectReply = {
@@ -39,7 +39,7 @@ export type GithubStatus = {
 
 /**
  * Connecting GitHub (WH-20, ADR-12): the owner's installation of the App, the repositories of it a team connects, and the redirect flow
- * that proves the installation is the person's. Only workspace owners connect, and an installation belongs to one workspace.
+ * that proves the installation is the person's. Only workspace owners connect, and an installation can serve several workspaces, each linked on its own proof.
  */
 @Injectable()
 export class ConnectService {
@@ -55,19 +55,26 @@ export class ConnectService {
 
   /**
    * Record that this workspace's owner has installed the App. The caller has already proved, with GitHub's own sign-in, that this
-   * person administers the installation. An installation belongs to one workspace: a second workspace cannot take it over.
+   * person administers the installation. The link is this workspace's: other workspaces' links to it are untouched.
    */
   async registerInstallation(actor: Actor, i: { installationId: string; accountLogin: string; accountType: string }) {
     if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can connect GitHub");
     await this.requireOwner(actor.id, actor.workspaceId);
-    const existing = await this.repo.installation(i.installationId);
-    if (existing && existing.workspaceId !== actor.workspaceId) throw new ServiceError("conflict", "That GitHub installation is already connected to another workspace");
     await this.repo.upsertInstallation({ installationId: i.installationId, workspaceId: actor.workspaceId, accountLogin: i.accountLogin, accountType: i.accountType, connectedBy: actor.id });
     return { ok: true };
   }
 
   listInstallations(actor: Actor) {
     return this.repo.installationsOf(actor.workspaceId);
+  }
+
+  /** This workspace stops using an installation (owners only). Other workspaces linked to it keep it. */
+  async unlinkInstallation(actor: Actor, installationId: string) {
+    if (actor.kind !== "human") throw new ServiceError("forbidden", "Only teammates can disconnect GitHub");
+    await this.requireOwner(actor.id, actor.workspaceId);
+    if (!(await this.repo.installationOf(actor.workspaceId, installationId))) throw new ServiceError("not_found", "That GitHub installation is not connected to your workspace");
+    await this.repo.unlinkInstallation(actor.workspaceId, installationId);
+    return { ok: true };
   }
 
   /**
@@ -133,7 +140,7 @@ export class ConnectService {
   /** Start connecting: owners only. Sends the person to GitHub to install the App, with a signed `state`. */
   async startConnect(h: Human, teamKey: string): Promise<ConnectReply> {
     const cfg = githubConfig();
-    const back = (err: string): ConnectReply => ({ status: 307, redirect: integrationPage(teamKey, `github_error=${err}`) });
+    const back = (err: string): ConnectReply => ({ status: 307, redirect: integrationPage(h.workspace.slug, teamKey, `github_error=${err}`) });
     if (!cfg) return back("not_configured");
     if (h.membership.role !== "owner") return back("owner_only");
     try {
@@ -142,7 +149,7 @@ export class ConnectService {
       if (e instanceof ServiceError) return { status: 404, text: "Not found" };
       throw e;
     }
-    const { state, nonce } = makeState(cfg.clientSecret, { user: h.user.id, team: teamKey });
+    const { state, nonce } = makeState(cfg.clientSecret, { user: h.user.id, workspace: h.workspace.slug, team: teamKey });
     return {
       status: 307,
       redirect: `${cfg.webUrl}/apps/${encodeURIComponent(cfg.slug)}/installations/new?state=${encodeURIComponent(state)}`,
@@ -163,10 +170,10 @@ export class ConnectService {
     const back = (err?: string, extra = ""): ConnectReply => ({
       status: 307,
       clearStateCookie: true,
-      redirect: integrationPage(team, err ? `github_error=${err}` : extra),
+      redirect: integrationPage(h.workspace.slug, team, err ? `github_error=${err}` : extra),
     });
     if (!gh) return { status: 503, text: "The GitHub App is not configured on this server", clearStateCookie: true };
-    if (!state || state.user !== h.user.id || !nonce || nonce !== state.nonce)
+    if (!state || state.user !== h.user.id || state.workspace !== h.workspace.slug || !nonce || nonce !== state.nonce)
       return { status: 400, text: "This connection link is not valid any more. Start again from Settings → Integrations → GitHub.", clearStateCookie: true };
     if (h.membership.role !== "owner") return back("owner_only");
 
@@ -179,7 +186,7 @@ export class ConnectService {
       const account = await gh.api.installationAccount(installationId);
       await this.registerInstallation(h.actor, { installationId, accountLogin: account.login, accountType: account.type });
     } catch (e) {
-      if (e instanceof ServiceError) return back(e.code === "conflict" ? "taken" : "failed");
+      if (e instanceof ServiceError) return back("failed");
       console.error("[github] callback failed:", e instanceof Error ? e.message : e);
       return back("failed");
     }

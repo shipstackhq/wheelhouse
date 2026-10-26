@@ -26,4 +26,10 @@ export function onStreamMessage(last: number | null, m: Incoming): { last: numbe
   return { last: next, refresh: true }; // a change, a resync, or a queue signal
 }
 
-export const streamUrl = (path: string, since: number | null) => (since == null ? path : `${path}?since=${since}`);
+/** The stream's address: for this workspace (a browser cannot set a header on a stream) and from where it left off. */
+export function streamUrl(path: string, since: number | null, workspace?: string) {
+  const q = new URLSearchParams();
+  if (workspace) q.set("workspace", workspace);
+  if (since != null) q.set("since", String(since));
+  return q.size ? `${path}?${q}` : path;
+}

@@ -41,7 +41,7 @@ describe("the docs home", () => {
     await user.click(await row("Phase 1"));
     await heading("Phase 1");
     expect(await screen.findByText("Phase one.")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/t/AA/docs");
+    expect(within(screen.getByRole("navigation", { name: "Doc navigation" })).getByRole("link", { name: "Docs" }).getAttribute("href")).toBe("/w/ae/t/AA/docs");
   });
 
   test("with no docs it says so, and offers to create one", async () => {
@@ -101,7 +101,7 @@ describe("the doc tree sheet", () => {
     open(`${HOME}/d-sub`);
     await heading("Phase 1");
     const nav = screen.getByRole("navigation", { name: "Doc navigation" });
-    expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/t/AA/docs/d-plan");
+    expect(within(nav).getByRole("link", { name: "Plan" }).getAttribute("href")).toBe("/w/ae/t/AA/docs/d-plan");
   });
 
   test("the 'About this doc' column sits beside the doc while reading and while editing", async () => {
@@ -466,7 +466,7 @@ describe("decision records", () => {
     const user = userEvent.setup();
     await createRecord(user);
     const section = (await screen.findByText("Decision record", { selector: "span.label" })).closest("section") as HTMLElement;
-    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/t/AA/decisions");
+    expect(within(section).getByRole("link", { name: "View all decisions" }).getAttribute("href")).toBe("/w/ae/t/AA/decisions");
     await user.click(within(section).getByRole("button", { name: "+ Create ADR from this doc" }));
     await waitFor(() => expect(server.sent(`PUT ${url("decisions")}`)).toHaveLength(1));
     expect(server.sent(`PUT ${url("decisions")}`)[0].body).toEqual({

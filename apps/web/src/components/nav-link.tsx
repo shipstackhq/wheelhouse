@@ -1,4 +1,5 @@
-import { Link, useLocation } from "react-router";
+import { useLocation } from "react-router";
+import { Link, useWsPath } from "../lib/workspace";
 import clsx from "clsx";
 import type { IconPair } from "./icons";
 import { LinkPending, useLinkPending } from "./link-pending";
@@ -17,8 +18,9 @@ export const NAV_ICON_RAIL = "md:text-lg";
  */
 export function NavLink({ href, prefix, icon, collapsed = false, badge = 0, children }: { href: string; prefix?: boolean; icon?: IconPair; collapsed?: boolean; /** A count shown at the end of the row (a dot on the rail); hidden at 0. */ badge?: number; children: React.ReactNode }) {
   const { pathname } = useLocation();
-  const active = prefix ? pathname === href || pathname.startsWith(href + "/") : pathname === href;
-  const pending = useLinkPending(href);
+  const to = useWsPath()(href) as string;
+  const active = prefix ? pathname === to || pathname.startsWith(to + "/") : pathname === to;
+  const pending = useLinkPending(to);
   const Icon = icon ? (active ? icon.fill : icon.line) : null;
   const link = (
     <Link

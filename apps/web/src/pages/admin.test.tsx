@@ -8,7 +8,7 @@ const admin = (s: { me: unknown }) => (s.me = { ...ADA, isInstanceAdmin: true })
 
 describe("admin: workspaces", () => {
   test("lists every workspace with owners, seats, teams and who invited them; yours and suspended ones are marked", async () => {
-    renderApp("/admin/workspaces", (s) => {
+    renderApp("/w/ae/admin/workspaces", (s) => {
       admin(s);
       s.on("GET /api/app/admin/workspaces", {
         workspaces: [
@@ -19,7 +19,7 @@ describe("admin: workspaces", () => {
     });
     await screen.findByRole("heading", { level: 1, name: "Workspaces on this server" });
     const mine = (await screen.findByText("(yours)")).closest("a") as HTMLElement;
-    expect(mine.getAttribute("href")).toBe("/admin/workspaces/t1");
+    expect(mine.getAttribute("href")).toBe("/w/ae/admin/workspaces/t1");
     expect(within(mine).getByText("ada@example.test")).toBeTruthy();
     expect(within(mine).getByText("no activity")).toBeTruthy();
     const theirs = screen.getByText("suspended").closest("a") as HTMLElement;
@@ -32,7 +32,7 @@ describe("admin: workspaces", () => {
 
 describe("admin: one workspace", () => {
   const open = (detail = adminWorkspaceDetail(), extra: (s: Parameters<Parameters<typeof renderApp>[1] & object>[0]) => void = () => {}) =>
-    renderApp("/admin/workspaces/t2", (s) => {
+    renderApp("/w/ae/admin/workspaces/t2", (s) => {
       admin(s);
       s.on("GET /api/app/admin/workspaces/t2", { workspace: detail });
       extra(s);
@@ -47,7 +47,7 @@ describe("admin: one workspace", () => {
     expect(screen.getByText("pending")).toBeTruthy();
     expect(screen.getByText("wh_zzzzzzz…")).toBeTruthy();
     expect(screen.getByText("Issues, comments and the map of this workspace are not shown here.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "All workspaces" }).getAttribute("href")).toBe("/admin/workspaces");
+    expect(screen.getByRole("link", { name: "All workspaces" }).getAttribute("href")).toBe("/w/ae/admin/workspaces");
   });
 
   test("suspending needs the workspace's exact name; on success it says how many sign-ins ended and reads the workspace again", async () => {
@@ -88,7 +88,7 @@ describe("admin: one workspace", () => {
   });
 
   test("a workspace that does not exist is a not-found page", async () => {
-    renderApp("/admin/workspaces/t2", (s) => {
+    renderApp("/w/ae/admin/workspaces/t2", (s) => {
       admin(s);
       s.on("GET /api/app/admin/workspaces/t2", apiError(404, "not_found", "Workspace not found"));
     });

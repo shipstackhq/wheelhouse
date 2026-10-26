@@ -91,6 +91,7 @@ export class ChatService {
         await this.stream.send(key, thread.deviceId, "chat.message", {
           messageId: answerId,
           threadId: thread.id,
+          workspaceId: thread.workspaceId,
           model: thread.model,
           sessionId: thread.sessionId,
           prompt: text,

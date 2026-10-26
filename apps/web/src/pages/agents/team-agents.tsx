@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link } from "../../lib/workspace";
 import { Dialog } from "radix-ui";
 import { useQuery } from "@tanstack/react-query";
 import type { AgentEntry } from "@wheelhouse/api-client";

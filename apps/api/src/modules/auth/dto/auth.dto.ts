@@ -5,8 +5,8 @@ import { anything, text, textOrUndefined } from "../../../common/pipes/lenient";
 export const loginDto = z.object({ email: text, password: text });
 export type LoginDto = z.infer<typeof loginDto>;
 
-/** Sign up: `{ name, email, password, workspace }`. */
-export const signupDto = z.object({ name: text, email: text, password: text, workspace: text });
+/** Sign up: `{ name, email, password }`. */
+export const signupDto = z.object({ name: text, email: text, password: text });
 export type SignupDto = z.infer<typeof signupDto>;
 
 /** `{ keyId?, teamKey? }`: reset an agent's queue, in one team or everywhere. */
@@ -24,6 +24,14 @@ export type PatchKeyDto = z.infer<typeof patchKeyDto>;
 /** `{ workspaceId }`: switch the session's workspace. */
 export const switchWorkspaceDto = z.object({ workspaceId: text });
 export type SwitchWorkspaceDto = z.infer<typeof switchWorkspaceDto>;
+
+/** `{ name, slug? }`: create a workspace. */
+export const createWorkspaceDto = z.object({ name: text, slug: textOrUndefined });
+export type CreateWorkspaceDto = z.infer<typeof createWorkspaceDto>;
+
+/** `{ userId }`: name the member who should become the owner. */
+export const transferOwnershipDto = z.object({ userId: text });
+export type TransferOwnershipDto = z.infer<typeof transferOwnershipDto>;
 
 /** `{ current, next }`: change the password. */
 export const changePasswordDto = z.object({ current: text, next: text });

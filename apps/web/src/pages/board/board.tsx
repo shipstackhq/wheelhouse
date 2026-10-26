@@ -30,6 +30,7 @@ import { PRIORITY_STYLE, type Col, type Member, type NodeLite, type Issue } from
 import { IssueDialog } from "./issue-dialog";
 import { AgentIcon, CloseIcon, CommentIcon, CyclesIcon, NodeIcon, ProjectsIcon } from "../../components/icons";
 import { cycleTitle } from "../cycles/cycle-bits";
+import { wsKey } from "../../lib/workspace";
 
 /**
  * The kanban board. What is on screen is a local copy of the server's issues, so a drag can move cards at once. The server's
@@ -75,7 +76,7 @@ export function Board(props: {
   // ?t= is the source of truth for the open issue; a value that isn't an issue ref is ignored.
   const openRef = parseIssueParam(search.get("t"));
 
-  const refreshBoard = useCallback(() => queryClient.invalidateQueries({ queryKey: ["board", teamKey] }), [queryClient, teamKey]);
+  const refreshBoard = useCallback(() => queryClient.invalidateQueries({ queryKey: wsKey(api, "board", teamKey) }), [api, queryClient, teamKey]);
 
   // Server state wins whenever we aren't mid-drag (live updates from agents/teammates).
   useEffect(() => {

@@ -22,7 +22,7 @@ import assert from "node:assert/strict";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "../apps/api/src/db";
 import type { Actor } from "../apps/api/src/common/actor";
-import { actorForKey, userForSessionToken } from "../apps/api/src/modules/auth/auth.legacy";
+import { actorForKey, humanFromSession, userForSessionToken } from "../apps/api/src/modules/auth/auth.legacy";
 import { sha256 } from "../apps/api/src/common/crypto";
 import { ServiceError } from "../apps/api/src/common/service-error";
 import { listEvents, markAllSeen, queueStatus, removeSession } from "../apps/api/src/lib/service-queue";
@@ -384,6 +384,21 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     await assert.rejects(requireTeam(gh, "SH"), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
     await assert.rejects(requireTeam(githubActor(B.workspaceId, B.teamId), A.teamKey), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
+
+  test("one GitHub installation linked by both workspaces: each sees only its own link, and unlinking B's leaves A's", async () => {
+    const { ConnectService } = await import("../apps/api/src/modules/github/connect.service");
+    const connect = (await testApp()).get(ConnectService);
+    const db = await getDb();
+    const link = (workspaceId: string, connectedBy: string) => db.insert(schema.githubInstallations).values({ installationId: "7777", workspaceId, accountLogin: "shared", accountType: "Organization", connectedBy });
+    await link(A.workspaceId, A.ownerId);
+    await link(B.workspaceId, B.owner.id);
+    assert.equal((await connect.listInstallations(A.owner)).length, 1);
+    assert.equal((await connect.listInstallations(B.owner)).length, 1);
+    await connect.unlinkInstallation(B.owner, "7777");
+    assert.equal((await connect.listInstallations(B.owner)).length, 0);
+    assert.equal((await connect.listInstallations(A.owner)).length, 1);
+    await db.delete(schema.githubInstallations).where(eq(schema.githubInstallations.installationId, "7777"));
+  });
 });
 
 describe("the attacks are real: the same calls work for the owner", () => {
@@ -637,6 +652,32 @@ describe("sign-in and keys do not cross workspaces", () => {
   });
 });
 
+describe("one session in two workspaces (X-Workspace)", () => {
+  test("each request sees and writes only the workspace it names; one the person is not in is a 404", async () => {
+    const db = await getDb();
+    const [u] = await db.insert(schema.users).values({ email: `both-${RUN}@example.com`, name: "Both", passwordHash: "x" }).returning();
+    const token = crypto.randomBytes(24).toString("base64url");
+    await db.insert(schema.sessions).values({ id: sha256(token), userId: u.id, expiresAt: new Date(Date.now() + 864e5) });
+    const slugs: string[] = [];
+    for (const id of [A.workspaceId, B.workspaceId]) {
+      await db.insert(schema.memberships).values({ userId: u.id, workspaceId: id, role: "owner" });
+      slugs.push((await db.select({ slug: schema.workspaces.slug }).from(schema.workspaces).where(eq(schema.workspaces.id, id)))[0].slug);
+    }
+    const as = async (slug: string) => (await humanFromSession(token, slug))!.actor;
+    const [a, b] = [await as(slugs[0]), await as(slugs[1])];
+    assert.equal(a.workspaceId, A.workspaceId);
+    assert.equal(b.workspaceId, B.workspaceId);
+    for (const [actor, tag] of [[a, "in A"], [b, "in B"]] as const) {
+      await createTeam(actor, { name: `Both ${tag}`, key: "BO" });
+      await createIssue(actor, "BO", { title: `written ${tag}` });
+    }
+    assert.equal(((await runTool(a, "get_issue", { issue: "BO-1" })) as { issue: { title: string } }).issue.title, "written in A");
+    assert.equal(((await runTool(b, "get_issue", { issue: "BO-1" })) as { issue: { title: string } }).issue.title, "written in B");
+    const [other] = await db.insert(schema.workspaces).values({ name: `Stranger ${RUN}` }).returning();
+    await assert.rejects(humanFromSession(token, other.slug), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+  });
+});
+
 describe("team keys are per workspace (continued)", () => {
   test("B creating a team with A's key gets its own team, and A's is untouched", async () => {
     const before = await fingerprint(A);
@@ -821,9 +862,13 @@ describe("the database refuses a row that points across workspaces (WH-113)", ()
 
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
 const DB_FILE_AUDIT: Record<string, string> = {
-  "apps/api/src/lib/images.ts": "profile pictures and the workspace image. Writes touch only the caller's own user row, or (owners and admins) the row of the workspace the session is working in; both ids come from the verified session, never from the request. Reads return a workspace's image only for the caller's own workspace, and a person's picture only when that person is a member of the caller's workspace (the join is on the session's workspace id); anything else is not_found (tested in images.test.ts)",
-  "apps/api/src/modules/daemon/daemon.repository.ts": "the only file of the daemon module that queries (devices, device_pairings, device_tokens, device_messages, device_jobs, device_job_events, instance_keys, chat_threads, chat_messages); it decides nothing. The machine side reaches only its own device: a job by job id AND the token's device id (another device's job is not_found), messages by the token's device id (and each is signed for that device alone, tested in daemon.test.ts), a pairing by its secret device code, a token by the sha256 of its secret and only while live; a job moves between states by job id and the states it may come from, so two writers cannot both win; the sweep is time-based and only moves job states. The person's side selects a device by owner id AND the caller's workspace id (another person's or another workspace's device is not_found), reads a job by job id AND the caller's workspace id (then through its issue's team in RunsService, tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused), and unpairing cancels only that device's own jobs. Three read-only joins reach another area's table because the machine side may not call other modules: a device's workspace (suspended or not, its name), and the issue, team key and repository of a job's own issue and repository for its pull request. A chat thread is read by thread id AND owner id AND the caller's workspace id (another person's, even a teammate's, is not_found, tested in chat.test.ts), a chat message by message id AND the token's device id; the thread list joins the team key, device and repository names read only. The instance's signing key is the one row of instance_keys, no workspace data",
+  "apps/api/src/modules/images/images.ts": "profile pictures and the workspace image. Writes touch only the caller's own user row, or (owners and admins) the row of the workspace the session is working in; both ids come from the verified session, never from the request. Reads return a workspace's image only for the caller's own workspace, and a person's picture only when that person is a member of the caller's workspace (the join is on the session's workspace id); anything else is not_found (tested in images.test.ts)",
+  "apps/api/src/modules/daemon/daemon.repository.ts": "the only file of the daemon module that queries (devices, device_pairings, device_tokens, device_messages, device_jobs, device_job_events, instance_keys, chat_threads, chat_messages); it decides nothing. The machine side reaches only its own device: a job by job id AND the token's device id (another device's job is not_found), messages by the token's device id (and each is signed for that device alone, tested in daemon.test.ts), a pairing by its secret device code, a token by the sha256 of its secret and only while live; a job moves between states by job id and the states it may come from, so two writers cannot both win; the sweep is time-based and only moves job states. The person's side selects a device by owner id alone (a device belongs to the person and serves every workspace they are in; another person's device is not_found), reads a job by job id AND the caller's workspace id (then through its issue's team in RunsService, tested in daemon.test.ts: a stranger in another workspace and a teammate without the device are refused), and unpairing cancels only that device's own jobs. Read-only joins reach another area's table because the machine side may not call other modules: the issue, team key and repository of a job's own issue and repository for its pull request. A chat thread is read by thread id AND owner id AND the caller's workspace id (another person's, even a teammate's, is not_found, tested in chat.test.ts), a chat message by message id AND the token's device id; the thread list joins the team key, device and repository names read only. The instance's signing key is the one row of instance_keys, no workspace data",
   "apps/api/src/modules/agents/agents.repository.ts": "the only file of the agents module that queries (workspace_agents, team_agents) and the one read of the workspace's own `settings` (the agents switch); it decides nothing. Every statement starts from the workspace id of the signed-in person or key; a team roster is read by a team id the service found through TeamAccessService.require (another workspace's team, or a team the person is not on, is not_found), a custom agent by slug AND workspace id, and a team agent is hidden from people who cannot open its team (tested in agents.test.ts)",
+  "apps/api/src/modules/auth/user-directory.ts": "reads user ids only (no names, emails or workspaces), in pages by id, for a broadcast to everyone on the instance; it takes nothing from a request and no controller reaches it, only the internal broadcast service",
+  "apps/api/src/modules/broadcasts/broadcasts.repository.ts": "the only file of the broadcasts module that queries; instance-level rows (no workspace) keyed by a sender's idempotency key, read and changed by id or key, never from a request: the module has no controller, only the internal broadcast service calls it. A broadcast holds no recipient data, and the inbox items it makes go through NotificationsRepository, one per person",
+  "apps/api/src/modules/notifications/notifications.repository.ts": "the only file of the notifications module that queries; every read and change goes through ownedBy(Recipient): the row's recipient must be the signed-in person and its workspace the session's workspace (or null, an instance-level item that shows in all of theirs), so another person's id, or another workspace's, matches nothing and reads as not found. The recipient is built from the session, never the request. The inserts take rows the service already addressed, and the 30-day purge removes only rows already in the trash",
+  "apps/api/src/modules/notifications/notifications.signal.ts": "sends the live signal 'inbox changed' with recipientUserId set, so a stream forwards it only to that person's own connections; it carries no item, title or body, and queries nothing itself",
   "apps/api/src/platform/database/database.ts": "hands out the client or the current transaction (`q`) and opens or joins a transaction; runs no queries itself",
   "apps/api/src/platform/events/events.service.ts": "writes the event log on the current transaction for an actor and a team its caller already resolved through the service layer (the same contract as emit); reads nothing",
   "apps/api/src/platform/database/database.service.ts": "opens the connection and runs the migrations at startup, then closes it on shutdown; runs no queries. No controller or guard may appear in this list",
@@ -832,16 +877,16 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/teams/teams.repository.ts": "the only file of the teams module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need) (the former requireTeam): not_found for a team of another workspace or one the person is not a member of, 403 below the needed role (ADR-23). Members: the workspace-wide views (all team names, the audit log) are for workspace owners and admins and every change checks the caller's role and keeps one admin (tested in team-access.test.ts). Lifecycle: every action runs inside a transaction that locks the workspace's teams, a parent must be one the person can open so the hierarchy grants no access, and children and candidates are filtered to teams the person can open (tested in team-lifecycle.test.ts). Statuses: admin to change anything, humans only, every statement scoped by the found team's id, and a status is looked up among that team's own statuses only, so another team's or workspace's id is a 404 (tested in statuses.test.ts)",
   "apps/api/src/platform/streams/stream-scope.ts": "the team stream resolves the team through requireTeam(actor); the dashboard stream is filtered to the teams the person is a member of, in the replay and for live events (tested)",
   "apps/api/src/modules/dashboard/dashboard.repository.ts": "the only file of the dashboard module that queries, and the one place a module reads other modules' tables (teams, statuses, issues, the event log, nodes, docs, keys, sessions, drafts, decisions, members, repositories, memberships, invites): the dashboard is the read model that looks across areas, and rebuilding its aggregates from service calls would be slow and pointless. Read-only, it decides nothing, and every call is by the caller's workspace id and the team ids the person can open (MetricsService: TeamAccessService.visibleTeamIds, or a team resolved through TeamAccessService.require), or by a team that ChecklistService resolved through TeamAccessService.require (tested)",
-  "apps/api/src/modules/github/github.repository.ts": "the only file of the github module that queries; it decides nothing, and every caller is a service. Webhooks reach a repository only through its workspace's own registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace; repositories are found inside the team the caller opened through TeamAccessService.require(actor, key, need), so another workspace's repository is not_found (tested)",
+  "apps/api/src/modules/github/github.repository.ts": "the only file of the github module that queries; it decides nothing, and every caller is a service. Webhooks reach a repository only through its own workspace's link to the installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace; repositories are found inside the team the caller opened through TeamAccessService.require(actor, key, need), so another workspace's repository is not_found (tested)",
   "apps/api/src/modules/docs/docs.repository.ts": "the only file of the docs module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need): a doc, a parent and a linked node are found inside the actor's team only, so another workspace's are not_found (tested in docs.test.ts and in this file's cross-workspace attacks); the members it lists are those of the signed-in person's own workspace, and an agent key's capabilities are read by the key's own id (tested)",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/platform/streams/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/modules/map/map.repository.ts": "the only file of the map module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need) (the former requireTeam / resolveIssue): nodes, edges, flows, decisions, terms, drafts, work sessions, landed files and the docs the map flags are all read and written by the found team's id, a node or flow is looked up inside that team only, and a draft is resolved only when it belongs to the actor's team and is pending, so another workspace's are not_found and stay untouched (tested). Graph: nodes, edges, flows and the data layer (graph.service). Decisions: ADRs and glossary (decisions.service). Freshness: reported changes, landing and draft publishing (freshness.service). Sync: sessions, drafts and debt (sessions.service); every entry point resolves the team first (tested)",
   "apps/api/src/modules/map/sessions.service.ts": "hands the current handle (`this.db.q`) to pruneSessions(q, team.id) after ending a session of the team found through TeamAccessService.require(actor, key); every other statement goes through MapRepository, audited above (tested)",
   "apps/api/src/modules/issues/issues.repository.ts": "the only file of the issues service that queries issues, comments, labels and issue_nodes; it decides nothing, and every caller is IssuesService, which resolves through TeamAccessService.require(actor, key, need) or resolveIssue (the issue found inside the actor's workspace, then the actor's role on its team: another workspace's team or issue and one the person is not on are not_found). The board's map nodes and members are selected by that team's id; the issue_nodes row is written or removed only for an issue resolved with edit and a node resolved inside that issue's own team, so a node of another team or workspace is not_found (tested over HTTP with two workspaces)",
-  "apps/api/src/modules/issues/cycles.repository.ts": "the only file of the cycles service that queries; every statement is scoped by the team id the service found through TeamAccessService.require(actor, key, need); a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
-  "apps/api/src/modules/issues/projects.repository.ts": "the only file of the projects service that queries; workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through ProjectsService.openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
-  "apps/api/src/modules/issues/initiatives.repository.ts": "the only file of the initiatives service that queries; workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through ProjectsService.openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
+  "apps/api/src/modules/issues/cycles/cycles.repository.ts": "the only file of the cycles service that queries; every statement is scoped by the team id the service found through TeamAccessService.require(actor, key, need); a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
+  "apps/api/src/modules/issues/projects/projects.repository.ts": "the only file of the projects service that queries; workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through ProjectsService.openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
+  "apps/api/src/modules/issues/initiatives/initiatives.repository.ts": "the only file of the initiatives service that queries; workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through ProjectsService.openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
 };
 
 const walk = (dir: string): string[] =>
@@ -877,7 +922,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   // The agent daemon (modules/daemon). /api/daemon is for devices: pairing and the token exchange are the way in and need no session;
   // everything else needs a device token, which names exactly one device, and reaches only that device's own jobs and messages.
   "POST /api/daemon/pair/start": "no workspace data: stores a pending pairing (the machine's public key and name) behind a random code; rate limited per address",
-  "POST /api/daemon/pair/poll": "the daemon's secret device code: answers only that pairing's state, and once approved its own device id and workspace name",
+  "POST /api/daemon/pair/poll": "the daemon's secret device code: answers only that pairing's state, and once approved its own device id",
   "POST /api/daemon/token": "an assertion signed by the device's own key: answers a token for that one device; another key, a revoked device or a reused assertion is refused (tested)",
   "GET /api/daemon/stream": "the device token's own messages only (device_messages by device id); ends when the device is revoked (tested)",
   "POST /api/daemon/hello": "updates the token's own device; reconciles only that device's jobs",
@@ -886,11 +931,11 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/daemon/jobs/:id/reject": "the job by id AND the token's device id",
   "POST /api/daemon/jobs/:id/events": "the job by id AND the token's device id",
   "POST /api/daemon/jobs/:id/finish": "the job by id AND the token's device id",
-  "GET /api/app/devices": "the caller's own devices: owner id AND the session's workspace id",
-  "PATCH /api/app/devices/:id": "a device of the caller's own (owner id AND workspace id); anyone else's is not_found (tested)",
-  "DELETE /api/app/devices/:id": "a device of the caller's own (owner id AND workspace id)",
-  "GET /api/app/devices/pair": "a pending pairing by its code; no workspace data until approved; viewers and guests refused (tested)",
-  "POST /api/app/devices/pair": "approving creates the device in the caller's own workspace, owned by the caller",
+  "GET /api/app/devices": "the caller's own devices: owner id, whatever workspace is open",
+  "PATCH /api/app/devices/:id": "a device of the caller's own (owner id); anyone else's is not_found (tested)",
+  "DELETE /api/app/devices/:id": "a device of the caller's own (owner id)",
+  "GET /api/app/devices/pair": "a pending pairing by its code; no workspace data; the machine as it described itself",
+  "POST /api/app/devices/pair": "approving creates a device owned by the caller, in no workspace",
   "POST /api/app/devices/pair/deny": "a pending pairing by its code; changes only its state",
   "GET /api/app/issues/:ref/jobs": "resolveIssue(actor) first; the runs of that issue, the caller's own devices, the issue team's repositories",
   "GET /api/app/issues/:ref/jobs/branches": "resolveIssue(actor) first; a repository of the issue's own team",
@@ -925,9 +970,9 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "DELETE /mcp": "405, nothing read",
   "GET /api/v1": "tool definitions only; no data",
   "POST /api/v1/:tool": "actor from the API key or session (ActorGuard); the service layer is workspace scoped (tested over HTTP)",
-  "POST /api/webhooks/github": "signature over the raw body first; a delivery reaches a repository only through its own workspace's registered installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a repository id and a forged row)",
-  "GET /api/github/install": "a signed-in owner (HumanGuard); the team is resolved through requireTeam(actor), so another workspace's team is a 404",
-  "GET /api/github/callback": "a signed-in owner; the signed state must name this person and the cookie's nonce; GitHub must say this person administers the installation; an installation belongs to one workspace",
+  "POST /api/webhooks/github": "signature over the raw body first; a delivery reaches a repository only through its own workspace's installation link (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a repository id and a forged row)",
+  "GET /api/github/install": "a signed-in owner (HumanGuard) in the workspace named by ?workspace=, which the signed state carries to the callback; the team is resolved through requireTeam(actor), so another workspace's team is a 404",
+  "GET /api/github/callback": "a signed-in owner; the signed state must name this person, this workspace and the cookie's nonce; GitHub must say this person administers the installation; a link is per workspace, so one installation can serve several (tested)",
   "GET /api/stream": "a person's session only; the scope is the caller's own workspace id (workspaceScope), never from the request, and is limited to the teams the person is a member of",
   "GET /api/teams/:key/stream": "a person's session only; the team is resolved through requireTeam(actor), another workspace's is a 404",
   "GET /api/app/auth/options": "whether sign-up is open; no data about any workspace, no auth",
@@ -948,6 +993,19 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "DELETE /api/app/teams/:key": "deleteTeam(actor, key): requireTeam(actor, key, admin), humans only, and the typed key must match; the last active team, a project lead and child teams are refused (tested)",
   "DELETE /api/app/teams/:key/sessions/:sessionId": "removeSession(actor): the team is resolved through requireTeam(actor) and the session must belong to it, so another workspace's is a 404 (tested)",
   "POST /api/app/me/password": "changes the signed-in person's own password, after checking the current one; nothing is taken from the request but the two passwords",
+  "GET /api/app/notifications": "the signed-in person's own inbox, archive or trash: the recipient is the session's person and workspace, nothing about whose inbox it is comes from the request; `teamId` only narrows it further (tested)",
+  "GET /api/app/notifications/unread-count": "counts the signed-in person's own unread items in the session's workspace (and their instance-level ones)",
+  "POST /api/app/notifications/read-all": "changes only the signed-in person's own items in the session's workspace",
+  "POST /api/app/notifications/:id/read": "the item is matched by id and the session's person and workspace together, so another person's item is a 404 and unchanged (tested)",
+  "POST /api/app/notifications/:id/archive": "matched by id and the session's person and workspace together; another person's item is a 404 (tested)",
+  "POST /api/app/notifications/:id/unarchive": "matched by id and the session's person and workspace together; another person's item is a 404 (tested)",
+  "DELETE /api/app/notifications/:id": "moves to the trash only an item matched by id and the session's person and workspace together; another person's is a 404 (tested)",
+  "POST /api/app/notifications/:id/restore": "matched by id and the session's person and workspace together; another person's item is a 404 (tested)",
+  "POST /api/app/workspace": "any signed-in person makes a new team workspace and becomes its owner; it reads nothing of any workspace and the only membership it makes is the caller's own, in the new one (turned off by the instance for non-admins)",
+  "POST /api/app/workspace/transfer": "requestTransfer(human): owners only, in the session's workspace; the person offered must be a non-guest member of that same workspace (tested)",
+  "DELETE /api/app/workspace/transfer": "cancelTransfer(human): owners only; clears the offer of the session's own workspace",
+  "POST /api/app/workspace/transfer/accept": "acceptTransfer(human): inside a transaction that locks the session's workspace, only the person the offer names can accept (anyone else is a 404), and it moves ownership of that workspace only; audited",
+  "POST /api/app/workspace/transfer/decline": "declineTransfer(human): only the person the offer names (anyone else is a 404); clears the offer of the session's own workspace",
   "GET /api/app/workspace": "workspaceOverview(human): the memberships of the person's own workspace; pending invites only for its owners (tested)",
   "GET /api/app/me/workspaces": "the signed-in person's own memberships only (auth-core.listWorkspaces, by their user id)",
   "POST /api/app/me/workspace": "switchWorkspace requires the person's own membership of that workspace (another workspace's id is a 404) and changes only this session's row (tested)",
@@ -1042,6 +1100,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/teams/:key/repositories": "listRepositories(actor): rows are selected by the team found through requireTeam(actor); the answer is a view without installation ids (tested)",
   "POST /api/app/teams/:key/repositories": "createRepository(actor): the team through requireTeam(actor); humans only (tested)",
   "GET /api/app/teams/:key/repositories/github": "githubStatus(human): installations are listed by the person's workspace id, and only for owners; repositories GitHub lists are asked per installation (tested against a fake GitHub)",
+  "DELETE /api/app/teams/:key/repositories/github/:installationId": "unlinkInstallation(actor): owners only, deletes only the actor's workspace's link and clears the installation id on that workspace's repositories; other workspaces' links stay (tested with one installation linked by two workspaces)",
   "POST /api/app/teams/:key/repositories/github": "connectGithubRepository(actor): owners only, and the installation must be one of the actor's workspace (ADR-12); name and branch are read from GitHub (tested against a fake GitHub)",
   "PATCH /api/app/teams/:key/repositories/:id": "updateRepository(actor): the repository is resolved inside the actor's team (tested)",
   "POST /api/app/teams/:key/repositories/:id/retire": "retireRepository(actor): resolved inside the actor's team (tested)",

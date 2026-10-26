@@ -229,6 +229,7 @@ export class InvitesService {
           await this.repo.insertMembership({ userId: u.id, workspaceId, role: "owner" });
         } else {
           await this.repo.insertMembership({ userId: u.id, workspaceId: workspaceId!, role: inv.role, tags: inv.tags });
+          await this.repo.markTeam(workspaceId!);
         }
         if (inv.kind === "join_workspace") await this.grantInviteTeams(inv, u.id, workspaceId!);
         await this.repo.setInviteUsedBy(inv.id, u.id);
@@ -273,6 +274,7 @@ export class InvitesService {
       const claimed = await this.repo.claimInvite(inv.id, now, user.id);
       if (!claimed.length) throw new InviteFailure("invalid");
       await this.repo.insertMembership({ userId: user.id, workspaceId: inv.workspaceId, role: inv.role, tags: inv.tags });
+      await this.repo.markTeam(inv.workspaceId);
       await this.grantInviteTeams(inv, user.id, inv.workspaceId);
       console.info(`[invite] accepted ${inv.id} kind=join_workspace by an existing account`);
       return { workspaceId: inv.workspaceId };

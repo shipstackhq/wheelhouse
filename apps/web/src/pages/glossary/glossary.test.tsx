@@ -20,7 +20,7 @@ describe("the glossary home", () => {
     await screen.findByRole("heading", { name: "Glossary" });
     expect(screen.getByRole("list").className).toContain("lg:grid-cols-3");
     const links = cards();
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/t/AA/glossary/t1", "/t/AA/glossary/t2"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/w/ae/t/AA/glossary/t1", "/w/ae/t/AA/glossary/t2"]);
     const invoice = screen.getByRole("link", { name: /^Invoice/ });
     expect(within(invoice).getByText("Billing")).toBeTruthy(); // the concept, as a label (the card is the link)
     expect(within(screen.getByRole("link", { name: /^Tenant/ })).queryByText("Billing")).toBeNull();
@@ -116,8 +116,8 @@ describe("one term", () => {
     await detail("t1");
     expect(screen.getByText("A bill we send")).toBeTruthy();
     const article = screen.getByRole("article");
-    expect(within(article).getByRole("link", { name: "Billing" }).getAttribute("href")).toBe("/t/AA/map?node=c-bill");
-    expect(within(screen.getByRole("navigation", { name: "Glossary navigation" })).getByRole("link", { name: /Glossary/ }).getAttribute("href")).toBe("/t/AA/glossary");
+    expect(within(article).getByRole("link", { name: "Billing" }).getAttribute("href")).toBe("/w/ae/t/AA/map?node=c-bill");
+    expect(within(screen.getByRole("navigation", { name: "Glossary navigation" })).getByRole("link", { name: /Glossary/ }).getAttribute("href")).toBe("/w/ae/t/AA/glossary");
   });
 
   test("a term without a concept has no concept link", async () => {

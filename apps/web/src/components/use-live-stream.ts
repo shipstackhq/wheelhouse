@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useWorkspaceSlug } from "../lib/workspace";
 import { backoffMs, DEBOUNCE_MS, FALLBACK_POLL_MS, onStreamMessage, shouldFallBack, streamUrl } from "../lib/live-stream";
 
 /**
@@ -10,6 +11,7 @@ export function useLiveStream({ path, onSignal, poll }: { path: string; onSignal
   // The latest callbacks, without restarting the connection every render.
   const signal = useRef(onSignal);
   const pollRef = useRef(poll);
+  const workspace = useWorkspaceSlug();
   useEffect(() => {
     signal.current = onSignal;
     pollRef.current = poll;
@@ -69,7 +71,7 @@ export function useLiveStream({ path, onSignal, poll }: { path: string; onSignal
     };
     const open = () => {
       if (!alive || document.hidden || es) return;
-      es = new EventSource(streamUrl(path, last));
+      es = new EventSource(streamUrl(path, last, workspace));
       es.addEventListener("ready", handle("ready"));
       es.addEventListener("resync", handle("resync"));
       es.addEventListener("change", handle("change"));
@@ -100,5 +102,5 @@ export function useLiveStream({ path, onSignal, poll }: { path: string; onSignal
       stopPolling();
       if (debounce) clearTimeout(debounce);
     };
-  }, [path]);
+  }, [path, workspace]);
 }

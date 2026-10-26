@@ -3,7 +3,6 @@ import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
-import { TeamAccessService } from "../teams/index";
 import { DaemonRepository } from "./daemon.repository";
 import { deviceView } from "./daemon.presenter";
 import { normalizeUserCode } from "./daemon.rules";
@@ -11,9 +10,8 @@ import { ACTIVE, MAX_POOL_SIZE, str, type Device } from "./device-common";
 import { DeviceStreamService } from "./device-stream.service";
 
 /**
- * A person's machines: list, approve a pairing, rename, resize, unpair. The person's side, so it is part of the api role (it asks the
- * teams module for the person's workspace role). Devices are selected by owner id AND the caller's workspace id: another person's or
- * another workspace's device is not_found. See wheelhouse-cli/daemon/DESIGN.md.
+ * A person's machines: list, approve a pairing, rename, resize, unpair. The person's side, so it is part of the api role. A device belongs to the person and serves every workspace they are in; devices are
+ * selected by owner id: another person's device is not_found. See wheelhouse-cli/daemon/DESIGN.md.
  */
 @Injectable()
 export class DevicesService {
@@ -21,13 +19,12 @@ export class DevicesService {
     @Inject(Database) private readonly db: Database,
     @Inject(DaemonRepository) private readonly repo: DaemonRepository,
     @Inject(DeviceStreamService) private readonly stream: DeviceStreamService,
-    @Inject(TeamAccessService) private readonly access: TeamAccessService,
   ) {}
 
-  /** The person's own paired machines in this workspace, each with how many jobs it is running. */
+  /** The person's own paired machines, each with how many jobs it is running. */
   async listDevices(actor: Actor) {
     if (actor.kind !== "human") throw new ServiceError("forbidden", "Only a person has devices");
-    const rows = await this.repo.listOwnDevices(actor.id, actor.workspaceId);
+    const rows = await this.repo.listOwnDevices(actor.id);
     const busy = rows.length ? await this.repo.activeJobCounts(rows.map((r) => r.id), ACTIVE) : [];
     const count = new Map(busy.map((b) => [b.deviceId, b.n]));
     return rows.map((d) => ({ ...deviceView(d), activeJobs: count.get(d.id) ?? 0 }));
@@ -35,7 +32,7 @@ export class DevicesService {
 
   async ownDevice(actor: Actor, id: string): Promise<Device> {
     if (actor.kind !== "human" || !isUuid(id)) throw new ServiceError("not_found", "Device not found");
-    const d = await this.repo.ownDevice(actor.id, actor.workspaceId, id);
+    const d = await this.repo.ownDevice(actor.id, id);
     if (!d) throw new ServiceError("not_found", "Device not found");
     return d;
   }
@@ -93,37 +90,34 @@ export class DevicesService {
     return p;
   }
 
-  /** Only people who can work in the workspace pair machines: a viewer or guest cannot run agents. */
-  private async requirePairer(actor: Actor) {
+  private requireHuman(actor: Actor) {
     if (actor.kind !== "human") throw new ServiceError("forbidden", "Only a person can pair a machine");
-    const role = await this.access.workspaceRoleOf(actor.workspaceId, actor.id);
-    if (!role || role === "viewer" || role === "guest") throw new ServiceError("forbidden", "Your workspace role cannot run agents on a machine");
   }
 
   /** What the approval page shows before the person says yes: the machine as it described itself. */
   async peekPairing(actor: Actor, code: unknown) {
-    await this.requirePairer(actor);
+    await this.requireHuman(actor);
     const p = await this.pendingPairing(code);
     return { userCode: p.userCode, name: p.name, os: p.os, expiresAt: p.expiresAt.toISOString() };
   }
 
-  /** Step 2, the person: approve the machine into their workspace, optionally renaming it. The device row is created here. */
+  /** Step 2, the person: approve the machine as theirs, optionally renaming it. The device row is created here. */
   async approvePairing(actor: Actor, code: unknown, input: { name?: unknown } = {}) {
-    await this.requirePairer(actor);
+    await this.requireHuman(actor);
     const p = await this.pendingPairing(code);
     const name = str(input.name, 80) || p.name;
     return this.db.transaction(async () => {
       const claimed = await this.repo.movePairing(p.id, "pending", "approved");
       if (!claimed) throw new ServiceError("conflict", "This code was just used");
       if (await this.repo.deviceByPublicKey(p.publicKey)) throw new ServiceError("conflict", "This machine's key is already paired; unpair it first");
-      const d = await this.repo.insertDevice({ workspaceId: actor.workspaceId, ownerId: actor.id, name, os: p.os, publicKey: p.publicKey });
+      const d = await this.repo.insertDevice({ ownerId: actor.id, name, os: p.os, publicKey: p.publicKey });
       await this.repo.setPairingDevice(p.id, d.id);
       return { device: deviceView(d) };
     });
   }
 
   async denyPairing(actor: Actor, code: unknown) {
-    await this.requirePairer(actor);
+    await this.requireHuman(actor);
     const p = await this.pendingPairing(code);
     await this.repo.movePairing(p.id, "pending", "denied");
     return { ok: true as const };

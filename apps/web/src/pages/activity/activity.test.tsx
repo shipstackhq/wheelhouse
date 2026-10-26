@@ -42,13 +42,13 @@ describe("the activity page", () => {
       }),
     );
     const href = async (text: string) => (await screen.findByRole("link", { name: text })).getAttribute("href");
-    expect(await href("issue event")).toBe("/t/AA?t=AA-5");
-    expect(await href("node event")).toBe("/t/AA/map?node=n-1");
-    expect(await href("edge event")).toBe("/t/AA/map");
-    expect(await href("flow event")).toBe("/t/AA/map?flow=f-1");
-    expect(await href("code event")).toBe("/t/AA/map");
-    expect(await href("decision event")).toBe("/t/AA/decisions#adr-4");
-    expect(await href("term event")).toBe("/t/AA/glossary");
+    expect(await href("issue event")).toBe("/w/ae/t/AA?t=AA-5");
+    expect(await href("node event")).toBe("/w/ae/t/AA/map?node=n-1");
+    expect(await href("edge event")).toBe("/w/ae/t/AA/map");
+    expect(await href("flow event")).toBe("/w/ae/t/AA/map?flow=f-1");
+    expect(await href("code event")).toBe("/w/ae/t/AA/map");
+    expect(await href("decision event")).toBe("/w/ae/t/AA/decisions#adr-4");
+    expect(await href("term event")).toBe("/w/ae/t/AA/glossary");
   });
 
   test("an event about nothing in particular is plain text, and a comment shows what was said", async () => {

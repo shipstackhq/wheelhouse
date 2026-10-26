@@ -134,14 +134,13 @@ describe("sign in", () => {
 });
 
 describe("sign up", () => {
-  test("asks for a name, an optional workspace name, an email and a password of at least 12 characters", async () => {
+  test("asks for a name, an email and a password of at least 12 characters", async () => {
     renderApp("/signup", (s) => {
       signedOut(s);
       s.on("GET /api/app/auth/options", { signupOpen: true });
     });
     await screen.findByRole("button", { name: "Create account" });
     expect((screen.getByLabelText("Name") as HTMLInputElement).required).toBe(true);
-    expect((screen.getByLabelText("Workspace name") as HTMLInputElement).required).toBe(false);
     const pw = screen.getByLabelText("Password") as HTMLInputElement;
     expect(pw.minLength).toBe(12);
     expect(pw.autocomplete).toBe("new-password");
@@ -156,12 +155,11 @@ describe("sign up", () => {
     });
     const user = userEvent.setup();
     await user.type(await screen.findByLabelText("Name"), "Ada Lovelace");
-    await user.type(screen.getByLabelText("Workspace name"), "Analytical Engines");
     await user.type(screen.getByLabelText("Email"), "ada@example.test");
     await user.type(screen.getByLabelText("Password"), "correct horse battery");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     await waitFor(() => expect(at()).toBe("/"));
-    expect(server.sent("POST /api/app/auth/signup")[0].body).toEqual({ name: "Ada Lovelace", email: "ada@example.test", password: "correct horse battery", workspace: "Analytical Engines" });
+    expect(server.sent("POST /api/app/auth/signup")[0].body).toEqual({ name: "Ada Lovelace", email: "ada@example.test", password: "correct horse battery" });
   });
 
   test("a taken email is shown as the server says it", async () => {

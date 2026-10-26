@@ -51,12 +51,18 @@ export class SessionsService {
   }
 
   /**
-   * The workspace a person is working in: the one their session chose, else their first. A suspended workspace is never chosen. Null
+   * The workspace a person is working in: the one the request names (its slug; not_found if they are not in it), else the one their
+   * session last used, else their first. A suspended workspace is never chosen. Null
    * when they belong to none that is usable.
    */
-  async currentMembership(userId: string, activeWorkspaceId?: string | null) {
+  async currentMembership(userId: string, activeWorkspaceId?: string | null, slug?: string | null) {
     const rows = await this.repo.membershipsOf(userId);
     const usable = rows.filter((r) => !r.workspace.suspendedAt);
+    if (slug) {
+      const asked = usable.find((r) => r.workspace.slug === slug);
+      if (!asked) throw new ServiceError("not_found", "Workspace not found");
+      return asked;
+    }
     return usable.find((r) => r.workspace.id === activeWorkspaceId) ?? usable[0] ?? null;
   }
 
@@ -66,7 +72,8 @@ export class SessionsService {
     const rows = await this.repo.membershipsOf(userId);
     return rows
       .filter((r) => !r.workspace.suspendedAt)
-      .map((r) => ({ id: r.workspace.id, name: r.workspace.name, role: r.membership.role, active: r.workspace.id === cur?.workspace.id }));
+      .map((r) => ({ id: r.workspace.id, slug: r.workspace.slug, name: r.workspace.name, kind: r.workspace.kind, role: r.membership.role, active: r.workspace.id === cur?.workspace.id }))
+      .sort((a, b) => Number(b.kind === "personal") - Number(a.kind === "personal")); // personal first; the rest keep their order
   }
 
   /** Points this session at another of the person's workspaces. Refused for one they are not in or that is suspended. */
@@ -82,22 +89,22 @@ export class SessionsService {
    * `Authorization: Bearer wh_...` (agents) wins over a session cookie (people using the API from the browser). Throws AuthError (401),
    * SuspendedError (403) or RateLimitError (429).
    */
-  async actorFromCredentials(c: { authorization?: string | null; sessionToken?: string | null; ip: string }): Promise<Actor> {
+  async actorFromCredentials(c: { authorization?: string | null; sessionToken?: string | null; workspace?: string | null; ip: string }): Promise<Actor> {
     if (c.authorization?.startsWith("Bearer ")) return this.keys.actorForKey(c.authorization.slice(7).trim(), c.ip);
     const session = c.sessionToken ? await this.sessionForToken(c.sessionToken) : null;
     if (!session) throw new AuthError("Not authenticated");
     const user = session.user;
-    const m = await this.currentMembership(user.id, session.activeWorkspaceId);
+    const m = await this.currentMembership(user.id, session.activeWorkspaceId, c.workspace);
     if (!m) throw new AuthError("No workspace");
     return { kind: "human", id: user.id, name: user.name, workspaceId: m.workspace.id };
   }
 
   /** The person behind a session cookie, with their workspace and membership, or null when signed out. */
-  async humanFromSession(token: string | undefined | null): Promise<Human | null> {
+  async humanFromSession(token: string | undefined | null, slug?: string | null): Promise<Human | null> {
     const session = token ? await this.sessionForToken(token) : null;
     if (!session) return null;
     const user = session.user;
-    const m = await this.currentMembership(user.id, session.activeWorkspaceId);
+    const m = await this.currentMembership(user.id, session.activeWorkspaceId, slug);
     if (!m) return null;
     const actor: Actor = { kind: "human", id: user.id, name: user.name, workspaceId: m.workspace.id };
     return { user, workspace: m.workspace, membership: m.membership, actor };
@@ -135,15 +142,14 @@ export class SessionsService {
     return signupOpen({ allowSignup: process.env.ALLOW_SIGNUP, nodeEnv: process.env.NODE_ENV, userCount: n });
   }
 
-  /** Create a user and a workspace they own. Throws AccountError. `ip` only feeds the signup rate limit. */
-  async signUp(input: { name: string; email: string; password: string; workspace?: string }, ip: string): Promise<{ userId: string }> {
+  /** Create a user and their personal workspace (named after them). Throws AccountError. `ip` only feeds the signup rate limit. */
+  async signUp(input: { name: string; email: string; password: string }, ip: string): Promise<{ userId: string }> {
     if (!(await this.signupAllowed())) throw new AccountError("signup_closed", "Signups are closed. Ask a workspace owner to add you.");
     const ipHit = rateLimit(`signup:${ip}`, 10, 60 * 60_000);
     if (!ipHit.ok) throw tooMany(ipHit.retryAfter);
     const name = String(input.name ?? "").trim();
     const email = String(input.email ?? "").trim().toLowerCase();
     const password = String(input.password ?? "");
-    const workspaceName = String(input.workspace ?? "").trim() || `${name}'s workspace`;
     if (!name || !emailOk(email)) {
       const fields: Record<string, string> = {};
       if (!name) fields.name = "Enter your name";
@@ -158,7 +164,7 @@ export class SessionsService {
     const passwordHash = await hashPassword(password);
     const userId = await this.db.transaction(async () => {
       const u = await this.repo.insertUser({ email, name, passwordHash });
-      const t = await this.repo.insertWorkspace(workspaceName);
+      const t = await this.repo.insertWorkspace(name, "personal");
       await this.repo.insertMembership({ userId: u.id, workspaceId: t.id, role: "owner" });
       return u.id;
     });

@@ -1,4 +1,5 @@
-import { Link, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
+import { Link } from "../../lib/workspace";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/shared/time";

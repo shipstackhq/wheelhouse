@@ -24,7 +24,7 @@ describe("the projects list", () => {
     expect(within(sso).getByText("On track")).toBeTruthy();
     expect(sso.textContent).toContain("Led by Ada Lovelace · 2 teams");
     expect(within(sso).getByLabelText("4 of 10 issues done")).toBeTruthy();
-    expect(sso.getAttribute("href")).toBe("/projects/p1");
+    expect(sso.getAttribute("href")).toBe("/w/ae/projects/p1");
     expect(sso.querySelector("[data-priority-chip]")).toBeNull(); // no priority is not worth a chip on the list
     expect((await card("Shaky")).querySelector("[data-priority-chip]")!.textContent).toBe("Urgent");
     const old = await card("Old migration");
@@ -53,7 +53,7 @@ describe("the projects list", () => {
     await user.click(screen.getByRole("button", { name: "Create project" }));
     await waitFor(() => expect(server.sent("POST /api/app/projects")).toHaveLength(1));
     expect(server.sent("POST /api/app/projects")[0].body).toEqual({ name: "Launch", description: "", status: "planned", priority: "none", startDate: null, targetDate: null, leadTeam: "AA", teams: ["BB"] });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/projects/new1"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae/projects/new1"));
   });
 
   test("a project without a name cannot be sent; a target before the start is said; a refusal is shown and the form stays", async () => {
@@ -79,7 +79,7 @@ describe("the projects list", () => {
   test("the sidebar has a Projects link, and the page is the workspace's, not a team's", async () => {
     open("/projects", (s) => s.on("GET /api/app/projects", { projects: [] }));
     await screen.findByText(/No projects yet/);
-    expect(screen.getAllByRole("link", { name: "Projects" }).some((a) => a.getAttribute("href") === "/projects")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Projects" }).some((a) => a.getAttribute("href") === "/w/ae/projects")).toBe(true);
   });
 });
 
@@ -124,7 +124,7 @@ describe("one project", () => {
     expect(within(ms).getAllByRole("listitem").map((li) => li.textContent?.replace(/UpDownRenameDelete/g, ""))).toEqual(["BetaNov 20, 20261 of 3 done", "GA0 of 1 done"]);
     const teams = screen.getByRole("region", { name: "Teams" });
     expect(within(teams).getByText("lead team")).toBeTruthy();
-    expect(within(teams).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/t/AA?t=AA-2");
+    expect(within(teams).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-2");
     expect(within(teams).getAllByText("Beta").length).toBeGreaterThan(0); // a milestone chip on the issue in it
     expect(screen.getByRole("region", { name: "Resources" }).querySelector("[data-others]")!.textContent).toBe("2 teams you are not in: 1 of 4 issues done.");
     expect(teams.textContent).not.toMatch(/BB|Beta team/);
@@ -284,7 +284,7 @@ describe("one project", () => {
     expect(confirm.textContent).toContain("Its 6 issues stay on their boards, in no project.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/projects/p1")).toHaveLength(1));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/projects"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae/projects"));
   });
 
   test("a project the person cannot see is not found", async () => {

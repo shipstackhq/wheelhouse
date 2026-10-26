@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Popover } from "radix-ui";
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import clsx from "clsx";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { timeAgo } from "@wheelhouse/shared/time";

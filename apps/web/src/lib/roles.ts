@@ -14,6 +14,10 @@ export const assignableRoles = (mine: Role) => WORKSPACE_ROLES.filter((r) => r.v
 
 export const canManagePeople = (role: Role | null | undefined) => role === "owner" || role === "admin";
 
+/** Guests see only their teams: no member list, no starting teams (ADR-23). Viewers cannot start teams either. */
+export const canSeePeople = (role: Role | null | undefined) => role !== "guest";
+export const canCreateTeam = (role: Role | null | undefined) => role === "owner" || role === "admin" || role === "member";
+
 export const TEAM_ROLES: { value: TeamRole; label: string; hint: string }[] = [
   { value: "admin", label: "admin", hint: "Manages who is in the team, its settings and repositories" },
   { value: "editor", label: "editor", hint: "Creates and edits issues, docs, the map and decisions" },

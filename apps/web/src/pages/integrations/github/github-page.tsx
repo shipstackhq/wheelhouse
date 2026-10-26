@@ -1,4 +1,5 @@
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { Link } from "../../../lib/workspace";
 import { Loaded } from "../../../components/query-state";
 import { Select } from "../../../components/ui";
 import { useRepos } from "../../../lib/queries";

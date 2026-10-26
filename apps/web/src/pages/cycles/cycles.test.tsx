@@ -33,7 +33,7 @@ describe("the cycles page", () => {
     const past = screen.getByRole("region", { name: "Past cycles" });
     expect(within(past).getAllByRole("link").map((a) => a.textContent?.split("past")[0])).toEqual(["Cycle 2", "Cycle 1: Kick-off"]);
     expect(within(past).getByLabelText("3 of 3 issues done")).toBeTruthy();
-    expect(within(current).getByRole("link").getAttribute("href")).toBe("/t/AA/cycles/3");
+    expect(within(current).getByRole("link").getAttribute("href")).toBe("/w/ae/t/AA/cycles/3");
   });
 
   test("with none it says cycles are optional; there is a button to start one", async () => {
@@ -100,7 +100,7 @@ describe("the cycles page", () => {
   test("the sidebar has a Cycles link for the team", async () => {
     open("/t/AA/cycles", (s) => s.on("GET /api/app/teams/AA/cycles", LIST()));
     await screen.findByText(/No cycles yet/);
-    const link = screen.getAllByRole("link", { name: "Cycles" }).find((a) => a.getAttribute("href") === "/t/AA/cycles");
+    const link = screen.getAllByRole("link", { name: "Cycles" }).find((a) => a.getAttribute("href") === "/w/ae/t/AA/cycles");
     expect(link).toBeTruthy();
   });
 
@@ -142,7 +142,7 @@ describe("one cycle", () => {
     expect(within(landed).getAllByRole("listitem")).toHaveLength(2);
     expect(within(landed).getAllByText("outside the cycle")).toHaveLength(1);
     expect(within(landed).getByText("A fix from another corner").closest("li")!.textContent).toContain("outside the cycle");
-    expect(within(issues).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/t/AA?t=AA-2");
+    expect(within(issues).getByRole("link", { name: /AA-2/ }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-2");
   });
 
   test("an upcoming cycle says it has not started; a cycle with nothing done says so", async () => {
@@ -186,7 +186,7 @@ describe("one cycle", () => {
     expect(confirm.textContent).toContain("Its 2 issues stay on the board, in no cycle.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/cycles/3")).toHaveLength(1));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/t/AA/cycles"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae/t/AA/cycles"));
   });
 
   test("an address that is not a cycle number, or a cycle the team does not have, is not found", async () => {

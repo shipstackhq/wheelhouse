@@ -1,7 +1,7 @@
 
 import "@xyflow/react/dist/style.css";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, wsKey } from "../../lib/workspace";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -578,8 +578,8 @@ function MapInner({ teamKey, graph: serverGraph, initialNode, initialFlow, initi
   const runAutoLayoutRef = useRef<((targetLens: LayerId, dir: Direction, onlyUnplaced: boolean) => Promise<void>) | null>(null);
 
   const reload = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ["graph", teamKey] });
-  }, [queryClient, teamKey]);
+    await queryClient.invalidateQueries({ queryKey: wsKey(api, "graph", teamKey) });
+  }, [api, queryClient, teamKey]);
 
   // The server's copy replaces ours whenever nothing is being dragged or saved: that is how another person's or an agent's change
   // shows up. A copy that arrives mid-drag is remembered, and read again when the drag or save is over.

@@ -135,7 +135,7 @@ describe("Connect GitHub", () => {
     open();
     const c = await githubCard();
     const link = within(c).getByRole("link", { name: "Add or change repositories on GitHub" });
-    expect(link.getAttribute("href")).toBe("/api/github/install?team=AA");
+    expect(link.getAttribute("href")).toBe("/api/github/install?workspace=ae&team=AA");
     expect(within(c).getByText("acme")).toBeTruthy();
     expect(within(c).getByText("acme/web")).toBeTruthy();
     expect(within(c).getByText("private")).toBeTruthy();
@@ -145,7 +145,7 @@ describe("Connect GitHub", () => {
   test("before any installation the button says Connect GitHub; the team key is escaped in the link", async () => {
     open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ installations: [] })));
     const c = await githubCard();
-    expect(within(c).getByRole("link", { name: "Connect GitHub" }).getAttribute("href")).toBe("/api/github/install?team=AA");
+    expect(within(c).getByRole("link", { name: "Connect GitHub" }).getAttribute("href")).toBe("/api/github/install?workspace=ae&team=AA");
   });
 
   test("Connect sends the installation, the repository's GitHub id, and the role and path limit typed; empty ones are left out", async () => {

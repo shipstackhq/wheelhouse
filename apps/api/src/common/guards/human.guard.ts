@@ -2,7 +2,7 @@ import { Catch, Injectable, type CanActivate, type ExceptionFilter, type Executi
 import type { Request, Response } from "express";
 import { SESSION_COOKIE } from "../../modules/auth/auth-policy";
 import { humanFromSession, type Human } from "../../modules/auth/index";
-import { cookieValue } from "../http/cookies";
+import { cookieValue, workspaceOf } from "../http/cookies";
 
 export type HumanRequest = Request & { human: Human };
 
@@ -17,12 +17,12 @@ export class SignedOutFilter implements ExceptionFilter {
   }
 }
 
-/** A person with a session cookie (not an API key): their user, workspace and membership. For routes a browser visits. */
+/** A person with a session cookie (not an API key): their user, workspace (`?workspace=`, else last used) and membership. For routes a browser visits. */
 @Injectable()
 export class HumanGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest<HumanRequest>();
-    const human = await humanFromSession(cookieValue(req.headers.cookie, SESSION_COOKIE));
+    const human = await humanFromSession(cookieValue(req.headers.cookie, SESSION_COOKIE), workspaceOf(req));
     if (!human) throw new SignedOutException();
     req.human = human;
     return true;

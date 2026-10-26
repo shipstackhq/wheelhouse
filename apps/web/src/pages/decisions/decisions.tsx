@@ -1,6 +1,7 @@
 
 import { useEffect, useState, useTransition } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
+import { Link, useNavigate } from "../../lib/workspace";
 import { Dialog } from "radix-ui";
 import clsx from "clsx";
 import type { Decision } from "@wheelhouse/api-client";

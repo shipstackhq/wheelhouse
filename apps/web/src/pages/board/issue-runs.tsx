@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
 import type { IssueRuns, JobEvent, JobView } from "@wheelhouse/api-client";

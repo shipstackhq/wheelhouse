@@ -141,8 +141,8 @@ describe("the node panel", () => {
     expect(within(p).getByRole("button", { name: /Web/ })).toBeTruthy(); // Web depends on API
     expect(within(p).getByText("Contains (2)")).toBeTruthy();
     expect(within(p).getByRole("button", { name: /Auth/ })).toBeTruthy();
-    expect(within(p).getByRole("link", { name: /ADR-1\s*Use REST/ }).getAttribute("href")).toBe("/t/AA/decisions#adr-1");
-    expect(within(p).getByRole("link", { name: /AA-1 Write the plan/ }).getAttribute("href")).toBe("/t/AA?t=AA-1");
+    expect(within(p).getByRole("link", { name: /ADR-1\s*Use REST/ }).getAttribute("href")).toBe("/w/ae/t/AA/decisions#adr-1");
+    expect(within(p).getByRole("link", { name: /AA-1 Write the plan/ }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-1");
     expect(within(p).getByText("apps/api/**")).toBeTruthy();
   });
 
@@ -259,7 +259,7 @@ describe("the node panel", () => {
     await user.click(within(p).getByRole("link", { name: "the API" }));
     await waitFor(() => expect(within(sideOf()!).getByRole("heading", { level: 2, name: "API" })).toBeTruthy());
     await user.click(within(sideOf()!).getByRole("button", { name: "Close" }));
-    expect(r.router.state.location.pathname).toBe("/t/AA/map");
+    expect(r.router.state.location.pathname).toBe("/w/ae/t/AA/map");
   });
 
   test("a term in an explanation is underlined with its definition on hover", async () => {

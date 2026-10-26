@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { Link } from "../lib/workspace";
 import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/shared/time";

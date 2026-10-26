@@ -27,9 +27,9 @@ import { RepositoriesService } from "./repositories.service";
 import { testApp } from "../../test/app";
 
 const app = await testApp();
-const { registerInstallation, connectGithubRepository, listInstallations } = (() => {
+const { registerInstallation, connectGithubRepository, listInstallations, unlinkInstallation } = (() => {
   const c = app.get(ConnectService);
-  return { registerInstallation: c.registerInstallation.bind(c), connectGithubRepository: c.connectGithubRepository.bind(c), listInstallations: c.listInstallations.bind(c) };
+  return { registerInstallation: c.registerInstallation.bind(c), connectGithubRepository: c.connectGithubRepository.bind(c), listInstallations: c.listInstallations.bind(c), unlinkInstallation: c.unlinkInstallation.bind(c) };
 })();
 const { handleDelivery, targetsFor, pullRequestsForIssue } = (() => {
   const d = app.get(DeliveriesService);
@@ -81,7 +81,7 @@ async function makeWorkspace(name: string, key: string, installation: string, gi
   const owner = await mkUser("owner", `${name} owner`);
   const member = await mkUser("member", `${name} member`);
   await createTeam(owner, { name: `${name} team`, key });
-  fakeGithub.state.repos.set(installation, [{ id: githubRepoId, fullName: `acme/${key.toLowerCase()}-app`, defaultBranch: "main", private: true }]);
+  fakeGithub.state.repos.set(installation, [...(fakeGithub.state.repos.get(installation) ?? []), { id: githubRepoId, fullName: `acme/${key.toLowerCase()}-app`, defaultBranch: "main", private: true }]);
   await registerInstallation(owner, { installationId: installation, accountLogin: "acme", accountType: "Organization" });
   const repo = await connectGithubRepository(owner, key, { installationId: installation, githubRepoId, role: "backend" }, fakeGithub.api);
   return { owner, member, installation, repoSlug: repo.slug, repoRowId: repo.id };
@@ -131,9 +131,9 @@ describe("connecting", () => {
     await assert.rejects(connectGithubRepository(A.member, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /Only workspace owners/);
   });
 
-  test("an installation belongs to one workspace: another workspace cannot register it", async () => {
-    await assert.rejects(registerInstallation(B.owner, { installationId: A.installation, accountLogin: "acme", accountType: "Organization" }), /already connected to another workspace/);
-    assert.equal((await listInstallations(B.owner)).some((i) => i.installationId === A.installation), false);
+  test("a workspace sees only its own links", async () => {
+    assert.deepEqual((await listInstallations(A.owner)).map((i) => i.installationId), [A.installation]);
+    assert.deepEqual((await listInstallations(B.owner)).map((i) => i.installationId), [B.installation]);
   });
 
   test("a workspace cannot connect a repository through an installation that is not its own", async () => {
@@ -151,6 +151,28 @@ describe("connecting", () => {
   test("the same repository cannot be connected twice to a team, and connecting needs the App to be configured", async () => {
     await assert.rejects(connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, fakeGithub.api), /already connected/);
     await assert.rejects(connectGithubRepository(A.owner, "AA", { installationId: A.installation, githubRepoId: SAME_GITHUB_REPO, role: "x" }, null), /not configured/);
+  });
+});
+
+describe("one installation, two workspaces", () => {
+  test("each workspace picks its own repositories, webhooks reach the right one, and unlinking one leaves the other", async () => {
+    const C = await makeWorkspace("Gamma2", "GA", "9100", "1001");
+    const D = await makeWorkspace("Delta2", "DA", "9100", "1002"); // the same installation, linked by a second workspace
+    assert.deepEqual((await targetsFor("9100", "1001")).map((t) => t.team.key), ["GA"]);
+    assert.deepEqual((await targetsFor("9100", "1002")).map((t) => t.team.key), ["DA"]);
+    assert.equal((await listInstallations(D.owner)).length, 1);
+
+    await assert.rejects(unlinkInstallation(D.member, "9100"), /Only workspace owners/);
+    await unlinkInstallation(D.owner, "9100");
+    assert.equal((await listInstallations(D.owner)).length, 0);
+    assert.deepEqual(await targetsFor("9100", "1002"), [], "the unlinked workspace no longer receives");
+    assert.deepEqual((await targetsFor("9100", "1001")).map((t) => t.team.key), ["GA"], "the other link is untouched");
+    assert.equal((await listInstallations(C.owner)).length, 1);
+    await assert.rejects(unlinkInstallation(D.owner, "9100"), /not connected to your workspace/);
+  });
+
+  test("the link needs its own proof: a workspace that never registered the installation cannot use it, whoever else did", async () => {
+    await assert.rejects(connectGithubRepository(B.owner, "BB", { installationId: "9100", githubRepoId: "1001", role: "x" }, fakeGithub.api), /not connected to your workspace/);
   });
 });
 

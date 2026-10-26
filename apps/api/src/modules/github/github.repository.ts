@@ -59,7 +59,7 @@ export class GithubRepository {
 
   /**
    * The repositories a webhook is about: connected through GitHub, with this exact installation and repository id, and whose
-   * installation is registered to the same workspace as the team.
+   * installation is linked to the same workspace as the team.
    */
   targetsFor(installationId: string, repoId: string) {
     return this.db.q
@@ -71,11 +71,6 @@ export class GithubRepository {
   }
 
   // ───────── installations ─────────
-
-  async installation(installationId: string) {
-    const [i] = await this.db.q.select().from(githubInstallations).where(eq(githubInstallations.installationId, installationId));
-    return i;
-  }
 
   async installationOf(workspaceId: string, installationId: string) {
     const [i] = await this.db.q.select().from(githubInstallations).where(and(eq(githubInstallations.installationId, installationId), eq(githubInstallations.workspaceId, workspaceId)));
@@ -90,11 +85,18 @@ export class GithubRepository {
     await this.db.q
       .insert(githubInstallations)
       .values(i)
-      .onConflictDoUpdate({ target: githubInstallations.installationId, set: { accountLogin: i.accountLogin, accountType: i.accountType } });
+      .onConflictDoUpdate({ target: [githubInstallations.installationId, githubInstallations.workspaceId], set: { accountLogin: i.accountLogin, accountType: i.accountType } });
   }
 
+  /** GitHub removed the App: every workspace's link to it goes. */
   async deleteInstallation(installationId: string) {
     await this.db.q.delete(githubInstallations).where(eq(githubInstallations.installationId, installationId));
+  }
+
+  /** One workspace stops using an installation; its repositories lose the installation id, so nothing there can reach GitHub through it. */
+  async unlinkInstallation(workspaceId: string, installationId: string) {
+    await this.db.q.delete(githubInstallations).where(and(eq(githubInstallations.installationId, installationId), eq(githubInstallations.workspaceId, workspaceId)));
+    await this.db.q.update(repositories).set({ githubInstallationId: null }).where(and(eq(repositories.workspaceId, workspaceId), eq(repositories.githubInstallationId, installationId)));
   }
 
   // ───────── deliveries ─────────

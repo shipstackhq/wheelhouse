@@ -6,6 +6,7 @@ import { describeFailure } from "../../../lib/form-state";
 import { githubQuery } from "../../../lib/queries";
 import { refreshAll } from "../../../lib/refresh";
 import { useServices } from "../../../lib/services";
+import { useWorkspaceSlug } from "../../../lib/workspace";
 import { useState } from "react";
 
 const MESSAGES: Record<string, string> = {
@@ -35,6 +36,7 @@ export function githubNote(params: URLSearchParams): { text: string; bad: boolea
  */
 export function GithubConnect({ teamKey }: { teamKey: string }) {
   const { api } = useServices();
+  const slug = useWorkspaceSlug();
   const query = useQuery(githubQuery(api, teamKey));
   const [params] = useSearchParams();
   const note = githubNote(params);
@@ -90,7 +92,7 @@ export function GithubConnect({ teamKey }: { teamKey: string }) {
       ) : (
         <>
           {/* A full page load: this leaves the app for GitHub and comes back to the callback, which redirects here. */}
-          <a className="btn btn-primary inline-flex" href={`/api/github/install?team=${encodeURIComponent(teamKey)}`}>
+          <a className="btn btn-primary inline-flex" href={`/api/github/install?workspace=${encodeURIComponent(slug ?? "")}&team=${encodeURIComponent(teamKey)}`}>
             {status.installations.length ? "Add or change repositories on GitHub" : "Connect GitHub"}
           </a>
           {status.installations.map((i) => (

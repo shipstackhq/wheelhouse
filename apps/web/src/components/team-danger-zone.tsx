@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "../lib/workspace";
 import type { TeamGuard } from "@wheelhouse/api-client";
 import { failure } from "../lib/form-state";
 import { useTeamSettings } from "../lib/queries";

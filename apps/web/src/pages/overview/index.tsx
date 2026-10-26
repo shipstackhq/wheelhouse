@@ -1,4 +1,5 @@
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link } from "../../lib/workspace";
 import { DashboardScopeProvider } from "../../lib/dashboard-scope";
 import { useBoard } from "../../lib/queries";
 import { DashboardRefresh } from "../dashboard/refresh";

@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import clsx from "clsx";
 import { Markdown } from "../../components/markdown";
 import { Select } from "../../components/ui";

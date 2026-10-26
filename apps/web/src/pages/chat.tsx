@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Link, NavLink, Outlet, useNavigate, useParams } from "react-router";
+import { Outlet, useParams } from "react-router";
+import { Link, NavLink, useNavigate, wsKey } from "../lib/workspace";
 import clsx from "clsx";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ChatMessageView, ChatThreadView } from "@wheelhouse/api-client";
@@ -205,7 +206,7 @@ function Conversation({ chat, messages }: { chat: ChatThreadView; messages: Chat
     following.current = true;
   }, [chat.id]);
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["chats"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: wsKey(api, "chats") });
   const send = async () => {
     const message = draft.trim();
     if (!message || busy || sending || !online) return;

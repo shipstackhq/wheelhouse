@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Outlet, useLocation, useMatches, useParams } from "react-router";
+import { Navigate, Outlet, useMatches, useParams } from "react-router";
 import { Logo } from "../components/logo";
 import { NavigationProgress } from "../components/navigation-progress";
 import { ProfileMenu } from "../components/profile-menu";
@@ -14,6 +14,7 @@ import { useSidebarCollapsed } from "../components/sidebar-toggle";
 import { PageMenuProvider } from "../components/page-menu";
 import { useRememberAppLocation } from "../lib/app-location";
 import { useMe, useTeams } from "../lib/session";
+import { useWsPathname } from "../lib/workspace";
 import { NotFound } from "./errors";
 
 /** Shown by the router while the first screen's data (who you are, your teams) loads. */
@@ -94,7 +95,7 @@ export function AppLayout() {
   const teams = useTeams().data;
   const fullWidth = useMatches().some((m) => (m.handle as PageHandle | undefined)?.fullWidth);
   // The dashboard and the team pages already have a stream that refreshes the inbox with everything else; the other pages open one for it.
-  const { pathname } = useLocation();
+  const pathname = useWsPathname();
   const hasStream = pathname === "/" || pathname.startsWith("/t/");
   useRememberAppLocation(); // Settings is its own screen: this is where its Back to app goes
   const [collapsed, toggleCollapsed] = useSidebarCollapsed(); // the sidebar's rail, toggled from the header

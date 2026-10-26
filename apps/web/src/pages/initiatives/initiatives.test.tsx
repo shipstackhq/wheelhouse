@@ -22,7 +22,7 @@ describe("the initiatives list", () => {
     expect(within(top).getByText("On track")).toBeTruthy();
     expect(top.textContent).toContain("Owned by Ada Lovelace · 2 projects · 1 sub-initiative");
     expect(within(top).getByLabelText("4 of 10 issues done")).toBeTruthy();
-    expect(top.getAttribute("href")).toBe("/initiatives/i1");
+    expect(top.getAttribute("href")).toBe("/w/ae/initiatives/i1");
     const sub = await card("SSO");
     expect(sub.textContent).toContain("No owner · 1 project");
     expect(sub.textContent).toContain("no target date");
@@ -33,7 +33,7 @@ describe("the initiatives list", () => {
   test("with none it invites starting one; the sidebar has an Initiatives link", async () => {
     renderApp("/initiatives", (s) => s.on("GET /api/app/initiatives", { initiatives: [] }));
     await screen.findByText(/No initiatives yet/);
-    expect(screen.getAllByRole("link", { name: "Initiatives" }).some((a) => a.getAttribute("href") === "/initiatives")).toBe(true);
+    expect(screen.getAllByRole("link", { name: "Initiatives" }).some((a) => a.getAttribute("href") === "/w/ae/initiatives")).toBe(true);
   });
 
   test("a new initiative is made from a name, and can go under one that has room; it opens its page", async () => {
@@ -57,7 +57,7 @@ describe("the initiatives list", () => {
     await user.click(screen.getByRole("button", { name: "Create initiative" }));
     await waitFor(() => expect(server.sent("POST /api/app/initiatives")).toHaveLength(1));
     expect(server.sent("POST /api/app/initiatives")[0].body).toEqual({ name: "Goal", description: "", status: "planned", targetDate: null, parentId: "i1" });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/initiatives/new1"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae/initiatives/new1"));
   });
 
   test("a name is required, and a refusal from the server is shown with the form kept", async () => {
@@ -104,11 +104,11 @@ describe("one initiative", () => {
     page();
     await screen.findByRole("heading", { level: 2, name: "Enterprise ready" });
     expect(screen.getByText("Everything big customers ask for")).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Where this sits" })).getByRole("link", { name: "Company goals" }).getAttribute("href")).toBe("/initiatives/i0");
+    expect(within(screen.getByRole("navigation", { name: "Where this sits" })).getByRole("link", { name: "Company goals" }).getAttribute("href")).toBe("/w/ae/initiatives/i0");
     const below = screen.getByRole("region", { name: "Initiatives below" });
-    expect(within(below).getByRole("link", { name: /SSO/ }).getAttribute("href")).toBe("/initiatives/i2");
+    expect(within(below).getByRole("link", { name: /SSO/ }).getAttribute("href")).toBe("/w/ae/initiatives/i2");
     const projects = screen.getByRole("region", { name: "Projects" });
-    expect(within(projects).getByRole("link", { name: "Launch SSO" }).getAttribute("href")).toBe("/projects/p1");
+    expect(within(projects).getByRole("link", { name: "Launch SSO" }).getAttribute("href")).toBe("/w/ae/projects/p1");
     expect(within(projects).getByText("through a sub-initiative")).toBeTruthy();
     expect(projects.querySelector("[data-hidden]")!.textContent).toBe("2 other projects of teams you are not in: 1 of 3 issues done.");
   });
@@ -195,6 +195,6 @@ describe("one initiative", () => {
     expect(confirm.textContent).toContain("The 1 initiative under it move up a level. The projects stay as they are.");
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/initiatives/i1")).toHaveLength(1));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/initiatives/i0"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae/initiatives/i0"));
   });
 });

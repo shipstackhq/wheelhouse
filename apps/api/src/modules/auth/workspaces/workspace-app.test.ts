@@ -92,6 +92,56 @@ describe("the workspace page", () => {
   });
 });
 
+describe("guests", () => {
+  test("a guest sees only themselves in the workspace, and no invites", async () => {
+    const g = await person(A.workspace.id, "guest");
+    const o = await t.workspaceOverview(g);
+    assert.deepEqual(o.members.map((m) => m.userId), [g.user.id]);
+    assert.equal(o.pendingInvites.length, 0);
+  });
+});
+
+describe("ownership transfer", () => {
+  const owner = async (w: { id: string }) => (await (await getDb()).select().from(schema.memberships).where(eq(schema.memberships.workspaceId, w.id))).filter((m) => m.role === "owner").map((m) => m.userId);
+  const fresh = async () => {
+    const w = await workspace("Transfer");
+    return { w, o: await person(w.id, "owner"), m: await person(w.id, "member"), g: await person(w.id, "guest") };
+  };
+
+  test("ownership moves only when the target accepts; the old owner becomes an admin", async () => {
+    const { w, o, m } = await fresh();
+    await t.requestTransfer(o, m.user.id);
+    assert.deepEqual(await owner(w), [o.user.id], "still the old owner");
+    assert.equal((await t.workspaceOverview(m)).transfer?.userId, m.user.id, "the target sees it");
+    assert.equal((await t.workspaceOverview(o)).transfer?.userId, m.user.id, "so does the owner");
+    await t.acceptTransfer(m);
+    assert.deepEqual(await owner(w), [m.user.id]);
+    assert.equal((await t.currentMembership(o.user.id, w.id))?.membership.role, "admin");
+    assert.equal((await t.workspaceOverview(m)).transfer, null);
+  });
+
+  test("only an owner can offer, and only to another non-guest member", async () => {
+    const { o, m, g } = await fresh();
+    await rejects(t.requestTransfer(m, o.user.id), isService("forbidden"), "member offers");
+    await rejects(t.requestTransfer(o, g.user.id), isService("invalid"), "guest target");
+    await rejects(t.requestTransfer(o, o.user.id), isService("invalid"), "self");
+    await rejects(t.requestTransfer(o, B.member.user.id), isService("invalid"), "another workspace");
+  });
+
+  test("cancel and decline leave ownership as it was; only the target can answer", async () => {
+    const { w, o, m, g } = await fresh();
+    await t.requestTransfer(o, m.user.id);
+    await rejects(t.acceptTransfer(g), isService("not_found"), "someone else accepts");
+    await rejects(t.declineTransfer(o), isService("not_found"), "the owner declines");
+    await t.cancelTransfer(o);
+    await rejects(t.acceptTransfer(m), isService("not_found"), "accept after cancel");
+    await t.requestTransfer(o, m.user.id);
+    await t.declineTransfer(m);
+    await rejects(t.acceptTransfer(m), isService("not_found"), "accept after decline");
+    assert.deepEqual(await owner(w), [o.user.id]);
+  });
+});
+
 describe("changing members", () => {
   test("an owner changes role and tags; the tags are normalised", async () => {
     const m = await t.updateMemberAs(A.owner, { userId: A.member.user.id, role: "member", tags: "Backend, Lead" });

@@ -30,7 +30,7 @@ import { InvitePage } from "../pages/invite";
 import { NewTeamPage } from "../pages/new-team";
 import { WorkspacePage } from "../pages/workspace";
 import { NotFound, RouteError } from "./errors";
-import { redirectIfSignedIn, requireSignedIn } from "./guards";
+import { redirectIfSignedIn, redirectToWorkspace, requireSignedIn, requireWorkspace } from "./guards";
 import { AppLayout, AuthLayout, FullPageSkeleton, InviteLayout, TeamLayout, RequireAdmin, RootLayout, type PageHandle } from "./layouts";
 import { OfflinePage } from "./offline";
 
@@ -65,6 +65,21 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "profile", Component: ProfileSettingsPage },
             { path: "password", Component: PasswordSettingsPage },
             { path: "devices", Component: DevicesSettingsPage },
+            { path: "*", Component: NotFound },
+          ],
+        },
+        {
+          path: "devices/pair",
+          Component: SettingsLayout,
+          loader: requireSignedIn(services),
+          children: [{ index: true, Component: DevicePairPage }],
+        },
+        {
+          path: "w/:slug/settings",
+          Component: SettingsLayout,
+          loader: requireWorkspace(services),
+          children: [
+            { index: true, element: <Navigate to="workspace" replace /> },
             { path: "workspace", Component: WorkspaceSettingsPage },
             { path: "members", Component: WorkspacePage },
             { path: "api-keys", Component: ApiKeysPage },
@@ -74,9 +89,11 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "*", Component: NotFound },
           ],
         },
+        { index: true, loader: redirectToWorkspace(services) },
         {
+          path: "w/:slug",
           Component: AppLayout,
-          loader: requireSignedIn(services),
+          loader: requireWorkspace(services),
           children: [
             { index: true, Component: Dashboard },
             { path: "inbox", Component: InboxPage, handle: { fullWidth: true } satisfies PageHandle },
@@ -89,7 +106,6 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "agents", Component: AgentsPage },
             { path: "agents/:slug", Component: AgentPage },
             { path: "api-keys", Component: ApiKeysPage },
-            { path: "devices/pair", Component: DevicePairPage },
             {
               path: "chat",
               Component: ChatLayout,

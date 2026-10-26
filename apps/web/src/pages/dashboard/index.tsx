@@ -1,4 +1,5 @@
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
+import { canCreateTeam } from "../../lib/roles";
 import { useMe } from "../../lib/session";
 import { WIDGETS, SPAN_CLASS } from "./registry";
 import { DashboardRefresh } from "./refresh";
@@ -20,7 +21,7 @@ export function Dashboard() {
             </h1>
             <p className="mt-1 text-sm text-muted">How {me.workspace.name}&apos;s teams are moving, and what the agents are up to.</p>
           </div>
-          <Link to="/teams/new" className="btn">+ New team</Link>
+          {canCreateTeam(me.role) && <Link to="/teams/new" className="btn">+ New team</Link>}
         </div>
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           {WIDGETS.map(({ id, span, Component }) => (

@@ -1,0 +1,2 @@
+ALTER TABLE "workspaces" ADD COLUMN "pending_owner_id" uuid;--> statement-breakpoint
+ALTER TABLE "workspaces" ADD CONSTRAINT "workspaces_pending_owner_id_users_id_fk" FOREIGN KEY ("pending_owner_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

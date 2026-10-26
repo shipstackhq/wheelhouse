@@ -1,5 +1,5 @@
 import { useActionState, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, wsKey } from "../lib/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { SubmitButton } from "../components/submit-button";
 import { failure, field, type FormState } from "../lib/form-state";
@@ -32,14 +32,14 @@ export function NewTeamForm() {
   const [state, action] = useActionState<FormState, FormData>(async (_prev, fd) => {
     try {
       const team = await api.teams.create({ name: field(fd, "name"), key: field(fd, "key") || undefined, description: field(fd, "description"), parent: field(fd, "parent") || null });
-      await queryClient.invalidateQueries({ queryKey: ["teams"] }); // the sidebar's switcher lists it at once
+      await queryClient.invalidateQueries({ queryKey: wsKey(api, "teams") }); // the sidebar's switcher lists it at once
       await navigate(`/t/${team.key}/onboarding`);
       return undefined;
     } catch (e) {
       return failure(e);
     }
   }, undefined);
-  const parents = useQuery({ queryKey: ["teams", "parent-candidates"], queryFn: () => api.teams.parentCandidates() }).data;
+  const parents = useQuery({ queryKey: wsKey(api, "teams", "parent-candidates"), queryFn: () => api.teams.parentCandidates() }).data;
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   const [keyTouched, setKeyTouched] = useState(false);

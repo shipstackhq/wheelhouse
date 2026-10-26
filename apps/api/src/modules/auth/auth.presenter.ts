@@ -11,7 +11,7 @@ import type { Human } from "./sessions.service";
 export function meView(h: Human, sessionToken: string) {
   return {
     user: { id: h.user.id, name: h.user.name, email: h.user.email, avatarUrl: avatarUrl(h.user.id, h.user.avatarKey) },
-    workspace: { id: h.workspace.id, name: h.workspace.name, imageUrl: workspaceImageUrl(h.workspace.id, h.workspace.imageKey) },
+    workspace: { id: h.workspace.id, slug: h.workspace.slug, name: h.workspace.name, imageUrl: workspaceImageUrl(h.workspace.id, h.workspace.imageKey) },
     role: h.membership.role,
     tags: h.membership.tags,
     isInstanceAdmin: isInstanceAdmin(h.user.email),

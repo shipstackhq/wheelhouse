@@ -187,6 +187,12 @@ describe("writing", () => {
     assert.equal((await requireTeam(sam, p2.key)).name, `Team ${p2.key}`); // another team is untouched
   });
 
+  test("a guest sees only the teams they are on and no list of the workspace's people", async () => {
+    assert.deepEqual((await listTeams(gus)).map((t) => t.key), [p1.key]);
+    await assert.rejects(() => requireTeam(gus, p2.key), code("not_found"));
+    await assert.rejects(() => pmem.listAddableMembers(gus, p1.key), code("forbidden"));
+  });
+
   test("workspace viewers and guests cannot start teams; members can, and become the team's admin", async () => {
     await assert.rejects(() => createTeam(dee, { name: "No", key: "NOV" }), code("forbidden"));
     await assert.rejects(() => createTeam(gus, { name: "No", key: "NOG" }), code("forbidden"));

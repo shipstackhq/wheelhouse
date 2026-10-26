@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link } from "../lib/workspace";
 import { failure } from "../lib/form-state";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";

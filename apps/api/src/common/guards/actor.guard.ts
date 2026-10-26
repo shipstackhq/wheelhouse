@@ -4,7 +4,7 @@ import type { Actor } from "../actor";
 import { SESSION_COOKIE } from "../../modules/auth/auth-policy";
 import { actorFromCredentials } from "../../modules/auth/index";
 import { clientIp } from "../rate-limit";
-import { cookieValue, toHeaders } from "../http/cookies";
+import { cookieValue, toHeaders, workspaceOf } from "../http/cookies";
 
 export type AuthedRequest = Request & { actor: Actor };
 
@@ -20,6 +20,7 @@ export class ActorGuard implements CanActivate {
     req.actor = await actorFromCredentials({
       authorization: req.headers.authorization ?? null,
       sessionToken: cookieValue(req.headers.cookie, SESSION_COOKIE),
+      workspace: workspaceOf(req),
       ip: clientIp(toHeaders(req.headers)),
     });
     return true;

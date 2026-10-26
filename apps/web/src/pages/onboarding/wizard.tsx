@@ -1,5 +1,5 @@
 import { useActionState, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "../../lib/workspace";
 import clsx from "clsx";
 import type { SetupCommands } from "@wheelhouse/api-client";
 import { CopyBlock } from "../../components/copy-block";

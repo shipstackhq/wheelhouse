@@ -1,5 +1,5 @@
 import { useState, useTransition } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "../../lib/workspace";
 import type { ProjectSummary } from "@wheelhouse/api-client";
 import { PRIORITY_LABEL, PriorityIcon } from "../../components/priority-icon";
 import { describeFailure } from "../../lib/form-state";

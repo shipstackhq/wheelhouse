@@ -132,6 +132,7 @@ export class RunsService {
       const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, offerExpiresAt });
       await this.stream.send(key, device.id, "job.offer", {
         jobId: j.id,
+        workspaceId: j.workspaceId,
         expiresAt: offerExpiresAt.toISOString(),
         model,
         branch,

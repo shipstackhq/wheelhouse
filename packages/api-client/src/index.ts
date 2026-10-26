@@ -103,7 +103,7 @@ export type Me = {
   /** `avatarUrl`: the profile picture, or null (show initials). */
   user: { id: string; name: string; email: string; avatarUrl?: string | null };
   /** `imageUrl`: the workspace's custom image, or null (show its initial). */
-  workspace: { id: string; name: string; imageUrl?: string | null };
+  workspace: { id: string; slug: string; name: string; imageUrl?: string | null };
   role: Role;
   /** The person's labels within the workspace (for example "eng"). */
   tags: string[];
@@ -131,7 +131,7 @@ export type TeamSettings = {
 export type ParentCandidate = { id: string; key: string; name: string; retired: boolean };
 
 export type LoginInput = { email: string; password: string };
-export type SignupInput = { name: string; email: string; password: string; workspace?: string };
+export type SignupInput = { name: string; email: string; password: string };
 
 /** Every failed request. `code` is stable and meant for code; `message` is meant for people. */
 export class ApiError extends Error {
@@ -177,6 +177,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
   const base = (options.baseUrl ?? "").replace(/\/+$/, "");
   const doFetch = options.fetch ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
   let csrf = ANONYMOUS;
+  let workspace: string | null = null;
 
   const team = (key: string) => `/api/app/teams/${encodeURIComponent(key)}`;
 
@@ -186,6 +187,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
     const headers: Record<string, string> = { accept: "application/json" };
     if (body !== undefined) headers["content-type"] = "application/json";
     if (unsafe) headers["x-csrf-token"] = csrf;
+    if (workspace) headers["x-workspace"] = workspace;
     const res = await doFetch(base + path, { method: m, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: "same-origin" });
     const text = await res.text();
     let json: unknown = null;
@@ -224,6 +226,13 @@ export function createApiClient(options: ApiClientOptions = {}) {
   };
 
   return {
+    /** The workspace every following call is for (`X-Workspace`); null sends none and the server uses the last one used. */
+    setWorkspace(slug: string | null) {
+      workspace = slug;
+    },
+    /** The workspace set by `setWorkspace`. */
+    getWorkspace: () => workspace,
+
     /** Any endpoint, with the same CSRF and error handling. Use the named methods where there is one. */
     request,
     get: <T>(path: string) => request<T>("GET", path),
@@ -259,6 +268,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
     /** The person's workspaces, and moving this session to another. After a switch every cached read belongs to the old one. */
     workspaces: {
       list: async () => (await request<{ workspaces: WorkspaceChoice[] }>("GET", "/api/app/me/workspaces")).workspaces,
+      /** Makes a team workspace the person owns; `slug` is taken from the name when left out. Field errors say what is wrong with either. */
+      create: async (input: { name: string; slug?: string }) =>
+        (await request<{ workspace: { id: string; slug: string; name: string } }>("POST", "/api/app/workspaces", input)).workspace,
       switchTo: async (workspaceId: string) => (await request<{ workspace: { id: string; name: string } }>("POST", "/api/app/me/workspace", { workspaceId })).workspace,
     },
 
@@ -484,6 +496,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
         (await request<{ member: WorkspaceMember }>("PATCH", `/api/app/workspace/members/${encodeURIComponent(userId)}`, input)).member,
       /** Workspace owners and admins: turn agents on or off for the workspace (data is kept). */
       setAgentsEnabled: (agentsEnabled: boolean) => request<{ settings: { agentsEnabled: boolean } }>("PATCH", "/api/app/workspace/settings", { agentsEnabled }),
+      /** Owners only: offer ownership to another member (not a guest); it moves when they accept. */
+      transferOwnership: (userId: string) => request<{ ok: true }>("POST", "/api/app/workspace/transfer", { userId }),
+      cancelTransfer: () => request<{ ok: true }>("DELETE", "/api/app/workspace/transfer"),
+      /** The person offered ownership answers. */
+      acceptTransfer: () => request<{ ok: true }>("POST", "/api/app/workspace/transfer/accept"),
+      declineTransfer: () => request<{ ok: true }>("POST", "/api/app/workspace/transfer/decline"),
       removeMember: (userId: string) => request<{ ok: true }>("DELETE", `/api/app/workspace/members/${encodeURIComponent(userId)}`),
     },
 

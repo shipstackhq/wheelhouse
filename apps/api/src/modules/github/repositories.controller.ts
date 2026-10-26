@@ -1,4 +1,4 @@
-import { Controller, Inject, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
+import { Controller, Delete, Inject, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { ConnectService } from "./connect.service";
@@ -40,6 +40,12 @@ export class RepositoriesController {
   @Post(":key/repositories/github")
   async connectGithub(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
     return { repository: repositoryView(await this.connect.connectGithubAs(req.human.actor, key, body)) };
+  }
+
+  /** This workspace stops using an installation; other workspaces linked to it keep it. Owners only. */
+  @Delete(":key/repositories/github/:installationId")
+  disconnectGithub(@Req() req: SessionRequest, @Param("installationId") installationId: string) {
+    return this.connect.unlinkInstallation(req.human.actor, installationId);
   }
 
   @Patch(":key/repositories/:id")
