@@ -24,7 +24,7 @@ describe("the Agents page", () => {
   test("switched off: says so, and sends admins to the setting", async () => {
     renderApp("/agents", page(agentsPage({ enabled: false, catalog: [], workspace: [] })));
     expect(await screen.findByText("Agents are off for this workspace.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "workspace settings" }).getAttribute("href")).toBe("/settings/workspace");
+    expect(screen.getByRole("link", { name: "workspace settings" }).getAttribute("href")).toBe("/w/ae/settings/workspace");
     expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
   });
 
@@ -215,7 +215,7 @@ describe("a team's agents", () => {
 
   test("the team nav links to it", async () => {
     renderApp("/t/AA/agents", roster());
-    expect((await screen.findAllByRole("link", { name: "Agents" })).some((l) => l.getAttribute("href") === "/t/AA/agents")).toBe(true);
+    expect((await screen.findAllByRole("link", { name: "Agents" })).some((l) => l.getAttribute("href") === "/w/ae/t/AA/agents")).toBe(true);
   });
 });
 

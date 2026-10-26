@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
+import { Link } from "../lib/workspace";
 import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
 import type { DeviceStatus, DeviceView } from "@wheelhouse/api-client";
@@ -151,7 +152,7 @@ function DeviceCard({ device: d }: { device: DeviceView }) {
 
 /**
  * `/devices/pair?code=...`: where the link the daemon prints lands. Shows the machine as it described itself, and the person approves it
- * into this workspace (naming it as they like) or says it is not theirs.
+ * as theirs (naming it as they like) or says it is not theirs.
  */
 export function DevicePairPage() {
   const { api, queryClient } = useServices();

@@ -3,14 +3,15 @@ import { canManagePeople, isWorkspaceRole } from "../../../common/roles";
 import { ServiceError } from "../../../common/service-error";
 import { isUuid } from "../../../common/uuid";
 import { Database } from "../../../platform/database/database";
-import { maxWorkspaceMembers } from "../auth-policy";
+import { isInstanceAdmin, maxWorkspaceMembers, workspaceCreateOpen } from "../auth-policy";
 import { AdminError } from "../auth-errors";
 import { AuthRepository } from "../auth.repository";
-import { issuerOf, parseTags, requireAdmin, requireManager } from "../auth.rules";
+import { isUniqueViolation, issuerOf, parseTags, requireAdmin, requireManager } from "../auth.rules";
 import { memberView, type WorkspaceMember } from "../auth.presenter";
 import { InvitesService } from "../invites/invites.service";
 import type { Human } from "../sessions.service";
 import type { WorkspaceRole } from "../../../db/schema";
+import { slugProblem } from "./workspace-slug";
 
 /** An instance admin: who is asking, and which workspace they are working in. */
 export type Admin = { userId: string; email: string; workspaceId: string };
@@ -55,14 +56,45 @@ export class WorkspacesService {
     @Inject(InvitesService) private readonly invites: InvitesService,
   ) {}
 
+  /** Anyone signed in makes a team workspace and owns it; `slug` comes from the name unless typed (refused with a field error when bad or taken). */
+  async createAs(h: Human, input: { name: string; slug?: string }) {
+    if (!workspaceCreateOpen() && !isInstanceAdmin(h.user.email)) throw new ServiceError("forbidden", "Creating workspaces is turned off on this instance");
+    const name = input.name.trim().slice(0, 100);
+    if (!name) throw new ServiceError("invalid", "Enter a name", { fields: { name: "Enter a name" } });
+    const slug = input.slug?.trim().toLowerCase() || undefined;
+    const bad = (m: string) => new ServiceError("invalid", m, { fields: { slug: m } });
+    if (slug) {
+      const problem = slugProblem(slug);
+      if (problem) throw bad(problem);
+      if (await this.repo.slugTaken(slug)) throw bad("That address is taken");
+    }
+    try {
+      return await this.db.transaction(async () => {
+        const w = await this.repo.insertWorkspace(name, "team", slug);
+        await this.repo.insertMembership({ userId: h.user.id, workspaceId: w.id, role: "owner" });
+        return { id: w.id, slug: w.slug, name: w.name, kind: w.kind, role: "owner" as const };
+      });
+    } catch (e) {
+      if (slug && isUniqueViolation(e)) throw bad("That address is taken");
+      throw e;
+    }
+  }
+
   /** The workspace page: its members, the seats, and (for owners) the invites still waiting. */
   async workspaceOverview(h: Human) {
     const rows = await this.repo.membersOf(h.workspace.id);
+    // A guest sees no directory of people: just themselves.
+    const visible = h.membership.role === "guest" ? rows.filter(({ user }) => user.id === h.user.id) : rows;
+    const pendingOwnerId = (await this.repo.workspaceById(h.workspace.id))?.pendingOwnerId;
+    const pending = rows.find(({ user }) => user.id === pendingOwnerId)?.user;
+    // Only the owner who offered it and the person offered it see a transfer.
+    const transfer = pending && (h.membership.role === "owner" || pending.id === h.user.id) ? { userId: pending.id, name: pending.name } : null;
     const pendingInvites = canManagePeople(h.membership.role) ? (await this.invites.listInvites(issuerOf(h))).filter((i) => i.kind === "join_workspace") : [];
     return {
       workspace: { id: h.workspace.id, name: h.workspace.name, agentsEnabled: h.workspace.settings.agentsEnabled !== false },
       role: h.membership.role,
-      members: rows.map(({ user: u, m }) => memberView(u, m)),
+      members: visible.map(({ user: u, m }) => memberView(u, m)),
+      transfer,
       seats: await this.invites.seatInfo(h.workspace.id),
       pendingInvites,
     };
@@ -149,6 +181,49 @@ export class WorkspacesService {
       throw new ServiceError("conflict", "A workspace needs at least one owner");
     }
     return (await this.workspaceOverview(h)).members.find((m) => m.userId === input.userId)!;
+  }
+
+  /** The owner offers ownership to another member who is not a guest; it moves only when they accept. Replaces an earlier offer. */
+  async requestTransfer(h: Human, userId: string) {
+    if (h.membership.role !== "owner") throw new ServiceError("forbidden", "Only an owner can transfer the workspace");
+    const target = isUuid(userId) && userId !== h.user.id ? await this.repo.membershipRole(h.workspace.id, userId) : undefined;
+    if (!target || target.role === "guest") throw new ServiceError("invalid", "Choose another member of this workspace, not a guest", { fields: { userId: "Choose a member" } });
+    await this.repo.setPendingOwner(h.workspace.id, userId);
+    return { ok: true as const };
+  }
+
+  /** The owner withdraws the offer. */
+  async cancelTransfer(h: Human) {
+    if (h.membership.role !== "owner") throw new ServiceError("forbidden", "Only an owner can transfer the workspace");
+    await this.repo.setPendingOwner(h.workspace.id, null);
+    return { ok: true as const };
+  }
+
+  /** The person offered ownership turns it down. */
+  async declineTransfer(h: Human) {
+    await this.db.transaction(async () => {
+      await this.offeredTo(h);
+      await this.repo.setPendingOwner(h.workspace.id, null);
+    });
+    return { ok: true as const };
+  }
+
+  /** The person offered ownership accepts: they become the owner, the current owners become admins. Audited. */
+  async acceptTransfer(h: Human) {
+    await this.db.transaction(async () => {
+      await this.offeredTo(h);
+      if ((await this.repo.membershipRole(h.workspace.id, h.user.id))?.role === "guest") throw new ServiceError("conflict", "A guest cannot own a workspace");
+      await this.repo.moveOwnership(h.workspace.id, h.user.id);
+      await this.repo.setPendingOwner(h.workspace.id, null);
+      await this.repo.insertAudit({ workspaceId: h.workspace.id, actorKind: "human", actorId: h.user.id, actorName: h.user.name, action: "workspace.ownership_transferred", targetType: "user", targetId: h.user.id });
+    });
+    return { ok: true as const };
+  }
+
+  /** Locks the workspace and checks the offer is still to this person (not_found otherwise). */
+  private async offeredTo(h: Human) {
+    const w = await this.repo.lockWorkspace(h.workspace.id);
+    if (w?.pendingOwnerId !== h.user.id) throw new ServiceError("not_found", "No ownership transfer is waiting for you");
   }
 
   /** Owners and admins remove a member (an admin cannot remove an owner). Nobody removes themselves here. */

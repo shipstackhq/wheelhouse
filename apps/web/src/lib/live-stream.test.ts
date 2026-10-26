@@ -19,6 +19,7 @@ describe("reconnecting", () => {
     assert.equal(streamUrl("/api/teams/WH/stream", null), "/api/teams/WH/stream");
     assert.equal(streamUrl("/api/teams/WH/stream", 120), "/api/teams/WH/stream?since=120");
     assert.equal(streamUrl("/api/stream", 0), "/api/stream?since=0", "position 0 is a position");
+    assert.equal(streamUrl("/api/stream", 5, "acme"), "/api/stream?workspace=acme&since=5");
   });
 
   test("bursts are folded together over a short window", () => {

@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import { CollapsibleList } from "../collapsible-list";
 import { Tip } from "../tip";
 

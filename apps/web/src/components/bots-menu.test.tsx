@@ -14,7 +14,7 @@ describe("the Bots menu in the team header", () => {
     expect(t.getAttribute("title")).toBe("No bots connected");
     await userEvent.setup().click(t);
     expect(await screen.findByText("No agents connected yet.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Create an API key" }).getAttribute("href")).toBe("/api-keys");
+    expect(screen.getByRole("link", { name: "Create an API key" }).getAttribute("href")).toBe("/w/ae/api-keys");
   });
 
   test("with a queue it shows the total, and in the menu who is behind", async () => {

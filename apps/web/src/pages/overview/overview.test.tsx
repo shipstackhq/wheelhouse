@@ -41,8 +41,8 @@ describe("a team's Overview", () => {
     expect(within(await tile("Open issues")).getByText("in this team")).toBeTruthy();
     expect(within(await tile("Agents active")).getByText("changed something in 7 days")).toBeTruthy();
     expect(screen.queryByText("Agents connected")).toBeNull();
-    expect((await screen.findByRole("link", { name: /Stale map nodes.*described/ })).getAttribute("href")).toBe("/t/AA/map"); // the tile is the link
-    expect(screen.getByRole("link", { name: /Stale docs.*possibly out of date/ }).getAttribute("href")).toBe("/t/AA/docs");
+    expect((await screen.findByRole("link", { name: /Stale map nodes.*described/ })).getAttribute("href")).toBe("/w/ae/t/AA/map"); // the tile is the link
+    expect(screen.getByRole("link", { name: /Stale docs.*possibly out of date/ }).getAttribute("href")).toBe("/w/ae/t/AA/docs");
   });
 
   test("Focus lists what waited longest, what sat longest and agents gone quiet, each linking to its issue", async () => {
@@ -50,12 +50,12 @@ describe("a team's Overview", () => {
     const focus = await widget("Focus");
     const section = (title: RegExp) => within(focus).getByText(title).parentElement as HTMLElement; // the label sits inside its section
     const review = section(/Waiting longest for review/);
-    expect(within(review).getByRole("link", { name: /AA-6.*Add rate limiting.*4 days/ }).getAttribute("href")).toBe("/t/AA?t=AA-6");
+    expect(within(review).getByRole("link", { name: /AA-6.*Add rate limiting.*4 days/ }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-6");
     const aging = section(/In progress the longest/);
-    expect(within(aging).getByRole("link", { name: /AA-4.*Refactor auth.*9 days/ }).getAttribute("href")).toBe("/t/AA?t=AA-4");
+    expect(within(aging).getByRole("link", { name: /AA-4.*Refactor auth.*9 days/ }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-4");
     expect(within(section(/Agents gone quiet/)).getByText(/CI bot/)).toBeTruthy();
-    expect(within(focus).getByRole("link", { name: "2 decisions still proposed" }).getAttribute("href")).toBe("/t/AA/decisions");
-    expect(within(focus).getByRole("link", { name: "3 members · you are admin" }).getAttribute("href")).toBe("/t/AA/members");
+    expect(within(focus).getByRole("link", { name: "2 decisions still proposed" }).getAttribute("href")).toBe("/w/ae/t/AA/decisions");
+    expect(within(focus).getByRole("link", { name: "3 members · you are admin" }).getAttribute("href")).toBe("/w/ae/t/AA/members");
   });
 
   test("when nothing is stuck, it says so instead of showing empty lists", async () => {
@@ -70,7 +70,7 @@ describe("a team's Overview", () => {
     renderApp("/t/AA/overview", (s) => s.on("GET /api/app/dashboard/focus", focusData({ aging: [], waitingReview: [], quiet: [], issues: 0 })));
     const focus = await widget("Focus");
     expect(within(focus).getByText(/No issues yet/)).toBeTruthy();
-    expect(within(focus).getByRole("link", { name: /Add the first one on the board/ }).getAttribute("href")).toBe("/t/AA");
+    expect(within(focus).getByRole("link", { name: /Add the first one on the board/ }).getAttribute("href")).toBe("/w/ae/t/AA");
     expect(within(focus).queryByText(/Nothing is stuck/)).toBeNull();
   });
 
@@ -88,8 +88,8 @@ describe("a team's Overview", () => {
     renderApp("/t/AA/overview");
     await screen.findByRole("heading", { level: 1, name: "Overview of Alpha" });
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getByRole("link", { name: "Overview" }).getAttribute("href")).toBe("/t/AA/overview");
-    expect(screen.getByRole("link", { name: "Open the board" }).getAttribute("href")).toBe("/t/AA");
+    expect(within(nav).getByRole("link", { name: "Overview" }).getAttribute("href")).toBe("/w/ae/t/AA/overview");
+    expect(screen.getByRole("link", { name: "Open the board" }).getAttribute("href")).toBe("/w/ae/t/AA");
   });
 
   test("a team you are not in is a plain not found", async () => {

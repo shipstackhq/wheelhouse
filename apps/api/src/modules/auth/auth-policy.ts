@@ -32,6 +32,9 @@ const positiveInt = (v: string | undefined, fallback: number) => {
 /** Seats per workspace, owner included; pending invites count (MAX_WORKSPACE_MEMBERS, default 5). */
 export const maxWorkspaceMembers = (raw = process.env.MAX_WORKSPACE_MEMBERS) => positiveInt(raw, 5);
 
+/** Anyone signed in may create a workspace unless the instance sets ALLOW_WORKSPACE_CREATE=false (instance admins always may). */
+export const workspaceCreateOpen = (raw = process.env.ALLOW_WORKSPACE_CREATE) => raw?.trim().toLowerCase() !== "false";
+
 /** How long an invite link works, in hours (INVITE_TTL_HOURS, default 7 days). */
 export const inviteTtlHours = (raw = process.env.INVITE_TTL_HOURS) => positiveInt(raw, 168);
 

@@ -53,6 +53,7 @@ export const workspace = (over: Partial<WorkspaceOverview> = {}): WorkspaceOverv
     { userId: "u1", name: "Ada Lovelace", email: "ada@example.test", role: "owner", tags: ["eng"] },
     { userId: "u2", name: "Grace Hopper", email: "grace@example.test", role: "member", tags: ["backend", "lead"] },
   ],
+  transfer: null,
   seats: { members: 2, pending: 0, used: 2, max: 5, full: false },
   pendingInvites: [],
   ...over,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link } from "../lib/workspace";
 import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/shared/time";

@@ -1,7 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ApiClient } from "@wheelhouse/api-client";
-import { useNavigate } from "react-router";
+import { useNavigate } from "./workspace";
 import { useServices } from "./services";
+import { wsKey } from "./workspace";
 
 /** One inbox item as /api/app/notifications lists it. */
 export type InboxItem = {
@@ -36,7 +37,7 @@ export const BELL_ITEMS = 5;
 /** Everything about the inbox is under "inbox", so one invalidation (a change, a mark, the live signal) refreshes the list and the count together. */
 const base = "/api/app/notifications";
 export const inboxQuery = (api: ApiClient, unreadOnly: boolean, limit = INBOX_PAGE_SIZE, view: InboxView = "inbox") => ({
-  queryKey: ["inbox", "list", { view, unreadOnly, limit }] as const,
+  queryKey: wsKey(api, "inbox", "list", { view, unreadOnly, limit }),
   initialPageParam: null as string | null,
   queryFn: ({ pageParam }: { pageParam: string | null }) => {
     const q = new URLSearchParams({ view, limit: String(limit) });
@@ -46,7 +47,7 @@ export const inboxQuery = (api: ApiClient, unreadOnly: boolean, limit = INBOX_PA
   },
   getNextPageParam: (last: InboxPage) => last.nextCursor,
 });
-export const unreadCountQuery = (api: ApiClient) => ({ queryKey: ["inbox", "count"] as const, queryFn: async () => (await api.get<{ count: number }>(`${base}/unread-count`)).count });
+export const unreadCountQuery = (api: ApiClient) => ({ queryKey: wsKey(api, "inbox", "count"), queryFn: async () => (await api.get<{ count: number }>(`${base}/unread-count`)).count });
 
 export const useInbox = (unreadOnly: boolean, limit?: number, view?: InboxView) => useInfiniteQuery(inboxQuery(useServices().api, unreadOnly, limit, view));
 export const useUnreadCount = () => useQuery(unreadCountQuery(useServices().api));
@@ -55,7 +56,7 @@ export const useUnreadCount = () => useQuery(unreadCountQuery(useServices().api)
 export function useInboxActions() {
   const { api } = useServices();
   const queryClient = useQueryClient();
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["inbox"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: wsKey(api, "inbox") });
   const at = (id: string, action: string) => `${base}/${encodeURIComponent(id)}/${action}`;
   const markRead = useMutation({ mutationFn: (id: string) => api.post(at(id, "read")), onSettled: refresh });
   const markAllRead = useMutation({ mutationFn: () => api.post(`${base}/read-all`), onSettled: refresh });

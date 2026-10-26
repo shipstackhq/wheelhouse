@@ -1,15 +1,15 @@
 import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { renderIn, serverWithData } from "../test/harness";
+import { apiError, renderIn, serverWithData } from "../test/harness";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
 const two = () => {
   const s = serverWithData();
   s.on("GET /api/app/me/workspaces", {
     workspaces: [
-      { id: "t1", name: "Analytical Engines", role: "owner", active: true },
-      { id: "t2", name: "Difference Engines", role: "viewer", active: false },
+      { id: "t1", slug: "ae", name: "Analytical Engines", kind: "personal", role: "owner", active: true },
+      { id: "t2", slug: "de", name: "Difference Engines", kind: "team", role: "viewer", active: false },
     ],
   });
   s.on("POST /api/app/me/workspace", { workspace: { id: "t2", name: "Difference Engines" } });
@@ -28,12 +28,12 @@ describe("the workspace switcher", () => {
     const group = await screen.findByRole("group", { name: "Workspaces" });
     const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
     expect(current.disabled).toBe(true);
-    expect(within(group).getAllByRole("button")).toHaveLength(1);
+    expect(within(group).getAllByRole("button")).toHaveLength(2); // the workspace and Create workspace
   });
 
-  test("with several it lists them, marks the current one, and switching moves the session and forgets everything read", async () => {
+  test("with several it lists them, marks the current one, and switching tells the server and opens the other workspace's address, keeping what was read", async () => {
     const { server, services, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", two());
-    services.queryClient.setQueryData(["marker"], "from the old workspace");
+    services.queryClient.setQueryData(["marker"], "kept: every key starts with its workspace, so nothing needs forgetting");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
     const group = await screen.findByRole("group", { name: "Workspaces" });
@@ -45,8 +45,8 @@ describe("the workspace switcher", () => {
     await user.click(within(group).getByRole("button", { name: /Difference Engines/ }));
     await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
     expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ workspaceId: "t2" });
-    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
-    expect(services.queryClient.getQueryData(["marker"])).toBeUndefined(); // nothing from the old workspace lingers
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/de"));
+    expect(services.queryClient.getQueryData(["marker"])).toBeDefined();
   });
 
   test("in the icon-only rail the icon stays and the down arrow goes (a phone drawer is never the rail, so it keeps it)", () => {
@@ -55,5 +55,31 @@ describe("the workspace switcher", () => {
     expect(button.className).not.toContain("md:hidden");
     expect(button.textContent).toBe("A");
     expect(button.querySelector("svg")!.getAttribute("class")).toContain("md:hidden");
+  });
+
+  test("Ctrl+2 opens the second workspace", async () => {
+    const { server, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", two());
+    await userEvent.setup().keyboard("{Control>}2{/Control}");
+    await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/de"));
+  });
+
+  test("Create workspace asks for a name, fills the address from it, shows the server's field error, then opens the new workspace", async () => {
+    const s = two();
+    let calls = 0;
+    s.on("POST /api/app/workspaces", () => (++calls === 1 ? apiError(400, "invalid", "x", { fields: { slug: "That address is taken" } }) : { workspace: { id: "t3", slug: "new-co", name: "New Co" } }));
+    s.on("POST /api/app/me/workspace", { workspace: { id: "t3", name: "New Co" } });
+    const { server, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", s);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
+    await user.click(await screen.findByRole("button", { name: "Create workspace" }));
+    await user.type(await screen.findByLabelText("Name"), "New Co");
+    expect((screen.getByLabelText("Address") as HTMLInputElement).value).toBe("new-co");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    expect(await screen.findByText("That address is taken")).toBeTruthy();
+    expect(server.sent("POST /api/app/workspaces")[0].body).toEqual({ name: "New Co" }); // an address not typed is left to the server
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/new-co"));
+    expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ workspaceId: "t3" });
   });
 });

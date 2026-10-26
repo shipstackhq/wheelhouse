@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Reorder, useDragControls } from "motion/react";
 import { Popover } from "radix-ui";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, useNavigate, useWsPathname, wsKey } from "../lib/workspace";
 import clsx from "clsx";
 import { NAV_ICON, NAV_ICON_RAIL, NAV_ITEM, NAV_ITEM_RAIL, NavLink } from "./nav-link";
 import { AddIcon, ChevronRightIcon, MoreFillIcon, NAV_ICONS, SearchIcon, type IconPair } from "./icons";
 import { SectionLabel, SidebarCloseButton, SidebarFrame, SidebarGroup, useFolded } from "./sidebar-frame";
 import { useUnreadCount } from "../lib/notifications";
+import { canCreateTeam } from "../lib/roles";
 import { useServices } from "../lib/services";
+import { useMe } from "../lib/session";
 import { TeamIcon } from "./team-icon";
 import { Tip } from "./tip";
 import { WorkspaceSwitcher } from "./workspace-switcher";
@@ -101,11 +103,13 @@ export function Sidebar({
   /** The account menu; a function gets whether the sidebar is the icon-only rail, so it can draw itself compact. */
   profile: React.ReactNode | ((collapsed: boolean) => React.ReactNode);
 }) {
-  const { pathname: path } = useLocation();
+  const path = useWsPathname();
   const navigate = useNavigate();
   const match = path.match(/^\/t\/([^/]+)/);
   const currentKey = match ? decodeURIComponent(match[1]) : null;
   // Retired teams stay out of the main list and the switcher; they sit in their own collapsed group below it.
+  const role = useMe().data?.role;
+  const canCreate = !role || canCreateTeam(role); // until the session loads, show it
   const teams = useMemo(() => allTeams.filter((t) => !t.retired), [allTeams]);
   const retiredTeams = allTeams.filter((t) => t.retired);
   const current = allTeams.find((p) => p.key === currentKey) ?? null;
@@ -134,7 +138,7 @@ export function Sidebar({
     if (!keys.length || keys.join(",") === signature) return;
     api.teams
       .reorder(keys)
-      .then(() => queryClient.invalidateQueries({ queryKey: ["teams"] }))
+      .then(() => queryClient.invalidateQueries({ queryKey: wsKey(api, "teams") }))
       .catch(() => setOrderKeys(null)); // not saved: back to the order the server has
   };
   const move = (key: string, delta: -1 | 1) => {
@@ -236,9 +240,11 @@ export function Sidebar({
                   <button type="button" onClick={() => setSwitcher(true)} aria-label="Search teams (⌘K)" className="rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
                     <SearchIcon className="text-base" />
                   </button>
-                  <Link to="/teams/new" aria-label="Create a team" className="rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
-                    <AddIcon className="text-base" />
-                  </Link>
+                  {canCreate && (
+                    <Link to="/teams/new" aria-label="Create a team" className="rounded p-1 text-muted outline-none hover:bg-panel hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
+                      <AddIcon className="text-base" />
+                    </Link>
+                  )}
                 </>
               }
             />
@@ -292,13 +298,15 @@ export function Sidebar({
                     ))}
                     {results.length === 0 && <div className="px-2 py-1.5 text-muted">No teams match.</div>}
                   </div>
-                  <Link
-                    to="/teams/new"
-                    onClick={() => setSwitcher(false)}
-                    className="mt-1 block rounded border-t border-line px-2 py-1.5 text-muted hover:bg-panel-2 hover:text-fg"
-                  >
-                    + New team
-                  </Link>
+                  {canCreate && (
+                    <Link
+                      to="/teams/new"
+                      onClick={() => setSwitcher(false)}
+                      className="mt-1 block rounded border-t border-line px-2 py-1.5 text-muted hover:bg-panel-2 hover:text-fg"
+                    >
+                      + New team
+                    </Link>
+                  )}
                 </div>
               </>
             )}

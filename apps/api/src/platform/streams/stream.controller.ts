@@ -7,7 +7,7 @@ import { clientIp } from "../../common/rate-limit";
 import { openStream } from "./stream-open";
 import { teamScope, workspaceScope, type StreamScope } from "./stream-scope";
 import type { Actor } from "../../common/actor";
-import { cookieValue, toHeaders } from "../../common/http/cookies";
+import { cookieValue, toHeaders, workspaceOf } from "../../common/http/cookies";
 import { StreamRegistry } from "./stream.registry";
 
 @Controller()
@@ -36,7 +36,7 @@ export class StreamController {
     });
     const last = req.headers["last-event-id"];
     const r = await openStream({
-      getActor: () => actorFromCredentials({ authorization: req.headers.authorization ?? null, sessionToken: cookieValue(req.headers.cookie, SESSION_COOKIE), ip: clientIp(toHeaders(req.headers)) }),
+      getActor: () => actorFromCredentials({ authorization: req.headers.authorization ?? null, sessionToken: cookieValue(req.headers.cookie, SESSION_COOKIE), workspace: workspaceOf(req), ip: clientIp(toHeaders(req.headers)) }),
       scopeFor,
       lastEventId: Array.isArray(last) ? (last[0] ?? null) : (last ?? null),
       since: new URL(req.originalUrl, "http://localhost").searchParams.get("since"),

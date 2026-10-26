@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import { ChevronRightIcon } from "../../components/icons";
 import { INTEGRATIONS } from "./integrations";
 

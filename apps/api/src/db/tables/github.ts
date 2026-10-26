@@ -63,16 +63,20 @@ export const teamFiles = table(
   (t) => [teamScope("team_files", t), primaryKey({ columns: [t.teamId, t.path] })],
 );
 
-// Which workspace an installation of the App belongs to. A row exists only after the installing person proved, through
-// GitHub's own sign-in, that they administer that installation: an installation id alone is a public number.
-export const githubInstallations = table("github_installations", {
-  installationId: text("installation_id").primaryKey(),
-  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-  accountLogin: text("account_login").notNull().default(""),
-  accountType: text("account_type").notNull().default(""),
-  connectedBy: uuid("connected_by"), // the user who connected it; no FK, people can leave
-  createdAt: createdAt(),
-});
+// Which workspaces an installation of the App serves: one row per link. A row exists only after the installing person proved, through
+// GitHub's own sign-in, that they administer that installation (an installation id alone is a public number), so the proof is per link.
+export const githubInstallations = table(
+  "github_installations",
+  {
+    installationId: text("installation_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    accountLogin: text("account_login").notNull().default(""),
+    accountType: text("account_type").notNull().default(""),
+    connectedBy: uuid("connected_by"), // the user who connected it; no FK, people can leave
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.installationId, t.workspaceId] })],
+);
 
 // Deliveries we have already handled (GitHub retries), so a redelivery changes nothing.
 export const githubDeliveries = table("github_deliveries", {

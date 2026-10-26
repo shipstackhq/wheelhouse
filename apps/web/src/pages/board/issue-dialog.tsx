@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
-import { Link } from "react-router";
+import { Link, wsKey } from "../../lib/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, Popover } from "radix-ui";
 import ReactMarkdown from "react-markdown";
@@ -125,7 +125,7 @@ export function IssueDialog(props: {
 
   /** Read the issue and the board again: after a change, and after a refusal (which shows what is true now). */
   const reload = async () => {
-    await Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: ["board", props.teamKey] })]);
+    await Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: wsKey(api, "board", props.teamKey) })]);
   };
 
   /**
@@ -448,7 +448,7 @@ export function IssueDialog(props: {
                       try {
                         await api.issues.remove(t.ref);
                         onClose();
-                        await queryClient.invalidateQueries({ queryKey: ["board", props.teamKey] });
+                        await queryClient.invalidateQueries({ queryKey: wsKey(api, "board", props.teamKey) });
                       } catch (e) {
                         setError(describeFailure(e));
                         setBusy(false);

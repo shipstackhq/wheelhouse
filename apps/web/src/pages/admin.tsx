@@ -1,4 +1,5 @@
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link } from "../lib/workspace";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { InviteForm } from "../components/invite-form";
 import { PendingInvites } from "../components/pending-invites";

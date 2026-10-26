@@ -1,4 +1,5 @@
-import { isRouteErrorResponse, Link, useRouteError } from "react-router";
+import { isRouteErrorResponse, useRouteError } from "react-router";
+import { Link } from "../lib/workspace";
 import { ApiError } from "@wheelhouse/api-client";
 
 /** The page for a URL that is not here, or a team that is not this workspace's (the two look the same, by design). */

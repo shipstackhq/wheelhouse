@@ -4,7 +4,7 @@ import { schema } from "../../db";
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 
-const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, workspaces, issues, teams, repositories, chatThreads, chatMessages } = schema;
+const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, issues, teams, repositories, chatThreads, chatMessages } = schema;
 
 export type DeviceRow = typeof devices.$inferSelect;
 export type PairingRow = typeof devicePairings.$inferSelect;
@@ -24,38 +24,18 @@ export type ChatMessagePatch = Partial<typeof chatMessages.$inferInsert>;
  * A chat thread is reached by thread id AND its owner AND the caller's workspace id (the person's side), a chat message by message id AND
  * the token's device id (the machine's side). The thread list joins the team (its key), the device and the repository (names), read only.
  *
- * Three reads join another area's table, read only: a device's workspace (its name and whether it is suspended), and the issue, team
+ * Reads join another area's table, read only: the issue, team
  * and repository a job's pull request is opened for. The machine side runs in a process of its own (SERVICE_ROLE=daemon) and may not
  * call the other modules, so it reads these rows itself; it writes none of them.
  *
- * A device is reached by its own id: a job by job id AND device id, a message by device id. A person's device is selected by owner id
- * AND workspace id, a job by job id AND workspace id (then through its issue's team, in the service).
+ * A device is reached by its own id: a job by job id AND device id, a message by device id. A person's device is selected by owner id,
+ * a job by job id AND workspace id (then through its issue's team, in the service).
  */
 @Injectable()
 export class DaemonRepository {
   constructor(@Inject(Database) private readonly db: Database) {}
 
   // ───────── devices ─────────
-
-  /** A device with whether its workspace is suspended. */
-  async deviceWithSuspension(id: string) {
-    const [row] = await this.db.q
-      .select({ device: devices, suspendedAt: workspaces.suspendedAt })
-      .from(devices)
-      .innerJoin(workspaces, eq(workspaces.id, devices.workspaceId))
-      .where(eq(devices.id, id));
-    return row;
-  }
-
-  /** A device with its workspace row (for the answer a paired machine gets once). */
-  async deviceWithWorkspace(id: string) {
-    const [row] = await this.db.q
-      .select({ device: devices, workspace: workspaces })
-      .from(devices)
-      .innerJoin(workspaces, eq(workspaces.id, devices.workspaceId))
-      .where(eq(devices.id, id));
-    return row;
-  }
 
   async deviceByPublicKey(publicKey: string) {
     const [d] = await this.db.q.select().from(devices).where(eq(devices.publicKey, publicKey));
@@ -81,17 +61,17 @@ export class DaemonRepository {
     await this.db.q.update(devices).set({ revokedAt: at }).where(eq(devices.id, id));
   }
 
-  /** A person's own device, not revoked: owner id AND workspace id. */
-  async ownDevice(ownerId: string, workspaceId: string, id: string) {
-    const [d] = await this.db.q.select().from(devices).where(and(eq(devices.id, id), eq(devices.ownerId, ownerId), eq(devices.workspaceId, workspaceId), isNull(devices.revokedAt)));
+  /** A person's own device, not revoked: device id AND owner id. */
+  async ownDevice(ownerId: string, id: string) {
+    const [d] = await this.db.q.select().from(devices).where(and(eq(devices.id, id), eq(devices.ownerId, ownerId), isNull(devices.revokedAt)));
     return d;
   }
 
-  listOwnDevices(ownerId: string, workspaceId: string) {
+  listOwnDevices(ownerId: string) {
     return this.db.q
       .select()
       .from(devices)
-      .where(and(eq(devices.ownerId, ownerId), eq(devices.workspaceId, workspaceId), isNull(devices.revokedAt)))
+      .where(and(eq(devices.ownerId, ownerId), isNull(devices.revokedAt)))
       .orderBy(asc(devices.createdAt));
   }
 
@@ -106,15 +86,14 @@ export class DaemonRepository {
 
   // ───────── tokens ─────────
 
-  /** The device behind a token that has not expired, with whether its workspace is suspended. */
+  /** The device behind a token that has not expired. */
   async deviceForTokenHash(tokenHash: string, now: Date) {
     const [row] = await this.db.q
-      .select({ device: devices, suspendedAt: workspaces.suspendedAt })
+      .select({ device: devices })
       .from(deviceTokens)
       .innerJoin(devices, eq(devices.id, deviceTokens.deviceId))
-      .innerJoin(workspaces, eq(workspaces.id, devices.workspaceId))
       .where(and(eq(deviceTokens.tokenHash, tokenHash), gt(deviceTokens.expiresAt, now)));
-    return row;
+    return row?.device;
   }
 
   async deleteExpiredTokens(deviceId: string, now: Date) {

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { forgetAppLocation } from "../../lib/app-location";
 import { ADA, apiError, renderApp } from "../../test/harness";
+import { workspace } from "../../test/data";
 
 const panel = () => within(screen.getByRole("navigation", { name: "Settings" }));
 
@@ -49,11 +50,11 @@ describe("settings as a screen of its own", () => {
       ["Profile", "/settings/profile"],
       ["Password", "/settings/password"],
       ["Devices", "/settings/devices"],
-      ["General", "/settings/workspace"],
-      ["Members", "/settings/members"],
-      ["API keys", "/settings/api-keys"],
-      ["Teams", "/settings/teams"],
-      ["GitHub", "/settings/integrations/github"],
+      ["General", "/w/ae/settings/workspace"],
+      ["Members", "/w/ae/settings/members"],
+      ["API keys", "/w/ae/settings/api-keys"],
+      ["Teams", "/w/ae/settings/teams"],
+      ["GitHub", "/w/ae/settings/integrations/github"],
     ]);
     expect(panel().getByText("Personal")).toBeTruthy();
     expect(panel().getByText("Workspace")).toBeTruthy();
@@ -104,10 +105,40 @@ describe("settings as a screen of its own", () => {
     expect(screen.queryByText(/used \(/)).toBeNull();
   });
 
+  test("a guest has no Members entry and cannot start a team", async () => {
+    renderApp("/settings/workspace", (s) => (s.me = { ...ADA, role: "guest" }));
+    await screen.findByRole("heading", { level: 1, name: "General" });
+    expect(panel().getByRole("link", { name: "General" })).toBeTruthy();
+    expect(panel().queryByRole("link", { name: "Members" })).toBeNull();
+    expect(screen.queryByText("Transfer ownership")).toBeNull();
+  });
+
+  test("an owner offers ownership to another member and can withdraw the offer", async () => {
+    const { server } = renderApp("/settings/workspace", (s) => {
+      s.on("POST /api/app/workspace/transfer", { ok: true });
+      s.on("DELETE /api/app/workspace/transfer", { ok: true });
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Transfer" }));
+    await waitFor(() => expect(server.sent("POST /api/app/workspace/transfer")[0]?.body).toEqual({ userId: "u2" }));
+  });
+
+  test("the person offered ownership can accept or decline", async () => {
+    const { server } = renderApp("/settings/workspace", (s) => {
+      s.me = { ...ADA, role: "member" };
+      s.on("GET /api/app/workspace", workspace({ role: "member", transfer: { userId: ADA.user.id, name: ADA.user.name } }));
+      s.on("POST /api/app/workspace/transfer/accept", { ok: true });
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Accept" }));
+    await waitFor(() => expect(server.sent("POST /api/app/workspace/transfer/accept")).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Decline" })).toBeTruthy();
+  });
+
   test("Teams lists your teams, each linking to that team's own settings", async () => {
     renderApp("/settings/teams");
     await screen.findByRole("heading", { level: 1, name: "Teams" });
-    expect(screen.getByRole("link", { name: "Settings of Alpha" }).getAttribute("href")).toBe("/t/AA/settings");
+    expect(screen.getByRole("link", { name: "Settings of Alpha" }).getAttribute("href")).toBe("/w/ae/t/AA/settings");
   });
 
   test("an unknown settings address is not found, still in the settings layout", async () => {
@@ -126,7 +157,7 @@ describe("Back to app", () => {
     expect(at()).toBe("/settings/profile");
     await userEvent.setup().click(screen.getByRole("button", { name: "Back to app" }));
     await screen.findByRole("navigation", { name: "Main" });
-    expect(router.state.location.pathname + router.state.location.search).toBe("/t/AA/docs?doc=x");
+    expect(router.state.location.pathname + router.state.location.search).toBe("/w/ae/t/AA/docs?doc=x");
   });
 
   test("moving around inside settings does not change where it goes back to", async () => {
@@ -148,7 +179,7 @@ describe("Back to app", () => {
     expect(first.at()).toBe("/");
     first.unmount();
     forgetAppLocation(); // a reload starts with no memory in the page, only what the tab stored
-    sessionStorage.setItem("wh:app-location", "/initiatives");
+    sessionStorage.setItem("wh:app-location", "/w/ae/initiatives");
     const second = renderApp("/settings/profile");
     await userEvent.setup().click(await screen.findByRole("button", { name: "Back to app" }));
     await screen.findByRole("navigation", { name: "Main" });

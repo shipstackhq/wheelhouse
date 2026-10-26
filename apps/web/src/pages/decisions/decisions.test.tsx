@@ -19,7 +19,7 @@ describe("the decisions home", () => {
     open();
     await screen.findByRole("heading", { name: "Decisions" });
     const links = cards();
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/t/AA/decisions/2", "/t/AA/decisions/1"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/w/ae/t/AA/decisions/2", "/w/ae/t/AA/decisions/1"]);
     expect(screen.getByRole("list").className).toContain("lg:grid-cols-3");
     // The labels: the status, then the map nodes it applies to (as text: the card itself is the link).
     const one = screen.getByRole("link", { name: /Use REST/ });
@@ -91,7 +91,7 @@ describe("one decision", () => {
     expect(screen.getByText("accepted")).toBeTruthy();
     for (const text of ["We needed one protocol", "REST over HTTP", "No streaming"]) expect(screen.getByText(text)).toBeTruthy();
     expect(screen.getByText(/^Ada Lovelace · \d+[dhm] ago$|^Ada Lovelace · just now$/)).toBeTruthy();
-    expect(within(screen.getByRole("navigation", { name: "Decision navigation" })).getByRole("link", { name: /Decisions/ }).getAttribute("href")).toBe("/t/AA/decisions");
+    expect(within(screen.getByRole("navigation", { name: "Decision navigation" })).getByRole("link", { name: /Decisions/ }).getAttribute("href")).toBe("/w/ae/t/AA/decisions");
   });
 
   test("a section with no text is left out; a rejected decision is struck through; an agent's is marked", async () => {
@@ -107,7 +107,7 @@ describe("one decision", () => {
   test("the nodes a decision applies to link to the map", async () => {
     await detail(1);
     const link = within(screen.getByRole("article")).getByRole("link", { name: /API/ });
-    expect(link.getAttribute("href")).toBe("/t/AA/map?node=s-api");
+    expect(link.getAttribute("href")).toBe("/w/ae/t/AA/map?node=s-api");
     expect(link.textContent).toContain("system");
   });
 
@@ -204,7 +204,7 @@ describe("the decisions page", () => {
       decisions = [...decisions, { ...MAP_DECISIONS[0], id: "dec3", number: 3, title: "Added by an agent" }];
       act(() => FakeEventSource.open[0].emit("change", { seq: 4 }));
       await screen.findByRole("link", { name: /^Added by an agent/ });
-      expect(cards().map((a) => a.getAttribute("href"))).toEqual(["/t/AA/decisions/3", "/t/AA/decisions/2", "/t/AA/decisions/1"]);
+      expect(cards().map((a) => a.getAttribute("href"))).toEqual(["/w/ae/t/AA/decisions/3", "/w/ae/t/AA/decisions/2", "/w/ae/t/AA/decisions/1"]);
     });
   });
 });

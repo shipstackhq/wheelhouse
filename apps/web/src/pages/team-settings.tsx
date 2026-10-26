@@ -1,5 +1,6 @@
 import { useActionState, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link, wsKey } from "../lib/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { DangerZone } from "../components/team-danger-zone";
 import { Loaded } from "../components/query-state";
@@ -67,7 +68,7 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
 function ParentSection({ teamKey, canEdit }: { teamKey: string; canEdit: boolean }) {
   const { api, queryClient } = useServices();
   const settings = useTeamSettings(teamKey).data;
-  const options = useQuery({ queryKey: ["members", teamKey, "parent-candidates"], queryFn: () => api.teams.parentCandidates(teamKey), enabled: canEdit }).data;
+  const options = useQuery({ queryKey: wsKey(api, "members", teamKey, "parent-candidates"), queryFn: () => api.teams.parentCandidates(teamKey), enabled: canEdit }).data;
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   if (!settings) return null;

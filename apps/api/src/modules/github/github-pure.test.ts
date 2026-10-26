@@ -148,21 +148,21 @@ describe("combining checks", () => {
 describe("the signed connect link", () => {
   const t0 = 1_800_000_000_000;
   test("a fresh link comes back as it was made", () => {
-    const { state, nonce } = makeState("k", { user: "u1", team: "WH" }, t0);
-    assert.deepEqual(readState("k", state, t0 + 1000), { user: "u1", team: "WH", nonce, exp: t0 + STATE_TTL_MS });
+    const { state, nonce } = makeState("k", { user: "u1", workspace: "ws", team: "WH" }, t0);
+    assert.deepEqual(readState("k", state, t0 + 1000), { user: "u1", workspace: "ws", team: "WH", nonce, exp: t0 + STATE_TTL_MS });
   });
   test("a link that expired, was tampered with, was signed with another key, or is garbage is refused", () => {
-    const { state } = makeState("k", { user: "u1", team: "WH" }, t0);
+    const { state } = makeState("k", { user: "u1", workspace: "ws", team: "WH" }, t0);
     assert.equal(readState("k", state, t0 + STATE_TTL_MS + 1), null, "expired");
     assert.equal(readState("other", state, t0 + 1), null, "another key");
     const [body, sig] = state.split(".");
-    const forged = Buffer.from(JSON.stringify({ user: "attacker", team: "WH", nonce: "x", exp: t0 + 99999999 })).toString("base64url");
+    const forged = Buffer.from(JSON.stringify({ user: "attacker", workspace: "ws", team: "WH", nonce: "x", exp: t0 + 99999999 })).toString("base64url");
     assert.equal(readState("k", `${forged}.${sig}`, t0 + 1), null, "body changed");
     assert.equal(readState("k", `${body}.${sig.slice(0, -2)}xx`, t0 + 1), null, "signature changed");
     for (const junk of [null, undefined, "", "abc", "a.b", "a.b.c", "."]) assert.equal(readState("k", junk as string, t0), null, String(junk));
   });
   test("every link has its own nonce", () => {
-    assert.notEqual(makeState("k", { user: "u", team: "WH" }, t0).nonce, makeState("k", { user: "u", team: "WH" }, t0).nonce);
+    assert.notEqual(makeState("k", { user: "u", workspace: "ws", team: "WH" }, t0).nonce, makeState("k", { user: "u", workspace: "ws", team: "WH" }, t0).nonce);
   });
 });
 

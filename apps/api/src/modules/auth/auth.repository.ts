@@ -142,6 +142,16 @@ export class AuthRepository {
     return row.settings;
   }
 
+  async setPendingOwner(workspaceId: string, userId: string | null) {
+    await this.db.q.update(workspaces).set({ pendingOwnerId: userId }).where(eq(workspaces.id, workspaceId));
+  }
+
+  /** Makes `userId` the one owner: every other owner becomes an admin. */
+  async moveOwnership(workspaceId: string, userId: string) {
+    await this.db.q.update(memberships).set({ role: "admin" }).where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.role, "owner")));
+    await this.db.q.update(memberships).set({ role: "owner" }).where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, userId)));
+  }
+
   async ownerCount(workspaceId: string): Promise<number> {
     const [{ n }] = await this.db.q
       .select({ n: sql<number>`count(*)::int` })
@@ -222,12 +232,18 @@ export class AuthRepository {
       .returning({ id: workspaces.id });
   }
 
-  async insertWorkspace(name: string): Promise<WorkspaceRowT> {
-    const [w] = await this.db.q.insert(workspaces).values({ name, slug: await newWorkspaceSlug(name, (slug) => this.slugTaken(slug)) }).returning();
+  /** A new workspace; the slug comes from the name unless one is given (the caller has checked it with `slugProblem` and `slugTaken`). */
+  async insertWorkspace(name: string, kind: "personal" | "team" = "team", slug?: string): Promise<WorkspaceRowT> {
+    const [w] = await this.db.q.insert(workspaces).values({ name, kind, slug: slug ?? (await newWorkspaceSlug(name, (s) => this.slugTaken(s))) }).returning();
     return w;
   }
 
-  private async slugTaken(slug: string): Promise<boolean> {
+  /** A personal workspace becomes a team one when someone else joins it. */
+  async markTeam(workspaceId: string) {
+    await this.db.q.update(workspaces).set({ kind: "team" }).where(and(eq(workspaces.id, workspaceId), eq(workspaces.kind, "personal")));
+  }
+
+  async slugTaken(slug: string): Promise<boolean> {
     const [taken] = await this.db.q.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.slug, slug));
     return !!taken;
   }

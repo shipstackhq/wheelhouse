@@ -178,6 +178,6 @@ describe("a new chat", () => {
     renderApp("/chat", (s) => serve(s, thread(), []));
     const nav = await screen.findByRole("navigation", { name: "Chats" });
     expect(await within(nav).findByText("How does auth work?")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Chat" }).getAttribute("href")).toBe("/chat");
+    expect(screen.getByRole("link", { name: "Chat" }).getAttribute("href")).toBe("/w/ae/chat");
   });
 });

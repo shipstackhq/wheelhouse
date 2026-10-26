@@ -11,13 +11,13 @@ import { KeysController } from "./keys/keys.controller";
 import { KeysService } from "./keys/keys.service";
 import { MeController } from "./me.controller";
 import { SessionsService } from "./sessions.service";
-import { WorkspaceController } from "./workspaces/workspace.controller";
+import { WorkspaceController, WorkspacesController } from "./workspaces/workspace.controller";
 import { WorkspacesService } from "./workspaces/workspaces.service";
 
 /** Sign-in, the person's workspaces, members, invites, API keys and the instance admin pages: the person's side only, so it is part of the api role. */
 @Module({
   imports: [TeamsModule],
-  controllers: [AuthController, MeController, WorkspaceController, InvitesController, KeysController, AdminController],
+  controllers: [AuthController, MeController, WorkspaceController, WorkspacesController, InvitesController, KeysController, AdminController],
   providers: [AuthRepository, SessionsService, KeysService, InvitesService, WorkspacesService],
 })
 export class AuthModule implements OnModuleInit {

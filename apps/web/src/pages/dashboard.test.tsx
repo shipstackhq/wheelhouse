@@ -23,7 +23,7 @@ describe("the dashboard", () => {
     renderApp("/");
     expect(await screen.findByRole("heading", { level: 1, name: /^Good (morning|afternoon|evening), Ada$/ })).toBeTruthy();
     expect(screen.getByText("How Analytical Engines's teams are moving, and what the agents are up to.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "+ New team" }).getAttribute("href")).toBe("/teams/new");
+    expect(screen.getByRole("link", { name: "+ New team" }).getAttribute("href")).toBe("/w/ae/teams/new");
   });
 
   test("every widget is drawn from its own endpoint", async () => {
@@ -58,12 +58,12 @@ describe("the dashboard", () => {
     const card = await widget("Team progress");
     expect(await within(card).findByText("40%")).toBeTruthy();
     expect(within(card).getByText(/done · 4\/10/)).toBeTruthy();
-    expect(within(card).getByRole("link", { name: /^AA\s*Alpha$/ }).getAttribute("href")).toBe("/t/AA");
-    expect(within(card).getByRole("link", { name: "Overview of Alpha" }).getAttribute("href")).toBe("/t/AA/overview"); // the team's own dashboard
+    expect(within(card).getByRole("link", { name: /^AA\s*Alpha$/ }).getAttribute("href")).toBe("/w/ae/t/AA");
+    expect(within(card).getByRole("link", { name: "Overview of Alpha" }).getAttribute("href")).toBe("/w/ae/t/AA/overview"); // the team's own dashboard
     expect(within(card).getByText("2 high/urgent")).toBeTruthy();
     expect(within(card).getByText("1 AI-ready")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "1 stale" }).getAttribute("href")).toBe("/t/AA/map");
-    expect(within(card).getByRole("link", { name: "1 stale doc" }).getAttribute("href")).toBe("/t/AA/docs");
+    expect(within(card).getByRole("link", { name: "1 stale" }).getAttribute("href")).toBe("/w/ae/t/AA/map");
+    expect(within(card).getByRole("link", { name: "1 stale doc" }).getAttribute("href")).toBe("/w/ae/t/AA/docs");
     for (const stage of ["Backlog", "Todo", "In Progress", "Review", "Done"]) expect(within(card).getAllByText(stage).length).toBeGreaterThan(0);
   });
 
@@ -71,16 +71,16 @@ describe("the dashboard", () => {
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), progress: [] }));
     const card = await widget("Team progress");
     expect(await within(card).findByText(/not in any team yet/)).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "Create one" }).getAttribute("href")).toBe("/teams/new");
+    expect(within(card).getByRole("link", { name: "Create one" }).getAttribute("href")).toBe("/w/ae/teams/new");
   });
 
   test("needs attention: review, urgent, stale explanations and stale docs each link to the thing", async () => {
     renderApp("/");
     const card = await widget("Needs attention");
-    expect((await within(card).findByRole("link", { name: /AA-7.*Add the login page/ })).getAttribute("href")).toBe("/t/AA?t=AA-7");
-    expect(within(card).getByRole("link", { name: /AA-9.*Fix the crash.*In Progress/ }).getAttribute("href")).toBe("/t/AA?t=AA-9");
-    expect(within(card).getByRole("link", { name: /Service layer/ }).getAttribute("href")).toBe("/t/AA/map?node=n1");
-    expect(within(card).getByRole("link", { name: /Runbook/ }).getAttribute("href")).toBe("/t/AA/docs?doc=d1");
+    expect((await within(card).findByRole("link", { name: /AA-7.*Add the login page/ })).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-7");
+    expect(within(card).getByRole("link", { name: /AA-9.*Fix the crash.*In Progress/ }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-9");
+    expect(within(card).getByRole("link", { name: /Service layer/ }).getAttribute("href")).toBe("/w/ae/t/AA/map?node=n1");
+    expect(within(card).getByRole("link", { name: /Runbook/ }).getAttribute("href")).toBe("/w/ae/t/AA/docs?doc=d1");
     expect(within(card).getByTitle("Agent work")).toBeTruthy();
   });
 
@@ -114,7 +114,7 @@ describe("the dashboard", () => {
     const quiet = (within(card).getByText("CI bot").closest("li")) as HTMLElement;
     expect(within(quiet).getByText("in sync")).toBeTruthy();
     expect(within(quiet).getByText("never connected")).toBeTruthy();
-    expect(within(card).getByRole("link", { name: "Manage" }).getAttribute("href")).toBe("/api-keys");
+    expect(within(card).getByRole("link", { name: "Manage" }).getAttribute("href")).toBe("/w/ae/api-keys");
   });
 
   test("mark all seen resets that agent's queue and reads the dashboard again", async () => {
@@ -148,7 +148,7 @@ describe("the dashboard", () => {
   test("sync health: quiet agents link to their issue; with nothing drifting it says so", async () => {
     renderApp("/");
     const card = await widget("Sync health");
-    expect((await within(card).findByRole("link", { name: /AA-4/ })).getAttribute("href")).toBe("/t/AA?t=AA-4");
+    expect((await within(card).findByRole("link", { name: /AA-4/ })).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-4");
     expect(within(card).getByText("Agent went quiet")).toBeTruthy();
     renderApp("/", (s) => serveWidgets(s, { ...widgets(), sync: { untracked: [], quiet: [], drafts: [] } }));
     expect((await screen.findAllByText("Board and map match the work in flight.")).length).toBeGreaterThan(0);
@@ -161,7 +161,7 @@ describe("the dashboard", () => {
     expect(await within(card).findByText("event 0")).toBeTruthy();
     expect(within(card).queryByText("event 3")).toBeNull();
     expect(within(card).getByRole("button", { name: "+5 more" })).toBeTruthy();
-    expect(within(card).getByText("event 0").closest("a")?.getAttribute("href")).toBe("/t/AA/activity");
+    expect(within(card).getByText("event 0").closest("a")?.getAttribute("href")).toBe("/w/ae/t/AA/activity");
   });
 
   test("agent events are marked with the robot", async () => {
@@ -208,7 +208,7 @@ describe("staying fresh", () => {
   test("the workspace's event stream refreshes every widget, and the person's own identity is not re-read", async () => {
     const { server } = renderApp("/");
     await screen.findByText("Open issues");
-    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));
+    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream?workspace=ae"]));
     const meBefore = server.sent("GET /api/app/me").length;
     act(() => FakeEventSource.open[0].emit("change", { seq: 7 }));
     await waitFor(() => expect(server.sent("GET /api/app/dashboard/kpis").length).toBe(2));
@@ -225,7 +225,7 @@ describe("staying fresh", () => {
       await new Promise((r) => setTimeout(r, 150));
       expect(refreshed).not.toHaveBeenCalled();
       hidden(false);
-      await waitFor(() => expect(refreshed).toHaveBeenCalledWith({ queryKey: ["dashboard"] }));
+      await waitFor(() => expect(refreshed).toHaveBeenCalledWith({ queryKey: [null, "dashboard"] }));
       const n = refreshed.mock.calls.length;
       act(() => void document.dispatchEvent(new Event("visibilitychange")));
       expect(refreshed.mock.calls.length).toBeGreaterThan(n);

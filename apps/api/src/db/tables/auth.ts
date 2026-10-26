@@ -39,6 +39,10 @@ export const workspaces = table("workspaces", {
   name: text("name").notNull(),
   // The workspace's address (`/w/<slug>` later). Created from the name; the default only keeps rows that skip it unique.
   slug: text("slug").notNull().unique().default(sql`replace(gen_random_uuid()::text, '-', '')`),
+  // A person's own workspace (made at sign-up) or a team's. Inviting someone into a personal one makes it a team.
+  kind: text("kind", { enum: ["personal", "team"] }).notNull().default("team"),
+  // Ownership handed over but not yet accepted: the person who has to accept. At most one per workspace; null: none.
+  pendingOwnerId: uuid("pending_owner_id").references(() => users.id, { onDelete: "set null" }),
   // Seats, owner included. Null: the instance default (MAX_WORKSPACE_MEMBERS).
   seatLimit: integer("seat_limit"),
   settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),

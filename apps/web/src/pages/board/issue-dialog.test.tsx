@@ -275,7 +275,7 @@ describe("the architecture links", () => {
     });
     const user = userEvent.setup();
     const link = within(d).getByRole("link", { name: "system: API" });
-    expect(link.getAttribute("href")).toBe("/t/AA/map?node=n-api");
+    expect(link.getAttribute("href")).toBe("/w/ae/t/AA/map?node=n-api");
     await user.click(within(d).getByRole("button", { name: "Unlink API" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/issues/AA-2/nodes/n-api")).toHaveLength(1));
     await user.click((within(d).getByText("+ link node").closest("button") ?? within(d).getByText("+ link node")) as HTMLElement);

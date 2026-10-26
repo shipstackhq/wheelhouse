@@ -63,9 +63,14 @@ export const peekInviteAsMemberAs = (...a: Parameters<InvitesService["peekInvite
 export const acceptInviteAsMemberAs = (...a: Parameters<InvitesService["acceptInviteAsMemberAs"]>) => s().invites.acceptInviteAsMemberAs(...a);
 
 // workspace, members and the instance admin
+export const createWorkspaceAs = (...a: Parameters<WorkspacesService["createAs"]>) => s().workspaces.createAs(...a);
 export const workspaceOverview = (...a: Parameters<WorkspacesService["workspaceOverview"]>) => s().workspaces.workspaceOverview(...a);
 export const updateMember = (...a: Parameters<WorkspacesService["updateMember"]>) => s().workspaces.updateMember(...a);
 export const updateMemberAs = (...a: Parameters<WorkspacesService["updateMemberAs"]>) => s().workspaces.updateMemberAs(...a);
+export const requestTransfer = (...a: Parameters<WorkspacesService["requestTransfer"]>) => s().workspaces.requestTransfer(...a);
+export const cancelTransfer = (...a: Parameters<WorkspacesService["cancelTransfer"]>) => s().workspaces.cancelTransfer(...a);
+export const acceptTransfer = (...a: Parameters<WorkspacesService["acceptTransfer"]>) => s().workspaces.acceptTransfer(...a);
+export const declineTransfer = (...a: Parameters<WorkspacesService["declineTransfer"]>) => s().workspaces.declineTransfer(...a);
 export const removeMember = (...a: Parameters<WorkspacesService["removeMember"]>) => s().workspaces.removeMember(...a);
 export const removeMemberAs = (...a: Parameters<WorkspacesService["removeMemberAs"]>) => s().workspaces.removeMemberAs(...a);
 export const adminListWorkspaces = (...a: Parameters<WorkspacesService["adminListWorkspaces"]>) => s().workspaces.adminListWorkspaces(...a);

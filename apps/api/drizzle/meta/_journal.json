@@ -330,6 +330,34 @@
       "when": 1792955830832,
       "tag": "0046_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793039990202,
+      "tag": "0047_workspace_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793041483450,
+      "tag": "0048_ownership_transfer",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793043849639,
+      "tag": "0049_github_installation_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793044323567,
+      "tag": "0050_devices_per_person",
+      "breakpoints": true
     }
   ]
 }

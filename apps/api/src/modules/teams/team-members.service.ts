@@ -81,6 +81,8 @@ export class TeamMembersService {
   /** Workspace members who are not in the team yet, for the "add someone" list. Team admins only. */
   async listAddable(actor: Actor, teamRef: string) {
     people(actor);
+    // A guest sees no directory of the workspace's people, even as a team admin.
+    if ((await this.access.workspaceRoleOf(actor.workspaceId, actor.id)) === "guest") throw new ServiceError("forbidden", "Guests cannot see the workspace's people");
     const team = await this.access.require(actor, teamRef, "admin");
     return this.repo.addableMembers(actor.workspaceId, team.id);
   }

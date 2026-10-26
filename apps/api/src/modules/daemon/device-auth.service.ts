@@ -12,7 +12,7 @@ import { DeviceStreamService } from "./device-stream.service";
 
 export type PollResult =
   | { status: "pending" | "slow_down" | "denied" | "expired" }
-  | { status: "approved"; deviceId: string; serverPublicKey: string; workspace: { id: string; name: string }; device: { name: string; poolSize: number } };
+  | { status: "approved"; deviceId: string; serverPublicKey: string; device: { name: string; poolSize: number } };
 
 /**
  * How a machine gets in: pairing from its side (RFC 8628: it starts and polls, a person approves in DevicesService), the exchange of
@@ -73,15 +73,14 @@ export class DeviceAuthService {
     // Approved: hand over once.
     const claimed = await this.repo.movePairing(p.id, "approved", "consumed");
     if (!claimed?.deviceId) return { status: "expired" };
-    const row = await this.repo.deviceWithWorkspace(claimed.deviceId);
-    if (!row) return { status: "expired" };
+    const device = await this.repo.deviceById(claimed.deviceId);
+    if (!device) return { status: "expired" };
     const { publicKey } = await this.stream.signingKey();
     return {
       status: "approved",
-      deviceId: row.device.id,
+      deviceId: device.id,
       serverPublicKey: rawPublicKey(publicKey),
-      workspace: { id: row.workspace.id, name: row.workspace.name },
-      device: { name: row.device.name, poolSize: row.device.poolSize },
+      device: { name: device.name, poolSize: device.poolSize },
     };
   }
 
@@ -98,28 +97,26 @@ export class DeviceAuthService {
     const jwt = str(input.assertion, 4000);
     const sub = assertionSubject(jwt);
     if (!sub || !isUuid(sub)) throw fail();
-    const row = await this.repo.deviceWithSuspension(sub);
-    const key = row ? publicKeyFromRaw(row.device.publicKey) : null;
+    const device = await this.repo.deviceById(sub);
+    const key = device ? publicKeyFromRaw(device.publicKey) : null;
     const claims = key ? verifyAssertion(jwt, key) : null;
-    if (!row || !claims || row.device.revokedAt) throw fail();
-    if (row.suspendedAt) throw new ServiceError("forbidden", "This workspace has been suspended");
+    if (!device || !claims || device.revokedAt) throw fail();
     const token = `whd_${randomToken()}`;
     const expiresAt = new Date(Date.now() + TOKEN_TTL_S * 1000);
-    await this.repo.deleteExpiredTokens(row.device.id, new Date());
-    const inserted = await this.repo.insertToken({ tokenHash: sha256(token), deviceId: row.device.id, jti: claims.jti, expiresAt });
+    await this.repo.deleteExpiredTokens(device.id, new Date());
+    const inserted = await this.repo.insertToken({ tokenHash: sha256(token), deviceId: device.id, jti: claims.jti, expiresAt });
     if (!inserted.length) throw fail(); // the assertion was used before
     return { accessToken: token, tokenType: "Bearer", expiresIn: TOKEN_TTL_S };
   }
 
-  /** The device behind `Authorization: Bearer whd_...`. Revoked devices, expired tokens and suspended workspaces are refused. */
+  /** The device behind `Authorization: Bearer whd_...`. Revoked devices and expired tokens are refused. */
   async deviceForToken(authorization: string | null | undefined, now = new Date()): Promise<Device> {
     const token = authorization?.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     if (!token.startsWith("whd_")) throw new DeviceAuthError("Missing device token");
-    const row = await this.repo.deviceForTokenHash(sha256(token), now);
-    if (!row || row.device.revokedAt) throw new DeviceAuthError("Invalid or expired device token");
-    if (row.suspendedAt) throw new ServiceError("forbidden", "This workspace has been suspended");
-    const used = rateLimit(`device:${row.device.id}`, 1200, 60_000);
+    const device = await this.repo.deviceForTokenHash(sha256(token), now);
+    if (!device || device.revokedAt) throw new DeviceAuthError("Invalid or expired device token");
+    const used = rateLimit(`device:${device.id}`, 1200, 60_000);
     if (!used.ok) throw new ServiceError("forbidden", "Too many requests from this device");
-    return row.device;
+    return device;
   }
 }

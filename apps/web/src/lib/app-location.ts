@@ -3,12 +3,12 @@ import { useLocation } from "react-router";
 
 /**
  * Where the person was in the app, so Settings (its own screen, with its own sidebar) can send them back to it. Anything under
- * /settings is not remembered. Kept in memory, and in sessionStorage so a reload on the settings screen still knows.
+ * /settings (or /w/:slug/settings) is not remembered. Kept in memory, and in sessionStorage so a reload on the settings screen still knows.
  */
 const KEY = "wh:app-location";
 let last: string | null = null;
 
-const isSettings = (path: string) => path === "/settings" || path.startsWith("/settings/");
+const isSettings = (path: string) => /^(\/w\/[^/]+)?\/settings(\/|$)/.test(path);
 
 export function rememberAppLocation(path: string) {
   if (isSettings(path)) return;

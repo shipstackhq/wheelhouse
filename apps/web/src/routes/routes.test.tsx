@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
-import { ApiError } from "@wheelhouse/api-client";
+import { ApiError, createApiClient } from "@wheelhouse/api-client";
+import { teamsQuery } from "../lib/session";
 import { ADA, renderApp, signedOut } from "../test/harness";
 import { FakeEventSource } from "../test/fake-event-source";
 
@@ -67,7 +68,7 @@ describe("signed in: every page is in the shell", () => {
     renderApp("/t/BB/docs");
     await screen.findByRole("button", { name: "Plan" });
     const trail = within(screen.getByRole("navigation", { name: "Breadcrumb" })); // the header says where you are, naming the team without its key
-    expect(trail.getByRole("link", { name: "Beta" }).getAttribute("href")).toBe("/t/BB");
+    expect(trail.getByRole("link", { name: "Beta" }).getAttribute("href")).toBe("/w/ae/t/BB");
     expect(trail.getByText("Docs").getAttribute("aria-current")).toBe("page");
     const sidebar = screen.getByRole("navigation", { name: "Main" });
     for (const name of ["Issues", "Activity", "Map", "Docs", "Decisions", "Glossary"]) expect(within(sidebar).getByRole("link", { name })).toBeTruthy();
@@ -152,12 +153,12 @@ describe("the session ends while the page is open", () => {
     const { at, server, services } = renderApp("/t/AA/docs");
     await screen.findByRole("button", { name: "Plan" });
     server.me = null; // signed out in another tab
-    await services.queryClient.invalidateQueries({ queryKey: ["teams"] });
+    await services.queryClient.invalidateQueries({ queryKey: ["ae", "teams"] });
     await waitFor(() => expect(at()).toBe("/login"));
     await screen.findByRole("button", { name: "Sign in" });
     expect(screen.queryByRole("navigation")).toBeNull();
     // What the person's session loaded is gone from memory; only the (empty) answer to "who is signed in" stays.
-    await waitFor(() => expect(services.queryClient.getQueryData(["teams"])).toBeUndefined());
+    await waitFor(() => expect(services.queryClient.getQueryData(["ae", "teams"])).toBeUndefined());
     expect(services.queryClient.getQueryData(["me"])).toBeNull();
   });
 });
@@ -203,18 +204,33 @@ describe("live updates", () => {
   test("a team page listens to that team's stream; the dashboard listens to the workspace's; other pages to the workspace's too, only to keep the inbox fresh", async () => {
     const { unmount } = renderApp("/t/AA/docs");
     await screen.findByRole("button", { name: "Plan" });
-    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/teams/AA/stream"]));
+    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/teams/AA/stream?workspace=ae"]));
     unmount();
     FakeEventSource.reset();
 
     const dash = renderApp("/");
     await screen.findByRole("heading", { level: 1, name: /^Good / });
-    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));
+    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream?workspace=ae"]));
     dash.unmount();
     FakeEventSource.reset();
 
     renderApp("/workspace");
     await screen.findByRole("heading", { level: 1, name: "Analytical Engines" });
-    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream"]));
+    await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/stream?workspace=ae"]));
+  });
+});
+
+describe("the workspace in the address", () => {
+  test("a /w/:slug page asks for that workspace on every request, and two workspaces never share a cache key", async () => {
+    const { server } = renderApp("/w/de/t/AA/docs");
+    await screen.findByRole("button", { name: "Plan" });
+    expect(server.sent("GET /api/app/teams")[0].headers["x-workspace"]).toBe("de");
+    expect(server.sent("GET /api/app/teams/AA/docs")[0].headers["x-workspace"]).toBe("de");
+
+    const api = createApiClient();
+    api.setWorkspace("ae");
+    const ae = teamsQuery(api).queryKey;
+    api.setWorkspace("de");
+    expect(teamsQuery(api).queryKey).not.toEqual(ae);
   });
 });

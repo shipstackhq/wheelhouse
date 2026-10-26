@@ -1,5 +1,5 @@
 import { useState, useTransition } from "react";
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import type { CycleList, CycleSummary } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";

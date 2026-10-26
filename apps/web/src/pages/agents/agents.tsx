@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { Link } from "../../lib/workspace";
 import { useQuery } from "@tanstack/react-query";
 import { CATALOG } from "@wheelhouse/shared/agents/catalog/index";
 import type { AgentEntry, AgentProfile, AgentsPage as AgentsData, CatalogAgent, CustomAgent } from "@wheelhouse/api-client";

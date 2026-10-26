@@ -17,6 +17,7 @@ import { useServices } from "../../lib/services";
 import { cycleTitle } from "../cycles/cycle-bits";
 import { IssueDialog } from "./issue-dialog";
 import type { Issue, Member, NodeLite } from "./shared";
+import { wsKey } from "../../lib/workspace";
 
 const MENU = "z-50 min-w-48 max-h-80 overflow-y-auto rounded-lg border border-line bg-panel p-1 text-sm text-fg shadow-xl";
 const ITEM = "flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 outline-none data-[highlighted]:bg-panel-2";
@@ -70,7 +71,7 @@ export function IssueList(props: {
     } catch (e) {
       setError(describeFailure(e));
     } finally {
-      await queryClient.invalidateQueries({ queryKey: ["board", teamKey] });
+      await queryClient.invalidateQueries({ queryKey: wsKey(api, "board", teamKey) });
     }
   };
   const toggle = (id: string) => {

@@ -12,7 +12,7 @@ if (process.env.TEST_DATABASE_URL) {
 import { before, describe, mock, test } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
@@ -173,9 +173,8 @@ describe("pairing", () => {
     await assert.rejects(d.approvePairing(owner, start.userCode), code("not_found"), "a used code is gone");
   });
 
-  test("a denied pairing says so; a bad key, a wrong code and a viewer are refused", async () => {
+  test("a denied pairing says so; a bad key and a wrong code are refused", async () => {
     const start = await d.startPairing({ publicKey: machine().publicKey, name: "x", os: "linux" }, ctx);
-    await assert.rejects(d.peekPairing(viewer, start.userCode), code("forbidden"));
     await d.denyPairing(owner, start.userCode);
     assert.equal((await d.pollPairing({ deviceCode: start.deviceCode })).status, "denied");
     await assert.rejects(d.startPairing({ publicKey: "nope", name: "x", os: "linux" }, ctx), code("invalid"));
@@ -408,6 +407,29 @@ describe("jobs", () => {
     await assert.rejects(d.runOnDevice(viewer, issue.ref, { deviceId: device.id, model: "opus" }), code("forbidden"));
     await assert.rejects(d.runOnDevice(stranger, issue.ref, { deviceId: device.id, model: "opus" }), code("not_found"));
     await assert.rejects(d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus", repositoryId: crypto.randomUUID() }), code("invalid"));
+  });
+
+  test("one device runs jobs from two workspaces, and stops getting work from one the person leaves", async () => {
+    const db = await getDb();
+    const { device } = await paired();
+    await online(device);
+    const [wsB] = await db.insert(schema.workspaces).values({ name: "Second workspace" }).returning();
+    await db.insert(schema.memberships).values({ userId: owner.id, workspaceId: wsB.id, role: "owner" });
+    const inB: Actor = { ...owner, workspaceId: wsB.id };
+    const teamB = await createTeam(inB, { name: "Second", key: "SB" });
+    await db.insert(schema.repositories).values({ teamId: teamB.id, workspaceId: wsB.id, displayName: "b", role: "app", provider: "github", slug: "5678", githubRepoId: "5678", githubFullName: "acme/b", defaultBranch: "main" });
+    const a = await d.runOnDevice(owner, (await createIssue(owner, "DM", { title: "in A" })).ref, { deviceId: device.id, model: "opus" });
+    const issueB = await createIssue(inB, "SB", { title: "in B" });
+    const b = await d.runOnDevice(inB, issueB.ref, { deviceId: device.id, model: "opus" });
+    assert.deepEqual(
+      (await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id))).map((m) => m.message.workspaceId),
+      [owner.workspaceId, wsB.id],
+      "each offer names its workspace",
+    );
+    assert.notEqual(a.job.id, b.job.id);
+    await db.delete(schema.memberships).where(and(eq(schema.memberships.userId, owner.id), eq(schema.memberships.workspaceId, wsB.id)));
+    await assert.rejects(d.runOnDevice(inB, issueB.ref, { deviceId: device.id, model: "opus" }), (e: unknown) => e instanceof ServiceError);
+    assert.equal((await d.runOnDevice(owner, (await createIssue(owner, "DM", { title: "still A" })).ref, { deviceId: device.id, model: "opus" })).job.state, "offered");
   });
 
   test("a run can start from another branch; a name that is not a branch is refused", async () => {

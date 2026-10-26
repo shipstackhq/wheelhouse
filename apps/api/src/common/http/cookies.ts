@@ -25,3 +25,10 @@ export function toHeaders(h: IncomingHttpHeaders): Headers {
   }
   return out;
 }
+
+/** The workspace a request is for: the `X-Workspace` header, or `?workspace=` where a browser cannot set headers (the live stream). */
+export function workspaceOf(req: { headers: IncomingHttpHeaders; query?: unknown }): string | null {
+  const h = req.headers["x-workspace"];
+  const q = (req.query as { workspace?: unknown } | undefined)?.workspace;
+  return (Array.isArray(h) ? h[0] : h) || (typeof q === "string" ? q : null) || null;
+}

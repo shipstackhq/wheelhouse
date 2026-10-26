@@ -1,4 +1,5 @@
-import { Link } from "react-router";
+import { useState } from "react";
+import { Link } from "../../lib/workspace";
 import { ChangePasswordForm } from "../../components/change-password-form";
 import { ChevronRightIcon } from "../../components/icons";
 import { ImageUpload } from "../../components/image-upload";
@@ -6,6 +7,9 @@ import { Avatar } from "../../components/profile-menu";
 import { useServices } from "../../lib/services";
 import { ThemeSwitch } from "../../components/theme-toggle";
 import { useAgents, useWorkspace } from "../../lib/queries";
+import { SubmitButton } from "../../components/submit-button";
+import { Select } from "../../components/ui";
+import { failure, field } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { canManagePeople } from "../../lib/roles";
 import { useMe, useTeams } from "../../lib/session";
@@ -118,6 +122,7 @@ export function WorkspaceSettingsPage() {
         </dl>
         <p className="mt-3 text-xs text-muted">To switch workspace, go back to the app and use the round icon at the top of its sidebar.</p>
       </div>
+      <Transfer />
       {manages && agents && (
         <div className="card p-5">
           <h2 className="font-medium">Agents</h2>
@@ -163,5 +168,52 @@ export function TeamsSettingsPage() {
         )}
       </div>
     </Section>
+  );
+}
+
+/** Ownership transfer: the owner offers it to another member and can withdraw it; the person offered it accepts or declines. */
+function Transfer() {
+  const { api, queryClient } = useServices();
+  const me = useMe().data;
+  const w = useWorkspace().data;
+  const [error, setError] = useState<string>();
+  if (!me || !w) return null;
+  const act = async (run: () => Promise<unknown>) => {
+    setError(undefined);
+    try {
+      await run();
+    } catch (e) {
+      setError(failure(e)?.error);
+    }
+    await refreshAll(queryClient);
+  };
+  const toYou = w.transfer?.userId === me.user.id;
+  const candidates = w.members.filter((m) => m.userId !== me.user.id && m.role !== "guest");
+  if (!toYou && w.role !== "owner") return null;
+  return (
+    <div className="card p-5">
+      <h2 className="font-medium">Transfer ownership</h2>
+      {toYou ? (
+        <>
+          <p className="mt-1 text-sm text-muted">You have been offered ownership of {w.workspace.name}. Accepting makes you its owner and the current owners admins.</p>
+          <div className="mt-3 flex gap-2">
+            <button type="button" className="btn" onClick={() => act(api.workspace.acceptTransfer)}>Accept</button>
+            <button type="button" className="btn" onClick={() => act(api.workspace.declineTransfer)}>Decline</button>
+          </div>
+        </>
+      ) : w.transfer ? (
+        <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
+          <span className="text-muted">Waiting for {w.transfer.name} to accept. You stay the owner until they do.</span>
+          <button type="button" className="btn" onClick={() => act(api.workspace.cancelTransfer)}>Cancel</button>
+        </div>
+      ) : (
+        <form action={(fd) => act(() => api.workspace.transferOwnership(field(fd, "userId")))} className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+          <Select name="userId" ariaLabel="New owner" defaultValue={candidates[0]?.userId} className="w-56" options={candidates.map((m) => ({ value: m.userId, label: m.name }))} />
+          <SubmitButton className="btn" disabled={!candidates.length}>Transfer</SubmitButton>
+          <span className="basis-full text-xs text-muted">They must accept. You become an admin when they do.</span>
+        </form>
+      )}
+      {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Link } from "react-router";
+import { Link } from "../../lib/workspace";
 import { TrendDownIcon, TrendFlatIcon, TrendUpIcon } from "../icons";
 
 /** Card frame every dashboard widget renders inside. */

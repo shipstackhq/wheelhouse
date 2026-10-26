@@ -44,11 +44,11 @@ describe("new team", () => {
     await user.type(await screen.findByLabelText("Name"), "New Thing");
     await user.type(screen.getByLabelText("Description"), "Agents read this.");
     await user.click(screen.getByRole("button", { name: "Create team" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/t/NT/onboarding"));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/w/ae/t/NT/onboarding"));
     expect(server.sent("POST /api/app/teams")[0].body).toEqual({ name: "New Thing", key: "NT", description: "Agents read this.", parent: null });
     expect(server.sent("POST /api/app/teams")[0].headers["x-csrf-token"]).toBe("csrf-ada");
     await screen.findByRole("heading", { level: 2, name: "Where does your code live?" });
-    const teams = services.queryClient.getQueryData(["teams"]) as { key: string }[];
+    const teams = services.queryClient.getQueryData(["ae", "teams"]) as { key: string }[];
     expect(teams.map((p) => p.key)).toContain("NT"); // so the sidebar's switcher and the team header know it at once
     expect(screen.getAllByText("NT").length).toBeGreaterThan(0);
   });
@@ -59,7 +59,7 @@ describe("new team", () => {
     await user.type(await screen.findByLabelText("Name"), "New Thing");
     await user.click(screen.getByRole("button", { name: "Create team" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Team key NT already in use");
-    expect(router.state.location.pathname).toBe("/teams/new");
+    expect(router.state.location.pathname).toBe("/w/ae/teams/new");
     expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("New Thing");
   });
 

@@ -2,21 +2,20 @@ import { uuid, text, timestamp, integer, jsonb, bigserial, numeric, primaryKey, 
 import { sql } from "drizzle-orm";
 import { table, createdAt, updatedAt } from "./common";
 import { teamScope } from "./team-scope";
-import { users, workspaces, memberships } from "./auth";
+import { users, memberships } from "./auth";
 import { repositories } from "./github";
 import { issues } from "./issues";
 
 /**
- * A machine someone paired with their workspace to run agent jobs on (the Wheelhouse daemon). It belongs to one person: only they
- * can send it work. The server keeps the device's Ed25519 public key; the private key never leaves the machine. A revoked device
+ * A machine someone paired to run agent jobs on (the Wheelhouse daemon). It belongs to one person, not a workspace: only they can
+ * send it work, from any workspace they are a member of. The server keeps the device's Ed25519 public key; the private key never leaves the machine. A revoked device
  * keeps its row (its jobs still point at it) but can no longer get a token.
  */
 export const devices = table(
   "devices",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    ownerId: uuid("owner_id").notNull(),
+    ownerId: uuid("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     os: text("os").notNull(),
     // Raw 32-byte Ed25519 public key, base64url.
@@ -33,10 +32,7 @@ export const devices = table(
     createdAt: createdAt(),
   },
   (t) => [
-    unique("devices_id_workspace_id_unique").on(t.id, t.workspaceId),
-    // Leaving the workspace removes the person's devices.
-    foreignKey({ name: "devices_owner_membership_fk", columns: [t.ownerId, t.workspaceId], foreignColumns: [memberships.userId, memberships.workspaceId] }).onDelete("cascade"),
-    index("devices_owner_idx").on(t.ownerId, t.workspaceId),
+    index("devices_owner_idx").on(t.ownerId),
     check("devices_pool_size_check", sql`"pool_size" between 1 and 8`),
   ],
 );
@@ -140,7 +136,7 @@ export const deviceJobs = table(
   },
   (t) => [
     teamScope("device_jobs", t),
-    foreignKey({ name: "device_jobs_device_fk", columns: [t.deviceId, t.workspaceId], foreignColumns: [devices.id, devices.workspaceId] }).onDelete("cascade"),
+    foreignKey({ name: "device_jobs_device_fk", columns: [t.deviceId], foreignColumns: [devices.id] }).onDelete("cascade"),
     foreignKey({ name: "device_jobs_issue_fk", columns: [t.issueId, t.teamId], foreignColumns: [issues.id, issues.teamId] }).onDelete("cascade"),
     index("device_jobs_issue_idx").on(t.issueId),
     index("device_jobs_device_state_idx").on(t.deviceId, t.state),
@@ -193,7 +189,7 @@ export const chatThreads = table(
   },
   (t) => [
     teamScope("chat_threads", t),
-    foreignKey({ name: "chat_threads_device_fk", columns: [t.deviceId, t.workspaceId], foreignColumns: [devices.id, devices.workspaceId] }).onDelete("cascade"),
+    foreignKey({ name: "chat_threads_device_fk", columns: [t.deviceId], foreignColumns: [devices.id] }).onDelete("cascade"),
     foreignKey({ name: "chat_threads_owner_membership_fk", columns: [t.ownerId, t.workspaceId], foreignColumns: [memberships.userId, memberships.workspaceId] }).onDelete("cascade"),
     index("chat_threads_owner_idx").on(t.ownerId, t.workspaceId, t.updatedAt),
     index("chat_threads_device_idx").on(t.deviceId),

@@ -8,7 +8,7 @@ import { buildRoutes } from "../routes/router";
 
 export const ADA: Me = {
   user: { id: "u1", name: "Ada Lovelace", email: "ada@example.test" },
-  workspace: { id: "t1", name: "Analytical Engines" },
+  workspace: { id: "t1", slug: "ae", name: "Analytical Engines" },
   role: "owner",
   tags: ["eng"],
   isInstanceAdmin: false,
@@ -87,7 +87,7 @@ export function serverWithData() {
   server.on("GET /api/app/notifications", { items: [], nextCursor: null });
   server.on("GET /api/app/notifications/unread-count", { count: 0 });
   server.on("GET /api/app/teams/AA/members", teamMembers());
-  server.on("GET /api/app/me/workspaces", { workspaces: [{ id: "t1", name: "Analytical Engines", role: "owner", active: true }] });
+  server.on("GET /api/app/me/workspaces", { workspaces: [{ id: "t1", slug: "ae", name: "Analytical Engines", role: "owner", active: true }] });
   server.on("GET /api/app/access/teams", { teams: [] });
   server.on("GET /api/app/access/audit", { events: [] });
   server.on("GET /api/app/admin/workspaces", { workspaces: [adminWorkspace()] });
@@ -108,6 +108,10 @@ export function serverWithData() {
   return server;
 }
 
+/** Pages of a workspace live under /w/:slug; tests name them as the app does (`/t/AA`) and this adds the workspace. Person pages stay as they are. */
+const SLUG = ADA.workspace.slug;
+const inWorkspace = (path: string) => (/^\/(w(?=\/)|login|signup|invite|offline|settings(?=[?#]|$)|settings\/(profile|password|devices))(?=[/?#]|$)/.test(path) ? path : `/w/${SLUG}${path === "/" ? "" : path}`);
+
 /** Render the real routes at `path`, as a browser would, against the fake server. */
 export function renderApp(path: string, setup: (server: FakeServer) => void = () => {}) {
   const server = serverWithData();
@@ -115,13 +119,13 @@ export function renderApp(path: string, setup: (server: FakeServer) => void = ()
   // eslint-disable-next-line prefer-const -- the services need the router to send you to /login, the router needs the services
   let router: ReturnType<typeof createMemoryRouter>;
   const services = createServices({ api: createApiClient({ fetch: server.fetch }), onSignedOut: () => void router.navigate("/login", { replace: true }) });
-  router = createMemoryRouter(buildRoutes(services), { initialEntries: [path] });
+  router = createMemoryRouter(buildRoutes(services), { initialEntries: [inWorkspace(path)] });
   const view = render(
     <ServicesProvider services={services}>
       <RouterProvider router={router} />
     </ServicesProvider>,
   );
-  return { ...view, router, services, server, at: () => router.state.location.pathname };
+  return { ...view, router, services, server, at: () => router.state.location.pathname.replace(`/w/${SLUG}`, "") || "/" };
 }
 
 /** Render one component inside the real data router and services. */

@@ -57,11 +57,10 @@ describe("signUp", () => {
     const [m] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, userId));
     assert.equal(m.role, "owner");
     const [t] = await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, m.workspaceId));
-    assert.equal(t.name, "Ada's workspace", "the workspace is named after the person unless they choose a name");
-    const second = fresh();
-    const two = await signUp({ name: "Bo", email: second.email, password: PASSWORD, workspace: " Acme " }, second.ip);
-    const [m2] = await db.select().from(schema.memberships).where(eq(schema.memberships.userId, two.userId));
-    assert.equal((await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, m2.workspaceId)))[0].name, "Acme");
+    assert.equal(t.name, "Ada", "the personal workspace is named after the person");
+    assert.equal(t.kind, "personal");
+    assert.match(t.slug, /^ada(-\d+)?$/);
+    assert.equal((await db.select().from(schema.memberships).where(eq(schema.memberships.userId, userId))).length, 1, "exactly one workspace");
   });
 
   test("is refused when signups are closed, except for the very first account", async () => {

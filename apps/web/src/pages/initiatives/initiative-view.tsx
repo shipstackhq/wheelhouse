@@ -1,5 +1,5 @@
 import { useState, useTransition } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "../../lib/workspace";
 import type { InitiativeDetail, ProjectHealthValue } from "@wheelhouse/api-client";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";

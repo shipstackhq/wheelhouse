@@ -107,7 +107,7 @@ describe("the inbox page", () => {
     expect(within(reader).getByText(/About: issue/)).toBeTruthy();
     expect(at()).toBe("/inbox");
     expect(router.state.location.search).toBe("?n=n1");
-    expect(within(reader).getByRole("link", { name: "Open issue" }).getAttribute("href")).toBe("/t/AA?t=AA-1");
+    expect(within(reader).getByRole("link", { name: "Open issue" }).getAttribute("href")).toBe("/w/ae/t/AA?t=AA-1");
     await waitFor(async () => expect((await row("Item 1")).dataset.unread).toBeUndefined());
   });
 
@@ -203,7 +203,7 @@ describe("the inbox page", () => {
     renderApp("/inbox", (s) => inbox(s, [item(1), item(2)]));
     const link = await screen.findByRole("link", { name: /Inbox/ });
     await waitFor(() => expect(link.textContent).toContain("2"));
-    expect(link.getAttribute("href")).toBe("/inbox");
+    expect(link.getAttribute("href")).toBe("/w/ae/inbox");
     await userEvent.setup().click(await screen.findByRole("button", { name: "Mark all read" }));
     await waitFor(() => expect(within(nav()).getByRole("link", { name: "Inbox" }).textContent).toBe("Inbox"));
   });
@@ -317,7 +317,7 @@ describe("the header bell", () => {
     await user.click(bell);
     await user.click(await screen.findByRole("button", { name: /^Item 1/ }));
     await waitFor(() => expect(server.sent("POST /api/app/notifications/n1/read")).toHaveLength(1));
-    await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe("/inbox?n=n1"));
+    await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe("/w/ae/inbox?n=n1"));
     await waitFor(() => expect(screen.getByRole("button", { name: "Notifications" })).toBeTruthy());
     expect(screen.queryByTestId("bell-dot")).toBeNull();
   });
@@ -424,7 +424,7 @@ describe("the inbox views", () => {
   });
 
   test("Trash offers only Restore, with Open issue kept; Restore puts the item back and clears the selection", async () => {
-    const { server, router } = renderApp("/inbox?view=trash&n=n1", (s) => inbox(s, [trashed(1, "2026-11-10T00:00:00.000Z", { href: "/t/AA?t=AA-1" }), item(2)]));
+    const { server, router } = renderApp("/w/ae/inbox?view=trash&n=n1", (s) => inbox(s, [trashed(1, "2026-11-10T00:00:00.000Z", { href: "/w/ae/t/AA?t=AA-1" }), item(2)]));
     const user = userEvent.setup();
     const reader = await screen.findByRole("article");
     expect(within(reader).getByRole("button", { name: "Restore" })).toBeTruthy();

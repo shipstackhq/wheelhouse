@@ -89,6 +89,23 @@ describe("working in one workspace at a time", () => {
     await switchWorkspace(token, pat.id, A.id);
   });
 
+  test("a request names its workspace: two tabs on one session work in two workspaces, even with the same team key", async () => {
+    const db = await getDb();
+    const slugOf = async (id: string) => (await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, id)))[0].slug;
+    const [sa, sb, sc] = [await slugOf(A.id), await slugOf(B.id), await slugOf(C.id)];
+    const a = (await humanFromSession(token, sa))!;
+    const b = (await humanFromSession(token, sb))!;
+    assert.deepEqual([a.workspace.id, b.workspace.id], [A.id, B.id]);
+    await createTeam(a.actor, { name: "Same A", key: `SK${L}` });
+    await createTeam(b.actor, { name: "Same B", key: `SK${L}` });
+    assert.equal((await requireTeam(a.actor, `SK${L}`)).name, "Same A");
+    assert.equal((await requireTeam(b.actor, `SK${L}`)).name, "Same B");
+    const actor = await t.actorFromCredentials({ sessionToken: token, workspace: sb, ip: "127.0.0.1" });
+    assert.equal(actor.workspaceId, B.id);
+    await assert.rejects(() => humanFromSession(token, sc), (e) => e instanceof ServiceError && e.code === "not_found"); // not a member
+    assert.equal((await humanFromSession(token))!.workspace.id, A.id); // the session's last used still decides when none is named
+  });
+
   test("you cannot switch into a workspace you are not in, and nothing changes when you try", async () => {
     assert.equal(await switchWorkspace(token, pat.id, C.id), null);
     assert.equal((await humanFromSession(token))!.workspace.id, A.id);
@@ -195,3 +212,50 @@ describe("joining another workspace with the account you already have", () => {
     await assert.rejects(() => t.peekInviteAsMemberAs(h, "nope"), (e) => e instanceof ServiceError && e.code === "invalid");
   });
 });
+
+describe("creating workspaces", () => {
+  const issuer = (workspaceId: string, userId: string): Issuer => ({ userId, email: "owner@example.com", workspaceId, role: "owner" });
+  const fieldOf = (e: unknown) => (e as ServiceError).details as { fields: Record<string, string> };
+
+  test("a person makes a team workspace they own, slug from the name or as typed, and can switch into it", async () => {
+    const h = (await humanFromSession(token))!;
+    const w = await t.createWorkspaceAs(h, { name: `Delta ${RUN}` });
+    assert.deepEqual([w.slug, w.kind, w.role], [`delta-${RUN}`, "team", "owner"]);
+    const typed = await t.createWorkspaceAs(h, { name: "Same name", slug: `typed-${RUN}` });
+    assert.equal(typed.slug, `typed-${RUN}`);
+    const clash = await t.createWorkspaceAs(h, { name: `Delta ${RUN}` }); // derived slugs get -2, -3
+    assert.equal(clash.slug, `delta-${RUN}-2`);
+    assert.ok((await listWorkspaces(pat.id, null)).some((x) => x.id === w.id && x.role === "owner"));
+    assert.equal((await switchWorkspace(token, pat.id, w.id))?.id, w.id);
+    await switchWorkspace(token, pat.id, A.id);
+  });
+
+  test("a typed slug that is taken, reserved or malformed is refused with a field error; the flag can close creation to non-admins", async () => {
+    const h = (await humanFromSession(token))!;
+    for (const slug of [`delta-${RUN}`, "admin", "w", "A b", "x"]) {
+      await assert.rejects(() => t.createWorkspaceAs(h, { name: "Nope", slug }), (e) => e instanceof ServiceError && !!fieldOf(e).fields.slug);
+    }
+    await assert.rejects(() => t.createWorkspaceAs(h, { name: " " }), (e) => e instanceof ServiceError && !!fieldOf(e).fields.name);
+    process.env.ALLOW_WORKSPACE_CREATE = "false";
+    try {
+      await assert.rejects(() => t.createWorkspaceAs(h, { name: "Closed" }), (e) => e instanceof ServiceError && e.code === "forbidden");
+    } finally {
+      delete process.env.ALLOW_WORKSPACE_CREATE;
+    }
+  });
+
+  test("inviting someone into a personal workspace makes it a team workspace; a derived slug never lands on a reserved word", async () => {
+    const db = await getDb();
+    const [P] = await db.insert(schema.workspaces).values({ name: `Solo ${RUN}`, kind: "personal" }).returning();
+    const solo = await user(email("solo"), "Solo");
+    await join(solo.id, P.id, "owner");
+    const inv = await createInvite(issuer(P.id, solo.id), { kind: "join_workspace", email: pat.email, role: "member" });
+    const kindOf = async () => (await db.select().from(schema.workspaces).where(eq(schema.workspaces.id, P.id)))[0].kind;
+    assert.equal(await kindOf(), "personal", "an invite alone changes nothing");
+    await acceptInviteAsMember(pat, inv.token);
+    assert.equal(await kindOf(), "team");
+    const reserved = await t.createWorkspaceAs((await humanFromSession(token))!, { name: "Admin" });
+    assert.equal(reserved.slug, "admin-2");
+  });
+});
+

@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router";
+import { Link, useWsPathname } from "../lib/workspace";
 import clsx from "clsx";
 import { ChevronRightIcon } from "./icons";
 
@@ -69,7 +69,7 @@ export function crumbsFor(pathname: string, workspaceName: string, teams: { key:
 
 /** The header's "you are here": every step but the last links back; the last is the page and is marked as such. */
 export function Breadcrumbs({ workspaceName, teams }: { workspaceName: string; teams: { key: string; name: string }[] }) {
-  const { pathname } = useLocation();
+  const pathname = useWsPathname();
   const crumbs = crumbsFor(pathname, workspaceName, teams);
   return (
     <nav aria-label="Breadcrumb" className="min-w-0">

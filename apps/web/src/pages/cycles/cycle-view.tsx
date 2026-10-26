@@ -1,5 +1,5 @@
 import { useState, useTransition } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate } from "../../lib/workspace";
 import clsx from "clsx";
 import type { CycleDetail } from "@wheelhouse/api-client";
 import { CheckIcon } from "../../components/icons";
