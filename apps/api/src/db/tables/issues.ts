@@ -43,6 +43,10 @@ export const issues = table(
     // WH-113: the agent the issue is delegated to, from the team's roster; the assignee stays the human who owns it. Deleting the
     // agent clears it; taking it off the roster is cleared by the agents service.
     delegateAgentId: uuid("delegate_agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
+    // WH-116: who delegated it and when, set and cleared with the delegate. The delegator is the requester of the run it starts; an issue
+    // whose delegation has no run since `delegated_at` is waiting for one of the delegator's devices to come online.
+    delegatedBy: uuid("delegated_by"),
+    delegatedAt: timestamp("delegated_at", { withTimezone: true }),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     position: doublePrecision("position").notNull(),

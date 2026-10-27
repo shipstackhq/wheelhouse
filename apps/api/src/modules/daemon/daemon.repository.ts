@@ -5,7 +5,7 @@ import { schema } from "../../db";
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 
-const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages } = schema;
+const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages, workspaceAgents, users } = schema;
 
 export type DeviceRow = typeof devices.$inferSelect;
 export type PairingRow = typeof devicePairings.$inferSelect;
@@ -233,6 +233,34 @@ export class DaemonRepository {
       .innerJoin(devices, eq(devices.id, deviceJobs.deviceId))
       .where(and(eq(deviceJobs.issueId, issueId), eq(deviceJobs.teamId, teamId)))
       .orderBy(desc(deviceJobs.createdAt))
+      .limit(50);
+  }
+
+  /** A workspace agent by id (WH-114: the run carries its profile). */
+  async workspaceAgent(id: string, workspaceId: string) {
+    const [a] = await this.db.q.select().from(workspaceAgents).where(and(eq(workspaceAgents.id, id), eq(workspaceAgents.workspaceId, workspaceId)));
+    return a;
+  }
+
+  /** The device the person last started a run on, if any. */
+  async lastRunDevice(userId: string) {
+    const [j] = await this.db.q.select({ deviceId: deviceJobs.deviceId }).from(deviceJobs).where(eq(deviceJobs.createdBy, userId)).orderBy(desc(deviceJobs.createdAt)).limit(1);
+    return j?.deviceId;
+  }
+
+  /** WH-116: delegated issues with no run since they were delegated: they wait for one of the delegator's devices. */
+  waitingDelegations() {
+    return this.db.q
+      .select({ id: issues.id, workspaceId: issues.workspaceId, delegatedBy: issues.delegatedBy, name: users.name })
+      .from(issues)
+      .innerJoin(users, eq(users.id, issues.delegatedBy))
+      .where(
+        and(
+          isNotNull(issues.delegateAgentId),
+          isNotNull(issues.delegatedAt),
+          sql`not exists (select 1 from ${deviceJobs} where ${deviceJobs.issueId} = ${issues.id} and ${deviceJobs.createdAt} >= ${issues.delegatedAt})`,
+        ),
+      )
       .limit(50);
   }
 
