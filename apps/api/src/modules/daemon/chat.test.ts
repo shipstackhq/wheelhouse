@@ -359,18 +359,54 @@ describe("Wheelhouse data in a chat (the answer's own key)", () => {
 
   test("a message carries a token that lists only read tools and reaches only the thread's team", async () => {
     const { device } = await paired();
-    const r = await chat.create(owner, input(device.id));
+    await chat.create(owner, input(device.id));
     const token = await tokenOf(device.id);
     const list = await names(token);
-    assert.ok(list.includes("list_issues") && !list.some((n) => tools.tools[n].scope !== "read"));
+    assert.ok(list.includes("list_issues") && list.includes("create_issue") && !list.includes("plan"));
     const actor = await keys.actorForKey(token, "1.1.1.1");
-    assert.deepEqual(actor.scopes, ["read"]);
+    assert.deepEqual(actor.scopes, ["read", "board:write", "map:write", "docs:write"]);
+    assert.equal(((await messagesTo(device.id)).at(-1)!.message as { mcp: { write: boolean } }).mcp.write, true);
     await access.require(actor, "CH", "read");
     await createTeam(owner, { name: "Other", key: "OT" });
     await assert.rejects(access.require(actor, "OT", "read"));
     const row = (await (await getDb()).select().from(schema.apiKeys).where(eq(schema.apiKeys.id, actor.id)))[0];
-    assert.equal(row.name, `Chat: ${r.chat.title}`);
+    assert.equal(row.name, `${owner.name} (chat)`);
     assert.notEqual(row.keyHash, token, "only the hash is stored");
+  });
+
+  test("CHAT_SCOPES=read makes the key read-only; planning is never granted; unknown names are ignored", async () => {
+    const { device } = await paired();
+    const prev = process.env.CHAT_SCOPES;
+    try {
+      process.env.CHAT_SCOPES = "read";
+      await chat.create(owner, input(device.id));
+      const ro = (await messagesTo(device.id)).at(-1)!.message as { mcp: { token: string; write: boolean } };
+      assert.equal(ro.mcp.write, false);
+      assert.deepEqual((await keys.actorForKey(ro.mcp.token, "1.1.1.1")).scopes, ["read"]);
+      assert.ok(!(await names(ro.mcp.token)).includes("create_issue"));
+
+      process.env.CHAT_SCOPES = "board:write, planning:write, nonsense";
+      await chat.create(owner, input(device.id));
+      assert.deepEqual((await keys.actorForKey(await tokenOf(device.id), "1.1.1.1")).scopes, ["read", "board:write"]);
+    } finally {
+      if (prev === undefined) delete process.env.CHAT_SCOPES;
+      else process.env.CHAT_SCOPES = prev;
+    }
+  });
+
+  test("a chat key creates an issue that reads as the person via chat", async () => {
+    const { device } = await paired();
+    await chat.create(owner, input(device.id));
+    const actor = await keys.actorForKey(await tokenOf(device.id), "1.1.1.1");
+    const call = (id: number, name: string, args: object) => runMcp(tools, JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } }), async () => actor);
+    const made = JSON.stringify((await call(1, "create_issue", { team: "CH", title: "From chat" })).body);
+    const ref = /CH-\d+/.exec(made)![0];
+    await call(2, "comment", { team: "CH", ref, body: "hello" });
+    assert.equal(actor.name, `${owner.name} (chat)`);
+    const rows = await (await getDb()).select().from(schema.comments);
+    assert.ok(rows.some((c) => c.authorName === `${owner.name} (chat)`));
+    const issues = await (await getDb()).select().from(schema.issues).where(eq(schema.issues.title, "From chat"));
+    assert.equal(issues.length, 1);
   });
 
   test("it is not on the keys page", async () => {

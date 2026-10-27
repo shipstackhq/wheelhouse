@@ -50,8 +50,10 @@ chat.cancel   { messageId }
 
 ## Wheelhouse data
 
-Each `chat.message` carries `mcp: { token }`, a key minted for that answer: `read` scope only, reaching only the thread's team, named
-`Chat: <thread title>`. The daemon reaches `<server URL>/mcp` with it as a bearer token. The key is deleted when the answer ends (finish,
+Each `chat.message` carries `mcp: { token, write }`, a key minted for that answer, reaching only the thread's team, named
+`<person> (chat)` so its writes (issues, comments, the activity feed) read as the person via chat. Its scopes are the instance's
+`CHAT_SCOPES` (default `read,board:write,map:write,docs:write`; `read` is always held, `planning:write` never is). `CHAT_SCOPES=read`
+makes every chat read-only; `write` is true when the key holds any scope besides `read`. The daemon reaches `<server URL>/mcp` with it as a bearer token. The key is deleted when the answer ends (finish,
 offline cancel, sweep failure) and expires 10 minutes after it was minted at the latest (`api_keys.expires_at`; `actorForKey` rejects it,
 the sweep deletes it). `api_keys.chat_message_id` marks it: such keys are left out of the keys page, the Agents page and the dashboard
 counts. Only its hash is stored, like any key.
