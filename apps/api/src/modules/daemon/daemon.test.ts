@@ -770,7 +770,9 @@ describe("delegated runs (WH-116)", () => {
     assert.equal(job.createdBy, who.id, "the delegator is the requester");
     assert.equal(job.agentId, agent.id);
     const [offer] = await (await getDb()).select().from(schema.deviceMessages).where(and(eq(schema.deviceMessages.deviceId, device.id), eq(schema.deviceMessages.type, "job.offer")));
-    assert.equal((offer.message as { agent: { slug: string } | null }).agent?.slug, slug);
+    const sent = (offer.message as { agent: { slug: string; name: string; definitions: Record<string, { prompt: string }> } | null }).agent!;
+    assert.equal(sent.slug, slug);
+    assert.match(sent.definitions[sent.name].prompt, /\S/, "the CLI agent definition carries the instructions (WH-115)");
 
     await updateIssue(who, issue.ref, { delegate: null });
     assert.equal((await jobsOf(issue.id))[0].state, "canceled");

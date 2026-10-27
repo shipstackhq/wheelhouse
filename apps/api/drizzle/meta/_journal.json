@@ -400,6 +400,13 @@
       "when": 1793140000002,
       "tag": "0056_delegated_runs",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1793140000003,
+      "tag": "0057_job_effort",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,7 @@ import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
 import { RepositoriesService, github, type RepositoryRow } from "../github/index";
+import { agentName, toAgentsJson } from "@wheelhouse/shared/agents/render";
 import { effectiveProfile } from "../agents/index";
 import { IssuesService } from "../issues/index";
 import { DaemonRepository } from "./daemon.repository";
@@ -134,7 +135,7 @@ export class RunsService {
     const offerExpiresAt = new Date(Date.now() + OFFER_TTL_MS);
     const key = await this.stream.signingKey();
     const job = await this.db.transaction(async () => {
-      const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, agentId: agent?.id ?? null, offerExpiresAt });
+      const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, agentId: agent?.id ?? null, effort: agent?.profile.effort ?? null, offerExpiresAt });
       await this.stream.send(key, device.id, "job.offer", {
         jobId: j.id,
         workspaceId: j.workspaceId,
@@ -157,7 +158,8 @@ export class RunsService {
           pathLimit: repo.pathLimit,
         },
         requestedBy: { id: actor.id, name: actor.name },
-        agent: agent ? { slug: agent.slug, profile: agent.profile } : null,
+        // WH-115: the CLI's own agent definition (instructions with the guardrails, tools, effort); the daemon runs `claude --agents <definitions> --agent <name>`.
+        agent: agent ? { slug: agent.slug, name: agentName(agent.profile), definitions: toAgentsJson(agent.profile) } : null,
       });
       return j;
     });
