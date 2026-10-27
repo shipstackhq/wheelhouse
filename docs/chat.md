@@ -16,7 +16,7 @@ in one thread, a model picker per message, attachments, permission prompts.
 
 - Read-only: claude runs with `Read,Grep,Glob` and read-only git (`log`, `diff`, `show`, `blame`, `grep`, `status`, `ls-files`, `ls-tree`,
   `rev-parse`, `merge-base`, `branch -r|-a`), plus `git checkout --detach` to move its own checkout to another branch. No other shell, no
-  edits, no MCP (`--strict-mcp-config` with none). Plain `git branch` is not allowed: `-D` would delete a run's branch in the shared clone.
+  edits. MCP is only Wheelhouse, read-only, with the message's own key (`--strict-mcp-config` with that one server; none without a key). Plain `git branch` is not allowed: `-D` would delete a run's branch in the shared clone.
 - Unmodified `claude` binary, the user's own sign-in, no Agent SDK (same ground rules as jobs).
 - Chats are the person's own: a thread belongs to its owner, only they see it, only on a device they own.
 - Chats are separate from jobs: their own small pool (2 at once), not counted in the job pool. A usage-limit pause (`pausedUntil`) applies to both.
@@ -114,7 +114,7 @@ bus (throttled to once per 300 ms for deltas, immediate for state changes). The 
   --append-system-prompt <CHAT_RULES>`, cwd = the thread's worktree. Flag names must be checked against `claude --help` of the installed CLI.
 - The prompt is the person's message as typed; the rules say: read-only assistant for repository X, now at commit Y (tip of origin/Z), answer
   from the code, cite file paths and branch, use read-only git for history and other branches, switch with `checkout --detach`, one command
-  per call, no other commands or edits, no access to Wheelhouse issues yet.
+  per call, no other commands or edits, and read Wheelhouse (issues, cycles, projects, the map, docs) with the wheelhouse tools, citing issue refs.
 - stream-json → events: `stream_event` with a `text_delta` → `delta`; `tool_use` blocks → `tool`; `result` → `finish` (with `session_id`, cost, text).
 - `chat.cancel` aborts that run (SIGTERM to the process group, as jobs do); the daemon then reports `canceled`.
 - A rate-limit result sets `pausedUntil` like a job does.
