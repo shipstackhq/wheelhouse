@@ -8,6 +8,7 @@ import { anon, app, newAccount, type Sess } from "./lib/app";
  * check, move by id, name or role, comment, link, delete, the Bots menu's queue, and the rules that keep one workspace out of another's
  * issues. Everything that changes data does it in a workspace made for the test.
  */
+const upsertNode = async (key: string, node: Record<string, unknown>) => (await v1ok({ key }, "update_map", { team: "RKT", changes: [{ op: "upsert_node", ...node }] })).results[0];
 const SID = "00000000-0000-4000-8000-000000000000";
 
 /** A workspace with one team, an API key for its agents, and the sessions to act as its owner. */
@@ -88,7 +89,7 @@ describe("GET /api/app/teams/:key/board", () => {
 
   test("an issue carries what a card shows, its linked nodes and comment count, and nothing internal", async () => {
     const t = await workspace();
-    const node = await v1ok({ key: t.key }, "upsert_node", { project: "RKT", layer: "concept", kind: "capability", name: "Billing", summary: "Takes money" });
+    const node = await upsertNode(t.key, { layer: "concept", kind: "capability", name: "Billing", summary: "Takes money" });
     const tk = await make(t.s, { title: "Card", priority: "high", labels: ["bug"], body: "Why" });
     await app("PUT", `/api/app/issues/${tk.ref}/nodes/${node.id}`, t.s);
     await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "hello" } });
@@ -243,7 +244,7 @@ describe("PATCH /api/app/issues/:ref: the version check", () => {
   test("a stale version is a 409 with the issue as it is now, and nothing is overwritten", async () => {
     const t = await workspace();
     const tk = await make(t.s, { title: "Original", body: "mine" });
-    await v1ok({ key: t.key }, "update_issue", { issue: tk.ref, title: "Changed by an agent", expected_version: 1 });
+    await v1ok({ key: t.key }, "update_issue", { ref: tk.ref, title: "Changed by an agent", expected_version: 1 });
     const stale = await app("PATCH", `/api/app/issues/${tk.ref}`, t.s, { body: { body: "my slow edit", version: 1 } });
     assert.equal(stale.status, 409);
     assert.equal(stale.json.error.code, "conflict");
@@ -362,7 +363,7 @@ describe("POST /api/app/issues/:ref/move", () => {
     const t = await workspace();
     const tk = await make(t.s, { title: "Shared" });
     await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "review" } });
-    const agentsBoard = await v1ok({ key: t.key }, "get_board", { project: "RKT" });
+    const agentsBoard = await v1ok({ key: t.key }, "list_issues", { team: "RKT" });
     const inReview = agentsBoard.statuses.find((c: { name: string }) => c.name === "Review");
     assert.deepEqual(inReview.issues.map((x: { ref: string }) => x.ref), [tk.ref]);
   });
@@ -406,7 +407,7 @@ describe("comments", () => {
 describe("linking an issue to a map node", () => {
   test("link, link again (no harm), unlink; the board and the issue both show it", async () => {
     const t = await workspace();
-    const node = await v1ok({ key: t.key }, "upsert_node", { project: "RKT", layer: "system", kind: "service", name: "API", summary: "The API" });
+    const node = await upsertNode(t.key, { layer: "system", kind: "service", name: "API", summary: "The API" });
     const tk = await make(t.s, { title: "Linked" });
     const url = `/api/app/issues/${tk.ref}/nodes/${node.id}`;
     assert.deepEqual((await app("PUT", url, t.s)).json, { ok: true });
@@ -421,7 +422,7 @@ describe("linking an issue to a map node", () => {
   test("a node of another workspace or team is a 404, and nothing is linked", async () => {
     const t = await workspace();
     const other = await workspace("Other");
-    const foreign = await v1ok({ key: other.key }, "upsert_node", { project: "RKT", layer: "system", kind: "service", name: "Foreign", summary: "x" });
+    const foreign = await upsertNode(other.key, { layer: "system", kind: "service", name: "Foreign", summary: "x" });
     const tk = await make(t.s, { title: "Mine" });
     const r = await app("PUT", `/api/app/issues/${tk.ref}/nodes/${foreign.id}`, t.s);
     assert.equal(r.status, 404);
@@ -433,7 +434,7 @@ describe("another workspace's issues are out of reach", () => {
   test("every read and write on an issue of another workspace is a 404, and the issue is untouched", async () => {
     const a = await workspace();
     const b = await newAccount("Intruder");
-    const node = await v1ok({ key: a.key }, "upsert_node", { project: "RKT", layer: "system", kind: "service", name: "N", summary: "x" });
+    const node = await upsertNode(a.key, { layer: "system", kind: "service", name: "N", summary: "x" });
     const tk = await make(a.s, { title: "Private", body: "secret plan" });
     const attempts: [string, string, unknown?][] = [
       ["GET", `/api/app/issues/${tk.ref}`],
@@ -481,7 +482,7 @@ describe("the Bots menu's queue", () => {
 
   test("a change by another actor shows up as queued for an agent, and mark-all-seen for the team clears it", async () => {
     const t = await workspace();
-    await v1ok({ key: t.key }, "get_changes", { project: "RKT" });
+    await v1ok({ key: t.key }, "get_changes", { team: "RKT" });
     await make(t.s, { title: "Queued for the agent" });
     const before = (await app("GET", "/api/app/teams/RKT/queue", t.s)).json.bots[0];
     assert.ok(before.pending >= 1, `pending ${before.pending}`);
@@ -499,7 +500,7 @@ describe("a change by an agent reaches an open board within a second", () => {
       assert.equal(stream.status, 200);
       await stream.waitFor((e) => e.event === "ready");
       const started = Date.now();
-      await v1ok({ key: t.key }, "move_issue", { issue: tk.ref, status: "Review" });
+      await v1ok({ key: t.key }, "update_issue", { ref: tk.ref, status: "Review" });
       const change = await stream.waitFor((e) => e.event === "change" && /moved RKT-1/.test(String(e.data?.summary)), 1000);
       assert.ok(Date.now() - started < 1000, "within a second");
       assert.match(String(change.data.summary), /Backlog → Review/);
@@ -527,7 +528,7 @@ describe("claim state", () => {
     const t = await workspace();
     const tk = await make(t.s, { title: "For agents" });
     assert.equal((await app("PATCH", `/api/app/issues/${tk.ref}`, t.s, { body: { agentClaimable: true } })).json.issue.agentClaimable, true);
-    await v1ok({ key: t.key }, "claim_issue", { issue: tk.ref });
+    await v1ok({ key: t.key }, "update_issue", { ref: tk.ref, assignee: "me" });
     const onBoard = (await board(t.s)).issues[0];
     assert.equal(onBoard.agentClaimable, true);
     assert.ok(onBoard.claimedByKeyId, "claimed by an agent key");
@@ -588,14 +589,16 @@ describe("sub-issues over the web API", () => {
 
   test("the agents' tools do the same: create_issue and update_issue take `parent`, get_issue shows the tree", async () => {
     const t = await workspace();
-    const parent = await v1ok(asKey(t.key), "create_issue", { project: "RKT", title: "Epic" });
-    const child = await v1ok(asKey(t.key), "create_issue", { project: "RKT", title: "Task", parent: parent.ref });
-    assert.equal(child.parentId, parent.id);
-    const detail = await v1ok(asKey(t.key), "get_issue", { issue: parent.ref });
+    const parent = await v1ok(asKey(t.key), "create_issue", { team: "RKT", title: "Epic" });
+    const child = await v1ok(asKey(t.key), "create_issue", { team: "RKT", title: "Task", parent: parent.ref });
+    const detail = await v1ok(asKey(t.key), "get_issue", { ref: parent.ref });
     assert.deepEqual(detail.children.map((c: { ref: string }) => c.ref), [child.ref]);
-    const lone = await v1ok(asKey(t.key), "create_issue", { project: "RKT", title: "Lone" });
-    assert.equal((await v1ok(asKey(t.key), "update_issue", { issue: lone.ref, parent: parent.ref })).parentId, parent.id);
-    assert.equal((await v1ok(asKey(t.key), "update_issue", { issue: lone.ref, parent: null })).parentId, null);
+    assert.equal((await v1ok(asKey(t.key), "get_issue", { ref: child.ref })).parent.ref, parent.ref);
+    const lone = await v1ok(asKey(t.key), "create_issue", { team: "RKT", title: "Lone" });
+    await v1ok(asKey(t.key), "update_issue", { ref: lone.ref, parent: parent.ref });
+    assert.equal((await v1ok(asKey(t.key), "get_issue", { ref: lone.ref })).parent.ref, parent.ref);
+    await v1ok(asKey(t.key), "update_issue", { ref: lone.ref, parent: null });
+    assert.equal((await v1ok(asKey(t.key), "get_issue", { ref: lone.ref })).parent, null);
   });
 });
 

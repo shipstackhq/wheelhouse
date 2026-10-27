@@ -104,7 +104,7 @@ describe("live events from the service layer", () => {
   });
 
   test("an agent's write through the tool layer is announced the same way", async () => {
-    const got = await heard(() => runTool(agent, "create_issue", { project: "LV", title: "From an agent" }));
+    const got = await heard(() => runTool(agent, "create_issue", { team: "LV", title: "From an agent" }));
     assert.ok(got.some((e) => e.type === "issue.created" && e.actorKind === "agent"));
   });
 
@@ -137,7 +137,7 @@ describe("live events from the service layer", () => {
   });
 
   test("an agent acking its queue sends a transient signal, so the Bots menu count can update", async () => {
-    const got = await heard(() => runTool(agent, "ack_changes", { project: "LV", seq: 1 }));
+    const got = await heard(() => runTool(agent, "get_changes", { team: "LV", ack: 1 }));
     const q = got.filter((e) => e.type === "queue.changed");
     assert.equal(q.length, 1);
     assert.equal(q[0].seq, undefined, "it is not a row in the log");

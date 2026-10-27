@@ -21,6 +21,9 @@ export function bindIssuesLegacy(services: Live) {
 }
 const s = (): Live => live ?? (() => { throw new Error("The issues module is not booted: start the Nest application (tests: await testApp()) before calling the legacy functions"); })();
 
+/** Runs `fn` in one transaction: the services it calls join it, so a batch applies whole or not at all. */
+export const transaction = <T>(fn: () => Promise<T>) => s().db.transaction(fn);
+
 // issues
 export const getBoard = (...a: Parameters<IssuesService["getBoard"]>) => s().issues.getBoard(...a);
 export const getIssue = (...a: Parameters<IssuesService["getIssue"]>) => s().issues.getIssue(...a);

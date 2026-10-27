@@ -41,9 +41,9 @@ describe("POST /mcp: authentication", () => {
   });
 
   test("a signed-in person (session cookie) can use it too", async () => {
-    const r = await mcp(asCookie(fx.a.sessionToken), "tools/call", { name: "list_projects", arguments: {} });
+    const r = await mcp(asCookie(fx.a.sessionToken), "tools/call", { name: "get_briefing", arguments: {} });
     assert.equal(r.status, 200);
-    assert.ok(mcpToolResult(r).some((p: { key: string }) => p.key === fx.a.teamKey));
+    assert.ok(mcpToolResult(r).teams.some((p: { key: string }) => p.key === fx.a.teamKey));
   });
 });
 
@@ -91,7 +91,7 @@ describe("POST /mcp: tools and prompts", () => {
     const tools = [...r.json.result.tools]
       .sort((x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name))
       .map((t: { name: string; inputSchema: unknown; annotations?: { readOnlyHint?: boolean } }) => ({ name: t.name, readOnly: !!t.annotations?.readOnlyHint, inputSchema: t.inputSchema }));
-    assert.ok(tools.length > 30, "expected the full tool set");
+    assert.equal(tools.length, 19, "the 19 agent tools");
     for (const t of r.json.result.tools) assert.ok(typeof t.description === "string" && t.description.length > 0, `${t.name} needs a description`);
     expectGolden("mcp-tools", tools);
   });
@@ -102,10 +102,10 @@ describe("POST /mcp: tools and prompts", () => {
   });
 
   test("tools/call returns the result as JSON text content", async () => {
-    const r = await mcp(A, "tools/call", { name: "list_projects", arguments: {} });
+    const r = await mcp(A, "tools/call", { name: "get_briefing", arguments: {} });
     assert.equal(r.json.result.content[0].type, "text");
     assert.equal(r.json.result.isError, undefined);
-    assert.ok(Array.isArray(mcpToolResult(r)));
+    assert.ok(Array.isArray(mcpToolResult(r).teams));
   });
 
   test("tool errors are results with isError, formatted code: message", async () => {
@@ -116,22 +116,22 @@ describe("POST /mcp: tools and prompts", () => {
     const invalid = await mcp(A, "tools/call", { name: "get_issue", arguments: {} });
     assert.equal(invalid.json.result.isError, true);
     assert.match(invalid.json.result.content[0].text, /^invalid: /);
-    const other = await mcp(A, "tools/call", { name: "get_board", arguments: { project: fx.b.teamKey } });
+    const other = await mcp(A, "tools/call", { name: "list_issues", arguments: { team: fx.b.teamKey } });
     assert.match(other.json.result.content[0].text, /^not_found: /, "another workspace's project looks like it does not exist");
   });
 
   test("a write through MCP is visible through the REST API", async () => {
     const title = `via mcp ${Date.now()}`;
-    const made = mcpToolResult(await mcp(A, "tools/call", { name: "create_issue", arguments: { project: fx.a.teamKey, title } }));
+    const made = mcpToolResult(await mcp(A, "tools/call", { name: "create_issue", arguments: { team: fx.a.teamKey, title } }));
     assert.match(made.ref, new RegExp(`^${fx.a.teamKey}-\\d+$`));
-    const got = (await call("/api/v1/get_issue", { ...A, body: { issue: made.ref } })).json.data;
+    const got = (await call("/api/v1/get_issue", { ...A, body: { ref: made.ref } })).json.data;
     assert.equal(got.issue.title, title);
   });
 
   test("prompts: the list is recorded, and a prompt renders messages", async () => {
     const list = await mcp(A, "prompts/list");
     expectGolden("mcp-prompts", [...list.json.result.prompts].map((p: { name: string; arguments?: unknown }) => ({ name: p.name, arguments: p.arguments ?? null })).sort((x, y) => x.name.localeCompare(y.name)));
-    const brief = await mcp(A, "prompts/get", { name: "brief", arguments: { project: fx.a.teamKey } });
+    const brief = await mcp(A, "prompts/get", { name: "brief", arguments: { team: fx.a.teamKey } });
     assert.equal(brief.status, 200);
     assert.ok(Array.isArray(brief.json.result.messages) && brief.json.result.messages.length > 0);
     const missing = await mcp(A, "prompts/get", { name: "no-such-prompt" });

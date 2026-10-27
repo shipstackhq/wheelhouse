@@ -223,11 +223,11 @@ describe("API keys and the API keys page", () => {
   test("the key works on the frozen API for its own workspace, and stops when it is revoked", async () => {
     const p = await signUp();
     const { json } = await app("POST", "/api/app/keys", p.sess, { body: { name: "agent" } });
-    const before = await v1({ key: json.secret }, "list_projects");
+    const before = await v1({ key: json.secret }, "get_briefing");
     assert.equal(before.status, 200);
-    assert.deepEqual(before.json.data, [], "the new workspace has no teams, and sees none of workspace A's");
+    assert.deepEqual(before.json.data.teams, [], "the new workspace has no teams, and sees none of workspace A's");
     assert.deepEqual((await app("DELETE", `/api/app/keys/${json.key.id}`, p.sess)).json, { ok: true });
-    assert.equal((await v1({ key: json.secret }, "list_projects")).status, 401);
+    assert.equal((await v1({ key: json.secret }, "get_briefing")).status, 401);
     const listed = (await app("GET", "/api/app/keys", p.sess)).json.keys[0];
     assert.ok(listed.revokedAt);
   });
@@ -261,7 +261,7 @@ describe("API keys and the API keys page", () => {
     assert.equal((await app("DELETE", `/api/app/keys/${k.key.id}`, mine.sess)).status, 404);
     assert.equal((await app("PATCH", `/api/app/keys/${k.key.id}`, mine.sess, { body: { scopes: ["read"] } })).status, 404);
     assert.equal((await app("POST", "/api/app/keys/mark-all-seen", mine.sess, { body: { keyId: k.key.id } })).status, 404);
-    assert.equal((await v1({ key: k.secret }, "list_projects")).status, 200);
+    assert.equal((await v1({ key: k.secret }, "get_briefing")).status, 200);
     assert.deepEqual((await app("GET", "/api/app/keys", theirs.sess)).json.keys[0].scopes, ["read", "board:write", "map:write"]);
     assert.deepEqual((await app("GET", "/api/app/keys", mine.sess)).json.keys, [], "and it is not in my list");
   });
@@ -499,7 +499,7 @@ describe("the instance admin's workspaces pages", () => {
     const blocked = await login(victim.email, PW);
     assert.equal(blocked.status, 403);
     assert.equal(blocked.json.error.code, "team_suspended");
-    assert.equal((await v1({ key: k }, "list_projects")).status, 403, "its keys are refused");
+    assert.equal((await v1({ key: k }, "get_briefing")).status, 403, "its keys are refused");
     const again = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: "Victim workspace" } });
     assert.equal(again.status, 409);
     const detail = (await app("GET", `/api/app/admin/workspaces/${id}`, admin)).json.workspace;
@@ -509,7 +509,7 @@ describe("the instance admin's workspaces pages", () => {
 
     assert.deepEqual((await app("POST", `/api/app/admin/workspaces/${id}/restore`, admin, { body: {} })).json, { ok: true });
     assert.equal((await login(victim.email, PW)).status, 200, "people sign in again");
-    assert.equal((await v1({ key: k }, "list_projects")).status, 200);
+    assert.equal((await v1({ key: k }, "get_briefing")).status, 200);
     assert.equal((await app("POST", `/api/app/admin/workspaces/${id}/restore`, admin, { body: {} })).status, 409, "it is not suspended any more");
   });
 });

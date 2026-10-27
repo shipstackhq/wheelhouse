@@ -48,7 +48,7 @@ describe("with no GitHub App configured", () => {
 
   test("the rest of the API still works", async () => {
     assert.equal((await call("/api/health")).status, 200);
-    const r = await call("/api/v1/list_projects", { key: fx.a.apiKey, method: "POST", body: {} });
+    const r = await call("/api/v1/get_briefing", { key: fx.a.apiKey, method: "POST", body: {} });
     assert.equal(r.status, 200);
   });
 });

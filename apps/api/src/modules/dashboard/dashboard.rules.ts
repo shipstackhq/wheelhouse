@@ -12,7 +12,7 @@ export function budgeted(sections: (string | null)[], max: number) {
     if (used + s.length > max) {
       const room = max - used;
       if (room > 200) out.push(clip(s, room) + "\n");
-      out.push(`_(briefing trimmed to ${max} chars; drill in with get_graph / get_node / get_flows)_`);
+      out.push(`_(briefing trimmed to ${max} chars; drill in with get_map)_`);
       break;
     }
     out.push(s);

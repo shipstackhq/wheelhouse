@@ -234,7 +234,7 @@ export async function getChanges(actor: Actor, teamRef: string, limit = 50) {
                 .groupBy(events.actorName)
             ).map((r) => [r.who, Number(r.n)]),
           ),
-          note: `Showing the oldest ${cap} of ${total} changes. Skim the summary, check get_board for current state, then ack_changes with latestSeq (${latest}) to catch up, or page through by acking the last seq shown.`,
+          note: `Showing the oldest ${cap} of ${total} changes. Skim the summary, check list_issues for current state, then call get_changes with ack = latestSeq (${latest}) to catch up, or page through by acking the last seq shown.`,
         }
       : undefined;
   // Map nodes whose code changed since they were last described: re-read the

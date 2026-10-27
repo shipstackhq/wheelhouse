@@ -1,36 +1,59 @@
 {
-  "list_projects": [
-    {
-      "createdAt": "string",
-      "description": "string",
-      "id": "string",
-      "issueCounter": "number",
-      "key": "string",
-      "name": "string",
-      "parentId": "null",
-      "retiredAt": "null",
-      "retiredBy": "null",
-      "teamId": "string"
-    }
-  ],
-  "get_board": {
-    "project": {
-      "description": "string",
-      "key": "string",
-      "name": "string"
+  "get_briefing": {
+    "activity": [
+      {
+        "at": "string",
+        "by": "string",
+        "seq": "number",
+        "summary": "string"
+      }
+    ],
+    "cycle": "null",
+    "markdown": "string",
+    "nextCycle": "null",
+    "projects": [],
+    "repositories": [
+      {
+        "lastEventAt": "null",
+        "lifecycle": "string",
+        "name": "string",
+        "provider": "string",
+        "role": "string"
+      }
+    ],
+    "stats": {
+      "inFlux": "number",
+      "nodes": "number",
+      "openIssues": "number",
+      "stale": "number",
+      "staleDocs": "number"
     },
+    "team": "string",
+    "teams": [
+      {
+        "description": "string",
+        "key": "string",
+        "name": "string"
+      }
+    ]
+  },
+  "list_issues": {
     "statuses": [
       {
         "issues": [
           {
             "agentClaimable": "boolean",
+            "assignee": "null",
             "claimed": "boolean",
             "comments": "number",
+            "cycle": "null",
             "labels": [
               "string"
             ],
             "linkedNodes": "number",
+            "milestone": "null",
             "priority": "string",
+            "project": "null",
             "ref": "string",
             "title": "string",
             "version": "number"
@@ -38,95 +61,53 @@
         ],
         "name": "string"
       }
-    ]
+    ],
+    "team": {
+      "key": "string",
+      "name": "string"
+    }
   },
   "create_issue": {
-    "agentClaimable": "boolean",
-    "assigneeId": "null",
-    "body": "string",
-    "claimedByKeyId": "null",
-    "createdAt": "string",
-    "createdById": "string",
-    "createdByKind": "string",
-    "id": "string",
-    "labels": [
-      "string"
-    ],
-    "number": "number",
-    "parentId": "null",
-    "position": "number",
-    "priority": "string",
-    "projectId": "string",
     "ref": "string",
     "status": "string",
-    "statusId": "string",
     "title": "string",
-    "updatedAt": "string",
     "version": "number"
   },
   "get_issue": {
     "children": [],
     "comments": [],
+    "context": "string",
     "history": [
       {
-        "actorId": "string",
-        "actorKind": "string",
-        "actorName": "string",
-        "createdAt": "string",
-        "data": {
-          "ref": "string",
-          "status": "string",
-          "title": "string"
-        },
-        "entity": "string",
-        "entityId": "string",
-        "projectId": "string",
-        "seq": "number",
-        "sessionId": "null",
+        "at": "string",
+        "by": "string",
+        "kind": "string",
         "summary": "string",
-        "teamId": "string",
         "type": "string"
       }
     ],
     "issue": {
       "agentClaimable": "boolean",
-      "assigneeId": "null",
+      "assignee": "null",
       "body": "string",
-      "claimedByKeyId": "null",
-      "createdAt": "string",
-      "createdById": "string",
-      "createdByKind": "string",
+      "claimed": "boolean",
+      "cycle": "null",
       "id": "string",
       "labels": [
         "string"
       ],
-      "number": "number",
-      "parentId": "null",
-      "position": "number",
+      "milestone": "null",
       "priority": "string",
-      "projectId": "string",
+      "project": "null",
       "ref": "string",
       "status": "string",
-      "statusId": "string",
       "title": "string",
-      "updatedAt": "string",
       "version": "number"
     },
     "nodes": [],
     "parent": "null",
-    "project": {
-      "createdAt": "string",
-      "description": "string",
-      "id": "string",
-      "issueCounter": "number",
-      "key": "string",
-      "name": "string",
-      "parentId": "null",
-      "retiredAt": "null",
-      "retiredBy": "null",
-      "teamId": "string"
-    },
-    "pullRequests": []
+    "pullRequests": [],
+    "readFirst": []
   },
   "get_changes": {
     "changes": [
@@ -142,12 +123,12 @@
         },
         "entity": "string",
         "entityId": "string",
-        "projectId": "string",
         "seq": "number",
         "sessionId": "null",
         "summary": "string",
         "teamId": "string",
-        "type": "string"
+        "type": "string",
+        "workspaceId": "string"
       }
     ],
     "cursor": "number",
@@ -157,38 +138,5 @@
     "staleDocs": [],
     "staleNodes": [],
     "total": "number"
-  },
-  "get_activity": [
-    {
-      "actorId": "string",
-      "actorKind": "string",
-      "actorName": "string",
-      "createdAt": "string",
-      "data": {
-        "body": "string",
-        "changes": {
-          "title": {
-            "from": "string",
-            "to": "string"
-          }
-        },
-        "commentId": "string",
-        "from": "string",
-        "fromRole": "string",
-        "ref": "string",
-        "status": "string",
-        "title": "string",
-        "to": "string",
-        "toRole": "string"
-      },
-      "entity": "string",
-      "entityId": "string",
-      "projectId": "string",
-      "seq": "number",
-      "sessionId": "null",
-      "summary": "string",
-      "teamId": "string",
-      "type": "string"
-    }
-  ]
+  }
 }

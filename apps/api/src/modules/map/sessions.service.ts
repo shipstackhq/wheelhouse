@@ -225,11 +225,11 @@ export class SessionsService {
     const owed = [...affected.values()].filter((a) => !drafted.has(a.node.id) && !edited.has(a.node.id)).map((a) => ({ name: a.node.name, layer: a.node.layer, files: a.files }));
 
     const lines: string[] = [];
-    if (!issue) lines.push(`- No issue is tracking this work. Claim or create an issue in ${team.key} and move it to In Progress (claim_issue / create_issue + move_issue).`);
+    if (!issue) lines.push(`- No issue is tracking this work. Claim or create an issue in ${team.key} and move it to In Progress (update_issue with status in_progress and assignee me, or create_issue).`);
     else if (!issueOk) lines.push(`- ${ref} hasn't been updated since you started changing files. Comment what you changed, and move it to Review if the work is done.`);
     for (const o of owed)
       lines.push(
-        `- Map node ${o.layer}:${o.name} covers files you changed (${o.files.slice(0, 3).join(", ")}${o.files.length > 3 ? "…" : ""}). Update its explanation with upsert_node${o.layer === "data" ? "/upsert_table" : ""}, or call mark_fresh if it's still accurate.`,
+        `- Map node ${o.layer}:${o.name} covers files you changed (${o.files.slice(0, 3).join(", ")}${o.files.length > 3 ? "…" : ""}). Update its explanation with update_map (upsert_node${o.layer === "data" ? "/upsert_table" : ""}), or call mark_fresh if it's still accurate.`,
       );
     const clean = !!issue && issueOk && !owed.length;
     return {

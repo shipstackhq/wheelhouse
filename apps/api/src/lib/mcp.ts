@@ -12,17 +12,19 @@ import { getPrompt, listPromptDefs } from "./prompts";
 
 export const SUPPORTED = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
-const INSTRUCTIONS = `Wheelhouse is your team's shared kanban board + knowledge map.
-Start of a session: call get_briefing (compact project context) instead of exploring the codebase; before working an issue call get_issue_context and read the files it lists first.
+const INSTRUCTIONS = `Wheelhouse is your team's shared board (issues, cycles, projects) and knowledge map (architecture, docs, decisions, glossary).
+Every tool takes \`team\` (a team key like "WH"). A project is Linear's kind: work that spans teams and cycles.
+Start of a session: get_briefing (compact team context) instead of exploring the codebase; before working an issue, get_issue and read the files it lists first.
 Board workflow:
-1. At the start of a task call get_changes for the project and handle what the team changed (new/edited/moved issues, comments addressed to you). It also lists staleNodes: map nodes whose code changed. Then ack_changes with the highest seq handled.
-2. Before working an issue: get_issue, move it to "In Progress" (claim_issue if it's agent-claimable).
-3. Talk to the team via comment on the issue: questions, decisions, a summary of what you changed.
-4. When done, move it to "Review". Create issues for follow-up work you discover.
-Knowledge map (concept → system → code layers, linked by "implements"):
-5. Read it before structural work (get_graph, get_node). It's how humans understand the codebase without reading code, so keep it true.
-6. After finishing work: report_changes with the files you touched, then re-describe any node that became stale (or mark_fresh), add nodes/edges/implements for new parts, update affected flows, and record an ADR for non-obvious choices.
-Pass expected_version on issue edits; on a conflict, re-read — a human changed it.
+1. At the start of a task call get_changes and handle what the team changed (new/edited/moved issues, comments addressed to you, stale nodes and docs). Pass its latest seq as \`ack\` on the next call to acknowledge.
+2. list_issues to find work (filter assignee "me", cycle "current"). Before working an issue: update_issue with status "in_progress" and assignee "me" (a claim, for agent-claimable issues).
+3. Talk to the team with comment on the issue: questions, decisions, a summary of what you changed.
+4. When done, update_issue to status "review". create_issue for follow-up work you discover, with its cycle, project and link_nodes set in the same call.
+Planning: get_cycle and get_project read it; plan (needs the planning:write scope) creates and edits cycles, projects and milestones in a batch.
+Knowledge map (concept, system, data and code layers, linked by "implements"):
+5. Read it before structural work (get_map; node for one part, flow for a walkthrough, layer "data" for the schema). It's how humans understand the codebase without reading code, so keep it true.
+6. After finishing work: get_stale, then re-describe stale nodes and docs (update_map, write_doc) or confirm them with mark_fresh; add nodes, edges and flows for new parts; record_decision for non-obvious choices; define_term for vocabulary. list_knowledge lists docs, decisions and terms; get_doc reads one.
+Pass expected_version on edits; on a conflict, re-read: a human changed it.
 Prompts: brief (load the briefing), map_codebase (bootstrap the map), map_schema (tables + relationships), refresh_map (fix stale nodes), explain.`;
 
 type RpcReq = { jsonrpc: "2.0"; id?: string | number | null; method: string; params?: Record<string, unknown> };

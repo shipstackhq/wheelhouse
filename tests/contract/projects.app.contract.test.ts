@@ -224,27 +224,26 @@ describe("who sees what over HTTP", () => {
   });
 });
 
-describe("the old agent surface", () => {
-  test("/api/v1 does not grow a project, and its project is still the team", async () => {
+describe("the agent surface", () => {
+  test("the tools show an issue's project by name", async () => {
     const p = await make();
     const t = await issue(teamA, { title: "For the agent", projectId: p.id });
-    const board = await v1ok({ key: apiKey }, "get_board", { project: teamA });
-    assert.equal(board.project.key, teamA, "`project` in the old shape is the team");
+    const board = await v1ok({ key: apiKey }, "list_issues", { team: teamA });
+    assert.equal(board.team.key, teamA);
     const card = board.statuses.flatMap((c: { issues: Record<string, unknown>[] }) => c.issues).find((x: { ref: string }) => x.ref === t.ref) as Record<string, unknown>;
     assert.ok(card, "the issue is on the agent's board");
-    for (const k of ["projectId", "milestoneId", "cycle", "cycleId"]) assert.equal(k in card, false, k);
-    const got = await v1ok({ key: apiKey }, "get_issue", { issue: t.ref });
-    for (const k of ["milestoneId", "cycle", "cycleId"]) assert.equal(k in got.issue, false, k);
-    assert.equal(got.issue.projectId, got.project.id, "the old `projectId` is still the team's id");
+    assert.equal(card.project, p.name);
+    const got = await v1ok({ key: apiKey }, "get_issue", { ref: t.ref });
+    assert.equal(got.issue.project, p.name);
   });
 
   test("a team's agents hear an issue join a project and a milestone change", async () => {
     const p = await make();
-    const before = (await v1ok({ key: apiKey }, "get_changes", { project: teamA })).changes.length;
+    const before = (await v1ok({ key: apiKey }, "get_changes", { team: teamA })).changes.length;
     void before;
     const t = await issue(teamA, { projectId: p.id });
     await app("POST", `/api/app/projects/${p.id}/milestones`, owner, { body: { name: "Heard" } });
-    const changes = (await v1ok({ key: apiKey2 }, "get_changes", { project: teamA })).changes as { type: string; summary: string }[];
+    const changes = (await v1ok({ key: apiKey2 }, "get_changes", { team: teamA })).changes as { type: string; summary: string }[];
     const mine = changes.filter((c) => c.summary.includes(p.name) || c.summary.includes(t.ref)).map((c) => c.type);
     assert.ok(mine.includes("project.issue_joined"), mine.join(", "));
     assert.ok(mine.includes("project.milestone_changed"), mine.join(", "));

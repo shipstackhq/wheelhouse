@@ -74,8 +74,9 @@ export type TeamProjectOption = { id: string; name: string; status: ProjectStatu
 
 type EventInput = { type: string; entityId: string; summary: string; data?: Record<string, unknown>; entity?: "project" | "initiative" };
 
+/** Teammates and API keys work with projects; Wheelhouse's own system work does not. */
 function humanOnly(actor: Actor) {
-  if (actor.kind !== "human" || actor.system) throw new ServiceError("forbidden", "Only teammates work with projects");
+  if (actor.system) throw new ServiceError("forbidden", "Only teammates and API keys work with projects");
 }
 
 @Injectable()
@@ -90,6 +91,7 @@ export class ProjectsService {
   // ───────── who may do what ─────────
 
   private async notGuest(actor: Actor) {
+    if (actor.kind === "agent") return; // a key reaches the teams it was given, never a guest's view
     const role = await this.access.workspaceRoleOf(actor.workspaceId, actor.id);
     if (!role || role === "guest") throw new ServiceError("not_found", "Project not found");
   }
@@ -294,7 +296,7 @@ export class ProjectsService {
       const t = await this.access.require(actor, k as string, "edit");
       if (t.id !== lead.id && !extra.some((x) => x.id === t.id)) extra.push(t);
     }
-    const leadUser = (await this.leadMember(actor, input.leadUser)) ?? actor.id;
+    const leadUser = (await this.leadMember(actor, input.leadUser)) ?? (actor.kind === "human" ? actor.id : null);
     const created = await this.db.transaction(async () => {
       const p = await this.repo.insertProject({ workspaceId: actor.workspaceId, name, description, status, priority, startDate, targetDate, healthOverride, leadUserId: leadUser, leadTeamId: lead.id });
       await this.repo.insertTeams([lead, ...extra].map((t) => ({ projectId: p.id, teamId: t.id, workspaceId: actor.workspaceId })));

@@ -1,59 +1,11 @@
 [
   {
-    "name": "ack_changes",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "seq": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "seq"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "claim_issue",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue": {
-          "type": "string",
-          "description": "Issue ref like \"WH-12\" (or id)"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "issue"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
     "name": "comment",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issue": {
+        "ref": {
           "type": "string",
           "description": "Issue ref like \"WH-12\" (or id)"
         },
@@ -67,7 +19,7 @@
         }
       },
       "required": [
-        "issue",
+        "ref",
         "body"
       ],
       "additionalProperties": false
@@ -79,9 +31,9 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
         "title": {
           "type": "string"
@@ -113,6 +65,35 @@
           "description": "Make it a sub-issue of this issue (a ref like WH-12 in the same team)",
           "type": "string"
         },
+        "assignee": {
+          "description": "\"me\" (you, or your key claims it), or a member's name or email",
+          "type": "string"
+        },
+        "cycle": {
+          "description": "\"current\", \"next\" or a cycle number",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "enum": [
+                "current",
+                "next"
+              ]
+            }
+          ]
+        },
+        "project": {
+          "description": "Project name or id (the team must take part in it)",
+          "type": "string"
+        },
+        "milestone": {
+          "description": "Milestone name or id of that project",
+          "type": "string"
+        },
         "link_nodes": {
           "description": "Graph node names/ids this issue touches",
           "type": "array",
@@ -126,154 +107,33 @@
         }
       },
       "required": [
-        "project",
+        "team",
         "title"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "create_project",
+    "name": "define_term",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "key": {
+        "team": {
           "type": "string",
-          "maxLength": 6
-        },
-        "description": {
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "delete_doc",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "doc": {
-          "type": "string",
-          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "doc"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "delete_flow",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "flow": {
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "flow"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "delete_node",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "node": {
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "node"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "delete_term",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
         "term": {
           "type": "string"
         },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "term"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_activity",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+        "definition": {
+          "type": "string"
         },
-        "limit": {
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+        "node": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "session": {
           "type": "string",
@@ -281,28 +141,9 @@
         }
       },
       "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_board",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
+        "team",
+        "term",
+        "definition"
       ],
       "additionalProperties": false
     }
@@ -313,9 +154,9 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
         "max_chars": {
           "description": "Default 6000",
@@ -328,9 +169,6 @@
           "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
         }
       },
-      "required": [
-        "project"
-      ],
       "additionalProperties": false
     }
   },
@@ -340,9 +178,15 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "ack": {
+          "description": "Acknowledge changes up to and including this seq before reading",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "limit": {
           "type": "integer",
@@ -355,7 +199,44 @@
         }
       },
       "required": [
-        "project"
+        "team"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_cycle",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "which": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "enum": [
+                "current",
+                "next"
+              ]
+            }
+          ]
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "team"
       ],
       "additionalProperties": false
     }
@@ -366,38 +247,13 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
-        "doc": {
+        "ref": {
           "type": "string",
-          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "doc"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_flows",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "name": {
-          "type": "string"
+          "description": "Doc ref, e.g. \"docs/runbooks/deploy\" (or the id)"
         },
         "session": {
           "type": "string",
@@ -405,37 +261,8 @@
         }
       },
       "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_graph",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "layer": {
-          "type": "string",
-          "enum": [
-            "concept",
-            "system",
-            "data",
-            "code"
-          ]
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
+        "team",
+        "ref"
       ],
       "additionalProperties": false
     }
@@ -446,33 +273,12 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "issue": {
-          "type": "string",
-          "description": "Issue ref like \"WH-12\" (or id)"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "issue"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_issue_context",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue": {
+        "ref": {
           "type": "string",
           "description": "Issue ref like \"WH-12\" (or id)"
         },
         "max_chars": {
-          "description": "Default 8000",
+          "description": "Size of the context pack, default 8000",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -483,228 +289,35 @@
         }
       },
       "required": [
-        "issue"
+        "ref"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "get_node",
+    "name": "get_map",
     "readOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "layer": {
+          "type": "string",
+          "enum": [
+            "concept",
+            "system",
+            "data",
+            "code"
+          ]
         },
         "node": {
           "type": "string"
         },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "node"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_schema",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_stale_docs",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "get_stale_nodes",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "link_doc_node",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "doc": {
-          "type": "string",
-          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
-        },
-        "node": {
-          "type": "string"
-        },
-        "unlink": {
-          "type": "boolean"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "doc",
-        "node"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "link_issue_node",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue": {
-          "type": "string",
-          "description": "Issue ref like \"WH-12\" (or id)"
-        },
-        "node": {
-          "type": "string"
-        },
-        "unlink": {
-          "type": "boolean"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "issue",
-        "node"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "list_decisions",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "list_doc_drafts",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "list_doc_templates",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "list_docs",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "parent": {
-          "description": "List only this doc's direct children",
+        "flow": {
+          "description": "Flow name",
           "type": "string"
         },
         "session": {
@@ -713,20 +326,20 @@
         }
       },
       "required": [
-        "project"
+        "team"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "list_drafts",
+    "name": "get_project",
     "readOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "ref": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Project name or id"
         },
         "session": {
           "type": "string",
@@ -734,34 +347,20 @@
         }
       },
       "required": [
-        "project"
+        "ref"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "list_projects",
+    "name": "get_stale",
     "readOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "session": {
+        "team": {
           "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "list_repositories",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
         "session": {
           "type": "string",
@@ -769,20 +368,69 @@
         }
       },
       "required": [
-        "project"
+        "team"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "list_terms",
+    "name": "list_issues",
     "readOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "filter": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "description": "Status name",
+              "type": "string"
+            },
+            "assignee": {
+              "description": "\"me\" (assigned to you, or claimed by your key), \"none\", or a member's name",
+              "type": "string"
+            },
+            "cycle": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "string",
+                      "enum": [
+                        "current",
+                        "next"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "string",
+                  "const": "none"
+                }
+              ]
+            },
+            "project": {
+              "description": "Project name or id",
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "text": {
+              "description": "Substring of the title or body",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         },
         "session": {
           "type": "string",
@@ -790,27 +438,28 @@
         }
       },
       "required": [
-        "project"
+        "team"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "mark_doc_fresh",
-    "readOnly": false,
+    "name": "list_knowledge",
+    "readOnly": true,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
-        "doc": {
+        "kind": {
           "type": "string",
-          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
-        },
-        "sha": {
-          "type": "string"
+          "enum": [
+            "docs",
+            "decisions",
+            "terms"
+          ]
         },
         "session": {
           "type": "string",
@@ -818,8 +467,8 @@
         }
       },
       "required": [
-        "project",
-        "doc"
+        "team",
+        "kind"
       ],
       "additionalProperties": false
     }
@@ -830,273 +479,19 @@
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "team": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Team key (e.g. \"WH\") or id"
         },
-        "node": {
-          "type": "string"
-        },
-        "sha": {
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "node"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "move_issue",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue": {
-          "type": "string",
-          "description": "Issue ref like \"WH-12\" (or id)"
-        },
-        "status": {
-          "type": "string"
-        },
-        "index": {
-          "description": "Position within the status, default end",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "expected_version": {
-          "description": "Issue version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "issue",
-        "status"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "report_changes",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "files": {
+        "refs": {
           "minItems": 1,
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Repo-relative paths"
-        },
-        "sha": {
-          "description": "Commit sha the changes landed in",
-          "type": "string"
-        },
-        "summary": {
-          "type": "string"
-        },
-        "repository": {
-          "description": "wheelhouse.json's repository name/slug, for multi-repo projects (WH-68)",
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "files"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "resume_session",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "mode": {
-          "type": "string",
-          "enum": [
-            "replay",
-            "skip"
-          ]
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "mode"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "search_docs",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "query": {
-          "type": "string"
-        },
-        "max_tokens": {
-          "description": "Approximate budget for returned snippets, default 800",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "query"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "suggest_doc_anchors",
-    "readOnly": true,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "doc": {
-          "type": "string",
-          "description": "Doc ref: its slug path (e.g. \"runbooks/deploy\") or id"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "doc"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "unlink_nodes",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "from": {
-          "type": "string"
-        },
-        "to": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "depends",
-            "implements",
-            "references"
-          ]
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "from",
-        "to"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "update_issue",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "issue": {
-          "type": "string",
-          "description": "Issue ref like \"WH-12\" (or id)"
-        },
-        "title": {
-          "type": "string"
-        },
-        "body": {
-          "type": "string"
-        },
-        "priority": {
-          "type": "string",
-          "enum": [
-            "none",
-            "low",
-            "medium",
-            "high",
-            "urgent"
-          ]
-        },
-        "labels": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "parent": {
-          "description": "Move it under this issue (a ref like WH-12 in the same team), or null to make it a top-level issue",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "expected_version": {
-          "description": "Issue version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
-          "type": "integer",
-          "minimum": -9007199254740991,
-          "maximum": 9007199254740991
+        "sha": {
+          "type": "string"
         },
         "session": {
           "type": "string",
@@ -1104,20 +499,302 @@
         }
       },
       "required": [
-        "issue"
+        "team",
+        "refs"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "upsert_decision",
+    "name": "plan",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "changes": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "create_cycle"
+                  },
+                  "team": {
+                    "type": "string",
+                    "description": "Team key (e.g. \"WH\") or id"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "goal": {
+                    "type": "string"
+                  },
+                  "starts_at": {
+                    "description": "ISO date; default now",
+                    "type": "string"
+                  },
+                  "ends_at": {
+                    "description": "ISO date; default two weeks on",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "op",
+                  "team"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "update_cycle"
+                  },
+                  "team": {
+                    "type": "string",
+                    "description": "Team key (e.g. \"WH\") or id"
+                  },
+                  "number": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "goal": {
+                    "type": "string"
+                  },
+                  "starts_at": {
+                    "type": "string"
+                  },
+                  "ends_at": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "op",
+                  "team",
+                  "number"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "create_project"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "lead_team": {
+                    "type": "string",
+                    "description": "Key of the team that leads it"
+                  },
+                  "teams": {
+                    "description": "Keys of other teams taking part",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "planned",
+                      "active",
+                      "paused",
+                      "completed",
+                      "canceled"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "target_date": {
+                    "type": "string"
+                  },
+                  "lead_user": {
+                    "description": "A person's id, or \"me\" (a teammate). Keys lead nothing; leave it out.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "name",
+                  "lead_team"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "update_project"
+                  },
+                  "project": {
+                    "type": "string",
+                    "description": "Project name or id"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "planned",
+                      "active",
+                      "paused",
+                      "completed",
+                      "canceled"
+                    ]
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "low",
+                      "medium",
+                      "high",
+                      "urgent"
+                    ]
+                  },
+                  "start_date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "target_date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "expected_version": {
+                    "description": "Version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "project"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "create_milestone"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "target_date": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "op",
+                  "project",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "update_milestone"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "milestone": {
+                    "type": "string",
+                    "description": "Milestone name or id"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "target_date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "project",
+                  "milestone"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "session": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "changes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "record_decision",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
         },
         "number": {
           "type": "integer",
@@ -1157,22 +834,530 @@
         }
       },
       "required": [
-        "project"
+        "team"
       ],
       "additionalProperties": false
     }
   },
   {
-    "name": "upsert_doc",
+    "name": "update_issue",
     "readOnly": false,
     "inputSchema": {
       "type": "object",
       "properties": {
-        "project": {
+        "ref": {
           "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
+          "description": "Issue ref like \"WH-12\" (or id)"
         },
-        "doc": {
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "string",
+          "enum": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "urgent"
+          ]
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent": {
+          "description": "Move it under this issue (a ref like WH-12 in the same team), or null to make it top-level",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "assignee": {
+          "description": "\"me\", a member's name or email, or null for nobody",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cycle": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "current",
+                    "next"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "project": {
+          "description": "Project name or id, or null to take it out of its project",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "milestone": {
+          "description": "Milestone name or id of its project, or null",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "link_nodes": {
+          "description": "Map nodes this issue touches",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unlink_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "expected_version": {
+          "description": "Version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_map",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "changes": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "upsert_node"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "layer": {
+                    "description": "Default system (or the parent's layer)",
+                    "type": "string",
+                    "enum": [
+                      "concept",
+                      "system",
+                      "data",
+                      "code"
+                    ]
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "concept",
+                      "capability",
+                      "actor",
+                      "service",
+                      "module",
+                      "component",
+                      "database",
+                      "queue",
+                      "external",
+                      "table",
+                      "view",
+                      "enum",
+                      "directory",
+                      "file",
+                      "symbol",
+                      "endpoint"
+                    ]
+                  },
+                  "parent": {
+                    "description": "Parent node (same layer) name or id; null moves to top level",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "type": "string"
+                  },
+                  "responsibilities": {
+                    "type": "string"
+                  },
+                  "interfaces": {
+                    "type": "string"
+                  },
+                  "gotchas": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "description": "Free-form notes (markdown)",
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "planned",
+                      "building",
+                      "live",
+                      "deprecated"
+                    ]
+                  },
+                  "anchors": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "implements": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "described_sha": {
+                    "type": "string"
+                  },
+                  "mark_fresh": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "op",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "remove_node"
+                  },
+                  "node": {
+                    "type": "string",
+                    "description": "Name, id or layer:name; its nested nodes go too"
+                  }
+                },
+                "required": [
+                  "op",
+                  "node"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "upsert_edge"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "depends",
+                      "implements",
+                      "references"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "op",
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "remove_edge"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "depends",
+                      "implements",
+                      "references"
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "upsert_table"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "table",
+                      "view",
+                      "enum"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "purpose": {
+                    "type": "string"
+                  },
+                  "gotchas": {
+                    "description": "Invariants, soft-delete rules, denormalisations, hot paths",
+                    "type": "string"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "SQL type as written, e.g. \"uuid\", \"text\", \"timestamptz\", \"jsonb\""
+                        },
+                        "pk": {
+                          "type": "boolean"
+                        },
+                        "nullable": {
+                          "type": "boolean"
+                        },
+                        "unique": {
+                          "type": "boolean"
+                        },
+                        "default": {
+                          "type": "string"
+                        },
+                        "references": {
+                          "description": "\"table.column\"",
+                          "type": "string"
+                        },
+                        "onDelete": {
+                          "description": "cascade | set null | restrict | no action",
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "description": "All columns, in schema order"
+                  },
+                  "indexes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "columns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "unique": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "columns"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "anchors": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "implements": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "described_sha": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "op",
+                  "name",
+                  "columns"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "upsert_flow"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "node": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "node",
+                        "title"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "op",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "remove_flow"
+                  },
+                  "flow": {
+                    "type": "string",
+                    "description": "Name or id"
+                  }
+                },
+                "required": [
+                  "op",
+                  "flow"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "team",
+        "changes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "write_doc",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "ref": {
           "description": "Omit to create a new doc",
           "type": "string"
         },
@@ -1185,14 +1370,12 @@
           "type": "string"
         },
         "parent": {
-          "description": "Parent doc slug path or id; null moves to top level; only used on create or move",
           "type": [
             "string",
             "null"
           ]
         },
         "template": {
-          "description": "Seed a new doc's body from one of the five standard templates (see list_doc_templates). Only used on create; ignored if `body` is also given (body wins). No effect on updates.",
           "type": "string",
           "enum": [
             "spec",
@@ -1209,15 +1392,24 @@
             "type": "string"
           }
         },
+        "link_nodes": {
+          "description": "Map nodes this doc documents",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unlink_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "described_sha": {
           "type": "string"
         },
-        "mark_fresh": {
-          "description": "Clear the stale flag without changing title/body (like mark_fresh for nodes)",
-          "type": "boolean"
-        },
         "expected_version": {
-          "description": "Doc version you last read. Required for safe updates; ignored on create.",
+          "description": "Version you last read. If the team changed it since, the call fails with a conflict instead of overwriting their edit.",
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
@@ -1228,371 +1420,7 @@
         }
       },
       "required": [
-        "project"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "upsert_edge",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "from": {
-          "type": "string"
-        },
-        "to": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "depends",
-            "implements",
-            "references"
-          ]
-        },
-        "label": {
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "from",
-        "to"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "upsert_flow",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "steps": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "node": {
-                "type": "string"
-              },
-              "title": {
-                "type": "string"
-              },
-              "detail": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "node",
-              "title"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "name"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "upsert_node",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "name": {
-          "type": "string"
-        },
-        "id": {
-          "type": "string"
-        },
-        "layer": {
-          "description": "Default system (or the parent's layer)",
-          "type": "string",
-          "enum": [
-            "concept",
-            "system",
-            "data",
-            "code"
-          ]
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "concept",
-            "capability",
-            "actor",
-            "service",
-            "module",
-            "component",
-            "database",
-            "queue",
-            "external",
-            "table",
-            "view",
-            "enum",
-            "directory",
-            "file",
-            "symbol",
-            "endpoint"
-          ]
-        },
-        "parent": {
-          "description": "Parent node (same layer) name or id; null moves to top level",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "summary": {
-          "type": "string"
-        },
-        "purpose": {
-          "type": "string"
-        },
-        "responsibilities": {
-          "type": "string"
-        },
-        "interfaces": {
-          "type": "string"
-        },
-        "gotchas": {
-          "type": "string"
-        },
-        "details": {
-          "description": "Free-form notes (markdown)",
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "planned",
-            "building",
-            "live",
-            "deprecated"
-          ]
-        },
-        "anchors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "implements": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "described_sha": {
-          "type": "string"
-        },
-        "mark_fresh": {
-          "type": "boolean"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "name"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "upsert_table",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "name": {
-          "type": "string"
-        },
-        "kind": {
-          "type": "string",
-          "enum": [
-            "table",
-            "view",
-            "enum"
-          ]
-        },
-        "summary": {
-          "type": "string"
-        },
-        "purpose": {
-          "type": "string"
-        },
-        "gotchas": {
-          "description": "Invariants, soft-delete rules, denormalisations, hot paths",
-          "type": "string"
-        },
-        "columns": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "type": {
-                "type": "string",
-                "description": "SQL type as written, e.g. \"uuid\", \"text\", \"timestamptz\", \"jsonb\""
-              },
-              "pk": {
-                "type": "boolean"
-              },
-              "nullable": {
-                "type": "boolean"
-              },
-              "unique": {
-                "type": "boolean"
-              },
-              "default": {
-                "type": "string"
-              },
-              "references": {
-                "description": "\"table.column\"",
-                "type": "string"
-              },
-              "onDelete": {
-                "description": "cascade | set null | restrict | no action",
-                "type": "string"
-              },
-              "note": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "type"
-            ],
-            "additionalProperties": false
-          },
-          "description": "All columns, in schema order"
-        },
-        "indexes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "columns": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "unique": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "columns"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "anchors": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "implements": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "described_sha": {
-          "type": "string"
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "name",
-        "columns"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "name": "upsert_term",
-    "readOnly": false,
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "project": {
-          "type": "string",
-          "description": "Project key (e.g. \"WH\") or id"
-        },
-        "term": {
-          "type": "string"
-        },
-        "definition": {
-          "type": "string"
-        },
-        "node": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "session": {
-          "type": "string",
-          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
-        }
-      },
-      "required": [
-        "project",
-        "term",
-        "definition"
+        "team"
       ],
       "additionalProperties": false
     }

@@ -40,9 +40,9 @@ describe("POST /api/app/auth/login", () => {
 
   test("that cookie is the same session the frozen API honours (a person signed in here can call /api/v1)", async () => {
     const s = await signIn(fx.a.email);
-    const r = await v1({ cookie: s.cookie }, "list_projects");
+    const r = await v1({ cookie: s.cookie }, "get_briefing");
     assert.equal(r.status, 200);
-    assert.ok(r.json.data.some((p: { key: string }) => p.key === fx.a.teamKey));
+    assert.ok(r.json.data.teams.some((p: { key: string }) => p.key === fx.a.teamKey));
     await app("POST", "/api/app/auth/logout", s);
   });
 
@@ -173,7 +173,7 @@ describe("POST /api/app/auth/logout", () => {
     const clear = out.cookies.find((c) => c.startsWith("wh_session="))!;
     assert.ok(/Expires=Thu, 01 Jan 1970|Max-Age=0/i.test(clear), clear);
     assert.equal((await app("GET", "/api/app/me", s)).status, 401, "the session itself is gone, not just the cookie");
-    assert.equal((await v1({ cookie: s.cookie }, "list_projects")).status, 401, "and it is gone for the frozen API as well");
+    assert.equal((await v1({ cookie: s.cookie }, "get_briefing")).status, 401, "and it is gone for the frozen API as well");
   });
 
   test("signing out when not signed in is harmless", async () => {
@@ -210,7 +210,7 @@ describe("GET /api/app/teams", () => {
     const s = sessionFrom(made);
     const list = await app("GET", "/api/app/teams", s);
     assert.deepEqual(list.json.teams, []);
-    const board = await v1({ cookie: s.cookie }, "get_board", { project: fx.a.teamKey });
+    const board = await v1({ cookie: s.cookie }, "list_issues", { team: fx.a.teamKey });
     assert.equal(board.status, 404);
     await app("POST", "/api/app/auth/logout", s);
   });

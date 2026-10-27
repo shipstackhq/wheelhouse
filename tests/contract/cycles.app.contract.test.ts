@@ -148,18 +148,18 @@ describe("the cycles endpoints", () => {
     assert.equal(((await list(mine.s)).json as { current: Summary }).current.goal, "", "and nothing of mine changed");
   });
 
-  test("agents hear cycle changes in their queue, and the old /api/v1 shapes do not grow a cycle", async () => {
+  test("agents hear cycle changes in their queue, and the tools show an issue's cycle", async () => {
     const t = await team();
     await make(t.s, { name: "Heard", startsAt: at(-1), endsAt: at(6) });
     const tk = await issue(t.s, { title: "For the agent", cycle: 1 });
-    const changes = await v1ok({ key: t.key }, "get_changes", { project: "CYC" });
+    const changes = await v1ok({ key: t.key }, "get_changes", { team: "CYC" });
     const types = (changes.changes as { type: string; entity: string }[]).map((c) => `${c.type}/${c.entity}`);
     assert.ok(types.includes("cycle.created/cycle"), types.join(", "));
-    const board = await v1ok({ key: t.key }, "get_board", { project: "CYC" });
+    const board = await v1ok({ key: t.key }, "list_issues", { team: "CYC" });
     const first = board.statuses.flatMap((c: { issues: object[] }) => c.issues)[0] as Record<string, unknown>;
     assert.ok(first, "the issue is on the agent's board");
-    assert.equal("cycle" in first || "cycleId" in first, false);
-    const got = await v1ok({ key: t.key }, "get_issue", { issue: tk.ref });
-    assert.equal("cycle" in got.issue || "cycleId" in got.issue, false);
+    assert.equal(first.cycle, 1);
+    const got = await v1ok({ key: t.key }, "get_issue", { ref: tk.ref });
+    assert.equal(got.issue.cycle, 1);
   });
 });

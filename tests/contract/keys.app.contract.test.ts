@@ -52,13 +52,13 @@ describe("choosing a key's teams", () => {
     const made = await makeKey({ teams: [t1] });
     const key = made.json.key as Key;
     const secret = made.json.secret as string;
-    assert.equal((await v1(asKey(secret), "get_board", { project: t2 })).status, 404);
+    assert.equal((await v1(asKey(secret), "list_issues", { team: t2 })).status, 404);
     const patched = await app("PATCH", `/api/app/keys/${key.id}`, owner, { body: { teams: [t1, t2] } });
     assert.equal(patched.status, 200, patched.text);
     assert.deepEqual((patched.json.key as Key).teams.map((t) => t.key).sort(), [t1, t2].sort());
-    assert.equal((await v1(asKey(secret), "get_board", { project: t2 })).status, 200);
+    assert.equal((await v1(asKey(secret), "list_issues", { team: t2 })).status, 200);
     assert.equal((await app("PATCH", `/api/app/keys/${key.id}`, owner, { body: { teams: [t2] } })).status, 200);
-    assert.equal((await v1(asKey(secret), "get_board", { project: t1 })).status, 404, "taking a team away closes it");
+    assert.equal((await v1(asKey(secret), "list_issues", { team: t1 })).status, 404, "taking a team away closes it");
     assert.equal((await app("PATCH", `/api/app/keys/${key.id}`, owner, { body: { teams: [] } })).status, 400);
     assert.equal((await app("PATCH", `/api/app/keys/${key.id}`, owner, { body: {} })).status, 400);
     assert.equal((await app("PATCH", `/api/app/keys/${key.id}`, anon(), { body: { teams: [t1] } })).status, 401);
@@ -72,33 +72,33 @@ describe("what a scoped key reaches", () => {
   });
 
   test("/api/v1: its team works, any other team of the workspace is a 404 for every kind of call", async () => {
-    assert.equal((await v1ok(asKey(secret), "get_board", { project: t1 })).statuses.length, 6);
-    assert.deepEqual((await v1ok(asKey(secret), "list_projects")).map((p: { key: string }) => p.key), [t1]);
+    assert.equal((await v1ok(asKey(secret), "list_issues", { team: t1 })).statuses.length, 6);
+    assert.deepEqual((await v1ok(asKey(secret), "get_briefing")).teams.map((p: { key: string }) => p.key), [t1]);
     const refused: [string, Record<string, unknown>][] = [
-      ["get_board", { project: t2 }],
-      ["get_issue", { issue: `${t2}-1` }],
-      ["create_issue", { project: t2, title: "planted" }],
-      ["update_issue", { issue: `${t2}-1`, title: "hijacked" }],
-      ["comment", { issue: `${t2}-1`, body: "hello" }],
-      ["get_changes", { project: t2 }],
-      ["get_briefing", { project: t2 }],
-      ["list_docs", { project: t2 }],
+      ["list_issues", { team: t2 }],
+      ["get_issue", { ref: `${t2}-1` }],
+      ["create_issue", { team: t2, title: "planted" }],
+      ["update_issue", { ref: `${t2}-1`, title: "hijacked" }],
+      ["comment", { ref: `${t2}-1`, body: "hello" }],
+      ["get_changes", { team: t2 }],
+      ["get_briefing", { team: t2 }],
+      ["list_knowledge", { team: t2, kind: "docs" }],
     ];
     for (const [tool, args] of refused) {
       const r = await v1(asKey(secret), tool, args);
       assert.equal(r.status, 404, `${tool}: ${r.text}`);
       assert.equal(r.json.error.code, "not_found");
     }
-    const existing = await v1(asKey(secret), "get_board", { project: "ZZZZ" });
-    const other = await v1(asKey(secret), "get_board", { project: t2 });
+    const existing = await v1(asKey(secret), "list_issues", { team: "ZZZZ" });
+    const other = await v1(asKey(secret), "list_issues", { team: t2 });
     assert.equal(other.json.error.message.replace(t2, "X"), existing.json.error.message.replace("ZZZZ", "X"), "a team it cannot open reads like one that does not exist");
     assert.equal((await app("GET", `/api/app/teams/${t2}/board`, owner)).json.issues.length, 1, "and nothing of T2 changed");
   });
 
   test("the MCP gives the same answers", async () => {
-    const list = mcpToolResult(await mcp(asKey(secret), "tools/call", { name: "list_projects", arguments: {} }));
-    assert.deepEqual(list.map((p: { key: string }) => p.key), [t1]);
-    const r = await mcp(asKey(secret), "tools/call", { name: "get_board", arguments: { project: t2 } });
+    const list = mcpToolResult(await mcp(asKey(secret), "tools/call", { name: "get_briefing", arguments: {} }));
+    assert.deepEqual(list.teams.map((p: { key: string }) => p.key), [t1]);
+    const r = await mcp(asKey(secret), "tools/call", { name: "list_issues", arguments: { team: t2 } });
     assert.equal(r.json.result.isError, true);
     assert.match(r.json.result.content[0].text, /^not_found:/);
   });
@@ -107,14 +107,5 @@ describe("what a scoped key reaches", () => {
     assert.equal((await openSse(`/api/teams/${t1}/stream`, { key: secret })).status, 403);
     assert.equal((await openSse(`/api/teams/${t2}/stream`, { key: secret })).status, 403);
     assert.equal((await openSse("/api/stream", { key: secret })).status, 403);
-  });
-
-  test("a key that makes a team can open it, and still cannot open the others", async () => {
-    const key = newKey();
-    const made = await v1(asKey(secret), "create_project", { name: `Made ${key}`, key });
-    assert.equal(made.status, 200, made.text);
-    assert.equal((await v1(asKey(secret), "get_board", { project: key })).status, 200);
-    assert.deepEqual((await v1ok(asKey(secret), "list_projects")).map((p: { key: string }) => p.key).sort(), [t1, key].sort());
-    assert.equal((await v1(asKey(secret), "get_board", { project: t2 })).status, 404);
   });
 });
