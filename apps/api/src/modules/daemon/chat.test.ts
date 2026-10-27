@@ -357,14 +357,14 @@ describe("Wheelhouse data in a chat (the answer's own key)", () => {
     return r.result.tools.map((t) => t.name);
   };
 
-  test("a message carries a token that lists only read tools and reaches only the thread's team", async () => {
+  test("a message carries a token that lists the board, map, docs and planning tools and reaches only the thread's team", async () => {
     const { device } = await paired();
     await chat.create(owner, input(device.id));
     const token = await tokenOf(device.id);
     const list = await names(token);
-    assert.ok(list.includes("list_issues") && list.includes("create_issue") && !list.includes("plan"));
+    assert.ok(list.includes("list_issues") && list.includes("create_issue") && list.includes("plan"));
     const actor = await keys.actorForKey(token, "1.1.1.1");
-    assert.deepEqual(actor.scopes, ["read", "board:write", "map:write", "docs:write"]);
+    assert.deepEqual(actor.scopes, ["read", "board:write", "map:write", "docs:write", "planning:write"]);
     assert.equal(((await messagesTo(device.id)).at(-1)!.message as { mcp: { write: boolean } }).mcp.write, true);
     await access.require(actor, "CH", "read");
     await createTeam(owner, { name: "Other", key: "OT" });
@@ -374,7 +374,7 @@ describe("Wheelhouse data in a chat (the answer's own key)", () => {
     assert.notEqual(row.keyHash, token, "only the hash is stored");
   });
 
-  test("CHAT_SCOPES=read makes the key read-only; planning is never granted; unknown names are ignored", async () => {
+  test("CHAT_SCOPES=read makes the key read-only; unknown names are ignored", async () => {
     const { device } = await paired();
     const prev = process.env.CHAT_SCOPES;
     try {
@@ -385,7 +385,7 @@ describe("Wheelhouse data in a chat (the answer's own key)", () => {
       assert.deepEqual((await keys.actorForKey(ro.mcp.token, "1.1.1.1")).scopes, ["read"]);
       assert.ok(!(await names(ro.mcp.token)).includes("create_issue"));
 
-      process.env.CHAT_SCOPES = "board:write, planning:write, nonsense";
+      process.env.CHAT_SCOPES = "board:write, nonsense";
       await chat.create(owner, input(device.id));
       assert.deepEqual((await keys.actorForKey(await tokenOf(device.id), "1.1.1.1")).scopes, ["read", "board:write"]);
     } finally {
