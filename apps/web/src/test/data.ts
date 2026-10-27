@@ -182,6 +182,7 @@ export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
     cycle: null,
     projectId: null,
     parentId: null,
+    delegateAgentId: null,
     milestoneId: null,
     position: n * 1000,
     version: 1,

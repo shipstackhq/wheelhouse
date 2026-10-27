@@ -31,6 +31,8 @@ export type IssueView = {
   milestoneId: string | null;
   /** The issue this is a sub-issue of (the same team's), or null. The board has every issue, so a card finds its parent from this. */
   parentId: string | null;
+  /** The workspace agent the issue is delegated to (WH-113), or null. */
+  delegateAgentId: string | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -54,6 +56,7 @@ export const issueView = (t: IssueRow & { ref: string; labels: string[]; cycle: 
   projectId: t.projectId,
   milestoneId: t.milestoneId,
   parentId: t.parentId,
+  delegateAgentId: t.delegateAgentId,
   position: t.position,
   version: t.version,
   createdByKind: t.createdByKind,

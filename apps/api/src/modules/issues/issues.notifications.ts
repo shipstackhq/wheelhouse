@@ -45,6 +45,18 @@ export class IssueNotifications {
     }));
   }
 
+  /** WH-117: someone other than the assignee delegated their issue to an agent: tell the assignee, who still owns it. */
+  delegated(actor: Actor, team: Team, issue: IssueRow, ref: string, agent: string) {
+    if (!issue.assigneeId) return Promise.resolve();
+    return this.send(actor, team, issue, [issue.assigneeId], (userId) => ({
+      type: "issue.delegated",
+      title: `${actor.name} asked ${agent} to work on ${ref}`,
+      body: issue.title,
+      dedupeKey: `issue.delegated:${issue.id}:v${issue.version}`,
+      recipientUserId: userId,
+    }));
+  }
+
   /** A comment on the issue: its creator and its assignee, one item each. */
   commented(actor: Actor, team: Team, issue: IssueRow, ref: string, comment: { id: string; body: string }) {
     return this.send(actor, team, issue, this.people(issue), (userId) => ({
