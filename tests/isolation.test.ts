@@ -679,8 +679,9 @@ describe("team keys are per workspace (continued)", () => {
     const p = await createTeam(B.owner, { name: "B's AA", key: "AA" });
     assert.equal(p.workspaceId, B.workspaceId);
     assert.notEqual(p.id, A.teamId);
-    const board = (await mcp.run(B.owner, "list_issues", { team: "AA" })) as { team: { name: string } };
-    assert.equal(board.team.name, "B's AA");
+    // B's "AA" is B's new, empty team: none of A's issues show through it.
+    const board = (await mcp.run(B.owner, "list_issues", { team: "AA" })) as { counts: { total: number } };
+    assert.equal(board.counts.total, 0);
     assert.equal(await fingerprint(A), before);
   });
 });
@@ -881,6 +882,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/issues/issues.repository.ts": "the only file of the issues service that queries issues, comments, labels and issue_nodes; it decides nothing, and every caller is IssuesService, which resolves through TeamAccessService.require(actor, key, need) or resolveIssue (the issue found inside the actor's workspace, then the actor's role on its team: another workspace's team or issue and one the person is not on are not_found). The board's map nodes and members are selected by that team's id; the issue_nodes row is written or removed only for an issue resolved with edit and a node resolved inside that issue's own team, so a node of another team or workspace is not_found (tested over HTTP with two workspaces)",
   "apps/api/src/modules/issues/cycles/cycles.repository.ts": "the only file of the cycles service that queries; every statement is scoped by the team id the service found through TeamAccessService.require(actor, key, need); a cycle is looked up by its number inside that team only, and an issue joins a cycle only through a (cycle_id, team_id) key, so another workspace's or team's cycle is a 404 and the database refuses the cross-team write (tested)",
   "apps/api/src/modules/issues/projects/projects.repository.ts": "the only file of the projects service that queries; workspace-level, so every statement starts from the signed-in person's workspace and a human actor: a project opens only through ProjectsService.openProject(), which needs the person on a team that takes part (a guest never is) and answers not_found otherwise; lists go through project_visibility; issue detail is read only for the viewer's own teams and every other team is counted, never named; an issue reaches a project only through its own team's project_teams row, which the database enforces (tested)",
+  "apps/api/src/modules/ideas/ideas.repository.ts": "the only file of the ideas service that queries; workspace-level: an idea is found or locked only by (workspace_id, id) from the signed-in person's workspace, and comments, updates and the team and issue names it shows are reached only through an idea found that way; agents and guests are refused before any query (tested)",
   "apps/api/src/modules/issues/initiatives/initiatives.repository.ts": "the only file of the initiatives service that queries; workspace-level, so every statement starts from the signed-in person's workspace and a human actor who is not a guest (a guest and a stranger both get not_found): lists and reads take only that workspace's rows, a project is linked only through ProjectsService.openProject() (the person must be on a team that takes part), and what an initiative shows of a project follows project_visibility, so the rest are counted and totalled, never named, and no issue is ever listed; the database refuses a parent or a project of another workspace (tested)",
 };
 
@@ -1082,6 +1084,12 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "DELETE /api/app/initiatives/:id": "deleteInitiative(actor, id): the owner or a workspace admin; soft delete, children move up, projects untouched (tested)",
   "POST /api/app/initiatives/:id/projects": "linkProject(actor, id): the owner or a workspace admin, and a project the person sees through openProject() (tested)",
   "DELETE /api/app/initiatives/:id/projects/:projectId": "unlinkProject(actor, id, projectId): the owner or a workspace admin, and a project the person sees (tested)",
+  "GET /api/app/ideas": "list(actor): the caller's workspace only, never a guest (tested)",
+  "POST /api/app/ideas": "create(actor): in the caller's workspace; a team tag needs requireTeam(actor, team, read) (tested)",
+  "GET /api/app/ideas/:id": "get(actor, id): found by (workspace, id), so another workspace's idea is not_found (tested)",
+  "PATCH /api/app/ideas/:id": "update(actor, id): locked by (workspace, id); viewers refused; a team tag needs requireTeam(read) (tested)",
+  "POST /api/app/ideas/:id/comments": "comment(actor, id): the idea is found by (workspace, id) first; viewers refused (tested)",
+  "POST /api/app/ideas/:id/promote": "promote(actor, id): locked by (workspace, id); the issue is filed through IssuesService.createIssue, which needs edit on the team (tested)",
   "GET /api/app/projects": "listProjects(actor): through project_visibility (people on a team that takes part, never a guest) in the caller's workspace (tested)",
   "POST /api/app/projects": "createProject(actor): the lead team and each extra team through requireTeam(actor, key, edit), so only teams the person edits take part; made in the caller's own workspace (tested)",
   "GET /api/app/projects/:id": "getProject(actor, id): openProject needs the person on a team that takes part; issue detail only for their own teams, the others as totals (tested)",

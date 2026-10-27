@@ -26,5 +26,5 @@ import { StreamApiModule } from "./platform/streams/stream-api.module";
  * routes have always come after the rest.
  */
 export function buildAppImports(role: ServiceRole): Array<Type | DynamicModule> {
-  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [McpModule, StreamApiModule, ImagesModule, TeamsModule, DocsModule, IssuesModule, MapModule, GithubModule, AuthModule, DashboardModule, NotificationsModule, BroadcastsModule, AgentsModule] : []), DaemonModule.register(role)];
+  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [McpModule, StreamApiModule, ImagesModule, TeamsModule, DocsModule, IssuesModule, IdeasModule, MapModule, GithubModule, AuthModule, DashboardModule, NotificationsModule, BroadcastsModule, AgentsModule] : []), DaemonModule.register(role)];
 }
