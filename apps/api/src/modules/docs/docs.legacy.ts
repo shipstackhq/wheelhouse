@@ -2,10 +2,10 @@ import type { DocFreshnessService } from "./doc-freshness.service";
 import type { DocsService } from "./docs.service";
 
 /**
- * Temporary. Code that is not converted yet (the MCP tools through lib/service.ts, the map module, tests) still calls plain functions;
+ * Temporary. Code that is not converted yet (the map module, tests) still calls plain functions;
  * these are those functions, each one line forwarding to the live service. `DocsModule.onModuleInit` points them at the service Nest
  * built, so nothing works before the application has booted (tests call `testApp()`). Delete this file when the last caller moves to
- * the service (the MCP redesign moves the tools).
+ * the service.
  */
 type Live = { docs: DocsService; freshness: DocFreshnessService };
 let live: Live | undefined;
@@ -25,8 +25,6 @@ export const deleteDoc = (...a: Parameters<DocsService["deleteDoc"]>) => s().doc
 export const linkDocNode = (...a: Parameters<DocsService["linkDocNode"]>) => s().docs.linkDocNode(...a);
 export const searchDocs = (...a: Parameters<DocsService["searchDocs"]>) => s().docs.searchDocs(...a);
 export const suggestDocAnchors = (...a: Parameters<DocsService["suggestDocAnchors"]>) => s().docs.suggestDocAnchors(...a);
-export const listDocTemplates = (...a: Parameters<DocsService["listDocTemplates"]>) => s().docs.listDocTemplates(...a);
-export const listDocsIndex = (...a: Parameters<DocsService["listDocsIndex"]>) => s().docs.listDocsIndex(...a);
 
 // freshness and drafts
 export const listStaleDocs = (...a: Parameters<DocFreshnessService["listStaleDocs"]>) => s().freshness.listStaleDocs(...a);

@@ -13,12 +13,12 @@ export type SignupDto = z.infer<typeof signupDto>;
 export const markAllSeenDto = z.object({ keyId: textOrUndefined, teamKey: textOrUndefined });
 export type MarkAllSeenDto = z.infer<typeof markAllSeenDto>;
 
-/** `{ name, teams? }`: create an API key. */
-export const createKeyDto = z.object({ name: text, teams: anything });
+/** `{ name, teams?, scopes? }`: create an API key. */
+export const createKeyDto = z.object({ name: text, teams: anything, scopes: anything });
 export type CreateKeyDto = z.infer<typeof createKeyDto>;
 
-/** `{ docsWrite?, teams? }`: change a key. The handler checks that one of them is sent and that `docsWrite` is a boolean. */
-export const patchKeyDto = z.object({ docsWrite: anything, teams: anything });
+/** `{ scopes?, teams? }`: change a key. The handler checks that one of them is sent; the service checks the scopes. */
+export const patchKeyDto = z.object({ scopes: anything, teams: anything });
 export type PatchKeyDto = z.infer<typeof patchKeyDto>;
 
 /** `{ workspaceId }`: switch the session's workspace. */

@@ -40,7 +40,7 @@ import * as cycles from "../apps/api/src/modules/issues/issues.legacy";
 import * as projects from "../apps/api/src/modules/issues/issues.legacy";
 import * as initiatives from "../apps/api/src/modules/issues/issues.legacy";
 import * as members from "../apps/api/src/modules/auth/auth.legacy";
-import { runTool, tools } from "../apps/api/src/lib/tools";
+import { ToolsService, type ToolName } from "../apps/api/src/lib/tools";
 import { askMap } from "../apps/api/src/modules/map/map.legacy";
 import { briefing, issueContext } from "../apps/api/src/modules/dashboard/dashboard.legacy";
 import { MetricsService } from "../apps/api/src/modules/dashboard/metrics.service";
@@ -48,6 +48,7 @@ import { resolveDraft } from "../apps/api/src/modules/map/map.legacy";
 import * as sync from "../apps/api/src/modules/map/map.legacy";
 import { testApp } from "../apps/api/src/test/app";
 const metrics = (await testApp()).get(MetricsService);
+const mcp = (await testApp()).get(ToolsService);
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything workspace A owns carries this
@@ -78,6 +79,8 @@ let A: Side & {
   repoSlug: string;
   docId: string;
   docSlug: string;
+  projectId: string;
+  projectName: string;
 };
 let B: Side & { memberId: string };
 
@@ -182,6 +185,7 @@ before(async () => {
     .returning();
   await scopeKeyToAllTeams(db, spare.id, a.workspaceId);
   await createIssue(a.agent, a.teamKey, { title: "A-SECRET agent issue" }); // an event written by A's agent
+  const project = await projects.createProject(a.owner, { name: "A-SECRET project", leadTeam: a.teamKey });
   A = {
     ...a,
     nodeName: map.sys.name,
@@ -196,6 +200,8 @@ before(async () => {
     repoSlug: repo.slug,
     docId: map.doc.id,
     docSlug: map.doc.slug,
+    projectId: project.id,
+    projectName: project.name,
   };
 
   const b = await seedSide("B");
@@ -209,85 +215,73 @@ before(async () => {
  * One entry per tool: the calls an attacker in workspace B makes with workspace A's identifiers. Typed as a full record so a
  * new tool without an entry does not compile; the registry test below also checks it at run time.
  */
-type ToolName = keyof typeof tools;
 const attacks = {
-  list_projects: () => [{}],
-  create_project: () => [{ name: "B project", key: "BX" }],
-  get_board: () => [{ project: A.teamKey }, { project: A.teamId }],
-  get_issue: () => [{ issue: A.issueRef }, { issue: A.issueId }],
-  create_issue: () => [{ project: A.teamKey, title: "B writes into A" }, { project: A.teamId, title: "B writes into A", link_nodes: [A.nodeName] }],
-  update_issue: () => [{ issue: A.issueRef, title: "hijacked" }, { issue: A.issueId, body: "hijacked" }],
-  move_issue: () => [{ issue: A.issueRef, status: "Done" }],
-  claim_issue: () => [{ issue: A.issueRef }],
-  comment: () => [{ issue: A.issueRef, body: "B comments on A" }],
-  get_changes: () => [{ project: A.teamKey }, { project: A.teamId }],
-  ack_changes: () => [{ project: A.teamKey, seq: 999999 }],
-  resume_session: () => [{ project: A.teamKey, mode: "replay" as const }],
-  get_activity: () => [{ project: A.teamKey }],
-  get_graph: () => [{ project: A.teamKey }, { project: A.teamKey, layer: "data" as const }],
-  get_node: () => [{ project: A.teamKey, node: A.nodeName }, { project: A.teamKey, node: A.nodeId }],
-  upsert_node: () => [
-    { project: A.teamKey, name: "B node" },
-    { project: A.teamKey, name: A.nodeName, id: A.nodeId, summary: "hijacked" },
+  get_briefing: () => [{ team: A.teamKey }, { team: A.teamId }],
+  get_changes: () => [{ team: A.teamKey }, { team: A.teamId }, { team: A.teamKey, ack: 999999 }],
+  list_issues: () => [{ team: A.teamKey }, { team: A.teamId }],
+  get_issue: () => [{ ref: A.issueRef }, { ref: A.issueId }],
+  create_issue: () => [{ team: A.teamKey, title: "B writes into A" }, { team: A.teamId, title: "B writes into A", link_nodes: [A.nodeName] }],
+  update_issue: () => [
+    { ref: A.issueRef, title: "hijacked" },
+    { ref: A.issueId, body: "hijacked" },
+    { ref: A.issueRef, status: "Done" },
+    { ref: A.issueRef, assignee: "me" },
+    { ref: A.issueRef, link_nodes: [A.nodeName] },
   ],
-  delete_node: () => [{ project: A.teamKey, node: A.nodeName }, { project: A.teamKey, node: A.nodeId }],
-  upsert_edge: () => [{ project: A.teamKey, from: A.nodeName, to: A.dataName }],
-  unlink_nodes: () => [{ project: A.teamKey, from: A.nodeName, to: "A-SECRET concept" }],
-  link_issue_node: () => [{ issue: A.issueRef, node: A.nodeName }, { issue: A.issueRef, node: A.nodeName, unlink: true }],
-  get_schema: () => [{ project: A.teamKey }],
-  upsert_table: () => [{ project: A.teamKey, name: A.dataName, summary: "hijacked", columns: [{ name: "id", type: "uuid" }] }],
-  get_briefing: () => [{ project: A.teamKey }],
-  get_issue_context: () => [{ issue: A.issueRef }],
-  delete_issue: () => [{ issue: A.issueRef }, { issue: A.issueId }],
-  delete_project: () => [{ project: A.teamKey }, { project: A.teamId }],
-  session_sync: () => [{ project: A.teamKey, session: "b-session", files: ["src/a/x.ts"] }],
-  session_status: () => [{ project: A.teamKey, session: A.sessionId }],
-  session_end: () => [{ project: A.teamKey, session: A.sessionId }],
-  land_changes: () => [{ project: A.teamKey, files: { "src/a/secret.ts": "b".repeat(40) } }],
-  list_drafts: () => [{ project: A.teamKey }],
-  get_flows: () => [{ project: A.teamKey }, { project: A.teamKey, name: A.flowName }],
-  upsert_flow: () => [{ project: A.teamKey, name: A.flowName, description: "hijacked" }],
-  delete_flow: () => [{ project: A.teamKey, flow: A.flowName }],
-  report_changes: () => [{ project: A.teamKey, files: ["src/a/secret.ts"] }],
-  get_stale_nodes: () => [{ project: A.teamKey }],
-  mark_fresh: () => [{ project: A.teamKey, node: A.nodeName }],
-  list_decisions: () => [{ project: A.teamKey }],
-  upsert_decision: () => [{ project: A.teamKey, number: 1, title: "hijacked" }, { project: A.teamKey, title: "B decision in A" }],
-  list_terms: () => [{ project: A.teamKey }],
-  upsert_term: () => [{ project: A.teamKey, term: A.termName, definition: "hijacked" }],
-  delete_term: () => [{ project: A.teamKey, term: A.termName }],
-  list_repositories: () => [{ project: A.teamKey }, { project: A.teamId }],
-  list_docs: () => [{ project: A.teamKey }, { project: A.teamId }, { project: A.teamKey, parent: A.docSlug }],
-  get_doc: () => [{ project: A.teamKey, doc: A.docSlug }, { project: A.teamKey, doc: A.docId }],
-  search_docs: () => [{ project: A.teamKey, query: "secret" }, { project: A.teamId, query: "secret" }],
-  upsert_doc: () => [
-    { project: A.teamKey, title: "B doc in A" },
-    { project: A.teamKey, doc: A.docSlug, title: "hijacked" },
-    { project: A.teamKey, doc: A.docId, body: "hijacked" },
+  comment: () => [{ ref: A.issueRef, body: "B comments on A" }],
+  get_project: () => [{ ref: A.projectId }, { ref: A.projectName }],
+  get_cycle: () => [{ team: A.teamKey }, { team: A.teamKey, which: 1 }],
+  plan: () => [
+    { changes: [{ op: "create_cycle" as const, team: A.teamKey }] },
+    { changes: [{ op: "update_cycle" as const, team: A.teamKey, number: 1, name: "hijacked" }] },
+    { changes: [{ op: "create_project" as const, name: "B in A", lead_team: A.teamKey }] },
+    { changes: [{ op: "update_project" as const, project: A.projectId, name: "hijacked" }] },
+    { changes: [{ op: "create_milestone" as const, project: A.projectId, name: "B milestone" }] },
+    { changes: [{ op: "update_milestone" as const, project: A.projectName, milestone: "x", name: "hijacked" }] },
   ],
-  delete_doc: () => [{ project: A.teamKey, doc: A.docSlug }, { project: A.teamKey, doc: A.docId }],
-  link_doc_node: () => [{ project: A.teamKey, doc: A.docSlug, node: A.nodeName }, { project: A.teamKey, doc: A.docId, node: A.nodeName, unlink: true }],
-  suggest_doc_anchors: () => [{ project: A.teamKey, doc: A.docSlug }, { project: A.teamKey, doc: A.docId }],
-  get_stale_docs: () => [{ project: A.teamKey }],
-  mark_doc_fresh: () => [{ project: A.teamKey, doc: A.docSlug }, { project: A.teamKey, doc: A.docId }],
-  list_doc_drafts: () => [{ project: A.teamKey }],
-  list_doc_templates: () => [], // static global metadata, no workspace data to attack (WH-65)
+  get_map: () => [{ team: A.teamKey }, { team: A.teamKey, layer: "data" as const }, { team: A.teamKey, node: A.nodeName }, { team: A.teamKey, node: A.nodeId }, { team: A.teamKey, flow: A.flowName }],
+  update_map: () => [
+    { team: A.teamKey, changes: [{ op: "upsert_node" as const, name: "B node" }] },
+    { team: A.teamKey, changes: [{ op: "upsert_node" as const, name: A.nodeName, id: A.nodeId, summary: "hijacked" }] },
+    { team: A.teamKey, changes: [{ op: "remove_node" as const, node: A.nodeName }] },
+    { team: A.teamKey, changes: [{ op: "remove_node" as const, node: A.nodeId }] },
+    { team: A.teamKey, changes: [{ op: "upsert_edge" as const, from: A.nodeName, to: A.dataName }] },
+    { team: A.teamKey, changes: [{ op: "remove_edge" as const, from: A.nodeName, to: "A-SECRET concept" }] },
+    { team: A.teamKey, changes: [{ op: "upsert_table" as const, name: A.dataName, summary: "hijacked", columns: [{ name: "id", type: "uuid" }] }] },
+    { team: A.teamKey, changes: [{ op: "upsert_flow" as const, name: A.flowName, description: "hijacked" }] },
+    { team: A.teamKey, changes: [{ op: "remove_flow" as const, flow: A.flowName }] },
+  ],
+  get_stale: () => [{ team: A.teamKey }],
+  mark_fresh: () => [{ team: A.teamKey, refs: [A.nodeName] }, { team: A.teamKey, refs: [`docs/${A.docSlug}`, A.docId] }],
+  list_knowledge: () => [{ team: A.teamKey, kind: "docs" as const }, { team: A.teamId, kind: "decisions" as const }, { team: A.teamKey, kind: "terms" as const }],
+  get_doc: () => [{ team: A.teamKey, ref: `docs/${A.docSlug}` }, { team: A.teamKey, ref: A.docId }],
+  write_doc: () => [
+    { team: A.teamKey, title: "B doc in A" },
+    { team: A.teamKey, ref: `docs/${A.docSlug}`, title: "hijacked" },
+    { team: A.teamKey, ref: A.docId, body: "hijacked" },
+    { team: A.teamKey, ref: A.docId, link_nodes: [A.nodeName], unlink_nodes: [A.nodeName] },
+  ],
+  record_decision: () => [{ team: A.teamKey, number: 1, title: "hijacked" }, { team: A.teamKey, title: "B decision in A" }],
+  define_term: () => [{ team: A.teamKey, term: A.termName, definition: "hijacked" }],
+  resume_session: () => [{ team: A.teamKey, mode: "replay" as const }],
+  session_sync: () => [{ team: A.teamKey, session: "b-session", files: ["src/a/x.ts"] }],
+  session_status: () => [{ team: A.teamKey, session: A.sessionId }],
+  session_end: () => [{ team: A.teamKey, session: A.sessionId }],
+  land_changes: () => [{ team: A.teamKey, files: { "src/a/secret.ts": "b".repeat(40) } }],
+  report_changes: () => [{ team: A.teamKey, files: ["src/a/secret.ts"] }],
 } satisfies Record<ToolName, () => Attack[]>;
-
-/** Tools whose call is legitimate for any workspace and never touches the target: their result must still hold no A data. */
-const harmless = new Set<string>(["list_projects", "create_project"]);
 
 describe("every tool, called by workspace B with workspace A's identifiers", () => {
   for (const asKind of ["human", "agent"] as const) {
     test(`as B's ${asKind}: refused, nothing read, nothing changed`, async () => {
       const actor = asKind === "human" ? B.owner : B.agent;
       const before = await fingerprint(A);
-      for (const name of Object.keys(tools) as ToolName[]) {
+      for (const name of Object.keys(mcp.tools) as ToolName[]) {
         for (const args of attacks[name]()) {
           let result: unknown;
           let error: unknown;
           try {
-            result = await runTool(actor, name, args);
+            result = await mcp.run(actor, name, args);
           } catch (e) {
             error = e;
           }
@@ -298,7 +292,7 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
             assert.ok(!isZodMessage(error.message), `${label}: refused only because the arguments were malformed: ${error.message}`);
             assert.ok(!MARK.test(error.message), `${label}: the refusal leaks workspace A data: ${error.message}`);
           } else {
-            assert.ok(harmless.has(name), `${label}: succeeded against workspace A's identifiers`);
+            assert.fail(`${label}: succeeded against workspace A's identifiers`);
             const text = JSON.stringify(result);
             assert.ok(!MARK.test(text), `${label}: returned workspace A data`);
             for (const id of [A.teamId, A.issueId, A.nodeId, A.ownerId, A.keyId]) assert.ok(!text.includes(id), `${label}: returned an id of workspace A`);
@@ -310,7 +304,7 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
   }
 
   test("a tool added without an isolation case fails here", () => {
-    assert.deepEqual(Object.keys(attacks).sort(), Object.keys(tools).sort());
+    assert.deepEqual(Object.keys(attacks).sort(), Object.keys(mcp.tools).sort());
   });
 });
 
@@ -328,15 +322,13 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
 
   test("every tool, called with the identifiers of A's other team: refused, nothing read, nothing changed", async () => {
     const before = await fingerprint(A);
-    const skip = new Set<string>(["list_projects", "create_project"]); // legitimate for any key; checked below
-    for (const name of Object.keys(tools) as ToolName[]) {
-      if (skip.has(name)) continue;
+    for (const name of Object.keys(mcp.tools) as ToolName[]) {
       for (const args of attacks[name]()) {
         const label = `${name}(${JSON.stringify(args).slice(0, 80)}) as a key scoped to SH`;
         let error: unknown;
         let result: unknown;
         try {
-          result = await runTool(narrow, name, args);
+          result = await mcp.run(narrow, name, args);
         } catch (e) {
           error = e;
         }
@@ -345,7 +337,7 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
           assert.ok(["not_found", "forbidden", "invalid", "conflict"].includes(error.code), `${label}: ${error.code}`);
           assert.ok(!isZodMessage(error.message), `${label}: refused only because the arguments were malformed: ${error.message}`);
         } else {
-          assert.ok(name === "list_doc_templates", `${label}: succeeded against a team the key is not scoped to: ${JSON.stringify(result).slice(0, 120)}`);
+          assert.fail(`${label}: succeeded against a team the key is not scoped to: ${JSON.stringify(result).slice(0, 120)}`);
         }
       }
     }
@@ -353,12 +345,12 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
   });
 
   test("it lists only its own team, and reads and writes there", async () => {
-    const listed = (await runTool(narrow, "list_projects", {})) as { key: string }[];
-    assert.deepEqual(listed.map((p) => p.key), ["SH"]);
+    const listed = (await mcp.run(narrow, "get_briefing", {})) as { teams: { key: string }[] };
+    assert.deepEqual(listed.teams.map((p) => p.key), ["SH"]);
     assert.ok(!JSON.stringify(listed).includes(A.teamId));
-    assert.equal(((await runTool(narrow, "get_issue", { issue: "SH-1" })) as { issue: { title: string } }).issue.title, "A-SECRET shared issue");
-    await runTool(narrow, "comment", { issue: "SH-1", body: "from the narrow key" });
-    await assert.rejects(runTool(narrow, "comment", { issue: A.issueRef, body: "no" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    assert.equal(((await mcp.run(narrow, "get_issue", { ref: "SH-1" })) as { issue: { title: string } }).issue.title, "A-SECRET shared issue");
+    await mcp.run(narrow, "comment", { ref: "SH-1", body: "from the narrow key" });
+    await assert.rejects(mcp.run(narrow, "comment", { ref: A.issueRef, body: "no" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("a key with no team and a key scoped to AA each reach only what they are given", async () => {
@@ -371,10 +363,10 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     };
     const none = await mk("A none key", []);
     const aa = await mk("A AA key", [A.teamId]);
-    assert.deepEqual(await runTool(none, "list_projects", {}), []);
-    await assert.rejects(runTool(none, "get_issue", { issue: A.issueRef }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
-    assert.equal(((await runTool(aa, "get_issue", { issue: A.issueRef })) as { issue: { title: string } }).issue.title, "A-SECRET issue");
-    await assert.rejects(runTool(aa, "get_issue", { issue: "SH-1" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    assert.deepEqual(((await mcp.run(none, "get_briefing", {})) as { teams: unknown[] }).teams, []);
+    await assert.rejects(mcp.run(none, "get_issue", { ref: A.issueRef }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    assert.equal(((await mcp.run(aa, "get_issue", { ref: A.issueRef })) as { issue: { title: string } }).issue.title, "A-SECRET issue");
+    await assert.rejects(mcp.run(aa, "get_issue", { ref: "SH-1" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
@@ -403,17 +395,17 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
 
 describe("the attacks are real: the same calls work for the owner", () => {
   test("workspace A's own agent and human can do what B was refused", async () => {
-    assert.equal((await runTool(A.agent, "get_issue", { issue: A.issueRef }) as { issue: { title: string } }).issue.title, "A-SECRET issue");
-    await runTool(A.owner, "get_node", { project: A.teamKey, node: A.nodeName });
-    await runTool(A.agent, "get_board", { project: A.teamId });
-    await runTool(A.agent, "session_status", { project: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof ServiceError));
+    assert.equal((await mcp.run(A.agent, "get_issue", { ref: A.issueRef }) as { issue: { title: string } }).issue.title, "A-SECRET issue");
+    await mcp.run(A.owner, "get_map", { team: A.teamKey, node: A.nodeName });
+    await mcp.run(A.agent, "list_issues", { team: A.teamId });
+    await mcp.run(A.agent, "session_status", { team: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof ServiceError));
   });
 });
 
 describe("team keys are per workspace", () => {
   test("two workspaces with a team called SH each see their own issues", async () => {
-    const a = (await runTool(A.owner, "get_issue", { issue: "SH-1" })) as { issue: { title: string } };
-    const b = (await runTool(B.owner, "get_issue", { issue: "SH-1" })) as { issue: { title: string } };
+    const a = (await mcp.run(A.owner, "get_issue", { ref: "SH-1" })) as { issue: { title: string } };
+    const b = (await mcp.run(B.owner, "get_issue", { ref: "SH-1" })) as { issue: { title: string } };
     assert.equal(a.issue.title, "A-SECRET shared issue");
     assert.equal(b.issue.title, "B-OWN shared issue");
   });
@@ -423,11 +415,10 @@ describe("team keys are per workspace", () => {
 describe("what B can see is only B's", () => {
   test("B's own board, graph, activity, queue, briefing and issue context hold nothing of A's", async () => {
     const calls: Promise<unknown>[] = [
-      runTool(B.owner, "get_board", { project: B.teamKey }),
-      runTool(B.owner, "get_graph", { project: B.teamKey }),
-      runTool(B.owner, "get_activity", { project: B.teamKey }),
-      runTool(B.owner, "list_projects", {}),
-      runTool(B.agent, "get_changes", { project: B.teamKey }),
+      mcp.run(B.owner, "list_issues", { team: B.teamKey }),
+      mcp.run(B.owner, "get_map", { team: B.teamKey }),
+      mcp.run(B.owner, "get_briefing", { team: B.teamKey }),
+      mcp.run(B.agent, "get_changes", { team: B.teamKey }),
       briefing(B.agent, B.teamKey),
       issueContext(B.agent, B.issueRef),
       listEvents(B.owner, B.teamKey),
@@ -462,9 +453,9 @@ describe("what B can see is only B's", () => {
   });
 
   test("B's agent queue never receives workspace A's events", async () => {
-    const changes = (await runTool(B.agent, "get_changes", { project: B.teamKey })) as { changes: unknown[] };
+    const changes = (await mcp.run(B.agent, "get_changes", { team: B.teamKey })) as { changes: unknown[] };
     assert.ok(!MARK.test(JSON.stringify(changes)));
-    await assert.rejects(runTool(B.agent, "get_changes", { project: A.teamKey }), ServiceError);
+    await assert.rejects(mcp.run(B.agent, "get_changes", { team: A.teamKey }), ServiceError);
   });
 });
 
@@ -509,10 +500,14 @@ describe("human-only and queue actions that take ids", () => {
 
   test("B's agent using A's session id is refused and A's session is unchanged", async () => {
     const before = await fingerprint(A);
-    for (const tool of ["get_changes", "ack_changes", "get_activity", "session_sync", "session_end", "session_status"] as const) {
-      const args: Record<string, unknown> =
-        tool === "ack_changes" ? { project: B.teamKey, seq: 5 } : tool.startsWith("session_") ? { project: B.teamKey, session: A.sessionId } : { project: B.teamKey };
-      await assert.rejects(runTool(B.agent, tool, { ...args, session: A.sessionId }), (e: unknown) => e instanceof ServiceError, tool);
+    for (const [tool, args] of [
+      ["get_changes", {}],
+      ["get_changes", { ack: 5 }],
+      ["session_sync", {}],
+      ["session_end", {}],
+      ["session_status", {}],
+    ] as const) {
+      await assert.rejects(mcp.run(B.agent, tool, { team: B.teamKey, ...args, session: A.sessionId }), (e: unknown) => e instanceof ServiceError, tool);
     }
     assert.equal(await fingerprint(A), before);
   });
@@ -671,8 +666,8 @@ describe("one session in two workspaces (X-Workspace)", () => {
       await createTeam(actor, { name: `Both ${tag}`, key: "BO" });
       await createIssue(actor, "BO", { title: `written ${tag}` });
     }
-    assert.equal(((await runTool(a, "get_issue", { issue: "BO-1" })) as { issue: { title: string } }).issue.title, "written in A");
-    assert.equal(((await runTool(b, "get_issue", { issue: "BO-1" })) as { issue: { title: string } }).issue.title, "written in B");
+    assert.equal(((await mcp.run(a, "get_issue", { ref: "BO-1" })) as { issue: { title: string } }).issue.title, "written in A");
+    assert.equal(((await mcp.run(b, "get_issue", { ref: "BO-1" })) as { issue: { title: string } }).issue.title, "written in B");
     const [other] = await db.insert(schema.workspaces).values({ name: `Stranger ${RUN}` }).returning();
     await assert.rejects(humanFromSession(token, other.slug), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
@@ -681,11 +676,11 @@ describe("one session in two workspaces (X-Workspace)", () => {
 describe("team keys are per workspace (continued)", () => {
   test("B creating a team with A's key gets its own team, and A's is untouched", async () => {
     const before = await fingerprint(A);
-    const p = (await runTool(B.owner, "create_project", { name: "B's AA", key: "AA" })) as { id: string; teamId: string }; // the tool wire: teamId is still the workspace
-    assert.equal(p.teamId, B.workspaceId);
+    const p = await createTeam(B.owner, { name: "B's AA", key: "AA" });
+    assert.equal(p.workspaceId, B.workspaceId);
     assert.notEqual(p.id, A.teamId);
-    const board = (await runTool(B.owner, "get_board", { project: "AA" })) as { project: { name: string } };
-    assert.equal(board.project.name, "B's AA");
+    const board = (await mcp.run(B.owner, "list_issues", { team: "AA" })) as { team: { name: string } };
+    assert.equal(board.team.name, "B's AA");
     assert.equal(await fingerprint(A), before);
   });
 });

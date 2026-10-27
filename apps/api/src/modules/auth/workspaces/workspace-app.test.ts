@@ -223,6 +223,11 @@ describe("API keys", () => {
     assert.ok(!listing.includes(secret) && !listing.includes("keyHash"), "no secret and no hash in a listing");
     assert.ok(JSON.stringify(key).indexOf(secret) < 0);
   });
+  test("scopes can be chosen at creation, must be real ones, and default when left out", async () => {
+    assert.deepEqual((await t.createKeyAs(A.member, "w", undefined, ["read", "docs:write"])).key.scopes, ["read", "docs:write"]);
+    assert.deepEqual((await t.createKeyAs(A.member, "d")).key.scopes, ["read", "board:write", "map:write"]);
+    await rejects(t.createKeyAs(A.member, "bad", undefined, ["root"]), (x) => x instanceof Error, "unknown scope");
+  });
   test("a blank name gets a default", async () => {
     assert.equal((await t.createKeyAs(A.member, "   ")).key.name, "Claude agent");
   });
@@ -240,15 +245,16 @@ describe("API keys", () => {
   test("another workspace's key cannot be revoked or have its capability changed: not found, nothing changes", async () => {
     const theirs = (await t.createKeyAs(B.owner, "theirs")).key;
     await rejects(t.revokeKeyAs(A.owner, theirs.id), isService("not_found"), "cross-workspace revoke");
-    await rejects(t.setKeyDocsWriteAs(A.owner, theirs.id, true), isService("not_found"), "cross-workspace capability");
+    await rejects(t.setKeyScopesAs(A.owner, theirs.id, ["read"]), isService("not_found"), "cross-workspace capability");
     const after = (await t.listKeys(B.owner)).find((k) => k.id === theirs.id)!;
     assert.equal(after.revokedAt, null);
-    assert.equal(after.canWriteDocs, false);
+    assert.deepEqual(after.scopes, ["read", "board:write", "map:write"]);
   });
-  test("docs:write can be granted and taken away, and a key can be revoked", async () => {
+  test("a new key has the default scopes, scopes can be set (and only the five), and a key can be revoked", async () => {
     const { key } = await t.createKeyAs(A.owner, "writer");
-    assert.equal((await t.setKeyDocsWriteAs(A.owner, key.id, true)).canWriteDocs, true);
-    assert.equal((await t.setKeyDocsWriteAs(A.owner, key.id, false)).canWriteDocs, false);
+    assert.deepEqual(key.scopes, ["read", "board:write", "map:write"]);
+    assert.deepEqual((await t.setKeyScopesAs(A.owner, key.id, ["read", "docs:write", "read"])).scopes, ["read", "docs:write"]);
+    await rejects(t.setKeyScopesAs(A.owner, key.id, ["read", "admin"]), isService("invalid"), "unknown scope");
     assert.deepEqual(await t.revokeKeyAs(A.owner, key.id), { ok: true });
     assert.ok((await t.listKeys(A.owner)).find((k) => k.id === key.id)!.revokedAt);
   });

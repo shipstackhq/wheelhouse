@@ -16,11 +16,12 @@ import assert from "node:assert/strict";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { createTeam } from "../teams/teams.legacy";
-import { createDoc } from "./docs.legacy";
-import { runTool } from "../../lib/tools";
+import { createDoc, getDoc } from "./docs.legacy";
+import { ToolsService } from "../../lib/tools";
 import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "@wheelhouse/shared/doc-templates";
 import { testApp } from "../../test/app";
 await testApp();
+const mcp = (await testApp()).get(ToolsService);
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;
@@ -99,20 +100,16 @@ describe("createDoc + template", () => {
   });
 });
 
-describe("tools: list_doc_templates", () => {
-  test("returns exactly the five with id/name/description, no bodies", async () => {
-    const result = (await runTool(human, "list_doc_templates", {})) as { id: string; name: string; description: string }[];
-    assert.equal(result.length, 5);
-    const ids = result.map((t) => t.id).sort();
-    assert.deepEqual(ids, ["decision-record", "meeting-notes", "onboarding", "runbook", "spec"].sort());
-    for (const t of result) assert.equal((t as { body?: string }).body, undefined);
+describe("tools: write_doc with template", () => {
+  test("the description names every template id", async () => {
+    const def = mcp.list().find((t) => t.name === "write_doc")!;
+    for (const id of ["decision-record", "meeting-notes", "onboarding", "runbook", "spec"]) assert.ok(def.description.includes(id), id);
   });
-});
 
-describe("tools: upsert_doc with template", () => {
   test("create path seeds body from `template` when no body is passed", async () => {
-    const created = (await runTool(human, "upsert_doc", { project: teamKey, title: "Spec via tool", template: "spec" })) as { body: string };
-    assert.equal(created.body, getDocTemplate("spec")!.body);
+    const created = (await mcp.run(human, "write_doc", { team: teamKey, title: "Spec via tool", template: "spec" })) as { ref: string };
+    const got = (await getDoc(human, teamKey, created.ref.replace(/^docs\//, ""))).doc;
+    assert.equal(got.body, getDocTemplate("spec")!.body);
   });
 });
 

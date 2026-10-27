@@ -159,8 +159,8 @@ describe("who sees what", () => {
     assert.equal((await app("DELETE", `/api/app/initiatives/${top.id}`, other)).status, 404);
   });
 
-  test("/api/v1 does not grow initiatives", async () => {
-    const tools = await v1ok({ key: apiKey }, "list_projects", {});
+  test("the agent tools do not show initiatives", async () => {
+    const tools = await v1ok({ key: apiKey }, "get_briefing", {});
     assert.ok(!JSON.stringify(tools).includes("initiative"));
   });
 });

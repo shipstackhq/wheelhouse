@@ -423,7 +423,7 @@ export class AuthRepository {
       .select({ key: apiKeys, suspendedAt: workspaces.suspendedAt })
       .from(apiKeys)
       .innerJoin(workspaces, eq(workspaces.id, apiKeys.workspaceId))
-      .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)));
+      .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt), or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, new Date()))));
     return row;
   }
 
@@ -432,7 +432,7 @@ export class AuthRepository {
   }
 
   keysOf(workspaceId: string): Promise<KeyRow[]> {
-    return this.db.q.select().from(apiKeys).where(eq(apiKeys.workspaceId, workspaceId)).orderBy(desc(apiKeys.createdAt));
+    return this.db.q.select().from(apiKeys).where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.chatMessageId))).orderBy(desc(apiKeys.createdAt));
   }
 
   async keyIn(id: string, workspaceId: string): Promise<KeyRow | undefined> {

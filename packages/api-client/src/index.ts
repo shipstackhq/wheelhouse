@@ -525,12 +525,12 @@ export function createApiClient(options: ApiClientOptions = {}) {
       page: () => request<ApiKeysPage>("GET", "/api/app/keys"),
       /** Reset an agent's queue: one key and/or one team, or everything. */
       markAllSeen: (input: { keyId?: string; teamKey?: string } = {}) => request<{ ok: true }>("POST", "/api/app/keys/mark-all-seen", input),
-      /** The secret is in this response only. `teams` are the keys of the teams it can open (teams you edit, at least one); left out, all of them. */
-      create: (name: string, teams?: string[]) => request<CreatedKey>("POST", "/api/app/keys", teams ? { name, teams } : { name }),
+      /** The secret is in this response only. `teams` are the keys of the teams it can open (teams you edit, at least one) and `scopes` what it may do; left out, all teams and the default scopes. */
+      create: (input: { name: string; teams?: string[]; scopes?: string[] }) => request<CreatedKey>("POST", "/api/app/keys", input),
       /** Set the teams the key can open; takes effect on its next call. */
       setTeams: async (id: string, teams: string[]) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { teams })).key,
       revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/keys/${encodeURIComponent(id)}`),
-      setDocsWrite: async (id: string, docsWrite: boolean) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { docsWrite })).key,
+      setScopes: async (id: string, scopes: string[]) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { scopes })).key,
     },
 
     invites: {

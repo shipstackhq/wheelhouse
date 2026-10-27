@@ -25,6 +25,10 @@ import { DeviceChatService } from "./device-chat.service";
 import { DeviceJobsService } from "./device-jobs.service";
 import { DevicesService } from "./devices.service";
 import { CHAT_PENDING_MS, CHAT_QUIET_MS, type Device } from "./device-common";
+import { KeysService } from "../auth/keys/keys.service";
+import { TeamAccessService } from "../teams/index";
+import { ToolsService } from "../../lib/tools";
+import { runMcp } from "../../lib/mcp";
 import { publicKeyFromRaw, rawPublicKey, verifyValue } from "./daemon-crypto";
 
 const app = await testApp();
@@ -33,6 +37,9 @@ const machine = app.get(DeviceChatService);
 const auth = app.get(DeviceAuthService);
 const jobs = app.get(DeviceJobsService);
 const devices = app.get(DevicesService);
+const keys = app.get(KeysService);
+const access = app.get(TeamAccessService);
+const tools = app.get(ToolsService);
 
 const RUN = Math.random().toString(16).slice(2, 8);
 let owner: Actor;
@@ -340,5 +347,61 @@ describe("the sweep", () => {
     // A failed answer frees the thread for the next question.
     assert.equal((await chat.send(owner, pending.chat.id, { message: "try again" })).messages.length, 2);
     await assert.rejects(machine.recordChatEvents(device, answerOf(pending).id, { events: [ev(5, "delta", { text: "late" })] }), code("conflict"));
+  });
+});
+
+describe("Wheelhouse data in a chat (the answer's own key)", () => {
+  const tokenOf = async (deviceId: string) => ((await messagesTo(deviceId)).at(-1)!.message as { mcp: { token: string } }).mcp.token;
+  const names = async (token: string) => {
+    const r = (await runMcp(tools, JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }), () => keys.actorForKey(token, "1.1.1.1"))).body as { result: { tools: { name: string }[] } };
+    return r.result.tools.map((t) => t.name);
+  };
+
+  test("a message carries a token that lists only read tools and reaches only the thread's team", async () => {
+    const { device } = await paired();
+    const r = await chat.create(owner, input(device.id));
+    const token = await tokenOf(device.id);
+    const list = await names(token);
+    assert.ok(list.includes("list_issues") && !list.some((n) => tools.tools[n].scope !== "read"));
+    const actor = await keys.actorForKey(token, "1.1.1.1");
+    assert.deepEqual(actor.scopes, ["read"]);
+    await access.require(actor, "CH", "read");
+    await createTeam(owner, { name: "Other", key: "OT" });
+    await assert.rejects(access.require(actor, "OT", "read"));
+    const row = (await (await getDb()).select().from(schema.apiKeys).where(eq(schema.apiKeys.id, actor.id)))[0];
+    assert.equal(row.name, `Chat: ${r.chat.title}`);
+    assert.notEqual(row.keyHash, token, "only the hash is stored");
+  });
+
+  test("it is not on the keys page", async () => {
+    const { device } = await paired();
+    await chat.create(owner, input(device.id));
+    const actor = await keys.actorForKey(await tokenOf(device.id), "1.1.1.1");
+    assert.ok(!(await keys.listKeys({ actor: owner, workspace: { id: owner.workspaceId } } as never)).some((k) => k.id === actor.id));
+  });
+
+  test("it stops working when the answer ends, however it ends", async () => {
+    const { device } = await paired();
+    const done = await chat.create(owner, input(device.id));
+    const t1 = await tokenOf(device.id);
+    await machine.finishChat(device, answerOf(done).id, { state: "done" });
+    await assert.rejects(keys.actorForKey(t1, "1.1.1.1"));
+
+    const stopped = await chat.create(owner, input(device.id));
+    const t2 = await tokenOf(device.id);
+    await (await getDb()).update(schema.devices).set({ lastSeenAt: new Date(Date.now() - 3600e3) }).where(eq(schema.devices.id, device.id));
+    await chat.cancel(owner, stopped.chat.id);
+    await assert.rejects(keys.actorForKey(t2, "1.1.1.1"));
+  });
+
+  test("it stops working when it expires, and the sweep deletes it", async () => {
+    const { device } = await paired();
+    await chat.create(owner, input(device.id));
+    const token = await tokenOf(device.id);
+    const actor = await keys.actorForKey(token, "1.1.1.1");
+    await (await getDb()).update(schema.apiKeys).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.apiKeys.id, actor.id));
+    await assert.rejects(keys.actorForKey(token, "1.1.1.1"));
+    await machine.sweep();
+    assert.equal((await (await getDb()).select().from(schema.apiKeys).where(eq(schema.apiKeys.id, actor.id))).length, 0);
   });
 });

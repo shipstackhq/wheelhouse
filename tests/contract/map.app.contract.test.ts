@@ -28,7 +28,7 @@ const node = async (s: Sess, body: Record<string, unknown>, key = "MAP") => {
   assert.equal(r.status, 200, r.text);
   return r.json.node;
 };
-const agentNode = (t: { key: string }, body: Record<string, unknown>) => v1ok({ key: t.key }, "upsert_node", { project: "MAP", ...body });
+const agentNode = (t: { key: string }, { session, ...node }: Record<string, unknown>) => v1ok({ key: t.key }, "update_map", { team: "MAP", session, changes: [{ op: "upsert_node", ...node }] });
 
 describe("every endpoint needs a signed-in person, and refuses a forged request", () => {
   const table: [string, string, unknown?][] = [
@@ -516,7 +516,7 @@ describe("stale and in-flux markings, and drafts", () => {
   /** A node anchored to a file, described, and then the file reported changed: stale. */
   const staleNode = async (t: Awaited<ReturnType<typeof workspace>>) => {
     const n = await node(t.s, { name: "Billing", layer: "system", summary: "Takes money", anchors: ["src/billing/**"] });
-    await v1ok({ key: t.key }, "report_changes", { project: "MAP", files: ["src/billing/charge.ts"], summary: "changed" });
+    await v1ok({ key: t.key }, "report_changes", { team: "MAP", files: ["src/billing/charge.ts"], summary: "changed" });
     return n;
   };
 
@@ -543,8 +543,8 @@ describe("stale and in-flux markings, and drafts", () => {
   test("code an agent's session is changing shows as in flux; its map update waits as a draft until published or discarded", async () => {
     const t = await workspace();
     const n = await node(t.s, { name: "Billing", layer: "system", summary: "Takes money", anchors: ["src/billing/**"] });
-    await v1ok({ key: t.key }, "session_sync", { project: "MAP", session: "sess-flux", files: ["src/billing/charge.ts"] });
-    await v1ok({ key: t.key }, "upsert_node", { project: "MAP", name: "Billing", layer: "system", purpose: "Drafted while the code is in flux", session: "sess-flux" });
+    await v1ok({ key: t.key }, "session_sync", { team: "MAP", session: "sess-flux", files: ["src/billing/charge.ts"] });
+    await agentNode(t, { name: "Billing", layer: "system", purpose: "Drafted while the code is in flux", session: "sess-flux" });
     let g = await graph(t.s);
     const flux = g.flux[n.id];
     assert.ok(flux, "the node is in flux");
@@ -566,8 +566,8 @@ describe("stale and in-flux markings, and drafts", () => {
   test("a draft can be discarded, and then the map is as it was", async () => {
     const t = await workspace();
     const n = await node(t.s, { name: "Billing", layer: "system", anchors: ["src/billing/**"] });
-    await v1ok({ key: t.key }, "session_sync", { project: "MAP", session: "sess-d", files: ["src/billing/x.ts"] });
-    await v1ok({ key: t.key }, "upsert_node", { project: "MAP", name: "Billing", layer: "system", purpose: "Never mind", session: "sess-d" });
+    await v1ok({ key: t.key }, "session_sync", { team: "MAP", session: "sess-d", files: ["src/billing/x.ts"] });
+    await agentNode(t, { name: "Billing", layer: "system", purpose: "Never mind", session: "sess-d" });
     const draft = (await graph(t.s)).flux[n.id].drafts[0];
     assert.deepEqual((await app("POST", `/api/app/teams/MAP/drafts/${draft.id}/resolve`, t.s, { body: { action: "discard" } })).json, { ok: true });
     const g = await graph(t.s);
@@ -579,8 +579,8 @@ describe("stale and in-flux markings, and drafts", () => {
     const a = await workspace();
     const b = await workspace("Other");
     const n = await node(a.s, { name: "Billing", layer: "system", anchors: ["src/billing/**"] });
-    await v1ok({ key: a.key }, "session_sync", { project: "MAP", session: "sess-x", files: ["src/billing/x.ts"] });
-    await v1ok({ key: a.key }, "upsert_node", { project: "MAP", name: "Billing", layer: "system", purpose: "p", session: "sess-x" });
+    await v1ok({ key: a.key }, "session_sync", { team: "MAP", session: "sess-x", files: ["src/billing/x.ts"] });
+    await agentNode(a, { name: "Billing", layer: "system", purpose: "p", session: "sess-x" });
     const draft = (await graph(a.s)).flux[n.id].drafts[0];
     const bad = await app("POST", `/api/app/teams/MAP/drafts/${draft.id}/resolve`, a.s, { body: { action: "explode" } });
     assert.equal(bad.status, 400);

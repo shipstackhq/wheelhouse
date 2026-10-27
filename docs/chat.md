@@ -9,14 +9,14 @@ A person opens **Chat** in Wheelhouse, picks a repository, one of their online d
 their machine as a signed device message. The daemon runs the person's own `claude` CLI, read-only, over a checkout of that repository and
 streams the answer back. The thread can be continued (the Claude session is resumed) and a running answer can be stopped.
 
-Out of scope for the slice: Wheelhouse data in chat (waits for the MCP redesign), shell access, editing, sharing threads, several repositories
+Out of scope for the slice: shell access, editing, sharing threads, several repositories
 in one thread, a model picker per message, attachments, permission prompts.
 
 ## Rules
 
 - Read-only: claude runs with `Read,Grep,Glob` and read-only git (`log`, `diff`, `show`, `blame`, `grep`, `status`, `ls-files`, `ls-tree`,
   `rev-parse`, `merge-base`, `branch -r|-a`), plus `git checkout --detach` to move its own checkout to another branch. No other shell, no
-  edits, no MCP (`--strict-mcp-config` with none). Plain `git branch` is not allowed: `-D` would delete a run's branch in the shared clone.
+  edits. MCP is only Wheelhouse, read-only, with the message's own key (`--strict-mcp-config` with that one server; none without a key). Plain `git branch` is not allowed: `-D` would delete a run's branch in the shared clone.
 - Unmodified `claude` binary, the user's own sign-in, no Agent SDK (same ground rules as jobs).
 - Chats are the person's own: a thread belongs to its owner, only they see it, only on a device they own.
 - Chats are separate from jobs: their own small pool (2 at once), not counted in the job pool. A usage-limit pause (`pausedUntil`) applies to both.
@@ -41,12 +41,20 @@ Add `chat.message` and `chat.cancel` to `DEVICE_MESSAGE_TYPES` (and to the `devi
 
 ```
 chat.message  { messageId, threadId, model, sessionId | null, prompt,
-                repository: { id, name, fullName, cloneUrl, defaultBranch }, expiresAt }
+                repository: { id, name, fullName, cloneUrl, defaultBranch }, expiresAt, mcp: { token } }
 chat.cancel   { messageId }
 ```
 
 `messageId` is the **assistant** message's id (the one being filled). `sessionId` is the thread's session to resume, null on the first message.
 `expiresAt` is 60 s out: a daemon that gets it later drops it.
+
+## Wheelhouse data
+
+Each `chat.message` carries `mcp: { token }`, a key minted for that answer: `read` scope only, reaching only the thread's team, named
+`Chat: <thread title>`. The daemon reaches `<server URL>/mcp` with it as a bearer token. The key is deleted when the answer ends (finish,
+offline cancel, sweep failure) and expires 10 minutes after it was minted at the latest (`api_keys.expires_at`; `actorForKey` rejects it,
+the sweep deletes it). `api_keys.chat_message_id` marks it: such keys are left out of the keys page, the Agents page and the dashboard
+counts. Only its hash is stored, like any key.
 
 ## Daemon → server (device token, same `DeviceGuard`)
 
@@ -106,7 +114,7 @@ bus (throttled to once per 300 ms for deltas, immediate for state changes). The 
   --append-system-prompt <CHAT_RULES>`, cwd = the thread's worktree. Flag names must be checked against `claude --help` of the installed CLI.
 - The prompt is the person's message as typed; the rules say: read-only assistant for repository X, now at commit Y (tip of origin/Z), answer
   from the code, cite file paths and branch, use read-only git for history and other branches, switch with `checkout --detach`, one command
-  per call, no other commands or edits, no access to Wheelhouse issues yet.
+  per call, no other commands or edits, and read Wheelhouse (issues, cycles, projects, the map, docs) with the wheelhouse tools, citing issue refs.
 - stream-json → events: `stream_event` with a `text_delta` → `delta`; `tool_use` blocks → `tool`; `result` → `finish` (with `session_id`, cost, text).
 - `chat.cancel` aborts that run (SIGTERM to the process group, as jobs do); the daemon then reports `canceled`.
 - A rate-limit result sets `pausedUntil` like a job does.

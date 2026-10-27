@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { DropdownMenu } from "radix-ui";
+import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { List } from "./list";
-import { SubmitButton } from "./submit-button";
-import { AgentIcon } from "./icons";
+import { AgentIcon, MoreIcon } from "./icons";
+import { scopeSummary } from "./key-dialog";
+import { useDialogs } from "./ui";
 
 /** What the keys lists need. Dates are ISO strings so the revoked list can cross into a client component. */
-export type KeyRow = { id: string; name: string; prefix: string; lastUsedAt: string | null; revokedAt: string | null; canWriteDocs?: boolean; teams?: { key: string; name: string }[] };
+export type KeyRow = { id: string; name: string; prefix: string; lastUsedAt: string | null; revokedAt: string | null; scopes?: string[]; teams?: { key: string; name: string }[] };
 /** A team a key could be given: one the person edits. */
 export type TeamOption = { key: string; name: string };
 
@@ -16,104 +18,55 @@ export function splitKeys(keys: KeyRow[]) {
   return { active, revoked };
 }
 
-/**
- * The keys that work today: name, prefix, when last used, and the two things you can do to one. The actions are passed in
- * so the component stays presentational (and renderable in tests without a server).
- */
-export function ActiveKeys({
-  keys,
-  markAllSeen,
-  revoke,
-  setDocsWrite,
-  teamOptions,
-  setTeams,
-}: {
-  keys: KeyRow[];
-  markAllSeen: (formData: FormData) => void | Promise<void>;
-  revoke: (formData: FormData) => void | Promise<void>;
-  /** WH-51: grant/revoke the "docs:write" capability. Keys default to read-only for docs. */
-  setDocsWrite?: (keyId: string, canWrite: boolean) => void | Promise<void>;
-  /** WH-120: the teams the person may give a key, and how to save a key's teams. Without them the teams are only shown. */
-  teamOptions?: TeamOption[];
-  setTeams?: (keyId: string, teams: string[]) => void | Promise<void>;
-}) {
-  if (!keys.length) return <p className="mt-5 text-sm text-muted">No active keys. Create one above.</p>;
-  return (
-    <List inset="card" className="mt-5 text-sm">
-      {keys.map((k) => (
-        <li key={k.id} className="flex items-center gap-3">
-          <span className="text-agent"><AgentIcon /> {k.name}</span>
-          <code className="font-mono text-xs text-muted">{k.prefix}…</code>
-          {setDocsWrite && (
-            <label className="ml-3 flex items-center gap-1.5 text-xs text-muted" title='Lets this key create/edit/delete docs via upsert_doc and delete_doc. Off by default (read-only).'>
-              <input type="checkbox" checked={!!k.canWriteDocs} onChange={(e) => void setDocsWrite(k.id, e.target.checked)} />
-              docs:write
-            </label>
-          )}
-          {k.teams && <KeyTeams k={k} options={teamOptions ?? []} save={setTeams} />}
-          <span className="ml-auto text-xs text-muted">{k.lastUsedAt ? `used ${timeAgo(k.lastUsedAt)}` : "never used"}</span>
-          <form action={markAllSeen}>
-            <input type="hidden" name="keyId" value={k.id} />
-            <SubmitButton className="btn btn-ghost py-1 text-xs" title="Reset this agent's queue in every team">Mark all seen</SubmitButton>
-          </form>
-          <form action={revoke}>
-            <input type="hidden" name="id" value={k.id} />
-            <SubmitButton className="btn btn-danger py-1 text-xs">Revoke</SubmitButton>
-          </form>
-        </li>
-      ))}
-    </List>
-  );
-}
+const item = "flex cursor-default items-center rounded-md px-2.5 py-1.5 text-sm outline-none data-[highlighted]:bg-fg/[0.07]";
 
-/** The teams a key can open: chips, and (when the person can change them) a small editor. A key with none reaches nothing, and says so. */
-function KeyTeams({ k, options, save }: { k: KeyRow; options: TeamOption[]; save?: (keyId: string, teams: string[]) => void | Promise<void> }) {
-  const [editing, setEditing] = useState(false);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const teams = k.teams ?? [];
-  if (editing && save) {
-    // Teams of the key the person cannot edit are not theirs to give or take: they stay as they are and are not offered.
-    const toggle = (key: string) => setPicked((p) => (p.includes(key) ? p.filter((x) => x !== key) : [...p, key]));
-    return (
-      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" role="group" aria-label={`Teams of ${k.name}`}>
-        {options.map((t) => (
-          <label key={t.key} className="flex items-center gap-1">
-            <input type="checkbox" checked={picked.includes(t.key)} onChange={() => toggle(t.key)} />
-            {t.name}
-          </label>
-        ))}
-        <button
-          type="button"
-          className="btn btn-primary py-0.5 text-xs"
-          disabled={!picked.length}
-          onClick={async () => {
-            try {
-              await save(k.id, picked);
-              setEditing(false);
-              setError(null);
-            } catch (e) {
-              setError(e instanceof Error ? e.message : "Could not save the teams");
-            }
-          }}
-        >
-          Save teams
-        </button>
-        <button type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => (setEditing(false), setError(null))}>
-          Cancel
-        </button>
-        {error && <span className="text-danger" role="alert">{error}</span>}
-      </span>
-    );
-  }
+/**
+ * The keys that work today: name, prefix, teams, what each can do, when last used, and a menu (Edit, Mark all seen, Revoke).
+ * The actions are passed in so the component stays presentational (and renderable in tests without a server).
+ */
+export function ActiveKeys({ keys, onEdit, markAllSeen, revoke }: { keys: KeyRow[]; onEdit: (k: KeyRow) => void; markAllSeen: (id: string) => void | Promise<void>; revoke: (id: string) => void | Promise<void> }) {
+  const { confirm, dialogs } = useDialogs();
+  if (!keys.length) return <p className="mt-5 text-sm text-muted">No active keys. Make one with New key.</p>;
   return (
-    <span className="flex flex-wrap items-center gap-1 text-xs">
-      {teams.length === 0 ? <span className="text-warn">no teams: reaches nothing</span> : teams.map((t) => <span key={t.key} className="chip bg-panel-2 text-muted" title={t.name}>{t.key}</span>)}
-      {save && (
-        <button type="button" className="text-muted hover:text-fg" aria-label={`Change the teams of ${k.name}`} onClick={() => (setPicked(teams.map((t) => t.key).filter((key) => options.some((o) => o.key === key))), setEditing(true))}>
-          Teams
-        </button>
-      )}
-    </span>
+    <>
+      <List inset="card" className="mt-5 text-sm">
+        {keys.map((k) => (
+          <li key={k.id} className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="text-agent"><AgentIcon /> {k.name}</span>
+                <code className="font-mono text-xs text-muted">{k.prefix}…</code>
+                {k.teams?.length === 0 ? (
+                  <span className="text-xs text-warn">no teams: reaches nothing</span>
+                ) : (
+                  k.teams?.map((t) => <span key={t.key} className="chip bg-panel-2 text-xs text-muted" title={t.name}>{t.key}</span>)
+                )}
+              </div>
+              <div className="mt-0.5 text-xs text-muted">{scopeSummary(k.scopes)} · {k.lastUsedAt ? `used ${timeAgo(k.lastUsedAt)}` : "never used"}</div>
+            </div>
+            <DropdownMenu.Root modal={false}>
+              <DropdownMenu.Trigger aria-label={`Actions for ${k.name}`} className="btn btn-ghost px-1.5 py-1">
+                <MoreIcon />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content align="end" sideOffset={4} className="z-60 min-w-40 rounded-lg border border-line bg-panel p-1 shadow-lg">
+                  <DropdownMenu.Item className={item} onSelect={() => onEdit(k)}>Edit</DropdownMenu.Item>
+                  <DropdownMenu.Item className={item} onSelect={() => void markAllSeen(k.id)}>Mark all seen</DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    className={clsx(item, "text-danger")}
+                    onSelect={async () => {
+                      if (await confirm({ title: `Revoke ${k.name}?`, description: "The agent stops working at once. This can't be undone.", confirmLabel: "Revoke", danger: true })) await revoke(k.id);
+                    }}
+                  >
+                    Revoke
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </li>
+        ))}
+      </List>
+      {dialogs}
+    </>
   );
 }

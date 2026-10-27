@@ -23,8 +23,8 @@ const pr = (o: { action: string; number: number; title: string; sha?: string; in
   installation: { id: Number(o.installation ?? gh.installationA) },
 });
 
-const issue = (as: ReturnType<typeof asKey>, ref: string) => v1ok(as, "get_issue", { issue: ref });
-const eventTypes = async (as: ReturnType<typeof asKey>, team: string) => JSON.stringify(await v1ok(as, "get_activity", { project: team, limit: 60 }));
+const issue = (as: ReturnType<typeof asKey>, ref: string) => v1ok(as, "get_issue", { ref: ref });
+const eventTypes = async (as: ReturnType<typeof asKey>, team: string) => JSON.stringify(await v1ok(as, "get_changes", { team: team, limit: 200 }));
 
 describe("POST /api/webhooks/github: signature and framing", () => {
   test("a missing, wrong or malformed signature is one plain 401, and nothing is processed", async () => {
@@ -106,7 +106,7 @@ describe("POST /api/webhooks/github: pull requests and CI", () => {
     assert.equal(t.pullRequests.length, 1);
     assert.equal(t.pullRequests[0].number, 7);
     assert.equal(t.pullRequests[0].state, "open");
-    assert.ok(t.comments.some((c: { authorName: string; body: string }) => c.authorName === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
+    assert.ok(t.comments.some((c: { by: string; body: string }) => c.by === "GitHub" && /moved to Review: pull request opened/.test(c.body)));
     assert.match(await eventTypes(A, fx.a.teamKey), /issue\.pull_request/);
   });
 

@@ -9,18 +9,19 @@ const revokedKey = (id: string) => key(id, { revokedAt: new Date(Date.now() - 2 
 const noop = () => {};
 const visible = (html: string) => html.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
 
-test("active keys show name, prefix and when they were last used, each with mark-all-seen and revoke", () => {
-  const html = renderToStaticMarkup(<ActiveKeys keys={[key("a1", { lastUsedAt: new Date().toISOString() }), key("b2")]} markAllSeen={noop} revoke={noop} />);
+test("active keys show name, prefix, teams, what they can do and when they were last used, each with an actions menu", () => {
+  const html = renderToStaticMarkup(
+    <ActiveKeys keys={[key("a1", { lastUsedAt: new Date().toISOString(), scopes: ["read", "board:write", "map:write"], teams: [{ key: "AA", name: "Alpha" }] }), key("b2", { scopes: ["read"] })]} onEdit={noop} markAllSeen={noop} revoke={noop} />,
+  );
   const text = visible(html);
-  assert.ok(text.includes("Key a1") && text.includes("wh_a1…") && text.includes("used just now"));
-  assert.ok(text.includes("Key b2") && text.includes("never used"));
-  assert.equal(html.match(/Mark all seen/g)?.length, 2);
-  assert.equal(html.match(/>Revoke</g)?.length, 2);
+  assert.ok(text.includes("Key a1") && text.includes("wh_a1…") && text.includes("AA") && text.includes("Read · Board · Map · used just now"));
+  assert.ok(text.includes("Key b2") && text.includes("Read · never used"));
+  assert.equal(html.match(/aria-label="Actions for Key/g)?.length, 2);
 });
 
 test("with no active keys it says so instead of rendering an empty list", () => {
-  const html = renderToStaticMarkup(<ActiveKeys keys={[]} markAllSeen={noop} revoke={noop} />);
-  assert.match(visible(html), /No active keys\. Create one above\./);
+  const html = renderToStaticMarkup(<ActiveKeys keys={[]} onEdit={noop} markAllSeen={noop} revoke={noop} />);
+  assert.match(visible(html), /No active keys/);
   assert.ok(!html.includes("<ul"));
 });
 
@@ -56,7 +57,7 @@ test("splitKeys keeps revoked keys out of the active list and puts the most rece
   const { active, revoked } = splitKeys([key("a"), old, key("b"), recent]);
   assert.deepEqual(active.map((k) => k.id), ["a", "b"], "live keys keep their order");
   assert.deepEqual(revoked.map((k) => k.id), ["recent", "old"]);
-  const html = renderToStaticMarkup(<ActiveKeys keys={active} markAllSeen={noop} revoke={noop} />);
+  const html = renderToStaticMarkup(<ActiveKeys keys={active} onEdit={noop} markAllSeen={noop} revoke={noop} />);
   assert.ok(html.includes("Key a") && !html.includes("Key old") && !html.includes("Key recent"));
 });
 

@@ -9,11 +9,11 @@ import type { TeamMembersService } from "./team-members.service";
 import type { TeamsService } from "./teams.service";
 
 /**
- * Temporary. Code that is not converted yet (other modules, the MCP tools, tests) still calls plain functions; these are those
+ * Temporary. Code that is not converted yet (other modules, tests) still calls plain functions; these are those
  * functions, each one line forwarding to the live service. `TeamsModule.onModuleInit` points them at the services Nest built, so
  * nothing works before the application has booted (tests call `testApp()`). A function that takes a `q` runs on it through
  * `Database.within`, so a caller's own transaction stays the one the service writes on. Delete this file when the last caller
- * moves to the services (the MCP redesign moves the tools).
+ * moves to the services.
  */
 type Live = { db: Database; access: TeamAccessService; teams: TeamsService; lifecycle: TeamLifecycleService; members: TeamMembersService; statuses: StatusesService };
 let live: Live | undefined;

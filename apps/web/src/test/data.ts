@@ -27,7 +27,7 @@ export const key = (over: Partial<KeyView> = {}): KeyView => ({
   createdAt: "2026-10-01T00:00:00.000Z",
   lastUsedAt: null,
   revokedAt: null,
-  canWriteDocs: false,
+  scopes: ["read", "board:write", "map:write"],
   teams: [{ key: "AA", name: "Alpha" }],
   ...over,
 });

@@ -30,6 +30,8 @@ export const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().
 export const CHAT_PENDING_MS = 60_000;
 export const CHAT_QUIET_MS = 3 * 60_000;
 /** The latest tool calls an answer keeps, and the most characters of one answer. */
+/** The daemon's CHAT_TIMEOUT: a chat answer's key never outlives it. */
+export const CHAT_KEY_TTL_MS = 10 * 60_000;
 export const CHAT_ACTIVITY_MAX = 30;
 export const CHAT_CONTENT_MAX = 400_000;
 export const CHAT_MESSAGE_MAX = 8_000;
