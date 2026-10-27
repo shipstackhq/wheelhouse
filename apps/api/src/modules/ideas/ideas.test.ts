@@ -107,6 +107,14 @@ describe("ideas", () => {
     assert.equal((await ideas.update(ada, i.id, { title: "Renamed", version: 4 })).title, "Renamed");
   });
 
+  test("an agent files an idea under its own name; Wheelhouse's own work cannot", async () => {
+    const agent: Actor = { kind: "agent", id: crypto.randomUUID(), name: "ada (chat)", workspaceId: ada.workspaceId };
+    const i = await ideas.create(agent, { title: "From a chat" });
+    assert.equal(i.author.name, "ada (chat)");
+    assert.ok((await ideas.list(ada)).some((x) => x.id === i.id));
+    await assert.rejects(ideas.create({ ...agent, system: true }, { title: "No" }), code("forbidden"));
+  });
+
   test("a guest sees nothing, a viewer reads but cannot write, another workspace gets a 404", async () => {
     const i = await ideas.create(ada, { title: "Private" });
     await assert.rejects(ideas.list(gus), code("not_found"));

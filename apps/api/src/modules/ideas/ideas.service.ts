@@ -57,7 +57,8 @@ export class IdeasService {
 
   /** Who may write: a teammate who is not a viewer. Reading is for every member but a guest; to anyone else the workspace has no ideas. */
   private async may(actor: Actor, write: boolean) {
-    if (actor.kind !== "human" || actor.system) throw new ServiceError("forbidden", "Only teammates work with ideas");
+    if (actor.system) throw new ServiceError("forbidden", "Only teammates and their agents work with ideas");
+    if (actor.kind === "agent") return; // an agent key is already held to its workspace and its scopes by the tool that calls in
     const role = await this.access.workspaceRoleOf(actor.workspaceId, actor.id);
     if (!role || role === "guest") throw new ServiceError("not_found", "Idea not found");
     if (write && role === "viewer") throw new ServiceError("forbidden", "Your role on this workspace is read only");

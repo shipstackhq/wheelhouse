@@ -9,6 +9,7 @@ import { MapModule } from "../modules/map/map.module";
 import { DocsModule } from "../modules/docs/docs.module";
 import { GithubModule } from "../modules/github/github.module";
 import { DashboardModule } from "../modules/dashboard/dashboard.module";
+import { IdeasModule } from "../modules/ideas/ideas.module";
 import { ToolsService } from "../lib/tools";
 import { CsrfGuard } from "../common/guards/csrf.guard";
 import { SessionGuard } from "../common/guards/session.guard";
@@ -18,7 +19,7 @@ import { SessionGuard } from "../common/guards/session.guard";
  * process that only serves machines. `ToolsService` builds the tool registry from the module services, so the module imports their modules.
  */
 @Module({
-  imports: [TeamsModule, IssuesModule, MapModule, DocsModule, GithubModule, DashboardModule],
+  imports: [TeamsModule, IssuesModule, MapModule, DocsModule, GithubModule, DashboardModule, IdeasModule],
   controllers: [McpController, V1Controller],
   providers: [ToolsService, ActorGuard, HumanGuard, CsrfGuard, SessionGuard],
 })

@@ -19,7 +19,7 @@ Board workflow:
 1. At the start of a task call get_changes and handle what the team changed (new/edited/moved issues, comments addressed to you, stale nodes and docs). Pass its latest seq as \`ack\` on the next call to acknowledge.
 2. list_issues to find work (filter assignee "me", cycle "current"). Before working an issue: update_issue with status "in_progress" and assignee "me" (a claim, for agent-claimable issues).
 3. Talk to the team with comment on the issue: questions, decisions, a summary of what you changed.
-4. When done, update_issue to status "review". create_issue for follow-up work you discover, with its cycle, project and link_nodes set in the same call.
+4. When done, update_issue to status "review". create_issue for follow-up work you discover, with its cycle, project and link_nodes set in the same call; create_idea for something worth considering that nobody has decided to do.
 Planning: get_cycle and get_project read it; plan (needs the planning:write scope) creates and edits cycles, projects and milestones in a batch.
 Knowledge map (concept, system, data and code layers, linked by "implements"):
 5. Read it before structural work (get_map; node for one part, flow for a walkthrough, layer "data" for the schema). It's how humans understand the codebase without reading code, so keep it true.
