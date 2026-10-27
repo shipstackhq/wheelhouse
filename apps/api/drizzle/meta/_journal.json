@@ -379,6 +379,13 @@
       "when": 1793130000000,
       "tag": "0053_ideas",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793140000000,
+      "tag": "0054_idea_version_labels",
+      "breakpoints": true
     }
   ]
 }

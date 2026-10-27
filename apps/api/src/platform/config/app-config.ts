@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { KEY_SCOPES, type KeyScope } from "@wheelhouse/shared/key-scopes";
 import { REPO_ROOT } from "./environment";
 import { readServiceRole, type ServiceRole } from "./service-role";
 
@@ -31,5 +32,16 @@ export class AppConfig {
   /** SERVICE_ROLE: which part of the API this process serves (see service-role.ts); "all" when unset. */
   get serviceRole(): ServiceRole {
     return readServiceRole(process.env);
+  }
+
+  /**
+   * CHAT_SCOPES: what a chat answer's key may do, comma-separated. `read` is always held; unknown names are dropped with a warning.
+   */
+  get chatScopes(): KeyScope[] {
+    const asked = (process.env.CHAT_SCOPES ?? "read,board:write,map:write,docs:write,planning:write").split(",").map((x) => x.trim()).filter(Boolean);
+    const known = asked.filter((x): x is KeyScope => (KEY_SCOPES as readonly string[]).includes(x));
+    const unknown = asked.filter((x) => !(KEY_SCOPES as readonly string[]).includes(x));
+    if (unknown.length) new Logger("AppConfig").warn(`CHAT_SCOPES: ignoring unknown ${unknown.join(", ")}`);
+    return ["read", ...new Set(known.filter((x) => x !== "read"))];
   }
 }

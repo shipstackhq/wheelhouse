@@ -92,6 +92,29 @@ describe("ideas", () => {
     await assert.rejects(ideas.update(ada, other.id, { status: "promoted" }), code("invalid"));
   });
 
+  test("a stale edit is refused, labels are cleaned, and a promoted idea stays editable", async () => {
+    const i = await ideas.create(ada, { title: "Shared", body: "v1" });
+    assert.equal(i.version, 1);
+    const mine = await ideas.update(ada, i.id, { body: "mine", version: 1 });
+    assert.equal(mine.version, 2);
+    await assert.rejects(ideas.update(ada, i.id, { body: "theirs", version: 1 }), code("conflict"));
+    assert.equal((await ideas.get(ada, i.id)).body, "mine");
+    const tagged = await ideas.update(ada, i.id, { labels: [" ux ", "UX", "api"], version: 2 });
+    assert.deepEqual(tagged.labels, ["ux", "api"]);
+    await assert.rejects(ideas.update(ada, i.id, { labels: "ux" }), code("invalid"));
+    const done = await ideas.promote(ada, i.id, { team: team.key });
+    assert.equal(done.version, 4);
+    assert.equal((await ideas.update(ada, i.id, { title: "Renamed", version: 4 })).title, "Renamed");
+  });
+
+  test("an agent files an idea under its own name; Wheelhouse's own work cannot", async () => {
+    const agent: Actor = { kind: "agent", id: crypto.randomUUID(), name: "ada (chat)", workspaceId: ada.workspaceId };
+    const i = await ideas.create(agent, { title: "From a chat" });
+    assert.equal(i.author.name, "ada (chat)");
+    assert.ok((await ideas.list(ada)).some((x) => x.id === i.id));
+    await assert.rejects(ideas.create({ ...agent, system: true }, { title: "No" }), code("forbidden"));
+  });
+
   test("a guest sees nothing, a viewer reads but cannot write, another workspace gets a 404", async () => {
     const i = await ideas.create(ada, { title: "Private" });
     await assert.rejects(ideas.list(gus), code("not_found"));

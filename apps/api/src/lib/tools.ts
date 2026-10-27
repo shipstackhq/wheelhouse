@@ -13,11 +13,12 @@ import { DecisionsService, FreshnessService, GraphService, SessionsService } fro
 import { DocFreshnessService, DocsService } from "../modules/docs/index";
 import { BriefingService } from "../modules/dashboard/index";
 import { RepositoriesService } from "../modules/github/index";
+import { IdeasService } from "../modules/ideas/ideas.service";
 import { ackChanges, checkSession, getChanges, listEvents, resumeSession, sessionNotice, touchSession } from "./service-queue";
 
 /**
  * One registry of operations, exposed both as MCP tools (/mcp) and as REST endpoints (POST /api/v1/<tool>). Keep descriptions
- * agent-oriented: they're what Claude reads to decide how to use Wheelhouse. The design is docs/mcp-redesign.md: 19 tools for
+ * agent-oriented: they're what Claude reads to decide how to use Wheelhouse. The design is docs/mcp-redesign.md: 20 tools for
  * agents, plus a few hidden ones the CLI and hooks call over REST.
  */
 
@@ -174,10 +175,10 @@ type ToolDeps = {
   db: Database; access: TeamAccessService; teamService: TeamsService; teamMembers: TeamMembersService;
   issues: IssuesService; cycleService: CyclesService; projectService: ProjectsService;
   graph: GraphService; decisions: DecisionsService; freshness: FreshnessService; sessions: SessionsService;
-  docs: DocsService; docFreshness: DocFreshnessService; dashboard: BriefingService; repositoryService: RepositoriesService;
+  docs: DocsService; docFreshness: DocFreshnessService; dashboard: BriefingService; repositoryService: RepositoriesService; ideas: IdeasService;
 };
 
-function buildTools({ db, access, teamService, teamMembers, issues, cycleService, projectService, graph, decisions, freshness, sessions, docs, docFreshness, dashboard, repositoryService }: ToolDeps) {
+function buildTools({ db, access, teamService, teamMembers, issues, cycleService, projectService, graph, decisions, freshness, sessions, docs, docFreshness, dashboard, repositoryService, ideas }: ToolDeps) {
   /** Apply a batch in order inside one transaction; a failing change names itself and nothing is applied. */
   function applyAll<C extends { op: string }>(changes: C[], one: (c: C) => Promise<unknown>) {
     return db.transaction(async () => {
@@ -778,6 +779,17 @@ Flows: a named walk through the map ("Agent picks up an issue"): 3-10 steps, eac
       run: (a, { team, ...t }) => decisions.upsertTerm(a, team, t),
     }),
 
+    create_idea: tool({
+      scope: "board:write",
+      description:
+        "File an idea: something worth considering that came up in a chat or a run, not yet committed work. Keep it thin (title and a few lines of why); no priority, assignee or cycle. People promote ideas to issues. Prefer this over create_issue when nobody has decided to do it.",
+      input: z.object({ team, title: z.string(), body: z.string().optional() }),
+      run: async (a, i) => {
+        const d = await ideas.create(a, i);
+        return { id: d.id, title: d.title, status: d.status, url: `/ideas/${d.id}` };
+      },
+    }),
+
     // ───────── plumbing for the CLI and hooks (REST only) ─────────
 
     session_sync: tool({
@@ -893,8 +905,9 @@ export class ToolsService {
     @Inject(DocFreshnessService) docFreshness: DocFreshnessService,
     @Inject(BriefingService) dashboard: BriefingService,
     @Inject(RepositoriesService) repositoryService: RepositoriesService,
+    @Inject(IdeasService) ideas: IdeasService,
   ) {
-    this.tools = buildTools({ db, access, teamService, teamMembers, issues, cycleService, projectService, graph, decisions, freshness, sessions, docs, docFreshness, dashboard, repositoryService });
+    this.tools = buildTools({ db, access, teamService, teamMembers, issues, cycleService, projectService, graph, decisions, freshness, sessions, docs, docFreshness, dashboard, repositoryService, ideas });
   }
 
   /** The tools the actor may call; its key's scopes narrow the list. */

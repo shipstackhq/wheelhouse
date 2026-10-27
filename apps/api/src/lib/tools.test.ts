@@ -38,8 +38,8 @@ before(async () => {
 });
 
 describe("the registry", () => {
-  test("19 agent tools, and the six session tools only over REST; every tool takes `team` where it needs one", () => {
-    assert.equal(mcp.list().length, 19);
+  test("20 agent tools, and the six session tools only over REST; every tool takes `team` where it needs one", () => {
+    assert.equal(mcp.list().length, 20);
     assert.deepEqual(
       mcp.list({ includeHidden: true }).map((t) => t.name).filter((n) => !mcp.list().some((t) => t.name === n)).sort(),
       ["land_changes", "report_changes", "resume_session", "session_end", "session_status", "session_sync"],

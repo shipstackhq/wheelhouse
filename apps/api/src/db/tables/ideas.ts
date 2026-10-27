@@ -1,4 +1,4 @@
-import { uuid, text, index } from "drizzle-orm/pg-core";
+import { uuid, text, index, integer, jsonb } from "drizzle-orm/pg-core";
 import { table, createdAt, updatedAt } from "./common";
 import { workspaces } from "./auth";
 import { teams } from "./teams";
@@ -25,6 +25,9 @@ export const ideas = table(
     authorId: uuid("author_id"),
     authorName: text("author_name").notNull(),
     promotedIssueId: uuid("promoted_issue_id").references(() => issues.id, { onDelete: "set null" }),
+    // WH-110: the optimistic lock (every change bumps it) and free-text tags, as on docs.
+    version: integer("version").notNull().default(1),
+    labels: jsonb("labels").$type<string[]>().notNull().default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

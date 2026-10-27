@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type { KeyScope } from "@wheelhouse/shared/key-scopes";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { schema } from "../../db";
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
@@ -450,11 +451,11 @@ export class DaemonRepository {
     return row;
   }
 
-  /** The read-only key of one chat answer (docs/chat.md, Wheelhouse data): reaches only the thread's team, expires with the answer. */
-  async insertChatKey(v: { workspaceId: string; teamId: string; messageId: string; name: string; keyHash: string; expiresAt: Date }) {
+  /** The key of one chat answer (docs/chat.md, Wheelhouse data): reaches only the thread's team, expires with the answer. */
+  async insertChatKey(v: { scopes: KeyScope[]; workspaceId: string; teamId: string; messageId: string; name: string; keyHash: string; expiresAt: Date }) {
     const [k] = await this.db.q
       .insert(apiKeys)
-      .values({ workspaceId: v.workspaceId, name: v.name, prefix: "wh_chat", keyHash: v.keyHash, capabilities: ["read"], chatMessageId: v.messageId, expiresAt: v.expiresAt })
+      .values({ workspaceId: v.workspaceId, name: v.name, prefix: "wh_chat", keyHash: v.keyHash, capabilities: v.scopes, chatMessageId: v.messageId, expiresAt: v.expiresAt })
       .returning({ id: apiKeys.id });
     await this.db.q.insert(apiKeyTeams).values({ apiKeyId: k.id, teamId: v.teamId, workspaceId: v.workspaceId });
   }

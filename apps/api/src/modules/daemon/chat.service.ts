@@ -4,6 +4,7 @@ import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { randomToken, sha256 } from "../../common/crypto";
+import { AppConfig } from "../../platform/config/app-config";
 import { Database } from "../../platform/database/database";
 import { DaemonRepository } from "./daemon.repository";
 import { chatMessageView, chatThreadView, deviceOnline, deviceView } from "./daemon.presenter";
@@ -26,6 +27,7 @@ const isUnique = (e: unknown) => {
 export class ChatService {
   constructor(
     @Inject(Database) private readonly db: Database,
+    @Inject(AppConfig) private readonly config: AppConfig,
     @Inject(DaemonRepository) private readonly repo: DaemonRepository,
     @Inject(DeviceStreamService) private readonly stream: DeviceStreamService,
     @Inject(DevicesService) private readonly devices: DevicesService,
@@ -89,9 +91,10 @@ export class ChatService {
           { ...scope, id: answerId, seq: seq + 2, role: "assistant", state: "pending" },
         ]);
         await this.repo.touchThread(thread.id, { model: thread.model, updatedAt: new Date() });
-        // The answer's own read-only key for the thread's team; the daemon reaches /mcp with it, and it is deleted when the answer ends.
+        // The answer's own key (CHAT_SCOPES) for the thread's team, named for the person so its writes read "<person> (chat)"; the daemon reaches /mcp with it, and it is deleted when the answer ends.
         const token = `wh_${randomToken(24)}`;
-        await this.repo.insertChatKey({ workspaceId: thread.workspaceId, teamId: thread.teamId, messageId: answerId, name: `Chat: ${thread.title}`.slice(0, 100), keyHash: sha256(token), expiresAt: new Date(Date.now() + CHAT_KEY_TTL_MS) });
+        const scopes = this.config.chatScopes;
+        await this.repo.insertChatKey({ scopes, workspaceId: thread.workspaceId, teamId: thread.teamId, messageId: answerId, name: `${actor.name} (chat)`.slice(0, 100), keyHash: sha256(token), expiresAt: new Date(Date.now() + CHAT_KEY_TTL_MS) });
         await this.stream.send(key, thread.deviceId, "chat.message", {
           messageId: answerId,
           threadId: thread.id,
@@ -101,7 +104,7 @@ export class ChatService {
           prompt: text,
           repository: { id: repo.id, name: repo.displayName, fullName: repo.githubFullName, cloneUrl: `https://github.com/${repo.githubFullName}.git`, defaultBranch: repo.defaultBranch },
           expiresAt,
-          mcp: { token },
+          mcp: { token, write: scopes.length > 1 },
         });
         return pair;
       });
