@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 
-const { teams, statuses, issues, comments, nodes, issueNodes, events, labels, issueLabels, teamMembers, users } = schema;
+const { teams, statuses, issues, comments, nodes, issueNodes, events, labels, issueLabels, teamMembers, users, teamAgents, workspaceAgents } = schema;
 
 export type IssueRow = typeof issues.$inferSelect;
 export type IssueInsert = typeof issues.$inferInsert;
@@ -64,6 +64,16 @@ export class IssuesRepository {
   }
 
   /** The issue as it is now, read under a row lock for the rest of the transaction; the given row when it is gone. */
+  /** The workspace agent with this slug on the team's roster, or undefined. */
+  async rosterAgentId(teamId: string, slug: string): Promise<string | undefined> {
+    const [r] = await this.db.q
+      .select({ id: workspaceAgents.id })
+      .from(teamAgents)
+      .innerJoin(workspaceAgents, and(eq(workspaceAgents.id, teamAgents.workspaceAgentId), eq(workspaceAgents.workspaceId, teamAgents.workspaceId)))
+      .where(and(eq(teamAgents.teamId, teamId), eq(workspaceAgents.slug, slug)));
+    return r?.id;
+  }
+
   async lockIssue(row: IssueRow): Promise<IssueRow> {
     const [fresh] = await this.db.q.select().from(issues).where(eq(issues.id, row.id)).for("update");
     return fresh ?? row;

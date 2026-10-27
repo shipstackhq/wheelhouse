@@ -242,6 +242,8 @@ export type IssueView = {
   milestoneId: string | null;
   /** The issue this is a sub-issue of (in the same team), or null. */
   parentId: string | null;
+  /** The workspace agent it is delegated to (WH-113), or null. */
+  delegateAgentId: string | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -481,6 +483,8 @@ export type IssuePatch = {
   milestoneId?: string | null;
   /** An issue of this team (a ref like "WH-12") to put this one under; null makes it a top-level issue. */
   parent?: string | null;
+  /** The slug of an agent on the team's roster (WH-113); null clears it. Only the assignee or an admin. */
+  delegate?: string | null;
   version?: number;
 };
 export type NewIssue = Omit<IssuePatch, "version"> & { title: string; status?: string };

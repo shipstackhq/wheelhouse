@@ -54,6 +54,8 @@ export type IssueInput = {
   milestoneId?: string | null;
   /** The issue this one is a sub-issue of: a ref ("WH-12") or id of an issue in the same team; null makes it a top-level issue. */
   parent?: string | null;
+  /** WH-113: the slug of an agent on the team's roster to delegate to, or null to clear. Only the assignee or an admin. */
+  delegate?: string | null;
 };
 
 /** Agent claims with no activity from the claiming agent for this long are released. */
@@ -130,6 +132,10 @@ export function issueInput(b: Record<string, unknown>, o: { create: boolean }): 
   if (b.parent !== undefined) {
     if (b.parent !== null && (typeof b.parent !== "string" || !b.parent.trim())) bad("parent", "parent must be an issue ref like WH-12, or null for none");
     out.parent = b.parent === null ? null : (b.parent as string).trim();
+  }
+  if (b.delegate !== undefined) {
+    if (b.delegate !== null && (typeof b.delegate !== "string" || !b.delegate.trim())) bad("delegate", "delegate must be an agent's slug, or null for none");
+    out.delegate = b.delegate === null ? null : (b.delegate as string).trim();
   }
   if (b.cycle !== undefined) {
     if (b.cycle !== null && (typeof b.cycle !== "number" || !Number.isSafeInteger(b.cycle))) bad("cycle", "cycle must be a cycle number, or null for none");

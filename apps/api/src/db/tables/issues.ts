@@ -5,6 +5,7 @@ import { teamScope } from "./team-scope";
 import { workspaces, apiKeys } from "./auth";
 import { nodes } from "./map";
 import { statuses } from "./teams";
+import { workspaceAgents } from "./agents";
 
 export const PRIORITIES = ["none", "low", "medium", "high", "urgent"] as const;
 
@@ -39,6 +40,9 @@ export const issues = table(
     // `ON DELETE SET NULL (parent_id)` (migration 0031), so deleting a parent frees its sub-issues and leaves them in their team.
     // The service refuses a parent that would make a loop (an issue under its own descendant); see `setParent`.
     parentId: uuid("parent_id"),
+    // WH-113: the agent the issue is delegated to, from the team's roster; the assignee stays the human who owns it. Deleting the
+    // agent clears it; taking it off the roster is cleared by the agents service.
+    delegateAgentId: uuid("delegate_agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
     agentClaimable: boolean("agent_claimable").notNull().default(false),
     claimedByKeyId: uuid("claimed_by_key_id").references(() => apiKeys.id, { onDelete: "set null" }),
     position: doublePrecision("position").notNull(),

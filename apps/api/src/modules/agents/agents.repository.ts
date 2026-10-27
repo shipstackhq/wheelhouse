@@ -3,7 +3,7 @@ import { and, asc, eq, getTableColumns } from "drizzle-orm";
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 
-const { workspaceAgents, teamAgents, teams, workspaces } = schema;
+const { workspaceAgents, teamAgents, teams, workspaces, issues } = schema;
 const columns = getTableColumns(workspaceAgents);
 
 export type AgentRow = typeof workspaceAgents.$inferSelect & { teamKey: string | null };
@@ -71,6 +71,8 @@ export class AgentsRepository {
 
   async removeFromRoster(teamId: string, agentId: string) {
     const rows = await this.db.q.delete(teamAgents).where(and(eq(teamAgents.teamId, teamId), eq(teamAgents.workspaceAgentId, agentId))).returning();
+    // An agent off the roster can no longer be the team's delegate (WH-113).
+    if (rows.length) await this.db.q.update(issues).set({ delegateAgentId: null }).where(and(eq(issues.teamId, teamId), eq(issues.delegateAgentId, agentId)));
     return rows.length > 0;
   }
 }

@@ -219,6 +219,24 @@ export class IssuesService {
 
   // ───────── changing issues ─────────
 
+  /**
+   * WH-113: who may delegate and to whom. A person only (an agent never hands work to an agent), and only the issue's assignee or an admin
+   * of the team or workspace. The agent must be on the team's roster. Returns the workspace agent id, or null to clear.
+   */
+  private async resolveDelegate(actor: Actor, team: { id: string }, issue: { assigneeId: string | null }, slug: string | null): Promise<string | null> {
+    if (actor.kind !== "human" || actor.system) throw new ServiceError("forbidden", "Only a person can delegate an issue to an agent");
+    if (actor.id !== issue.assigneeId) {
+      const [teamRole, workspaceRole] = await Promise.all([this.access.roleOn(actor, team.id), this.access.workspaceRoleOf(actor.workspaceId, actor.id)]);
+      if (teamRole !== "admin" && workspaceRole !== "owner" && workspaceRole !== "admin") {
+        throw new ServiceError("forbidden", "Only the assignee or an admin can delegate this issue", { fields: { delegate: "Only the assignee or an admin can delegate this issue" } });
+      }
+    }
+    if (slug === null) return null;
+    const id = await this.repo.rosterAgentId(team.id, slug);
+    if (!id) throw new ServiceError("invalid", `${slug} is not on this team's roster`, { fields: { delegate: `${slug} is not on this team's roster` } });
+    return id;
+  }
+
   private async positionAt(statusId: string, index: number | undefined, excludeId?: string) {
     return positionAmong(await this.repo.siblingsInStatus(statusId, excludeId), index);
   }
@@ -303,17 +321,18 @@ export class IssuesService {
         else clean.labels = want;
       }
       await this.assertAssignee(team.id, clean.assigneeId);
-      const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, ...cleanRest } = clean;
+      const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, delegate: wantDelegate, ...cleanRest } = clean;
       const parentChange = wantParent === undefined ? {} : { parentId: await this.resolveParent(team, issue.id, wantParent) };
+      const delegateChange = wantDelegate === undefined ? {} : { delegateAgentId: await this.resolveDelegate(actor, team, issue, wantDelegate) };
       const projectChoice =
         wantProject === undefined && wantMilestone === undefined
           ? undefined
           : await this.projects.resolveIssueProject(team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
-      const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange } as Record<string, unknown>);
+      const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange, ...delegateChange } as Record<string, unknown>);
       if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null };
       const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
       const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await this.cycles.cycleForIssue(team.id, newCycle)).id };
-      const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, version: issue.version + 1, updatedAt: new Date() });
+      const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, ...delegateChange, version: issue.version + 1, updatedAt: new Date() });
       if (newLabels) await this.repo.setLabels(team, row.id, newLabels);
       const t = { ...row, labels: newLabels ?? issue.labels, cycle: newCycle === undefined ? issue.cycle : newCycle };
       await this.projects.emitIssueMove(actor, team.id, r, issue.projectId, row.projectId);
