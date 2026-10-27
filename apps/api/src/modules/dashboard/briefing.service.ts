@@ -67,7 +67,7 @@ export class BriefingService {
     const built =
       systems.length || tables.length
         ? `## How it's built\n${sysLines.join("\n")}${deps.length ? `\nConnections: ${deps.join("; ")}` : ""}${
-            tables.length ? `\nData: ${tables.length} tables/views/enums (${tables.slice(0, 25).map((t) => t.name).join(", ")}${tables.length > 25 ? "…" : ""}), ${rels} relationships. Use get_schema for columns.` : ""
+            tables.length ? `\nData: ${tables.length} tables/views/enums (${tables.slice(0, 25).map((t) => t.name).join(", ")}${tables.length > 25 ? "…" : ""}), ${rels} relationships. Use get_map with layer "data" for columns.` : ""
           }\n`
         : null;
 
@@ -103,7 +103,7 @@ export class BriefingService {
           .join(", ")}. Latest: ${q.changes
           .slice(-5)
           .map((c) => `${c.actorName} ${c.summary}`)
-          .join("; ")}. Call get_changes to handle them, then ack_changes.\n`;
+          .join("; ")}. Call get_changes to handle them (pass its latestSeq as ack next time).\n`;
       }
     }
 
@@ -129,13 +129,13 @@ export class BriefingService {
 
     // Docs index (WH-51): titles + slugs only, never bodies, to protect the token budget.
     const docsSection = docsIndex.length
-      ? `## Docs\n${docsIndex.slice(0, 20).map((d) => `- ${d.title} (${d.slug})`).join("\n")}${docsIndex.length > 20 ? `\n…and ${docsIndex.length - 20} more` : ""}\nUse get_doc(slug) to read one, search_docs to find by keyword.\n`
+      ? `## Docs\n${docsIndex.slice(0, 20).map((d) => `- ${d.title} (${d.slug})`).join("\n")}${docsIndex.length > 20 ? `\n…and ${docsIndex.length - 20} more` : ""}\nUse get_doc(docs/<slug>) to read one, list_knowledge for the tree.\n`
       : null;
 
-    const flows = g.flows.length ? `## Flows\n${g.flows.map((f) => `- ${f.name} (${f.steps.length} steps)`).join("\n")}\nUse get_flows for steps.\n` : null;
+    const flows = g.flows.length ? `## Flows\n${g.flows.map((f) => `- ${f.name} (${f.steps.length} steps)`).join("\n")}\nUse get_map with flow for steps.\n` : null;
     const terms = g.terms.length ? `## Glossary\n${g.terms.slice(0, 15).map((t) => `- **${t.term}**: ${clip(t.definition, 120)}`).join("\n")}\n` : null;
     const deeper =
-      "## Go deeper\nget_issue_context(issue) for everything about one issue, including which files to read first. get_node(node) for one part. get_schema for the data model.\n";
+      "## Go deeper\nget_issue(ref) for everything about one issue, including which files to read first. get_map with node for one part, with layer=data for the data model.\n";
 
     // Where the code comes from and how much to trust "what landed" (ADR-7): said plainly, never left to be guessed.
     const live = repos.filter((r) => r.lifecycle !== "retired");
@@ -232,8 +232,8 @@ export class BriefingService {
       : null;
     const read = files.length ? `## Read these files first\n${files.map((f) => `- ${f}`).join("\n")}\n` : null;
     const parts = linked.length
-      ? `## ${guessed ? "Possibly related parts of the system (issue isn't linked to the map yet; link with link_issue_node)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
-      : `## Map\nNothing on the map matches this issue yet. After the work, add or link nodes (upsert_node, link_issue_node).\n`;
+      ? `## ${guessed ? "Possibly related parts of the system (issue isn't linked to the map yet; link with update_issue link_nodes)" : "Parts of the system this touches"}\n${linked.map(nodeBlock).join("\n\n")}\n`
+      : `## Map\nNothing on the map matches this issue yet. After the work, add or link nodes (update_map, update_issue link_nodes).\n`;
     const near = neighbours.length
       ? `## Connected across layers\n${neighbours.map((n) => `- ${n.layer}:${n.name}${n.summary ? `: ${n.summary}` : ""}`).join("\n")}\n`
       : null;

@@ -19,12 +19,13 @@ import { ServiceError } from "../common/service-error";
 import { addComment, createIssue } from "../modules/issues/issues.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
 import { getChanges, markAllSeen, queueStatus, removeSession } from "./service-queue";
-import { runTool } from "./tools";
+import { ToolsService } from "./tools";
 import { MetricsService } from "../modules/dashboard/metrics.service";
 import { briefing } from "../modules/dashboard/dashboard.legacy";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
 import { testApp } from "../test/app";
 const metrics = (await testApp()).get(MetricsService);
+const mcp = (await testApp()).get(ToolsService);
 
 type Changes = Awaited<ReturnType<typeof getChanges>>;
 
@@ -33,7 +34,7 @@ let key: Actor;
 let otherKey: Actor;
 let issueRef: string;
 
-const as = (a: Actor, tool: string, args: Record<string, unknown>) => runTool(a, tool, { project: "QQ", ...args });
+const as = (a: Actor, tool: string, args: Record<string, unknown>) => mcp.run(a, tool, { team: "QQ", ...args });
 const changes = (a: Actor, session?: string) => as(a, "get_changes", session ? { session } : {}) as Promise<Changes>;
 const seqs = (c: Changes) => c.changes.map((e) => e.seq);
 
@@ -61,14 +62,14 @@ describe("per-session queue cursors", () => {
     assert.ok(a.total > 0, "A sees the workspace's changes");
     assert.deepEqual(seqs(b), seqs(a), "B starts with the same queue");
 
-    await as(key, "ack_changes", { session: "sess-A", seq: a.latestSeq });
+    await as(key, "get_changes", { session: "sess-A", ack: a.latestSeq });
     assert.equal((await changes(key, "sess-A")).total, 0, "A's queue is empty after its ack");
     assert.deepEqual(seqs(await changes(key, "sess-B")), seqs(b), "B still has every change");
   });
 
   test("a session's own writes are hidden from it but visible to sibling sessions", async () => {
     const before = (await changes(key, "sess-A")).latestSeq;
-    await as(key, "update_issue", { issue: issueRef, priority: "high", session: "sess-A" });
+    await as(key, "update_issue", { ref: issueRef, priority: "high", session: "sess-A" });
 
     const a = await changes(key, "sess-A");
     assert.equal(a.changes.filter((e) => e.seq > before).length, 0, "A doesn't see its own edit");
@@ -87,7 +88,7 @@ describe("per-session queue cursors", () => {
 
   test("the key-level cursor follows the furthest ack, and new sessions start there", async () => {
     const b = await changes(key, "sess-B");
-    await as(key, "ack_changes", { session: "sess-B", seq: b.latestSeq });
+    await as(key, "get_changes", { session: "sess-B", ack: b.latestSeq });
     assert.equal((await changes(key)).total, 0, "key-level cursor caught up with B");
 
     const fresh = await changes(key, "sess-C");
@@ -101,7 +102,7 @@ describe("per-session queue cursors", () => {
   test("a session registered by another key is refused", async () => {
     await assert.rejects(changes(otherKey, "sess-A"), (e: unknown) => e instanceof ServiceError && e.code === "forbidden");
     await assert.rejects(
-      as(otherKey, "update_issue", { issue: issueRef, title: "hijack", session: "sess-A" }),
+      as(otherKey, "update_issue", { ref: issueRef, title: "hijack", session: "sess-A" }),
       (e: unknown) => e instanceof ServiceError && e.code === "forbidden",
     );
   });
@@ -150,7 +151,7 @@ describe("session breakdown (WH-45)", () => {
     const c = before.sessions.find((s) => s.id === "sess-C")!;
     assert.ok(b.pending > 0 && c.pending > 0, "both have something queued");
 
-    await as(key, "ack_changes", { session: "sess-B", seq: (await changes(key, "sess-B")).latestSeq });
+    await as(key, "get_changes", { session: "sess-B", ack: (await changes(key, "sess-B")).latestSeq });
 
     const after = (await queueStatus(human, "QQ")).find((q) => q.id === key.id)!;
     assert.equal(after.sessions.find((s) => s.id === "sess-B")!.pending, 0);
@@ -166,7 +167,7 @@ describe("the model is never asked to handle the session id (ADR-5)", () => {
     assert.ok(!/session/i.test(markdown.split("## Since you last looked")[1] ?? ""), "but without asking the model to pass an id");
     assert.ok(!markdown.includes("Your Wheelhouse session is"));
 
-    const def = (await import("./tools")).listToolDefs().find((t) => t.name === "get_changes")!;
+    const def = mcp.list().find((t) => t.name === "get_changes")!;
     assert.ok(!/Pass `session`/.test(def.description));
   });
 });
@@ -256,7 +257,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
   test("a removed session that reconnects lands at the top of the queue and is told what it missed", async () => {
     await changes(key, "s-rm"); // registers with a cursor
     const seen = (await changes(key, "s-rm")).latestSeq;
-    await as(key, "ack_changes", { session: "s-rm", seq: seen });
+    await as(key, "get_changes", { session: "s-rm", ack: seen });
     await removeSession(human, "QQ", "s-rm");
     await addComment(human, issueRef, "while you were gone 1");
     await addComment(human, issueRef, "while you were gone 2");
@@ -269,7 +270,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     assert.ok((await listed()).sessions.some((s) => s.id === "s-rm"));
 
     assert.equal(((await changes(key, "s-rm")) as Resumable).session_removed?.missedChanges, 2, "still reported until it chooses");
-    const brief = await runTool({ ...key }, "get_briefing", { project: "QQ", session: "s-rm" });
+    const brief = await mcp.run({ ...key }, "get_briefing", { team: "QQ", session: "s-rm" });
     assert.equal((brief as { session_removed?: unknown }).session_removed !== undefined, true, "the briefing reports it too");
   });
 
@@ -284,7 +285,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
 
   test("skip keeps it at the top of the queue and delivers nothing", async () => {
     await changes(key, "s-skip");
-    await as(key, "ack_changes", { session: "s-skip", seq: (await changes(key, "s-skip")).latestSeq });
+    await as(key, "get_changes", { session: "s-skip", ack: (await changes(key, "s-skip")).latestSeq });
     await removeSession(human, "QQ", "s-skip");
     await addComment(human, issueRef, "missed on purpose");
     assert.equal(((await changes(key, "s-skip")) as Resumable).session_removed?.missedChanges, 1);

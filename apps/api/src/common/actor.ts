@@ -11,6 +11,8 @@ export type Actor = {
   system?: true;
   /** System actors only: the one team the work is for. An agent key's teams are in `api_key_teams`, not here. */
   teamId?: string;
+  /** Agent keys only: the scopes the key holds. Left out (people, system work), every scope is held. */
+  scopes?: string[];
   /** Agents only: the client session making the call (Claude Code session_id), when the call names one. */
   sessionId?: string;
 };

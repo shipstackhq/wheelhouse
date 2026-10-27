@@ -60,7 +60,7 @@ export class DashboardRepository {
     return this.db.q
       .select({ id: apiKeys.id, name: apiKeys.name, lastUsedAt: apiKeys.lastUsedAt })
       .from(apiKeys)
-      .where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt)))
+      .where(and(eq(apiKeys.workspaceId, workspaceId), isNull(apiKeys.revokedAt), isNull(apiKeys.chatMessageId)))
       .orderBy(desc(apiKeys.lastUsedAt));
   }
 
@@ -117,7 +117,7 @@ export class DashboardRepository {
         .select({ count: sql<number>`count(*)::int` })
         .from(apiKeys)
         .innerJoin(schema.apiKeyTeams, eq(schema.apiKeyTeams.apiKeyId, apiKeys.id))
-        .where(and(eq(schema.apiKeyTeams.teamId, team.id), isNull(apiKeys.revokedAt))),
+        .where(and(eq(schema.apiKeyTeams.teamId, team.id), isNull(apiKeys.revokedAt), isNull(apiKeys.chatMessageId))),
       q.select({ count: sql<number>`count(*)::int` }).from(nodes).where(eq(nodes.teamId, team.id)),
       q.select({ count: sql<number>`count(*)::int` }).from(schema.memberships).where(eq(schema.memberships.workspaceId, team.workspaceId)),
       q

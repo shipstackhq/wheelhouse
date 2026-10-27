@@ -3,10 +3,11 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
+import { randomToken, sha256 } from "../../common/crypto";
 import { Database } from "../../platform/database/database";
 import { DaemonRepository } from "./daemon.repository";
 import { chatMessageView, chatThreadView, deviceOnline, deviceView } from "./daemon.presenter";
-import { CHAT_MESSAGE_MAX, OFFER_TTL_MS, str } from "./device-common";
+import { CHAT_KEY_TTL_MS, CHAT_MESSAGE_MAX, OFFER_TTL_MS, str } from "./device-common";
 import { DeviceStreamService } from "./device-stream.service";
 import { DevicesService } from "./devices.service";
 import { RunsService } from "./runs.service";
@@ -75,7 +76,7 @@ export class ChatService {
   }
 
   /** Inserts the question and an empty answer, and writes the signed `chat.message` to the device, in one transaction. */
-  private async ask(actor: Actor, thread: { id: string; teamId: string; workspaceId: string; deviceId: string; model: string; sessionId: string | null }, repo: { id: string; displayName: string; githubFullName: string | null; defaultBranch: string }, text: string) {
+  private async ask(actor: Actor, thread: { id: string; teamId: string; workspaceId: string; deviceId: string; model: string; sessionId: string | null; title: string }, repo: { id: string; displayName: string; githubFullName: string | null; defaultBranch: string }, text: string) {
     const key = await this.stream.signingKey();
     const answerId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + OFFER_TTL_MS).toISOString();
@@ -88,6 +89,9 @@ export class ChatService {
           { ...scope, id: answerId, seq: seq + 2, role: "assistant", state: "pending" },
         ]);
         await this.repo.touchThread(thread.id, { model: thread.model, updatedAt: new Date() });
+        // The answer's own read-only key for the thread's team; the daemon reaches /mcp with it, and it is deleted when the answer ends.
+        const token = `wh_${randomToken(24)}`;
+        await this.repo.insertChatKey({ workspaceId: thread.workspaceId, teamId: thread.teamId, messageId: answerId, name: `Chat: ${thread.title}`.slice(0, 100), keyHash: sha256(token), expiresAt: new Date(Date.now() + CHAT_KEY_TTL_MS) });
         await this.stream.send(key, thread.deviceId, "chat.message", {
           messageId: answerId,
           threadId: thread.id,
@@ -97,6 +101,7 @@ export class ChatService {
           prompt: text,
           repository: { id: repo.id, name: repo.displayName, fullName: repo.githubFullName, cloneUrl: `https://github.com/${repo.githubFullName}.git`, defaultBranch: repo.defaultBranch },
           expiresAt,
+          mcp: { token },
         });
         return pair;
       });

@@ -234,7 +234,7 @@ export async function getChanges(actor: Actor, teamRef: string, limit = 50) {
                 .groupBy(events.actorName)
             ).map((r) => [r.who, Number(r.n)]),
           ),
-          note: `Showing the oldest ${cap} of ${total} changes. Skim the summary, check get_board for current state, then ack_changes with latestSeq (${latest}) to catch up, or page through by acking the last seq shown.`,
+          note: `Showing the oldest ${cap} of ${total} changes. Skim the summary, check list_issues for current state, then call get_changes with ack = latestSeq (${latest}) to catch up, or page through by acking the last seq shown.`,
         }
       : undefined;
   // Map nodes whose code changed since they were last described: re-read the
@@ -337,7 +337,7 @@ export async function queueStatus(actor: Actor, teamRef: string) {
   const keys = await db
     .select({ id: schema.apiKeys.id, name: schema.apiKeys.name, lastUsedAt: schema.apiKeys.lastUsedAt, createdAt: schema.apiKeys.createdAt })
     .from(schema.apiKeys)
-    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), sql`${schema.apiKeys.revokedAt} is null`));
+    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), sql`${schema.apiKeys.revokedAt} is null`, sql`${schema.apiKeys.chatMessageId} is null`));
   const out = [];
   for (const { createdAt, ...k } of keys) {
     const after = await cursorFor(db, { id: k.id, createdAt }, team.id);

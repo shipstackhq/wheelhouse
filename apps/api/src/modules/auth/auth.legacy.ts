@@ -42,7 +42,7 @@ export const keysPage = (...a: Parameters<KeysService["keysPage"]>) => s().keys.
 export const createKeyAs = (...a: Parameters<KeysService["createKeyAs"]>) => s().keys.createKeyAs(...a);
 export const setKeyTeamsAs = (...a: Parameters<KeysService["setKeyTeamsAs"]>) => s().keys.setKeyTeamsAs(...a);
 export const revokeKeyAs = (...a: Parameters<KeysService["revokeKeyAs"]>) => s().keys.revokeKeyAs(...a);
-export const setKeyDocsWriteAs = (...a: Parameters<KeysService["setKeyDocsWriteAs"]>) => s().keys.setKeyDocsWriteAs(...a);
+export const setKeyScopesAs = (...a: Parameters<KeysService["setKeyScopesAs"]>) => s().keys.setKeyScopesAs(...a);
 export const revokeApiKey = (...a: Parameters<KeysService["revokeApiKey"]>) => s().keys.revokeApiKey(...a);
 
 // invites

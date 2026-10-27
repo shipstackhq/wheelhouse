@@ -20,10 +20,11 @@ import { ServiceError } from "../../common/service-error";
 import { addComment, createIssue, moveIssue, updateIssue } from "../../modules/issues/issues.legacy";
 import { createTeam } from "../../modules/teams/teams.legacy";
 import { emit } from "./emit";
-import { runTool } from "../../lib/tools";
+import { ToolsService } from "../../lib/tools";
 import { teamScope, workspaceScope } from "../streams/stream-scope";
 import { testApp } from "../../test/app";
 await testApp();
+const mcp = (await testApp()).get(ToolsService);
 
 let human: Actor;
 let agent: Actor;
@@ -104,7 +105,7 @@ describe("live events from the service layer", () => {
   });
 
   test("an agent's write through the tool layer is announced the same way", async () => {
-    const got = await heard(() => runTool(agent, "create_issue", { project: "LV", title: "From an agent" }));
+    const got = await heard(() => mcp.run(agent, "create_issue", { team: "LV", title: "From an agent" }));
     assert.ok(got.some((e) => e.type === "issue.created" && e.actorKind === "agent"));
   });
 
@@ -137,7 +138,7 @@ describe("live events from the service layer", () => {
   });
 
   test("an agent acking its queue sends a transient signal, so the Bots menu count can update", async () => {
-    const got = await heard(() => runTool(agent, "ack_changes", { project: "LV", seq: 1 }));
+    const got = await heard(() => mcp.run(agent, "get_changes", { team: "LV", ack: 1 }));
     const q = got.filter((e) => e.type === "queue.changed");
     assert.equal(q.length, 1);
     assert.equal(q[0].seq, undefined, "it is not a row in the log");

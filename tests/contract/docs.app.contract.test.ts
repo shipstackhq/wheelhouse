@@ -126,7 +126,7 @@ describe("docs", () => {
     const d = await create(t.s, { title: "Pay docs", body: "How `src/pay/charge.ts` works" });
     const saved = await patch(t.s, d.id, { anchors: [" src/pay/** ", "", "README.md"], version: 1 });
     assert.deepEqual(saved.json.doc.anchors, ["src/pay/**", "README.md"]);
-    await v1ok({ key: t.key }, "report_changes", { project: "DOC", files: ["src/pay/charge.ts"], summary: "changed" });
+    await v1ok({ key: t.key }, "report_changes", { team: "DOC", files: ["src/pay/charge.ts"], summary: "changed" });
     const flagged = (await app("GET", `/api/app/teams/DOC/docs/${d.id}`, t.s)).json.doc;
     assert.equal(flagged.stale, true);
     assert.ok(flagged.staleReason);
@@ -134,7 +134,7 @@ describe("docs", () => {
     const fresh = await app("POST", `/api/app/teams/DOC/docs/${d.id}/fresh`, t.s, { body: {} });
     assert.equal(fresh.status, 200);
     assert.deepEqual([fresh.json.doc.stale, fresh.json.doc.staleReason], [false, null]);
-    await v1ok({ key: t.key }, "report_changes", { project: "DOC", files: ["src/pay/charge.ts"], summary: "again" });
+    await v1ok({ key: t.key }, "report_changes", { team: "DOC", files: ["src/pay/charge.ts"], summary: "again" });
     assert.equal((await app("GET", `/api/app/teams/DOC/docs/${d.id}`, t.s)).json.doc.stale, true);
     const edited = await patch(t.s, d.id, { body: "rewritten", version: fresh.json.doc.version });
     assert.equal(edited.json.doc.stale, false);
@@ -225,7 +225,7 @@ describe("docs", () => {
 
   test("an agent key without docs:write cannot write a doc, but the web person can", async () => {
     const t = await workspace();
-    const denied = await fetchV1(t.key, "upsert_doc", { project: "DOC", title: "From agent" });
+    const denied = await fetchV1(t.key, "write_doc", { team: "DOC", title: "From agent" });
     assert.equal(denied, 403);
     assert.equal((await create(t.s, { title: "From a person" })).title, "From a person");
   });

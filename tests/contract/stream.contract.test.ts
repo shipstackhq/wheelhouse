@@ -34,7 +34,7 @@ describe("GET /api/stream and /api/teams/:key/stream", () => {
       assert.equal(typeof ready.data.seq, "number");
 
       const title = unique("streamed");
-      await v1ok(A, "create_issue", { project: fx.a.teamKey, title });
+      await v1ok(A, "create_issue", { team: fx.a.teamKey, title });
       const change = await s.waitFor((e) => e.event === "change" && String(e.data?.summary).includes(title));
       assert.match(change.id ?? "", /^\d+$/, "a change from the log carries an id so the browser can resume");
       expectGolden("sse-change-event", shape(change.data));
@@ -45,8 +45,8 @@ describe("GET /api/stream and /api/teams/:key/stream", () => {
 
   test("resuming with Last-Event-ID or ?since= replays what was missed, in order", async () => {
     const title = unique("resume");
-    const made = await v1ok(A, "create_issue", { project: fx.a.teamKey, title });
-    await v1ok(A, "comment", { issue: made.ref, body: "second change" });
+    const made = await v1ok(A, "create_issue", { team: fx.a.teamKey, title });
+    await v1ok(A, "comment", { ref: made.ref, body: "second change" });
     const all = await openSse(`/api/teams/${fx.a.teamKey}/stream?since=0`, { cookie: fx.a.sessionToken });
     try {
       const created = await all.waitFor((e) => e.event === "change" && String(e.data?.summary).includes(title));
@@ -73,8 +73,8 @@ describe("GET /api/stream and /api/teams/:key/stream", () => {
       await projB.waitFor((e) => e.event === "ready");
       const a = unique("only-a");
       const b = unique("only-b");
-      await v1ok(A, "create_issue", { project: fx.a.teamKey, title: a });
-      await v1ok(B, "create_issue", { project: fx.b.teamKey, title: b });
+      await v1ok(A, "create_issue", { team: fx.a.teamKey, title: a });
+      await v1ok(B, "create_issue", { team: fx.b.teamKey, title: b });
       await workspaceA.waitFor((e) => String(e.data?.summary).includes(a));
       await workspaceB.waitFor((e) => String(e.data?.summary).includes(b));
       await projB.waitFor((e) => String(e.data?.summary).includes(b));

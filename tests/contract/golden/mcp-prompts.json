@@ -3,8 +3,8 @@
     "name": "brief",
     "arguments": [
       {
-        "name": "project",
-        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "name": "team",
+        "description": "Wheelhouse team key, e.g. \"WH\"",
         "required": true
       }
     ]
@@ -13,8 +13,8 @@
     "name": "explain",
     "arguments": [
       {
-        "name": "project",
-        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "name": "team",
+        "description": "Wheelhouse team key, e.g. \"WH\"",
         "required": true
       },
       {
@@ -28,8 +28,8 @@
     "name": "map_codebase",
     "arguments": [
       {
-        "name": "project",
-        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "name": "team",
+        "description": "Wheelhouse team key, e.g. \"WH\"",
         "required": true
       },
       {
@@ -42,8 +42,8 @@
     "name": "map_schema",
     "arguments": [
       {
-        "name": "project",
-        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "name": "team",
+        "description": "Wheelhouse team key, e.g. \"WH\"",
         "required": true
       }
     ]
@@ -52,8 +52,8 @@
     "name": "refresh_map",
     "arguments": [
       {
-        "name": "project",
-        "description": "Wheelhouse project key, e.g. \"WH\"",
+        "name": "team",
+        "description": "Wheelhouse team key, e.g. \"WH\"",
         "required": true
       }
     ]
