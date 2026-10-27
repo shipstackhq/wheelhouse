@@ -337,7 +337,7 @@ export async function queueStatus(actor: Actor, teamRef: string) {
   const keys = await db
     .select({ id: schema.apiKeys.id, name: schema.apiKeys.name, lastUsedAt: schema.apiKeys.lastUsedAt, createdAt: schema.apiKeys.createdAt })
     .from(schema.apiKeys)
-    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), sql`${schema.apiKeys.revokedAt} is null`));
+    .where(and(eq(schema.apiKeys.workspaceId, actor.workspaceId), sql`${schema.apiKeys.revokedAt} is null`, sql`${schema.apiKeys.chatMessageId} is null`));
   const out = [];
   for (const { createdAt, ...k } of keys) {
     const after = await cursorFor(db, { id: k.id, createdAt }, team.id);

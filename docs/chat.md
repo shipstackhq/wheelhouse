@@ -9,7 +9,7 @@ A person opens **Chat** in Wheelhouse, picks a repository, one of their online d
 their machine as a signed device message. The daemon runs the person's own `claude` CLI, read-only, over a checkout of that repository and
 streams the answer back. The thread can be continued (the Claude session is resumed) and a running answer can be stopped.
 
-Out of scope for the slice: Wheelhouse data in chat (waits for the MCP redesign), shell access, editing, sharing threads, several repositories
+Out of scope for the slice: shell access, editing, sharing threads, several repositories
 in one thread, a model picker per message, attachments, permission prompts.
 
 ## Rules
@@ -41,12 +41,20 @@ Add `chat.message` and `chat.cancel` to `DEVICE_MESSAGE_TYPES` (and to the `devi
 
 ```
 chat.message  { messageId, threadId, model, sessionId | null, prompt,
-                repository: { id, name, fullName, cloneUrl, defaultBranch }, expiresAt }
+                repository: { id, name, fullName, cloneUrl, defaultBranch }, expiresAt, mcp: { token } }
 chat.cancel   { messageId }
 ```
 
 `messageId` is the **assistant** message's id (the one being filled). `sessionId` is the thread's session to resume, null on the first message.
 `expiresAt` is 60 s out: a daemon that gets it later drops it.
+
+## Wheelhouse data
+
+Each `chat.message` carries `mcp: { token }`, a key minted for that answer: `read` scope only, reaching only the thread's team, named
+`Chat: <thread title>`. The daemon reaches `<server URL>/mcp` with it as a bearer token. The key is deleted when the answer ends (finish,
+offline cancel, sweep failure) and expires 10 minutes after it was minted at the latest (`api_keys.expires_at`; `actorForKey` rejects it,
+the sweep deletes it). `api_keys.chat_message_id` marks it: such keys are left out of the keys page, the Agents page and the dashboard
+counts. Only its hash is stored, like any key.
 
 ## Daemon → server (device token, same `DeviceGuard`)
 

@@ -122,6 +122,9 @@ export const apiKeys = table("api_keys", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   // The scopes this key holds (KEY_SCOPES). New keys read and write the board and the map; "docs:write" (WH-51) and "planning:write" are granted by a teammate.
   capabilities: jsonb("capabilities").$type<string[]>().notNull().default([...DEFAULT_KEY_SCOPES]),
+  // A chat answer's key (docs/chat.md): set for the answer it was minted for, never listed as a person's key. Gone at the answer's end or `expiresAt`.
+  chatMessageId: uuid("chat_message_id"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (t) => [unique("api_keys_id_workspace_id_unique").on(t.id, t.workspaceId)]);
 

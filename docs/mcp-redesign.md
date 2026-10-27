@@ -33,7 +33,7 @@ optional where the key reaches a single team.
 
 `api_keys.capabilities` grows from `["docs:write"]` to these five. Existing keys are migrated to the defaults plus `docs:write` where set.
 Chat runs get a key minted per message: `read` only, the thread's team, expiring when the answer ends (or after the chat timeout,
-10 minutes, at the latest). It is never stored on the device. Daemon runs get `read`, `map:write` and `board:write` limited to their own issue.
+10 minutes, at the latest). It is never stored on the device: it travels in the signed `chat.message` as `mcp.token` and is deleted when the answer ends (`api_keys.chat_message_id` marks it, `expires_at` bounds it; see docs/chat.md). Daemon runs get `read`, `map:write` and `board:write` limited to their own issue.
 
 ## Tools (19)
 

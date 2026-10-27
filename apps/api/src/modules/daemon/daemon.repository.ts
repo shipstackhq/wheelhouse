@@ -1,10 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, desc, eq, gt, inArray, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql, type SQL } from "drizzle-orm";
 import { schema } from "../../db";
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 
-const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, issues, teams, repositories, chatThreads, chatMessages } = schema;
+const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages } = schema;
 
 export type DeviceRow = typeof devices.$inferSelect;
 export type PairingRow = typeof devicePairings.$inferSelect;
@@ -446,7 +446,27 @@ export class DaemonRepository {
       .set({ ...set, updatedAt: new Date() })
       .where(and(eq(chatMessages.id, id), inArray(chatMessages.state, from), atEventSeq === undefined ? undefined : eq(chatMessages.lastEventSeq, atEventSeq)))
       .returning();
+    if (row && !["pending", "streaming"].includes(row.state)) await this.dropChatKeys([row.id]);
     return row;
+  }
+
+  /** The read-only key of one chat answer (docs/chat.md, Wheelhouse data): reaches only the thread's team, expires with the answer. */
+  async insertChatKey(v: { workspaceId: string; teamId: string; messageId: string; name: string; keyHash: string; expiresAt: Date }) {
+    const [k] = await this.db.q
+      .insert(apiKeys)
+      .values({ workspaceId: v.workspaceId, name: v.name, prefix: "wh_chat", keyHash: v.keyHash, capabilities: ["read"], chatMessageId: v.messageId, expiresAt: v.expiresAt })
+      .returning({ id: apiKeys.id });
+    await this.db.q.insert(apiKeyTeams).values({ apiKeyId: k.id, teamId: v.teamId, workspaceId: v.workspaceId });
+  }
+
+  /** Deletes the chat keys of these answers (their team rows go with them). */
+  async dropChatKeys(messageIds: string[]) {
+    await this.db.q.delete(apiKeys).where(inArray(apiKeys.chatMessageId, messageIds));
+  }
+
+  /** Deletes chat keys past their expiry. */
+  async dropExpiredChatKeys(now: Date) {
+    await this.db.q.delete(apiKeys).where(and(isNotNull(apiKeys.chatMessageId), lt(apiKeys.expiresAt, now)));
   }
 
   /** Answers nobody has started by `pendingBefore`, and ones that went quiet since `quietBefore`, fail with the reason. */
@@ -457,7 +477,9 @@ export class DaemonRepository {
         .set({ state: "failed", error, updatedAt: now })
         .where(and(eq(chatMessages.role, "assistant"), eq(chatMessages.state, state), lt(col, when)))
         .returning();
-    return [...(await stale("pending", pendingBefore, "Your device did not answer", chatMessages.createdAt)), ...(await stale("streaming", quietBefore, "Your device went quiet", chatMessages.updatedAt))];
+    const failed = [...(await stale("pending", pendingBefore, "Your device did not answer", chatMessages.createdAt)), ...(await stale("streaming", quietBefore, "Your device went quiet", chatMessages.updatedAt))];
+    if (failed.length) await this.dropChatKeys(failed.map((m) => m.id));
+    return failed;
   }
 
   async threadById(id: string) {

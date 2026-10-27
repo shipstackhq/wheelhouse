@@ -88,8 +88,9 @@ export class DeviceChatService {
     return { ok: true as const };
   }
 
-  /** Answers the device never started (60 s) or that went quiet (3 minutes) fail, and their owners are told. Returns how many. */
+  /** Chat keys past their 10 minutes are deleted. Answers the device never started (60 s) or that went quiet (3 minutes) fail, and their owners are told. Returns how many. */
   async sweep(now = new Date()) {
+    await this.repo.dropExpiredChatKeys(now);
     const failed = await this.repo.failStaleAnswers(new Date(now.getTime() - CHAT_PENDING_MS), new Date(now.getTime() - CHAT_QUIET_MS), now);
     for (const m of failed) {
       const thread = await this.repo.threadById(m.threadId);
