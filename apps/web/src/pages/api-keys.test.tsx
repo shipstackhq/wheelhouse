@@ -50,6 +50,14 @@ describe("the API keys page", () => {
     expect(within(d).getByText("See issues, cycles, projects, the map and docs")).toBeTruthy();
   });
 
+  test("a retired team is not offered: the server refuses a key for it", async () => {
+    const { server } = renderApp("/api-keys");
+    server.teams = server.teams.map((t) => (t.key === "BB" ? { ...t, retired: true } : t));
+    const d = await openNew(userEvent.setup());
+    expect(within(d).queryByRole("checkbox", { name: "Beta" })).toBeNull();
+    expect(within(d).getByText("Alpha")).toBeTruthy();
+  });
+
   test("Create is disabled without a name or without a team, and says why", async () => {
     renderApp("/api-keys");
     const user = userEvent.setup();

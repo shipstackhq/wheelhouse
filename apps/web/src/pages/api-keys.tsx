@@ -15,8 +15,8 @@ export function ApiKeysPage() {
   const query = useApiKeysPage();
   // "new", or the key being edited; null when no dialog is open.
   const [dialog, setDialog] = useState<"new" | KeyRow | null>(null);
-  // Teams the person edits are the ones they may give a key (the server refuses the rest).
-  const teamOptions = (useTeams().data ?? []).filter((t) => t.role !== "viewer").map((t) => ({ key: t.key, name: t.name }));
+  // Teams the person edits are the ones they may give a key; a retired team is read only (the server refuses the rest).
+  const teamOptions = (useTeams().data ?? []).filter((t) => t.role !== "viewer" && !t.retired).map((t) => ({ key: t.key, name: t.name }));
   return (
     <Loaded query={query} label="Loading API keys">
       {({ keys, setup: cmd }) => {
