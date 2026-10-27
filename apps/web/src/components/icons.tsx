@@ -120,6 +120,7 @@ import {
   RiLoopRightLine,
   RiRocket2Line,
   RiFlag2Line,
+  RiLightbulbLine,
   RiBox3Fill,
   RiMoreFill,
   RiFlag2Fill,
@@ -254,6 +255,8 @@ export const TeamGlyphIcon = icon(RiBox3Fill);
 export const MoreFillIcon = icon(RiMoreFill);
 export const InitiativesIcon = icon(RiFlag2Line);
 export const InitiativesFillIcon = icon(RiFlag2Fill);
+export const IdeasIcon = icon(RiLightbulbLine);
+export const IdeasFillIcon = icon(RiLightbulbFill);
 export const CyclesIcon = icon(RiLoopRightLine);
 export const CyclesFillIcon = icon(RiLoopRightFill);
 export const CollapseSidebarIcon = icon(RiSidebarFoldLine);
@@ -268,6 +271,7 @@ export const NAV_ICONS = {
   cycles: { line: CyclesIcon, fill: CyclesFillIcon },
   projects: { line: ProjectsIcon, fill: ProjectsFillIcon },
   initiatives: { line: InitiativesIcon, fill: InitiativesFillIcon },
+  ideas: { line: IdeasIcon, fill: IdeasFillIcon },
   activity: { line: ActivityIcon, fill: ActivityFillIcon },
   map: { line: MapIcon, fill: MapFillIcon },
   docs: { line: FileIcon, fill: FileFillIcon },

@@ -76,6 +76,11 @@ import type {
   ProjectInput,
   ProjectSummary,
   InitiativeDetail,
+  IdeaComment,
+  IdeaDetail,
+  IdeaInput,
+  IdeaStatus,
+  IdeaSummary,
   InitiativeInput,
   InitiativeSummary,
   Role,
@@ -427,6 +432,17 @@ export function createApiClient(options: ApiClientOptions = {}) {
         (await request<{ project: ProjectDetail }>("PATCH", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, patch)).project,
       deleteMilestone: async (id: string, milestoneId: string) =>
         (await request<{ project: ProjectDetail }>("DELETE", `/api/app/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`)).project,
+    },
+
+    ideas: {
+      /** The workspace's ideas, newest first; `status` keeps one. Not for a guest. */
+      list: async (status?: IdeaStatus) => (await request<{ ideas: IdeaSummary[] }>("GET", `/api/app/ideas${status ? `?status=${status}` : ""}`)).ideas,
+      get: async (id: string) => (await request<{ idea: IdeaDetail }>("GET", `/api/app/ideas/${encodeURIComponent(id)}`)).idea,
+      create: async (input: IdeaInput & { title: string }) => (await request<{ idea: IdeaDetail }>("POST", "/api/app/ideas", input)).idea,
+      update: async (id: string, patch: IdeaInput) => (await request<{ idea: IdeaDetail }>("PATCH", `/api/app/ideas/${encodeURIComponent(id)}`, patch)).idea,
+      comment: async (id: string, body: string) => (await request<{ comment: IdeaComment }>("POST", `/api/app/ideas/${encodeURIComponent(id)}/comments`, { body })).comment,
+      /** File the idea as an issue in `team` (its own tag when absent) and mark it promoted. */
+      promote: async (id: string, team?: string) => (await request<{ idea: IdeaDetail }>("POST", `/api/app/ideas/${encodeURIComponent(id)}/promote`, team ? { team } : {})).idea,
     },
 
     initiatives: {

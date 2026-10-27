@@ -15,6 +15,7 @@ import { DocsPage } from "../pages/docs";
 import { GlossaryPage } from "../pages/glossary";
 import { OnboardingPage } from "../pages/onboarding";
 import { CyclePage, CyclesPage } from "../pages/cycles";
+import { IdeaPage, IdeasPage } from "../pages/ideas";
 import { InitiativePage, InitiativesPage } from "../pages/initiatives";
 import { ProjectPage, ProjectsPage } from "../pages/projects";
 import { IntegrationsPage } from "../pages/integrations";
@@ -98,6 +99,8 @@ export function buildRoutes(services: Services): RouteObject[] {
             { index: true, Component: Dashboard },
             { path: "inbox", Component: InboxPage, handle: { fullWidth: true } satisfies PageHandle },
             { path: "teams/new", Component: NewTeamPage },
+            { path: "ideas", Component: IdeasPage },
+            { path: "ideas/:id", Component: IdeaPage },
             { path: "initiatives", Component: InitiativesPage },
             { path: "initiatives/:id", Component: InitiativePage },
             { path: "projects", Component: ProjectsPage },

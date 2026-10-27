@@ -63,6 +63,12 @@ export const projectQuery = (api: ApiClient, id: string) => ({ queryKey: wsKey(a
 export const useProjects = () => useQuery(projectsQuery(useServices().api));
 export const useProject = (id: string) => useQuery(projectQuery(useServices().api, id));
 
+/** Ideas (WH-109): the workspace's, newest first, and one with its comments. */
+export const ideasQuery = (api: ApiClient) => ({ queryKey: wsKey(api, "ideas"), queryFn: () => api.ideas.list() });
+export const ideaQuery = (api: ApiClient, id: string) => ({ queryKey: wsKey(api, "idea", id), queryFn: () => api.ideas.get(id) });
+export const useIdeas = () => useQuery(ideasQuery(useServices().api));
+export const useIdea = (id: string) => useQuery(ideaQuery(useServices().api, id));
+
 /** Initiatives (WH-119): every one in the workspace as a flat list in tree order, and one with its sub-initiatives and projects. */
 export const initiativesQuery = (api: ApiClient) => ({ queryKey: wsKey(api, "initiatives"), queryFn: () => api.initiatives.list() });
 export const initiativeQuery = (api: ApiClient, id: string) => ({ queryKey: wsKey(api, "initiative", id), queryFn: () => api.initiatives.get(id) });

@@ -9,6 +9,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { DocsModule } from "./modules/docs/docs.module";
 import { ImagesModule } from "./modules/images/images.module";
 import { GithubModule } from "./modules/github/github.module";
+import { IdeasModule } from "./modules/ideas/ideas.module";
 import { IssuesModule } from "./modules/issues/issues.module";
 import { MapModule } from "./modules/map/map.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";

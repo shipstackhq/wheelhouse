@@ -14,3 +14,4 @@ export * from "./tables/events";
 export * from "./tables/broadcasts";
 export * from "./tables/notifications";
 export * from "./tables/agents";
+export * from "./tables/ideas";
