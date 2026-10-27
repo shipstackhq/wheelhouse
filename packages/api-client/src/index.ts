@@ -530,7 +530,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Set the teams the key can open; takes effect on its next call. */
       setTeams: async (id: string, teams: string[]) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { teams })).key,
       revoke: (id: string) => request<{ ok: true }>("DELETE", `/api/app/keys/${encodeURIComponent(id)}`),
-      setDocsWrite: async (id: string, docsWrite: boolean) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { docsWrite })).key,
+      setScopes: async (id: string, scopes: string[]) => (await request<{ key: KeyView }>("PATCH", `/api/app/keys/${encodeURIComponent(id)}`, { scopes })).key,
     },
 
     invites: {

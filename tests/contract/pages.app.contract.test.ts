@@ -41,7 +41,7 @@ describe("every endpoint needs a signed-in person", () => {
     ["POST", "/api/app/keys/mark-all-seen", {}],
     ["POST", "/api/app/keys", { name: "x" }],
     ["DELETE", `/api/app/keys/${sid}`],
-    ["PATCH", `/api/app/keys/${sid}`, { docsWrite: true }],
+    ["PATCH", `/api/app/keys/${sid}`, { scopes: ["read"] }],
     ["GET", "/api/app/invites"],
     ["POST", "/api/app/invites", { kind: "join_workspace", email: "x@example.test" }],
     ["DELETE", `/api/app/invites/${sid}`],
@@ -209,7 +209,7 @@ describe("API keys and the API keys page", () => {
     assert.match(created.json.secret, /^wh_[A-Za-z0-9_-]+$/);
     assert.equal(created.json.key.name, "CI bot");
     assert.equal(created.json.key.prefix, created.json.secret.slice(0, 10));
-    assert.equal(created.json.key.canWriteDocs, false);
+    assert.deepEqual(created.json.key.scopes, ["read", "board:write", "map:write"]);
 
     const page = await app("GET", "/api/app/keys", p.sess);
     assert.equal(page.status, 200);
@@ -243,14 +243,13 @@ describe("API keys and the API keys page", () => {
     assert.ok(!/wh_[A-Za-z0-9_-]{10}/.test(JSON.stringify(setup)), "no key in any command");
   });
 
-  test("docs:write is off by default and can be granted and taken away", async () => {
+  test("a new key has the default scopes; they can be set, and only to the five", async () => {
     const p = await signUp();
     const k = (await app("POST", "/api/app/keys", p.sess, { body: { name: "writer" } })).json.key;
-    const on = await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { docsWrite: true } });
-    assert.equal(on.json.key.canWriteDocs, true);
-    assert.equal((await app("GET", "/api/app/keys", p.sess)).json.keys[0].canWriteDocs, true);
-    assert.equal((await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { docsWrite: false } })).json.key.canWriteDocs, false);
-    const bad = await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { docsWrite: "yes" } });
+    const on = await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { scopes: ["read", "docs:write"] } });
+    assert.deepEqual(on.json.key.scopes, ["read", "docs:write"]);
+    assert.deepEqual((await app("GET", "/api/app/keys", p.sess)).json.keys[0].scopes, ["read", "docs:write"]);
+    const bad = await app("PATCH", `/api/app/keys/${k.id}`, p.sess, { body: { scopes: ["admin"] } });
     assert.equal(bad.status, 400);
     assert.equal(bad.json.error.code, "invalid");
   });
@@ -260,10 +259,10 @@ describe("API keys and the API keys page", () => {
     const theirs = await signUp("Theirs");
     const k = (await app("POST", "/api/app/keys", theirs.sess, { body: { name: "theirs" } })).json;
     assert.equal((await app("DELETE", `/api/app/keys/${k.key.id}`, mine.sess)).status, 404);
-    assert.equal((await app("PATCH", `/api/app/keys/${k.key.id}`, mine.sess, { body: { docsWrite: true } })).status, 404);
+    assert.equal((await app("PATCH", `/api/app/keys/${k.key.id}`, mine.sess, { body: { scopes: ["read"] } })).status, 404);
     assert.equal((await app("POST", "/api/app/keys/mark-all-seen", mine.sess, { body: { keyId: k.key.id } })).status, 404);
     assert.equal((await v1({ key: k.secret }, "list_projects")).status, 200);
-    assert.equal((await app("GET", "/api/app/keys", theirs.sess)).json.keys[0].canWriteDocs, false);
+    assert.deepEqual((await app("GET", "/api/app/keys", theirs.sess)).json.keys[0].scopes, ["read", "board:write", "map:write"]);
     assert.deepEqual((await app("GET", "/api/app/keys", mine.sess)).json.keys, [], "and it is not in my list");
   });
 

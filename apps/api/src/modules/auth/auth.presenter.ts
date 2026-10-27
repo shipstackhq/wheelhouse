@@ -29,7 +29,7 @@ export const memberView = (u: { id: string; name: string; email: string }, m: { 
   tags: m.tags,
 });
 
-export type KeyView = { id: string; name: string; prefix: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null; canWriteDocs: boolean; teams: { key: string; name: string }[] };
+export type KeyView = { id: string; name: string; prefix: string; createdAt: Date; lastUsedAt: Date | null; revokedAt: Date | null; scopes: string[]; teams: { key: string; name: string }[] };
 
 export const keyView = (k: typeof schema.apiKeys.$inferSelect, teams: KeyView["teams"] = []): KeyView => ({
   id: k.id,
@@ -38,7 +38,7 @@ export const keyView = (k: typeof schema.apiKeys.$inferSelect, teams: KeyView["t
   createdAt: k.createdAt,
   lastUsedAt: k.lastUsedAt,
   revokedAt: k.revokedAt,
-  canWriteDocs: k.capabilities.includes("docs:write"),
+  scopes: k.capabilities,
   teams,
 });
 

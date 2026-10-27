@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { KEY_SCOPES } from "@wheelhouse/shared/key-scopes";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { List } from "./list";
 import { SubmitButton } from "./submit-button";
 import { AgentIcon } from "./icons";
 
 /** What the keys lists need. Dates are ISO strings so the revoked list can cross into a client component. */
-export type KeyRow = { id: string; name: string; prefix: string; lastUsedAt: string | null; revokedAt: string | null; canWriteDocs?: boolean; teams?: { key: string; name: string }[] };
+export type KeyRow = { id: string; name: string; prefix: string; lastUsedAt: string | null; revokedAt: string | null; scopes?: string[]; teams?: { key: string; name: string }[] };
 /** A team a key could be given: one the person edits. */
 export type TeamOption = { key: string; name: string };
 
@@ -24,15 +25,15 @@ export function ActiveKeys({
   keys,
   markAllSeen,
   revoke,
-  setDocsWrite,
+  setScopes,
   teamOptions,
   setTeams,
 }: {
   keys: KeyRow[];
   markAllSeen: (formData: FormData) => void | Promise<void>;
   revoke: (formData: FormData) => void | Promise<void>;
-  /** WH-51: grant/revoke the "docs:write" capability. Keys default to read-only for docs. */
-  setDocsWrite?: (keyId: string, canWrite: boolean) => void | Promise<void>;
+  /** Set the scopes a key holds (WH-51). A new key reads and writes the board and the map; docs and planning are off. */
+  setScopes?: (keyId: string, scopes: string[]) => void | Promise<void>;
   /** WH-120: the teams the person may give a key, and how to save a key's teams. Without them the teams are only shown. */
   teamOptions?: TeamOption[];
   setTeams?: (keyId: string, teams: string[]) => void | Promise<void>;
@@ -44,12 +45,17 @@ export function ActiveKeys({
         <li key={k.id} className="flex items-center gap-3">
           <span className="text-agent"><AgentIcon /> {k.name}</span>
           <code className="font-mono text-xs text-muted">{k.prefix}…</code>
-          {setDocsWrite && (
-            <label className="ml-3 flex items-center gap-1.5 text-xs text-muted" title='Lets this key create/edit/delete docs via upsert_doc and delete_doc. Off by default (read-only).'>
-              <input type="checkbox" checked={!!k.canWriteDocs} onChange={(e) => void setDocsWrite(k.id, e.target.checked)} />
-              docs:write
-            </label>
-          )}
+          {setScopes &&
+            KEY_SCOPES.map((scope) => (
+              <label key={scope} className="ml-3 flex items-center gap-1.5 text-xs text-muted">
+                <input
+                  type="checkbox"
+                  checked={!!k.scopes?.includes(scope)}
+                  onChange={(e) => void setScopes(k.id, e.target.checked ? [...(k.scopes ?? []), scope] : (k.scopes ?? []).filter((s) => s !== scope))}
+                />
+                {scope}
+              </label>
+            ))}
           {k.teams && <KeyTeams k={k} options={teamOptions ?? []} save={setTeams} />}
           <span className="ml-auto text-xs text-muted">{k.lastUsedAt ? `used ${timeAgo(k.lastUsedAt)}` : "never used"}</span>
           <form action={markAllSeen}>

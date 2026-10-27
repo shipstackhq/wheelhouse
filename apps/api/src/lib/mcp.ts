@@ -55,7 +55,7 @@ async function handle(msg: RpcReq, getActor: () => Promise<Actor>) {
       }
     }
     case "tools/list":
-      return ok(id, { tools: listToolDefs() });
+      return ok(id, { tools: listToolDefs({ actor: await getActor() }) });
     case "tools/call": {
       const actor = await getActor();
       const name = String(params?.name ?? "");

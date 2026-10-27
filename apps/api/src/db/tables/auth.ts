@@ -2,6 +2,7 @@ import { uuid, text, timestamp, integer, jsonb, primaryKey, index, uniqueIndex, 
 import { sql } from "drizzle-orm";
 import { table, createdAt } from "./common";
 import { teamScope } from "./team-scope";
+import { DEFAULT_KEY_SCOPES } from "@wheelhouse/shared/key-scopes";
 import { TEAM_ROLES } from "./teams";
 
 /**
@@ -119,9 +120,8 @@ export const apiKeys = table("api_keys", {
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  // Capability flags for this key (WH-51). Keys default to none set, i.e. read-only: a key must be
-  // explicitly marked "docs:write" by a teammate before upsert_doc/delete_doc will work for it.
-  capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
+  // The scopes this key holds (KEY_SCOPES). New keys read and write the board and the map; "docs:write" (WH-51) and "planning:write" are granted by a teammate.
+  capabilities: jsonb("capabilities").$type<string[]>().notNull().default([...DEFAULT_KEY_SCOPES]),
   createdAt: createdAt(),
 }, (t) => [unique("api_keys_id_workspace_id_unique").on(t.id, t.workspaceId)]);
 
@@ -143,8 +143,3 @@ export const apiKeyTeams = table(
     index("api_key_teams_team_idx").on(t.teamId),
   ],
 );
-
-/** Capability flags a key can be granted. Currently just docs write access (WH-51). */
-export const KEY_CAPABILITIES = ["docs:write"] as const;
-
-export type KeyCapability = (typeof KEY_CAPABILITIES)[number];

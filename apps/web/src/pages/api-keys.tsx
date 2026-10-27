@@ -20,7 +20,7 @@ export function ApiKeysPage() {
   return (
     <Loaded query={query} label="Loading API keys">
       {({ keys, setup: cmd }) => {
-        const rows: KeyRow[] = keys.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, lastUsedAt: k.lastUsedAt, revokedAt: k.revokedAt, canWriteDocs: k.canWriteDocs, teams: k.teams }));
+        const rows: KeyRow[] = keys.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, lastUsedAt: k.lastUsedAt, revokedAt: k.revokedAt, scopes: k.scopes, teams: k.teams }));
         const { active, revoked } = splitKeys(rows);
         return (
           <div className="h-full overflow-y-auto">
@@ -55,9 +55,9 @@ export function ApiKeysPage() {
                       await refreshAll(queryClient);
                     }
                   }}
-                  setDocsWrite={async (keyId, canWrite) => {
+                  setScopes={async (keyId, scopes) => {
                     try {
-                      await api.keys.setDocsWrite(keyId, canWrite);
+                      await api.keys.setScopes(keyId, scopes);
                     } finally {
                       await refreshAll(queryClient);
                     }

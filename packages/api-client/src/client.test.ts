@@ -176,7 +176,7 @@ describe("the page endpoints (WH-95)", () => {
     assert.deepEqual(s.calls[0].body, { name: "CI" });
     assert.equal(made.secret, "wh_secret");
     assert.deepEqual(await sent((a) => a.keys.revoke("k 1")), { method: "DELETE", url: "/api/app/keys/k%201", body: undefined });
-    assert.deepEqual(await sent((a) => a.keys.setDocsWrite("k1", true), { json: { key: { id: "k1", canWriteDocs: true } } }), { method: "PATCH", url: "/api/app/keys/k1", body: { docsWrite: true } });
+    assert.deepEqual(await sent((a) => a.keys.setScopes("k1", ["read", "docs:write"]), { json: { key: { id: "k1", scopes: ["read", "docs:write"] } } }), { method: "PATCH", url: "/api/app/keys/k1", body: { scopes: ["read", "docs:write"] } });
     assert.deepEqual(await sent((a) => a.keys.setTeams("k1", ["AA", "BB"]), { json: { key: { id: "k1", teams: [] } } }), { method: "PATCH", url: "/api/app/keys/k1", body: { teams: ["AA", "BB"] } });
     const scoped = script([{ status: 201, json: { key: { id: "k2" }, secret: "wh_s" } }]);
     await createApiClient({ fetch: scoped.f }).keys.create("CI", ["AA"]);

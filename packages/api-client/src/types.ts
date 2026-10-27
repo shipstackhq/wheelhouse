@@ -61,7 +61,7 @@ export type WorkspaceOverview = {
   pendingInvites: PendingInvite[];
 };
 
-export type KeyView = { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; canWriteDocs: boolean; /** The teams the key can open (and nothing else). */ teams: { key: string; name: string }[] };
+export type KeyView = { id: string; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; revokedAt: string | null; /** What the key may do: read, board:write, map:write, docs:write, planning:write. */ scopes: string[]; /** The teams the key can open (and nothing else). */ teams: { key: string; name: string }[] };
 
 /** Every command the API keys page asks someone to paste. None of them carries a key. */
 export type SetupCommands = {

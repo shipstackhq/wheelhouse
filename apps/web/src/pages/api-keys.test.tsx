@@ -110,17 +110,17 @@ describe("the API keys page", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("Too many attempts. Try again in 60 minutes.");
   });
 
-  test("Revoke, Mark all seen and the docs:write switch each call the API for that key and read the page again", async () => {
+  test("Revoke, Mark all seen and the docs:write scope each call the API for that key and read the page again", async () => {
     const { server } = renderApp("/api-keys", (s) => {
       s.on("DELETE /api/app/keys/k1", { ok: true });
       s.on("POST /api/app/keys/mark-all-seen", { ok: true });
-      s.on("PATCH /api/app/keys/k1", { key: key({ canWriteDocs: true }) });
+      s.on("PATCH /api/app/keys/k1", { key: key({ scopes: ["read", "board:write", "map:write", "docs:write"] }) });
     });
     const user = userEvent.setup();
     const row = ((await screen.findByText("Claude — Ada's laptop")).closest("li")) as HTMLElement;
     await user.click(within(row).getByRole("checkbox", { name: /docs:write/ }));
     await waitFor(() => expect(server.sent("PATCH /api/app/keys/k1")).toHaveLength(1));
-    expect(server.sent("PATCH /api/app/keys/k1")[0].body).toEqual({ docsWrite: true });
+    expect(server.sent("PATCH /api/app/keys/k1")[0].body).toEqual({ scopes: ["read", "board:write", "map:write", "docs:write"] });
     await user.click(within(row).getByRole("button", { name: "Mark all seen" }));
     await waitFor(() => expect(server.sent("POST /api/app/keys/mark-all-seen")).toHaveLength(1));
     expect(server.sent("POST /api/app/keys/mark-all-seen")[0].body).toEqual({ keyId: "k1" });

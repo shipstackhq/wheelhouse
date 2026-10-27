@@ -4,6 +4,7 @@ import type { Actor } from "../../../common/actor";
 import { rateLimit } from "../../../common/rate-limit";
 import { roleAllows } from "../../../common/roles";
 import { ServiceError } from "../../../common/service-error";
+import { KEY_SCOPES } from "@wheelhouse/shared/key-scopes";
 import { onboarding } from "@wheelhouse/shared/onboarding";
 import { Database } from "../../../platform/database/database";
 import { TeamAccessService, TeamsService } from "../../teams/index";
@@ -44,7 +45,7 @@ export class KeysService {
     const used = rateLimit(`key:${row.key.id}`, KEY_CALL_LIMIT, KEY_CALL_WINDOW_MS);
     if (!used.ok) throw new RateLimitError(used.retryAfter);
     await this.repo.touchKey(row.key.id, new Date());
-    return { kind: "agent", id: row.key.id, name: row.key.name, workspaceId: row.key.workspaceId };
+    return { kind: "agent", id: row.key.id, name: row.key.name, workspaceId: row.key.workspaceId, scopes: row.key.capabilities };
   }
 
   /** The teams of each key, by key id. The API keys page shows all of them: a workspace member sees which teams an agent reaches, not what is in them. */
@@ -136,12 +137,12 @@ export class KeysService {
     return rows.length > 0;
   }
 
-  /** Grant or take away the "docs:write" capability (WH-51) on one of the workspace's own keys. */
-  async setKeyDocsWriteAs(h: Human, id: string, canWrite: boolean): Promise<KeyView> {
+  /** Set the scopes (KEY_SCOPES) of one of the workspace's own keys. */
+  async setKeyScopesAs(h: Human, id: string, scopes: unknown): Promise<KeyView> {
     const key = await this.repo.keyIn(id, h.workspace.id);
     if (!key) throw new ServiceError("not_found", "API key not found");
-    const next = canWrite ? [...new Set([...key.capabilities, "docs:write"])] : key.capabilities.filter((c) => c !== "docs:write");
-    const row = await this.repo.setKeyCapabilities(id, h.workspace.id, next);
+    if (!Array.isArray(scopes) || scopes.some((s) => !(KEY_SCOPES as readonly unknown[]).includes(s))) throw new ServiceError("invalid", `scopes must be a list of: ${KEY_SCOPES.join(", ")}`, { fields: { scopes: KEY_SCOPES.join(", ") } });
+    const row = await this.repo.setKeyCapabilities(id, h.workspace.id, [...new Set(scopes as string[])]);
     return keyView(row, (await this.teamsOfKeys([id])).get(id));
   }
 

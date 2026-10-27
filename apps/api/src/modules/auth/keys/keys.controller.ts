@@ -41,13 +41,12 @@ export class KeysController {
     return this.keys.revokeKeyAs(req.human, id);
   }
 
-  /** `{ docsWrite?: boolean, teams?: string[] }`: let this key edit docs (off by default), and/or set the teams it can open. */
+  /** `{ scopes?: string[], teams?: string[] }`: set what this key may do (its scopes), and/or the teams it can open. */
   @Patch("keys/:id")
   async patch(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody(new ZodValidationPipe(patchKeyDto)) b: PatchKeyDto) {
-    if (b.docsWrite === undefined && b.teams === undefined) throw new ServiceError("invalid", "Send docsWrite or teams", { fields: { docsWrite: "true or false" } });
-    if (b.docsWrite !== undefined && typeof b.docsWrite !== "boolean") throw new ServiceError("invalid", "docsWrite must be true or false", { fields: { docsWrite: "true or false" } });
+    if (b.scopes === undefined && b.teams === undefined) throw new ServiceError("invalid", "Send scopes or teams", { fields: { scopes: "a list of scopes" } });
     let key;
-    if (b.docsWrite !== undefined) key = await this.keys.setKeyDocsWriteAs(req.human, id, b.docsWrite as boolean);
+    if (b.scopes !== undefined) key = await this.keys.setKeyScopesAs(req.human, id, b.scopes);
     if (b.teams !== undefined) key = await this.keys.setKeyTeamsAs(req.human, id, b.teams);
     return { key };
   }

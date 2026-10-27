@@ -17,8 +17,8 @@ export type MarkAllSeenDto = z.infer<typeof markAllSeenDto>;
 export const createKeyDto = z.object({ name: text, teams: anything });
 export type CreateKeyDto = z.infer<typeof createKeyDto>;
 
-/** `{ docsWrite?, teams? }`: change a key. The handler checks that one of them is sent and that `docsWrite` is a boolean. */
-export const patchKeyDto = z.object({ docsWrite: anything, teams: anything });
+/** `{ scopes?, teams? }`: change a key. The handler checks that one of them is sent; the service checks the scopes. */
+export const patchKeyDto = z.object({ scopes: anything, teams: anything });
 export type PatchKeyDto = z.infer<typeof patchKeyDto>;
 
 /** `{ workspaceId }`: switch the session's workspace. */

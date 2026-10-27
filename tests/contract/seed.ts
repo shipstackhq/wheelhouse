@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "../../apps/api/src/db";
+import { KEY_SCOPES } from "../../packages/shared/src/key-scopes";
 import { scopeKeyToAllTeams } from "../../apps/api/src/modules/auth/auth.legacy";
 import { createIssue } from "../../apps/api/src/modules/issues/issues.legacy";
 import { createTeam } from "../../apps/api/src/modules/teams/teams.legacy";
@@ -58,7 +59,7 @@ async function workspace(letter: "A" | "B", passwordHash: string): Promise<Works
   const member = await mkUser("member", "member");
   const key = async (name: string, revoked = false) => {
     const k = token("wh_");
-    const [row] = await db.insert(schema.apiKeys).values({ workspaceId: t.id, name, prefix: k.slice(0, 10), keyHash: sha256(k), createdBy: owner.id, revokedAt: revoked ? new Date() : null }).returning({ id: schema.apiKeys.id });
+    const [row] = await db.insert(schema.apiKeys).values({ workspaceId: t.id, name, prefix: k.slice(0, 10), keyHash: sha256(k), createdBy: owner.id, capabilities: [...KEY_SCOPES], revokedAt: revoked ? new Date() : null }).returning({ id: schema.apiKeys.id });
     await scopeKeyToAllTeams(db, row.id, t.id); // the team exists by now; a key reaches only the teams it is scoped to (WH-120)
     return k;
   };
