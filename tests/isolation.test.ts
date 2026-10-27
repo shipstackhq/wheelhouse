@@ -40,7 +40,7 @@ import * as cycles from "../apps/api/src/modules/issues/issues.legacy";
 import * as projects from "../apps/api/src/modules/issues/issues.legacy";
 import * as initiatives from "../apps/api/src/modules/issues/issues.legacy";
 import * as members from "../apps/api/src/modules/auth/auth.legacy";
-import { runTool, tools } from "../apps/api/src/lib/tools";
+import { ToolsService, type ToolName } from "../apps/api/src/lib/tools";
 import { askMap } from "../apps/api/src/modules/map/map.legacy";
 import { briefing, issueContext } from "../apps/api/src/modules/dashboard/dashboard.legacy";
 import { MetricsService } from "../apps/api/src/modules/dashboard/metrics.service";
@@ -48,6 +48,7 @@ import { resolveDraft } from "../apps/api/src/modules/map/map.legacy";
 import * as sync from "../apps/api/src/modules/map/map.legacy";
 import { testApp } from "../apps/api/src/test/app";
 const metrics = (await testApp()).get(MetricsService);
+const mcp = (await testApp()).get(ToolsService);
 
 const RUN = crypto.randomBytes(3).toString("hex");
 const MARK = /a-secret/i; // everything workspace A owns carries this
@@ -214,7 +215,6 @@ before(async () => {
  * One entry per tool: the calls an attacker in workspace B makes with workspace A's identifiers. Typed as a full record so a
  * new tool without an entry does not compile; the registry test below also checks it at run time.
  */
-type ToolName = keyof typeof tools;
 const attacks = {
   get_briefing: () => [{ team: A.teamKey }, { team: A.teamId }],
   get_changes: () => [{ team: A.teamKey }, { team: A.teamId }, { team: A.teamKey, ack: 999999 }],
@@ -276,12 +276,12 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
     test(`as B's ${asKind}: refused, nothing read, nothing changed`, async () => {
       const actor = asKind === "human" ? B.owner : B.agent;
       const before = await fingerprint(A);
-      for (const name of Object.keys(tools) as ToolName[]) {
+      for (const name of Object.keys(mcp.tools) as ToolName[]) {
         for (const args of attacks[name]()) {
           let result: unknown;
           let error: unknown;
           try {
-            result = await runTool(actor, name, args);
+            result = await mcp.run(actor, name, args);
           } catch (e) {
             error = e;
           }
@@ -304,7 +304,7 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
   }
 
   test("a tool added without an isolation case fails here", () => {
-    assert.deepEqual(Object.keys(attacks).sort(), Object.keys(tools).sort());
+    assert.deepEqual(Object.keys(attacks).sort(), Object.keys(mcp.tools).sort());
   });
 });
 
@@ -322,13 +322,13 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
 
   test("every tool, called with the identifiers of A's other team: refused, nothing read, nothing changed", async () => {
     const before = await fingerprint(A);
-    for (const name of Object.keys(tools) as ToolName[]) {
+    for (const name of Object.keys(mcp.tools) as ToolName[]) {
       for (const args of attacks[name]()) {
         const label = `${name}(${JSON.stringify(args).slice(0, 80)}) as a key scoped to SH`;
         let error: unknown;
         let result: unknown;
         try {
-          result = await runTool(narrow, name, args);
+          result = await mcp.run(narrow, name, args);
         } catch (e) {
           error = e;
         }
@@ -345,12 +345,12 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
   });
 
   test("it lists only its own team, and reads and writes there", async () => {
-    const listed = (await runTool(narrow, "get_briefing", {})) as { teams: { key: string }[] };
+    const listed = (await mcp.run(narrow, "get_briefing", {})) as { teams: { key: string }[] };
     assert.deepEqual(listed.teams.map((p) => p.key), ["SH"]);
     assert.ok(!JSON.stringify(listed).includes(A.teamId));
-    assert.equal(((await runTool(narrow, "get_issue", { ref: "SH-1" })) as { issue: { title: string } }).issue.title, "A-SECRET shared issue");
-    await runTool(narrow, "comment", { ref: "SH-1", body: "from the narrow key" });
-    await assert.rejects(runTool(narrow, "comment", { ref: A.issueRef, body: "no" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    assert.equal(((await mcp.run(narrow, "get_issue", { ref: "SH-1" })) as { issue: { title: string } }).issue.title, "A-SECRET shared issue");
+    await mcp.run(narrow, "comment", { ref: "SH-1", body: "from the narrow key" });
+    await assert.rejects(mcp.run(narrow, "comment", { ref: A.issueRef, body: "no" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("a key with no team and a key scoped to AA each reach only what they are given", async () => {
@@ -363,10 +363,10 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
     };
     const none = await mk("A none key", []);
     const aa = await mk("A AA key", [A.teamId]);
-    assert.deepEqual(((await runTool(none, "get_briefing", {})) as { teams: unknown[] }).teams, []);
-    await assert.rejects(runTool(none, "get_issue", { ref: A.issueRef }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
-    assert.equal(((await runTool(aa, "get_issue", { ref: A.issueRef })) as { issue: { title: string } }).issue.title, "A-SECRET issue");
-    await assert.rejects(runTool(aa, "get_issue", { ref: "SH-1" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    assert.deepEqual(((await mcp.run(none, "get_briefing", {})) as { teams: unknown[] }).teams, []);
+    await assert.rejects(mcp.run(none, "get_issue", { ref: A.issueRef }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
+    assert.equal(((await mcp.run(aa, "get_issue", { ref: A.issueRef })) as { issue: { title: string } }).issue.title, "A-SECRET issue");
+    await assert.rejects(mcp.run(aa, "get_issue", { ref: "SH-1" }), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
 
   test("the GitHub actor of one team reaches no other team, even of its own workspace", async () => {
@@ -395,17 +395,17 @@ describe("a key scoped to one team of a workspace (WH-120)", () => {
 
 describe("the attacks are real: the same calls work for the owner", () => {
   test("workspace A's own agent and human can do what B was refused", async () => {
-    assert.equal((await runTool(A.agent, "get_issue", { ref: A.issueRef }) as { issue: { title: string } }).issue.title, "A-SECRET issue");
-    await runTool(A.owner, "get_map", { team: A.teamKey, node: A.nodeName });
-    await runTool(A.agent, "list_issues", { team: A.teamId });
-    await runTool(A.agent, "session_status", { team: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof ServiceError));
+    assert.equal((await mcp.run(A.agent, "get_issue", { ref: A.issueRef }) as { issue: { title: string } }).issue.title, "A-SECRET issue");
+    await mcp.run(A.owner, "get_map", { team: A.teamKey, node: A.nodeName });
+    await mcp.run(A.agent, "list_issues", { team: A.teamId });
+    await mcp.run(A.agent, "session_status", { team: A.teamKey, session: A.sessionId }).catch((e) => assert.ok(e instanceof ServiceError));
   });
 });
 
 describe("team keys are per workspace", () => {
   test("two workspaces with a team called SH each see their own issues", async () => {
-    const a = (await runTool(A.owner, "get_issue", { ref: "SH-1" })) as { issue: { title: string } };
-    const b = (await runTool(B.owner, "get_issue", { ref: "SH-1" })) as { issue: { title: string } };
+    const a = (await mcp.run(A.owner, "get_issue", { ref: "SH-1" })) as { issue: { title: string } };
+    const b = (await mcp.run(B.owner, "get_issue", { ref: "SH-1" })) as { issue: { title: string } };
     assert.equal(a.issue.title, "A-SECRET shared issue");
     assert.equal(b.issue.title, "B-OWN shared issue");
   });
@@ -415,10 +415,10 @@ describe("team keys are per workspace", () => {
 describe("what B can see is only B's", () => {
   test("B's own board, graph, activity, queue, briefing and issue context hold nothing of A's", async () => {
     const calls: Promise<unknown>[] = [
-      runTool(B.owner, "list_issues", { team: B.teamKey }),
-      runTool(B.owner, "get_map", { team: B.teamKey }),
-      runTool(B.owner, "get_briefing", { team: B.teamKey }),
-      runTool(B.agent, "get_changes", { team: B.teamKey }),
+      mcp.run(B.owner, "list_issues", { team: B.teamKey }),
+      mcp.run(B.owner, "get_map", { team: B.teamKey }),
+      mcp.run(B.owner, "get_briefing", { team: B.teamKey }),
+      mcp.run(B.agent, "get_changes", { team: B.teamKey }),
       briefing(B.agent, B.teamKey),
       issueContext(B.agent, B.issueRef),
       listEvents(B.owner, B.teamKey),
@@ -453,9 +453,9 @@ describe("what B can see is only B's", () => {
   });
 
   test("B's agent queue never receives workspace A's events", async () => {
-    const changes = (await runTool(B.agent, "get_changes", { team: B.teamKey })) as { changes: unknown[] };
+    const changes = (await mcp.run(B.agent, "get_changes", { team: B.teamKey })) as { changes: unknown[] };
     assert.ok(!MARK.test(JSON.stringify(changes)));
-    await assert.rejects(runTool(B.agent, "get_changes", { team: A.teamKey }), ServiceError);
+    await assert.rejects(mcp.run(B.agent, "get_changes", { team: A.teamKey }), ServiceError);
   });
 });
 
@@ -507,7 +507,7 @@ describe("human-only and queue actions that take ids", () => {
       ["session_end", {}],
       ["session_status", {}],
     ] as const) {
-      await assert.rejects(runTool(B.agent, tool, { team: B.teamKey, ...args, session: A.sessionId }), (e: unknown) => e instanceof ServiceError, tool);
+      await assert.rejects(mcp.run(B.agent, tool, { team: B.teamKey, ...args, session: A.sessionId }), (e: unknown) => e instanceof ServiceError, tool);
     }
     assert.equal(await fingerprint(A), before);
   });
@@ -666,8 +666,8 @@ describe("one session in two workspaces (X-Workspace)", () => {
       await createTeam(actor, { name: `Both ${tag}`, key: "BO" });
       await createIssue(actor, "BO", { title: `written ${tag}` });
     }
-    assert.equal(((await runTool(a, "get_issue", { ref: "BO-1" })) as { issue: { title: string } }).issue.title, "written in A");
-    assert.equal(((await runTool(b, "get_issue", { ref: "BO-1" })) as { issue: { title: string } }).issue.title, "written in B");
+    assert.equal(((await mcp.run(a, "get_issue", { ref: "BO-1" })) as { issue: { title: string } }).issue.title, "written in A");
+    assert.equal(((await mcp.run(b, "get_issue", { ref: "BO-1" })) as { issue: { title: string } }).issue.title, "written in B");
     const [other] = await db.insert(schema.workspaces).values({ name: `Stranger ${RUN}` }).returning();
     await assert.rejects(humanFromSession(token, other.slug), (e: unknown) => e instanceof ServiceError && e.code === "not_found");
   });
@@ -679,7 +679,7 @@ describe("team keys are per workspace (continued)", () => {
     const p = await createTeam(B.owner, { name: "B's AA", key: "AA" });
     assert.equal(p.workspaceId, B.workspaceId);
     assert.notEqual(p.id, A.teamId);
-    const board = (await runTool(B.owner, "list_issues", { team: "AA" })) as { team: { name: string } };
+    const board = (await mcp.run(B.owner, "list_issues", { team: "AA" })) as { team: { name: string } };
     assert.equal(board.team.name, "B's AA");
     assert.equal(await fingerprint(A), before);
   });

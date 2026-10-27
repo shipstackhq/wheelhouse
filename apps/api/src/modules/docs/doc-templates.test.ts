@@ -17,10 +17,11 @@ import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { createTeam } from "../teams/teams.legacy";
 import { createDoc, getDoc } from "./docs.legacy";
-import { listToolDefs, runTool } from "../../lib/tools";
+import { ToolsService } from "../../lib/tools";
 import { DOC_TEMPLATES, DOC_TEMPLATE_IDS, extractActionItems, getDocTemplate, listDocTemplates } from "@wheelhouse/shared/doc-templates";
 import { testApp } from "../../test/app";
 await testApp();
+const mcp = (await testApp()).get(ToolsService);
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;
@@ -101,12 +102,12 @@ describe("createDoc + template", () => {
 
 describe("tools: write_doc with template", () => {
   test("the description names every template id", async () => {
-    const def = listToolDefs().find((t) => t.name === "write_doc")!;
+    const def = mcp.list().find((t) => t.name === "write_doc")!;
     for (const id of ["decision-record", "meeting-notes", "onboarding", "runbook", "spec"]) assert.ok(def.description.includes(id), id);
   });
 
   test("create path seeds body from `template` when no body is passed", async () => {
-    const created = (await runTool(human, "write_doc", { team: teamKey, title: "Spec via tool", template: "spec" })) as { ref: string };
+    const created = (await mcp.run(human, "write_doc", { team: teamKey, title: "Spec via tool", template: "spec" })) as { ref: string };
     const got = (await getDoc(human, teamKey, created.ref.replace(/^docs\//, ""))).doc;
     assert.equal(got.body, getDocTemplate("spec")!.body);
   });

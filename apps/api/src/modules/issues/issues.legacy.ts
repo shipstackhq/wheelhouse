@@ -7,11 +7,11 @@ import type { ProjectsService } from "./projects/projects.service";
 import { issueDetailView } from "./issues.presenter";
 
 /**
- * Temporary. Code that is not converted yet (the MCP tools through lib/service.ts, the map and daemon modules, tests) still calls plain
+ * Temporary. Code that is not converted yet (the map and daemon modules, tests) still calls plain
  * functions; these are those functions, each one line forwarding to the live service. `IssuesModule.onModuleInit` points them at the
  * services Nest built, so nothing works before the application has booted (tests call `testApp()`). A function that takes a `q` runs on
  * it through `Database.within`, so a caller's own transaction stays the one the service uses. Delete this file when the last caller
- * moves to the services (the MCP redesign moves the tools).
+ * moves to the services.
  */
 type Live = { db: Database; issues: IssuesService; cycles: CyclesService; projects: ProjectsService; initiatives: InitiativesService };
 let live: Live | undefined;
@@ -22,7 +22,6 @@ export function bindIssuesLegacy(services: Live) {
 const s = (): Live => live ?? (() => { throw new Error("The issues module is not booted: start the Nest application (tests: await testApp()) before calling the legacy functions"); })();
 
 /** Runs `fn` in one transaction: the services it calls join it, so a batch applies whole or not at all. */
-export const transaction = <T>(fn: () => Promise<T>) => s().db.transaction(fn);
 
 // issues
 export const getBoard = (...a: Parameters<IssuesService["getBoard"]>) => s().issues.getBoard(...a);
@@ -34,7 +33,6 @@ export const createIssue = (...a: Parameters<IssuesService["createIssue"]>) => s
 export const updateIssue = (...a: Parameters<IssuesService["updateIssue"]>) => s().issues.updateIssue(...a);
 export const moveIssue = (...a: Parameters<IssuesService["moveIssue"]>) => s().issues.moveIssue(...a);
 export const deleteIssue = (...a: Parameters<IssuesService["deleteIssue"]>) => s().issues.deleteIssue(...a);
-export const claimIssue = (...a: Parameters<IssuesService["claimIssue"]>) => s().issues.claimIssue(...a);
 export const addComment = (...a: Parameters<IssuesService["addComment"]>) => s().issues.addComment(...a);
 export const linkIssueNode = (...a: Parameters<IssuesService["linkIssueNode"]>) => s().issues.linkIssueNode(...a);
 

@@ -17,7 +17,7 @@ import { TeamsService } from "./teams.service";
   imports: [EventsModule],
   controllers: [TeamsController, TeamMembersController, StatusesController],
   providers: [TeamsRepository, TeamAccessService, TeamsService, TeamLifecycleService, TeamMembersService, StatusesService],
-  exports: [TeamAccessService, TeamsService],
+  exports: [TeamAccessService, TeamsService, TeamMembersService],
 })
 export class TeamsModule implements OnModuleInit {
   constructor(

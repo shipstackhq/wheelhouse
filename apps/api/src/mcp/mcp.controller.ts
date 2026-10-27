@@ -1,8 +1,9 @@
-import { Catch, Controller, Delete, Get, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
+import { Catch, Controller, Delete, Get, Inject, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
 import { AuthError } from "../modules/auth/auth-errors";
 import { mcpAuthFailure } from "../common/errors/api-errors";
 import { runMcp } from "../lib/mcp";
+import { ToolsService } from "../lib/tools";
 import { ActorGuard, type AuthedRequest } from "../common/guards/actor.guard";
 import type { RawTextRequest } from "../common/http/raw-text";
 
@@ -28,11 +29,13 @@ export class McpExceptionFilter implements ExceptionFilter {
 @Controller("mcp")
 @UseFilters(McpExceptionFilter)
 export class McpController {
+  constructor(@Inject(ToolsService) private readonly tools: ToolsService) {}
+
   @Post()
   @UseGuards(ActorGuard)
   async post(@Req() req: AuthedRequest & RawTextRequest, @Res() res: Response) {
     const actor = req.actor;
-    const r = await runMcp(req.rawText ?? "", async () => actor);
+    const r = await runMcp(this.tools, req.rawText ?? "", async () => actor);
     if (r.body === undefined) res.status(r.status).end();
     else res.status(r.status).json(r.body);
   }

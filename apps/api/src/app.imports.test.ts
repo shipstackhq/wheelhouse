@@ -1,7 +1,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { DynamicModule } from "@nestjs/common";
-import { LegacyApiModule } from "./legacy-api.module";
+import { McpModule } from "./mcp/mcp.module";
 import { buildAppImports } from "./app.imports";
 import { DaemonController } from "./modules/daemon/daemon.controller";
 import { DaemonSweep } from "./modules/daemon/daemon.sweep";
@@ -24,19 +24,19 @@ const names = (xs: unknown[]) => xs.map((x) => (x as { name: string }).name);
 describe("what each SERVICE_ROLE loads", () => {
   test("all (the default) loads everything: the legacy group and both sides of the daemon module", () => {
     const imports = buildAppImports("all");
-    assert.ok(imports.includes(LegacyApiModule));
+    assert.ok(imports.includes(McpModule));
     assert.deepEqual(names(daemonControllers("all")), ["DaemonController", "DevicesController", "ChatController"]);
     assert.ok(daemonProviders("all").includes(DaemonSweep));
   });
 
   test("api serves people: the legacy group and the devices routes, but not the machine API or the sweep", () => {
-    assert.ok(buildAppImports("api").includes(LegacyApiModule));
+    assert.ok(buildAppImports("api").includes(McpModule));
     assert.deepEqual(names(daemonControllers("api")), ["DevicesController", "ChatController"]);
     assert.ok(!daemonProviders("api").includes(DaemonSweep));
   });
 
   test("daemon serves machines: only the machine API and the sweep, none of the legacy group", () => {
-    assert.ok(!buildAppImports("daemon").includes(LegacyApiModule));
+    assert.ok(!buildAppImports("daemon").includes(McpModule));
     assert.deepEqual(daemonControllers("daemon"), [DaemonController]);
     assert.ok(daemonProviders("daemon").includes(DaemonSweep));
   });
@@ -48,7 +48,7 @@ describe("what each SERVICE_ROLE loads", () => {
       assert.deepEqual(names(imports.slice(0, 3)), ["ConfigModule", "DatabaseModule", "EventsModule"], role);
     }
     const all = buildAppImports("all");
-    assert.ok(all.indexOf(LegacyApiModule) < all.findIndex((m) => (m as DynamicModule).module === DaemonModule));
+    assert.ok(all.indexOf(McpModule) < all.findIndex((m) => (m as DynamicModule).module === DaemonModule));
   });
 });
 

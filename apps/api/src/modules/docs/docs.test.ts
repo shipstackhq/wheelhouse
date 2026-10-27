@@ -25,10 +25,11 @@ import { upsertNode } from "../map/map.legacy";
 import { createTeam, requireTeam } from "../teams/teams.legacy";
 import { createDoc, deleteDoc, getDoc, linkDocNode, listDocDrafts, listDocs, markDocFresh, moveDoc, searchDocs, suggestDocAnchors, updateDoc } from "./docs.legacy";
 import { extractPathTokens } from "./docs.rules";
-import { runTool } from "../../lib/tools";
+import { ToolsService } from "../../lib/tools";
 import * as sync from "../map/map.legacy";
 import { testApp } from "../../test/app";
 await testApp();
+const mcp = (await testApp()).get(ToolsService);
 
 const RUN = crypto.randomBytes(3).toString("hex");
 let human: Actor;
@@ -185,34 +186,34 @@ describe("service layer: CRUD, locking, tree, limits", () => {
 describe("tool layer: permissions and the untrusted-content marker", () => {
   test("a read-only key can list_knowledge and get_doc", async () => {
     await createDoc(human, teamKey, { title: "Readable by anyone", body: "anyone can read this" });
-    const list = await runTool(readOnlyAgent, "list_knowledge", { team: teamKey, kind: "docs" });
+    const list = await mcp.run(readOnlyAgent, "list_knowledge", { team: teamKey, kind: "docs" });
     assert.ok(Array.isArray(list));
     const found = (list as { ref: string }[]).find((d) => d.ref === "docs/readable-by-anyone")!;
-    const got = (await runTool(readOnlyAgent, "get_doc", { team: teamKey, ref: found.ref })) as { body: string };
+    const got = (await mcp.run(readOnlyAgent, "get_doc", { team: teamKey, ref: found.ref })) as { body: string };
     assert.match(got.body, /<untrusted-document-content/);
     assert.match(got.body, /anyone can read this/);
   });
 
   test("a read-only key is refused on write_doc with a clear forbidden error", async () => {
     await assert.rejects(
-      () => runTool(readOnlyAgent, "write_doc", { team: teamKey, title: "Should fail" }),
+      () => mcp.run(readOnlyAgent, "write_doc", { team: teamKey, title: "Should fail" }),
       (e: unknown) => e instanceof ServiceError && e.code === "forbidden" && /docs:write/.test(e.message),
     );
   });
 
   test("a key with docs:write can create and update, and write_doc links nodes and suggests anchors", async () => {
     await upsertNode(human, teamKey, { name: "Doc target", layer: "system", anchors: ["src/target/**"] });
-    const created = (await runTool(writerAgent, "write_doc", { team: teamKey, title: "Agent-written doc", body: "see src/lib/a.ts", link_nodes: ["Doc target"] })) as { ref: string; id: string; version: number; suggestedAnchors: string[] };
+    const created = (await mcp.run(writerAgent, "write_doc", { team: teamKey, title: "Agent-written doc", body: "see src/lib/a.ts", link_nodes: ["Doc target"] })) as { ref: string; id: string; version: number; suggestedAnchors: string[] };
     assert.equal(created.ref, "docs/agent-written-doc");
     assert.ok(created.suggestedAnchors.includes("src/lib/a.ts") && created.suggestedAnchors.includes("src/target/**"), "from the body and the linked node");
-    const updated = (await runTool(writerAgent, "write_doc", { team: teamKey, ref: created.ref, body: "hello v2", expected_version: created.version })) as { version: number };
+    const updated = (await mcp.run(writerAgent, "write_doc", { team: teamKey, ref: created.ref, body: "hello v2", expected_version: created.version })) as { version: number };
     assert.equal(updated.version, 2);
-    const read = (await runTool(writerAgent, "get_doc", { team: teamKey, ref: created.ref })) as { nodes: { name: string }[] };
+    const read = (await mcp.run(writerAgent, "get_doc", { team: teamKey, ref: created.ref })) as { nodes: { name: string }[] };
     assert.deepEqual(read.nodes.map((n) => n.name), ["Doc target"]);
   });
 
   test("a human (no key capability check) can always write", async () => {
-    const d = (await runTool(human, "write_doc", { team: teamKey, title: "Human doc" })) as { id: string };
+    const d = (await mcp.run(human, "write_doc", { team: teamKey, title: "Human doc" })) as { id: string };
     assert.ok(d.id);
   });
 
@@ -357,10 +358,10 @@ describe("clearing: updateDoc and mark_doc_fresh clear the stale flag, with hist
   test("get_stale / mark_fresh tools work end to end for docs", async () => {
     const d = await createDoc(human, teamKey, { title: "Via tools", anchors: ["src/lib/z.ts"] });
     await reportChanges(human, teamKey, { files: ["src/lib/z.ts"] });
-    const stale = (await runTool(human, "get_stale", { team: teamKey })) as { docs: { id: string; ref: string }[] };
+    const stale = (await mcp.run(human, "get_stale", { team: teamKey })) as { docs: { id: string; ref: string }[] };
     assert.ok(stale.docs.some((x) => x.id === d.id));
-    await runTool(human, "mark_fresh", { team: teamKey, refs: [stale.docs.find((x) => x.id === d.id)!.ref] });
-    const staleAfter = (await runTool(human, "get_stale", { team: teamKey })) as { docs: { id: string }[] };
+    await mcp.run(human, "mark_fresh", { team: teamKey, refs: [stale.docs.find((x) => x.id === d.id)!.ref] });
+    const staleAfter = (await mcp.run(human, "get_stale", { team: teamKey })) as { docs: { id: string }[] };
     assert.ok(!staleAfter.docs.some((x) => x.id === d.id));
   });
 });

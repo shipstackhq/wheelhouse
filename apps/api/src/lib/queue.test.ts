@@ -19,12 +19,13 @@ import { ServiceError } from "../common/service-error";
 import { addComment, createIssue } from "../modules/issues/issues.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
 import { getChanges, markAllSeen, queueStatus, removeSession } from "./service-queue";
-import { runTool } from "./tools";
+import { ToolsService } from "./tools";
 import { MetricsService } from "../modules/dashboard/metrics.service";
 import { briefing } from "../modules/dashboard/dashboard.legacy";
 import { bucketOf } from "@wheelhouse/shared/session-buckets";
 import { testApp } from "../test/app";
 const metrics = (await testApp()).get(MetricsService);
+const mcp = (await testApp()).get(ToolsService);
 
 type Changes = Awaited<ReturnType<typeof getChanges>>;
 
@@ -33,7 +34,7 @@ let key: Actor;
 let otherKey: Actor;
 let issueRef: string;
 
-const as = (a: Actor, tool: string, args: Record<string, unknown>) => runTool(a, tool, { team: "QQ", ...args });
+const as = (a: Actor, tool: string, args: Record<string, unknown>) => mcp.run(a, tool, { team: "QQ", ...args });
 const changes = (a: Actor, session?: string) => as(a, "get_changes", session ? { session } : {}) as Promise<Changes>;
 const seqs = (c: Changes) => c.changes.map((e) => e.seq);
 
@@ -166,7 +167,7 @@ describe("the model is never asked to handle the session id (ADR-5)", () => {
     assert.ok(!/session/i.test(markdown.split("## Since you last looked")[1] ?? ""), "but without asking the model to pass an id");
     assert.ok(!markdown.includes("Your Wheelhouse session is"));
 
-    const def = (await import("./tools")).listToolDefs().find((t) => t.name === "get_changes")!;
+    const def = mcp.list().find((t) => t.name === "get_changes")!;
     assert.ok(!/Pass `session`/.test(def.description));
   });
 });
@@ -269,7 +270,7 @@ describe("session recency, removal and reconnect (WH-48)", () => {
     assert.ok((await listed()).sessions.some((s) => s.id === "s-rm"));
 
     assert.equal(((await changes(key, "s-rm")) as Resumable).session_removed?.missedChanges, 2, "still reported until it chooses");
-    const brief = await runTool({ ...key }, "get_briefing", { team: "QQ", session: "s-rm" });
+    const brief = await mcp.run({ ...key }, "get_briefing", { team: "QQ", session: "s-rm" });
     assert.equal((brief as { session_removed?: unknown }).session_removed !== undefined, true, "the briefing reports it too");
   });
 

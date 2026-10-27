@@ -1,7 +1,7 @@
-import { Catch, Controller, Get, HttpCode, Param, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
+import { Catch, Controller, Get, HttpCode, Inject, Param, Post, Req, Res, UseFilters, UseGuards, type ArgumentsHost, type ExceptionFilter } from "@nestjs/common";
 import type { Response } from "express";
 import { v1Failure } from "../common/errors/api-errors";
-import { listToolDefs, runTool } from "../lib/tools";
+import { ToolsService } from "../lib/tools";
 import { ActorGuard, type AuthedRequest } from "../common/guards/actor.guard";
 import type { RawTextRequest } from "../common/http/raw-text";
 
@@ -17,10 +17,12 @@ export class V1ExceptionFilter implements ExceptionFilter {
 @Controller("api/v1")
 @UseFilters(V1ExceptionFilter)
 export class V1Controller {
+  constructor(@Inject(ToolsService) private readonly tools: ToolsService) {}
+
   /** Every tool, hidden ones included, for clients that discover them. No credentials needed. */
   @Get()
   list(@Res() res: Response) {
-    res.json({ usage: "POST /api/v1/<name> with JSON body; Authorization: Bearer <api key>", tools: listToolDefs({ includeHidden: true }) });
+    res.json({ usage: "POST /api/v1/<name> with JSON body; Authorization: Bearer <api key>", tools: this.tools.list({ includeHidden: true }) });
   }
 
   /** POST /api/v1/<tool> with a JSON body of the tool's arguments. */
@@ -34,6 +36,6 @@ export class V1Controller {
     } catch {
       /* an unparseable body counts as no arguments */
     }
-    res.json({ data: await runTool(req.actor, tool, args) });
+    res.json({ data: await this.tools.run(req.actor, tool, args) });
   }
 }

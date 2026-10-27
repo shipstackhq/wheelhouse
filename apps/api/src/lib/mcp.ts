@@ -1,5 +1,5 @@
 import type { Actor } from "../common/actor";
-import { listToolDefs, runTool } from "./tools";
+import type { ToolsService } from "./tools";
 import { ServiceError } from "../common/service-error";
 import { getPrompt, listPromptDefs } from "./prompts";
 
@@ -32,7 +32,7 @@ type RpcReq = { jsonrpc: "2.0"; id?: string | number | null; method: string; par
 const ok = (id: RpcReq["id"], result: unknown) => ({ jsonrpc: "2.0", id, result });
 const err = (id: RpcReq["id"], code: number, message: string) => ({ jsonrpc: "2.0", id, error: { code, message } });
 
-async function handle(msg: RpcReq, getActor: () => Promise<Actor>) {
+async function handle(tools: ToolsService, msg: RpcReq, getActor: () => Promise<Actor>) {
   const { id, method, params } = msg;
   switch (method) {
     case "initialize": {
@@ -57,12 +57,12 @@ async function handle(msg: RpcReq, getActor: () => Promise<Actor>) {
       }
     }
     case "tools/list":
-      return ok(id, { tools: listToolDefs({ actor: await getActor() }) });
+      return ok(id, { tools: tools.list({ actor: await getActor() }) });
     case "tools/call": {
       const actor = await getActor();
       const name = String(params?.name ?? "");
       try {
-        const result = await runTool(actor, name, params?.arguments);
+        const result = await tools.run(actor, name, params?.arguments);
         return ok(id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] });
       } catch (e) {
         if (e instanceof ServiceError) {
@@ -81,7 +81,7 @@ async function handle(msg: RpcReq, getActor: () => Promise<Actor>) {
  * Answer one POST body (already authenticated). `getActor` is called for each tool call, so a host may resolve the caller
  * again per call (the Next app does) or hand back the one it already has (the API does).
  */
-export async function runMcp(raw: string, getActor: () => Promise<Actor>): Promise<{ status: number; body?: unknown }> {
+export async function runMcp(tools: ToolsService, raw: string, getActor: () => Promise<Actor>): Promise<{ status: number; body?: unknown }> {
   let body: RpcReq | RpcReq[];
   try {
     body = JSON.parse(raw);
@@ -94,7 +94,7 @@ export async function runMcp(raw: string, getActor: () => Promise<Actor>): Promi
   for (const m of batch) {
     if (m.id === undefined || m.id === null) continue; // notification: no response
     try {
-      responses.push(await handle(m, getActor));
+      responses.push(await handle(tools, m, getActor));
     } catch (e) {
       console.error("[mcp]", e);
       responses.push(err(m.id, -32603, e instanceof Error ? e.message : "Internal error"));

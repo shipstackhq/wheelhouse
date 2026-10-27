@@ -14,14 +14,15 @@ import { ServiceError } from "../common/service-error";
 import { scopeKeyToAllTeams } from "../modules/auth/auth.legacy";
 import { createIssue } from "../modules/issues/issues.legacy";
 import { createTeam } from "../modules/teams/teams.legacy";
-import { listToolDefs, runTool, tools } from "./tools";
+import { ToolsService } from "./tools";
 import { testApp } from "../test/app";
 await testApp();
+const mcp = (await testApp()).get(ToolsService);
 
 let human: Actor;
 let key: Actor;
 const T = "TT";
-const call = <R = Record<string, any>>(a: Actor, tool: string, args: Record<string, unknown> = {}) => runTool(a, tool, args) as Promise<R>; // eslint-disable-line @typescript-eslint/no-explicit-any
+const call = <R = Record<string, any>>(a: Actor, tool: string, args: Record<string, unknown> = {}) => mcp.run(a, tool, args) as Promise<R>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const day = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
 before(async () => {
@@ -38,13 +39,13 @@ before(async () => {
 
 describe("the registry", () => {
   test("19 agent tools, and the six session tools only over REST; every tool takes `team` where it needs one", () => {
-    assert.equal(listToolDefs().length, 19);
+    assert.equal(mcp.list().length, 19);
     assert.deepEqual(
-      listToolDefs({ includeHidden: true }).map((t) => t.name).filter((n) => !listToolDefs().some((t) => t.name === n)).sort(),
+      mcp.list({ includeHidden: true }).map((t) => t.name).filter((n) => !mcp.list().some((t) => t.name === n)).sort(),
       ["land_changes", "report_changes", "resume_session", "session_end", "session_status", "session_sync"],
     );
-    for (const t of listToolDefs({ includeHidden: true })) assert.ok("team" in (t.inputSchema.properties as object) || ["plan", "get_project", "get_issue", "update_issue", "comment", "get_briefing"].includes(t.name), t.name);
-    assert.ok(!("create_project" in tools) && !("search_docs" in tools));
+    for (const t of mcp.list({ includeHidden: true })) assert.ok("team" in (t.inputSchema.properties as object) || ["plan", "get_project", "get_issue", "update_issue", "comment", "get_briefing"].includes(t.name), t.name);
+    assert.ok(!("create_project" in mcp.tools) && !("search_docs" in mcp.tools));
   });
 });
 
