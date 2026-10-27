@@ -90,16 +90,18 @@ export class KeysService {
 
   /**
    * Create a key. The secret is returned here and nowhere else; only its hash is stored. 10 an hour per person. `teams` are the keys
-   * of the teams it can open (WH-120): teams the person edits, at least one; left out, every team they edit.
+   * of the teams it can open (WH-120): teams the person edits, at least one; left out, every team they edit. `scopes` are what it may
+   * do (KEY_SCOPES); left out, the column's default.
    */
-  async createKeyAs(h: Human, name: string, teamKeys?: unknown) {
+  async createKeyAs(h: Human, name: string, teamKeys?: unknown, scopes?: unknown) {
     const hit = rateLimit(`create-key:${h.user.id}`, 10, 60 * 60_000);
     if (!hit.ok) throw tooMany(hit.retryAfter);
     const label = name.trim().slice(0, 100) || "Claude agent";
     const secret = `wh_${randomToken(24)}`;
+    const caps = scopes === undefined ? undefined : this.checkScopes(scopes);
     const scope = teamKeys === undefined ? await this.editableTeams(h) : await this.scopeTeams(h, teamKeys);
     const row = await this.db.transaction(async () => {
-      const k = await this.repo.insertKey({ workspaceId: h.workspace.id, name: label, prefix: secret.slice(0, 10), keyHash: sha256(secret), createdBy: h.user.id });
+      const k = await this.repo.insertKey({ workspaceId: h.workspace.id, name: label, prefix: secret.slice(0, 10), keyHash: sha256(secret), createdBy: h.user.id, ...(caps && { capabilities: caps }) });
       if (scope.length) await this.repo.insertKeyTeams(scope.map((t) => ({ apiKeyId: k.id, teamId: t.id, workspaceId: h.workspace.id })));
       return k;
     });
@@ -137,12 +139,16 @@ export class KeysService {
     return rows.length > 0;
   }
 
+  private checkScopes(scopes: unknown): string[] {
+    if (!Array.isArray(scopes) || scopes.some((s) => !(KEY_SCOPES as readonly unknown[]).includes(s))) throw new ServiceError("invalid", `scopes must be a list of: ${KEY_SCOPES.join(", ")}`, { fields: { scopes: KEY_SCOPES.join(", ") } });
+    return [...new Set(scopes as string[])];
+  }
+
   /** Set the scopes (KEY_SCOPES) of one of the workspace's own keys. */
   async setKeyScopesAs(h: Human, id: string, scopes: unknown): Promise<KeyView> {
     const key = await this.repo.keyIn(id, h.workspace.id);
     if (!key) throw new ServiceError("not_found", "API key not found");
-    if (!Array.isArray(scopes) || scopes.some((s) => !(KEY_SCOPES as readonly unknown[]).includes(s))) throw new ServiceError("invalid", `scopes must be a list of: ${KEY_SCOPES.join(", ")}`, { fields: { scopes: KEY_SCOPES.join(", ") } });
-    const row = await this.repo.setKeyCapabilities(id, h.workspace.id, [...new Set(scopes as string[])]);
+    const row = await this.repo.setKeyCapabilities(id, h.workspace.id, this.checkScopes(scopes));
     return keyView(row, (await this.teamsOfKeys([id])).get(id));
   }
 

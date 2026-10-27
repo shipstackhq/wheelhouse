@@ -223,6 +223,11 @@ describe("API keys", () => {
     assert.ok(!listing.includes(secret) && !listing.includes("keyHash"), "no secret and no hash in a listing");
     assert.ok(JSON.stringify(key).indexOf(secret) < 0);
   });
+  test("scopes can be chosen at creation, must be real ones, and default when left out", async () => {
+    assert.deepEqual((await t.createKeyAs(A.member, "w", undefined, ["read", "docs:write"])).key.scopes, ["read", "docs:write"]);
+    assert.deepEqual((await t.createKeyAs(A.member, "d")).key.scopes, ["read", "board:write", "map:write"]);
+    await rejects(t.createKeyAs(A.member, "bad", undefined, ["root"]), (x) => x instanceof Error, "unknown scope");
+  });
   test("a blank name gets a default", async () => {
     assert.equal((await t.createKeyAs(A.member, "   ")).key.name, "Claude agent");
   });

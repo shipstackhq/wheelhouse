@@ -28,11 +28,11 @@ export class KeysController {
     return { ok: true };
   }
 
-  /** `{ name, teams? }`: create a key. `teams` are the keys of the teams it can open (teams you edit; default all of them). The secret is in this response and nowhere else, ever. */
+  /** `{ name, teams?, scopes? }`: create a key. `teams` are the keys of the teams it can open (teams you edit; default all of them). The secret is in this response and nowhere else, ever. */
   @Post("keys")
   @HttpCode(201)
   create(@Req() req: SessionRequest, @JsonBody(new ZodValidationPipe(createKeyDto)) body: CreateKeyDto) {
-    return this.keys.createKeyAs(req.human, body.name, body.teams);
+    return this.keys.createKeyAs(req.human, body.name, body.teams, body.scopes);
   }
 
   @Delete("keys/:id")

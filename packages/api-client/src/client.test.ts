@@ -172,15 +172,15 @@ describe("the page endpoints (WH-95)", () => {
 
   test("keys: create sends only the name and hands back the secret; revoke and capability use the key's id", async () => {
     const s = script([{ status: 201, json: { key: { id: "k1" }, secret: "wh_secret" } }]);
-    const made = await createApiClient({ fetch: s.f }).keys.create("CI");
+    const made = await createApiClient({ fetch: s.f }).keys.create({ name: "CI" });
     assert.deepEqual(s.calls[0].body, { name: "CI" });
     assert.equal(made.secret, "wh_secret");
     assert.deepEqual(await sent((a) => a.keys.revoke("k 1")), { method: "DELETE", url: "/api/app/keys/k%201", body: undefined });
     assert.deepEqual(await sent((a) => a.keys.setScopes("k1", ["read", "docs:write"]), { json: { key: { id: "k1", scopes: ["read", "docs:write"] } } }), { method: "PATCH", url: "/api/app/keys/k1", body: { scopes: ["read", "docs:write"] } });
     assert.deepEqual(await sent((a) => a.keys.setTeams("k1", ["AA", "BB"]), { json: { key: { id: "k1", teams: [] } } }), { method: "PATCH", url: "/api/app/keys/k1", body: { teams: ["AA", "BB"] } });
     const scoped = script([{ status: 201, json: { key: { id: "k2" }, secret: "wh_s" } }]);
-    await createApiClient({ fetch: scoped.f }).keys.create("CI", ["AA"]);
-    assert.deepEqual(scoped.calls[0].body, { name: "CI", teams: ["AA"] });
+    await createApiClient({ fetch: scoped.f }).keys.create({ name: "CI", teams: ["AA"], scopes: ["read"] });
+    assert.deepEqual(scoped.calls[0].body, { name: "CI", teams: ["AA"], scopes: ["read"] });
     assert.deepEqual(await sent((a) => a.keys.page(), { json: { keys: [], setup: {} } }), { method: "GET", url: "/api/app/keys", body: undefined });
     assert.deepEqual(await sent((a) => a.keys.markAllSeen({ keyId: "k1" })), { method: "POST", url: "/api/app/keys/mark-all-seen", body: { keyId: "k1" } });
   });

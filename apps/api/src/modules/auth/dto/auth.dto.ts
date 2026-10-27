@@ -13,8 +13,8 @@ export type SignupDto = z.infer<typeof signupDto>;
 export const markAllSeenDto = z.object({ keyId: textOrUndefined, teamKey: textOrUndefined });
 export type MarkAllSeenDto = z.infer<typeof markAllSeenDto>;
 
-/** `{ name, teams? }`: create an API key. */
-export const createKeyDto = z.object({ name: text, teams: anything });
+/** `{ name, teams?, scopes? }`: create an API key. */
+export const createKeyDto = z.object({ name: text, teams: anything, scopes: anything });
 export type CreateKeyDto = z.infer<typeof createKeyDto>;
 
 /** `{ scopes?, teams? }`: change a key. The handler checks that one of them is sent; the service checks the scopes. */

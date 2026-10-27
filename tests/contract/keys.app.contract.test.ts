@@ -27,6 +27,13 @@ before(async () => {
 });
 
 describe("choosing a key's teams", () => {
+  test("scopes are chosen at creation: a real list is kept, an unknown scope is a 400", async () => {
+    const ok = await makeKey({ scopes: ["read", "docs:write"] });
+    assert.equal(ok.status, 201, ok.text);
+    assert.deepEqual((ok.json.key as { scopes: string[] }).scopes, ["read", "docs:write"]);
+    assert.equal((await makeKey({ scopes: ["root"] })).status, 400);
+  });
+
   test("a key is made for the teams you pick; left out, it gets every team you can edit; the API keys page lists them", async () => {
     const narrow = await makeKey({ teams: [t1] });
     assert.equal(narrow.status, 201, narrow.text);
