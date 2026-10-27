@@ -221,6 +221,7 @@ export function Sidebar({
             <NavButton icon={NAV_ICONS.myIssues} collapsed={collapsed}>My issues</NavButton>
           </div>
           <SidebarGroup title="Workspace" collapsed={collapsed} gap="mt-3">
+            <NavLink href="/ideas" prefix icon={NAV_ICONS.ideas} collapsed={collapsed}>Ideas</NavLink>
             <NavLink href="/initiatives" prefix icon={NAV_ICONS.initiatives} collapsed={collapsed}>Initiatives</NavLink>
             <NavLink href="/projects" prefix icon={NAV_ICONS.projects} collapsed={collapsed}>Projects</NavLink>
             <NavLink href="/workspace" icon={NAV_ICONS.people} collapsed={collapsed}>Members</NavLink>

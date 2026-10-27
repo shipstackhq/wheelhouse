@@ -374,6 +374,25 @@ export type InitiativeDetail = InitiativeSummary & {
   /** Projects the viewer sees that are not linked here yet (only when they can edit it). */
   linkable: { id: string; name: string }[];
 };
+/** Ideas (WH-109): a note that is not yet work. `promoted` is only reached by promoting it to an issue. */
+export type IdeaStatus = "new" | "exploring" | "promoted" | "parked";
+export type IdeaSummary = {
+  id: string;
+  title: string;
+  status: IdeaStatus;
+  author: { kind: "human" | "agent"; name: string };
+  /** Only a tag. */
+  team: { id: string; key: string; name: string } | null;
+  commentCount: number;
+  /** The issue it became, once promoted. */
+  promotedIssue: { id: string; ref: string; title: string } | null;
+  createdAt: string;
+  updatedAt: string;
+};
+export type IdeaComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
+export type IdeaDetail = IdeaSummary & { body: string; comments: IdeaComment[]; canEdit: boolean };
+export type IdeaInput = { title?: string; body?: string; status?: Exclude<IdeaStatus, "promoted">; team?: string | null };
+
 export type InitiativeInput = {
   name?: string;
   description?: string;

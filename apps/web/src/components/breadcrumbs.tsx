@@ -27,6 +27,7 @@ const TEAM_ITEM: Record<string, string> = {
 };
 
 const WORKSPACE_PAGES: Record<string, { label: string; item?: string }> = {
+  ideas: { label: "Ideas", item: "Idea" },
   initiatives: { label: "Initiatives", item: "Initiative" },
   projects: { label: "Projects", item: "Project" },
   workspace: { label: "Members" },

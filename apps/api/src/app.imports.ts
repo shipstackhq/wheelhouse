@@ -9,6 +9,7 @@ import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { DocsModule } from "./modules/docs/docs.module";
 import { ImagesModule } from "./modules/images/images.module";
 import { GithubModule } from "./modules/github/github.module";
+import { IdeasModule } from "./modules/ideas/ideas.module";
 import { IssuesModule } from "./modules/issues/issues.module";
 import { MapModule } from "./modules/map/map.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
@@ -25,5 +26,5 @@ import { StreamApiModule } from "./platform/streams/stream-api.module";
  * routes have always come after the rest.
  */
 export function buildAppImports(role: ServiceRole): Array<Type | DynamicModule> {
-  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [LegacyApiModule, StreamApiModule, ImagesModule, TeamsModule, DocsModule, IssuesModule, MapModule, GithubModule, AuthModule, DashboardModule, NotificationsModule, BroadcastsModule, AgentsModule] : []), DaemonModule.register(role)];
+  return [ConfigModule, DatabaseModule, EventsModule, EventEmitterModule.forRoot(), ...(servesApi(role) ? [LegacyApiModule, StreamApiModule, ImagesModule, TeamsModule, DocsModule, IssuesModule, IdeasModule, MapModule, GithubModule, AuthModule, DashboardModule, NotificationsModule, BroadcastsModule, AgentsModule] : []), DaemonModule.register(role)];
 }
