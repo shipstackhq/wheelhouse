@@ -279,7 +279,7 @@ export type TicketInput = {
   labels?: string[];
 };
 
-export async function createTicket(actor: Actor, projectRef: string, input: TicketInput & { title: string; column?: string }) {
+export async function createTicket(actor: Actor, projectRef: string, input: TicketInput & { title: string; column?: string; ideaId?: string }) {
   const db = await getDb();
   const project = await getProject(actor, projectRef);
   if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
@@ -304,6 +304,7 @@ export async function createTicket(actor: Actor, projectRef: string, input: Tick
         assigneeId: input.assigneeId ?? null,
         agentClaimable: input.agentClaimable ?? actor.kind === "agent",
         labels: input.labels ?? [],
+        ideaId: input.ideaId ?? null,
         position,
         createdByKind: actor.kind,
         createdById: actor.id,
@@ -1731,4 +1732,98 @@ export async function queueStatus(actor: Actor, projectRef: string) {
     out.push({ ...k, pending, sessions });
   }
   return out;
+}
+
+// ───────────────────────── ideas (WH-109) ─────────────────────────
+//
+// Workspace-wide (team-scoped) notes captured before they are work. Not recorded in `events`, which is
+// per-project; the trail between an idea and its issue is the ticket's idea_id and the idea's promoted_ticket_id.
+
+const { ideas, ideaComments } = schema;
+
+export type IdeaStatus = (typeof schema.IDEA_STATUSES)[number];
+
+async function ownIdea(q: Q, actor: Actor, id: string) {
+  if (!isUuid(id)) throw new ServiceError("not_found", "Idea not found");
+  const [idea] = await q.select().from(ideas).where(and(eq(ideas.id, id), eq(ideas.teamId, actor.teamId)));
+  if (!idea) throw new ServiceError("not_found", "Idea not found");
+  return idea;
+}
+
+export async function listIdeas(actor: Actor, opts: { status?: IdeaStatus } = {}) {
+  const db = await getDb();
+  return db
+    .select()
+    .from(ideas)
+    .where(and(eq(ideas.teamId, actor.teamId), opts.status ? eq(ideas.status, opts.status) : undefined))
+    .orderBy(desc(ideas.createdAt));
+}
+
+export async function createIdea(actor: Actor, input: { title: string; body?: string; tag?: string | null }) {
+  const title = input.title?.trim();
+  if (!title) throw new ServiceError("invalid", "title is required");
+  const db = await getDb();
+  const [idea] = await db
+    .insert(ideas)
+    .values({
+      teamId: actor.teamId,
+      title,
+      body: input.body?.trim() ?? "",
+      tag: input.tag?.trim() || null,
+      authorKind: actor.kind,
+      authorId: actor.id,
+      authorName: actor.name,
+    })
+    .returning();
+  return idea;
+}
+
+export async function getIdea(actor: Actor, id: string) {
+  const db = await getDb();
+  const idea = await ownIdea(db, actor, id);
+  const cs = await db.select().from(ideaComments).where(eq(ideaComments.ideaId, idea.id)).orderBy(asc(ideaComments.createdAt));
+  let ticket: { ref: string; title: string } | null = null;
+  if (idea.promotedTicketId) {
+    const [row] = await db
+      .select({ number: tickets.number, title: tickets.title, key: projects.key })
+      .from(tickets)
+      .innerJoin(projects, eq(projects.id, tickets.projectId))
+      .where(and(eq(tickets.id, idea.promotedTicketId), eq(projects.teamId, actor.teamId)));
+    if (row) ticket = { ref: `${row.key}-${row.number}`, title: row.title };
+  }
+  return { idea, comments: cs, ticket };
+}
+
+export async function setIdeaStatus(actor: Actor, id: string, status: IdeaStatus) {
+  if (!schema.IDEA_STATUSES.includes(status)) throw new ServiceError("invalid", `Unknown status ${status}`);
+  const db = await getDb();
+  const idea = await ownIdea(db, actor, id);
+  // "promoted" is only reachable through promoteIdea, so the idea and its issue always agree.
+  if (status === "promoted" && !idea.promotedTicketId) throw new ServiceError("invalid", "Use Promote to turn an idea into an issue");
+  const [row] = await db.update(ideas).set({ status, updatedAt: new Date() }).where(eq(ideas.id, idea.id)).returning();
+  return row;
+}
+
+export async function addIdeaComment(actor: Actor, id: string, body: string) {
+  if (!body?.trim()) throw new ServiceError("invalid", "Comment body is required");
+  const db = await getDb();
+  const idea = await ownIdea(db, actor, id);
+  const [c] = await db
+    .insert(ideaComments)
+    .values({ ideaId: idea.id, authorKind: actor.kind, authorId: actor.id, authorName: actor.name, body: body.trim() })
+    .returning();
+  return c;
+}
+
+/** One action: create an issue from the idea (linked back to it) and mark the idea promoted. */
+export async function promoteIdea(actor: Actor, id: string, projectRef: string) {
+  const db = await getDb();
+  const idea = await ownIdea(db, actor, id);
+  if (idea.promotedTicketId) throw new ServiceError("conflict", "This idea has already been promoted");
+  const ticket = await createTicket(actor, projectRef, { title: idea.title, body: idea.body, ideaId: idea.id });
+  await db
+    .update(ideas)
+    .set({ status: "promoted", promotedTicketId: ticket.id, updatedAt: new Date() })
+    .where(and(eq(ideas.id, idea.id), eq(ideas.teamId, actor.teamId)));
+  return { ticketRef: ticket.ref, ideaId: idea.id };
 }

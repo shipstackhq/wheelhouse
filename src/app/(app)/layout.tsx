@@ -18,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <div className="px-4 pb-2 text-xs text-muted">{team.name}</div>
         <nav className="flex-1 overflow-y-auto px-2 text-sm">
           <NavLink href="/">Dashboard</NavLink>
+          <NavLink href="/ideas" prefix>Ideas</NavLink>
           <div className="label mt-4 px-2 normal-case tracking-normal">Projects</div>
           {projects.map((p) => (
             <NavLink key={p.id} href={`/p/${p.key}`} prefix>

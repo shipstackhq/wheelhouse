@@ -443,3 +443,58 @@ export async function resolveDraftAction(projectKey: string, draftId: string, ac
   const { resolveDraft } = await import("@/lib/sync");
   return wrap(() => resolveDraft(actor, projectKey, draftId, action));
 }
+
+// ───────── ideas (WH-109) ─────────
+
+const ideaFail = (path: string, e: unknown): never => {
+  if (e instanceof svc.ServiceError) redirect(`${path}?error=${encodeURIComponent(e.message)}`);
+  throw e;
+};
+
+export async function createIdeaAction(fd: FormData) {
+  const { actor } = await requireHuman();
+  let id: string;
+  try {
+    id = (await svc.createIdea(actor, { title: String(fd.get("title") ?? ""), body: String(fd.get("body") ?? ""), tag: String(fd.get("tag") ?? "") })).id;
+  } catch (e) {
+    return ideaFail("/ideas", e);
+  }
+  revalidatePath("/ideas");
+  redirect(`/ideas/${id}`);
+}
+
+export async function setIdeaStatusAction(fd: FormData) {
+  const { actor } = await requireHuman();
+  const id = String(fd.get("id") ?? "");
+  try {
+    await svc.setIdeaStatus(actor, id, String(fd.get("status") ?? "") as svc.IdeaStatus);
+  } catch (e) {
+    return ideaFail(`/ideas/${id}`, e);
+  }
+  revalidatePath("/ideas", "layout");
+  redirect(`/ideas/${id}`);
+}
+
+export async function commentIdeaAction(fd: FormData) {
+  const { actor } = await requireHuman();
+  const id = String(fd.get("id") ?? "");
+  try {
+    await svc.addIdeaComment(actor, id, String(fd.get("body") ?? ""));
+  } catch (e) {
+    return ideaFail(`/ideas/${id}`, e);
+  }
+  revalidatePath(`/ideas/${id}`);
+  redirect(`/ideas/${id}`);
+}
+
+export async function promoteIdeaAction(fd: FormData) {
+  const { actor } = await requireHuman();
+  const id = String(fd.get("id") ?? "");
+  try {
+    await svc.promoteIdea(actor, id, String(fd.get("project") ?? ""));
+  } catch (e) {
+    return ideaFail(`/ideas/${id}`, e);
+  }
+  revalidatePath("/ideas", "layout");
+  redirect(`/ideas/${id}`);
+}

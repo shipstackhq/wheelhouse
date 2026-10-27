@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -151,6 +152,12 @@ export function TicketDrawer(props: {
             />
           </Field>
         </div>
+
+        {t.ideaId && (
+          <div className="text-sm text-muted">
+            Promoted from an <Link href={`/ideas/${t.ideaId}`} className="underline hover:text-fg">idea</Link>
+          </div>
+        )}
 
         <section>
           <div className="mb-1 flex items-center justify-between">

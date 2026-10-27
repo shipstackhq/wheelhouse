@@ -125,6 +125,8 @@ export const tickets = pgTable(
     labels: jsonb("labels").$type<string[]>().notNull().default([]),
     position: doublePrecision("position").notNull(),
     version: integer("version").notNull().default(1),
+    // The idea this ticket was promoted from (WH-109), if any.
+    ideaId: uuid("idea_id"),
     createdByKind: text("created_by_kind", { enum: ["human", "agent"] }).notNull(),
     createdById: uuid("created_by_id"),
     createdAt: createdAt(),
@@ -139,6 +141,39 @@ export const tickets = pgTable(
 export const comments = pgTable("comments", {
   id: uuid("id").primaryKey().defaultRandom(),
   ticketId: uuid("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
+  authorId: uuid("author_id"),
+  authorName: text("author_name").notNull(),
+  body: text("body").notNull(),
+  createdAt: createdAt(),
+});
+
+export const IDEA_STATUSES = ["new", "exploring", "promoted", "parked"] as const;
+
+/** Workspace-wide ideas (WH-109): captured before they are work. Deliberately no priority, estimate or assignee. */
+export const ideas = pgTable(
+  "ideas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    status: text("status", { enum: IDEA_STATUSES }).notNull().default("new"),
+    tag: text("tag"), // optional team tag
+    authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
+    authorId: uuid("author_id"),
+    authorName: text("author_name").notNull(),
+    // Set when promoted: the ticket this became.
+    promotedTicketId: uuid("promoted_ticket_id").references(() => tickets.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("ideas_team_idx").on(t.teamId, t.createdAt)],
+);
+
+export const ideaComments = pgTable("idea_comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ideaId: uuid("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
   authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
   authorId: uuid("author_id"),
   authorName: text("author_name").notNull(),

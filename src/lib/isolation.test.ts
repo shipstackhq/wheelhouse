@@ -467,6 +467,10 @@ const ACTION_AUDIT: Record<string, string> = {
   markAllSeenAction: "service.markAllSeen (keys filtered by the caller's team)",
   removeSessionAction: "service.removeSession (project and session filtered by team)",
   resolveDraftAction: "sync.resolveDraft (draft filtered by the team's project)",
+  createIdeaAction: "service.createIdea with the caller's team",
+  setIdeaStatusAction: "service.setIdeaStatus (ownIdea filters by team)",
+  commentIdeaAction: "service.addIdeaComment (ownIdea filters by team)",
+  promoteIdeaAction: "service.promoteIdea (ownIdea and getProject filter by team)",
 };
 
 /** Files that call getDb() directly, and how each one scopes its queries. A new file must be added here. */
