@@ -1,0 +1,1 @@
+ALTER TABLE "device_jobs" ADD COLUMN "effort" text;

@@ -125,6 +125,8 @@ export const deviceJobs = table(
     createdBy: uuid("created_by"),
     // The agent whose profile the run uses (WH-114); null for a generic run.
     agentId: uuid("agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
+    // The effort the run was started with (WH-115): the agent profile's, or null for the CLI's default.
+    effort: text("effort"),
     offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }).notNull(),
     cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
     // Set while the device has gone quiet (state `unreachable`): when the server noticed. Nothing is guessed from silence; a run only
