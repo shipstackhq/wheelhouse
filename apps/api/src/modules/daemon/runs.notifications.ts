@@ -27,23 +27,26 @@ export class RunNotifications {
       if (!issue) return;
       const ref = `${issue.teamKey}-${issue.number}`;
       const ok = job.state === "succeeded";
-      await this.inbox.notify({
-        workspaceId: issue.workspaceId,
-        teamId: issue.teamId,
-        recipientUserId: job.createdBy,
-        source: "wheelhouse",
-        type: ok ? "run.finished" : "run.failed",
-        title: ok ? `Run on ${ref} finished` : `Run on ${ref} failed`,
-        body: ok ? issue.title : [issue.title, (job.error ?? "").slice(0, SNIPPET)].filter(Boolean).join("\n"),
-        actorKind: "agent",
-        actorId: device.id,
-        actorName: device.name,
-        subjectEntity: "issue",
-        subjectId: job.issueId,
-        href: `/t/${issue.teamKey}?t=${ref}`,
-        data: { jobId: job.id, state: job.state, branch: job.branch },
-        dedupeKey: `${ok ? "run.finished" : "run.failed"}:${job.id}`,
-      });
+      // The requester, and the assignee when someone else started it (WH-127: the issue stays theirs).
+      for (const recipientUserId of new Set([job.createdBy, ...(isUuid(issue.assigneeId) ? [issue.assigneeId] : [])])) {
+        await this.inbox.notify({
+          workspaceId: issue.workspaceId,
+          teamId: issue.teamId,
+          recipientUserId,
+          source: "wheelhouse",
+          type: ok ? "run.finished" : "run.failed",
+          title: ok ? `Run on ${ref} finished` : `Run on ${ref} failed`,
+          body: ok ? issue.title : [issue.title, (job.error ?? "").slice(0, SNIPPET)].filter(Boolean).join("\n"),
+          actorKind: "agent",
+          actorId: device.id,
+          actorName: device.name,
+          subjectEntity: "issue",
+          subjectId: job.issueId,
+          href: `/t/${issue.teamKey}?t=${ref}`,
+          data: { jobId: job.id, state: job.state, branch: job.branch },
+          dedupeKey: `${ok ? "run.finished" : "run.failed"}:${job.id}`,
+        });
+      }
     } catch (e) {
       this.log.warn(`run notification failed: ${e instanceof Error ? e.message : e}`);
     }

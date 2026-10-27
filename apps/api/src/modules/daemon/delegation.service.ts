@@ -6,6 +6,7 @@ import { effectiveProfile } from "../agents/index";
 import { DaemonRepository } from "./daemon.repository";
 import { DevicesService } from "./devices.service";
 import { RunsService } from "./runs.service";
+import { ACTIVE } from "./device-common";
 
 /** How often issues waiting for a device are offered again. */
 const WAITING_EVERY_MS = 30_000;
@@ -28,7 +29,10 @@ export class DelegationService implements OnModuleInit, OnApplicationShutdown {
   ) {}
 
   onModuleInit() {
-    this.timer = setInterval(() => this.offerWaiting().catch((e) => this.log.warn(`offering waiting delegations failed: ${e instanceof Error ? e.message : e}`)), WAITING_EVERY_MS);
+    this.timer = setInterval(() => {
+      this.stopOrphaned().catch((e) => this.log.warn(`stopping runs of people who left failed: ${e instanceof Error ? e.message : e}`));
+      this.offerWaiting().catch((e) => this.log.warn(`offering waiting delegations failed: ${e instanceof Error ? e.message : e}`));
+    }, WAITING_EVERY_MS);
     this.timer.unref();
   }
 
@@ -41,6 +45,16 @@ export class DelegationService implements OnModuleInit, OnApplicationShutdown {
     const { team } = await this.issues.resolveIssue(actor, issueId);
     await this.runs.stopIssueRuns(actor, issueId, team.id);
     if (agentId) await this.start(actor, ref, issueId, agentId);
+  }
+
+  /** WH-127: a requester who left the team or the workspace: their active runs stop and the issue's delegate is cleared. Returns how many. */
+  async stopOrphaned() {
+    const rows = await this.repo.orphanedRuns(ACTIVE);
+    for (const { job } of rows) {
+      await this.runs.stopIssueRuns({ kind: "human", id: job.createdBy!, name: "Wheelhouse", workspaceId: job.workspaceId }, job.issueId, job.teamId);
+      await this.repo.clearDelegation(job.issueId);
+    }
+    return rows.length;
   }
 
   /** Delegated issues with no run yet, offered as their delegator. Returns how many started. */

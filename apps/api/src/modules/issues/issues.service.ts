@@ -240,6 +240,22 @@ export class IssuesService {
     return id;
   }
 
+  /**
+   * WH-127: run the issue's delegate again, with the actor as the requester (the assignee taking over a run an admin started, or a rerun
+   * after a failure). Same permission as delegating. The active run is stopped and a new one started by the delegation listener.
+   */
+  async rerunDelegate(actor: Actor, ref: string) {
+    const out = await this.db.transaction(async () => {
+      const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "edit");
+      if (!issue.delegateAgentId) throw new ServiceError("invalid", `${r} is not delegated to an agent`);
+      await this.resolveDelegate(actor, team, issue, null);
+      await this.repo.updateIssue(issue.id, { delegatedBy: actor.id, delegatedAt: new Date(), updatedAt: new Date() });
+      return { id: issue.id, ref: r, agentId: issue.delegateAgentId };
+    });
+    await this.emitter.emitAsync(ISSUE_DELEGATED, { actor, issueId: out.id, ref: out.ref, agentId: out.agentId } satisfies IssueDelegated);
+    return { ok: true };
+  }
+
   private async positionAt(statusId: string, index: number | undefined, excludeId?: string) {
     return positionAmong(await this.repo.siblingsInStatus(statusId, excludeId), index);
   }

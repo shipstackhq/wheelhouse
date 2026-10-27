@@ -188,12 +188,13 @@ export class RunsService {
 
   /**
    * Stop a job. An offer not yet taken ends at once; a job the daemon holds is asked to stop (a signed cancel) and ends when the daemon
-   * reports it. The person who started it, or the device's owner, can cancel.
+   * reports it. The person who started it, the device's owner, or the issue's assignee (WH-127: the issue is theirs) can cancel.
    */
   async cancelJob(actor: Actor, jobId: string) {
     const job = await this.readableJob(actor, jobId);
     const d = await this.repo.deviceById(job.deviceId);
-    if (actor.kind !== "human" || (job.createdBy !== actor.id && d?.ownerId !== actor.id)) throw new ServiceError("forbidden", "Only the person who started it or the device's owner can cancel a run");
+    const assignee = (await this.repo.issueForNotice(job.issueId))?.assigneeId;
+    if (actor.kind !== "human" || (job.createdBy !== actor.id && d?.ownerId !== actor.id && assignee !== actor.id)) throw new ServiceError("forbidden", "Only the person who started it, the device's owner or the assignee can cancel a run");
     if (isFinalState(job.state)) return { job: jobView(job) };
     const now = new Date();
     const key = await this.stream.signingKey();

@@ -25,6 +25,7 @@ import { DeviceStreamService } from "./device-stream.service";
 import { DevicesService } from "./devices.service";
 import { RunsService } from "./runs.service";
 import { DelegationService } from "./delegation.service";
+import { IssuesService } from "../issues/index";
 import { updateIssue } from "../issues/issues.legacy";
 import { jobDelivery } from "./daemon.presenter";
 import { OFFER_TTL_MS, UNREACHABLE_AFTER_MS, type Device } from "./device-common";
@@ -773,6 +774,38 @@ describe("delegated runs (WH-116)", () => {
 
     await updateIssue(who, issue.ref, { delegate: null });
     assert.equal((await jobsOf(issue.id))[0].state, "canceled");
+  });
+
+  test("the assignee can stop an admin's run, rerun it as theirs, and hears how it ends", async () => {
+    const { who, slug } = await setup("ari");
+    const { device } = await paired(owner);
+    await online(device);
+    const issue = await createIssue(owner, "DM", { title: "Admin delegates", assigneeId: who.id });
+    await updateIssue(owner, issue.ref, { delegate: slug });
+    const [first] = await jobsOf(issue.id);
+    assert.equal(first.createdBy, owner.id, "the admin who delegated is the requester");
+    assert.equal((await d.cancelJob(who, first.id)).job.state, "canceled", "the assignee may stop it");
+
+    const { device: mine } = await paired(who);
+    await online(mine);
+    await app.get(IssuesService).rerunDelegate(who, issue.ref);
+    const second = (await jobsOf(issue.id)).find((j) => j.id !== first.id)!;
+    assert.equal(second.createdBy, who.id, "a rerun makes the assignee the requester");
+    await assert.rejects(app.get(IssuesService).rerunDelegate(teammate, issue.ref), code("forbidden"));
+  });
+
+  test("when the requester leaves the team, their run stops and the delegate is cleared", async () => {
+    const { who, slug } = await setup("lee");
+    const { device } = await paired(who);
+    await online(device);
+    const issue = await createIssue(owner, "DM", { title: "Leaver", assigneeId: who.id });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const db = await getDb();
+    await db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, who.id));
+    assert.ok((await app.get(DelegationService).stopOrphaned()) >= 1);
+    assert.equal((await jobsOf(issue.id))[0].state, "canceled");
+    const [row] = await db.select().from(schema.issues).where(eq(schema.issues.id, issue.id));
+    assert.equal(row.delegateAgentId, null);
   });
 
   test("with no device online the issue waits, and is offered when one comes online", async () => {
