@@ -390,8 +390,10 @@ export type IdeaSummary = {
   updatedAt: string;
 };
 export type IdeaComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
-export type IdeaDetail = IdeaSummary & { body: string; comments: IdeaComment[]; canEdit: boolean };
-export type IdeaInput = { title?: string; body?: string; status?: Exclude<IdeaStatus, "promoted">; team?: string | null };
+/** WH-110: `version` is the optimistic lock; `labels` are free-text tags. */
+export type IdeaDetail = IdeaSummary & { body: string; version: number; labels: string[]; comments: IdeaComment[]; canEdit: boolean };
+/** `version` is the one the edit started from: a stale one is refused with a 409 and nothing is saved. */
+export type IdeaInput = { title?: string; body?: string; status?: Exclude<IdeaStatus, "promoted">; team?: string | null; labels?: string[]; version?: number };
 
 export type InitiativeInput = {
   name?: string;

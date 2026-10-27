@@ -30,7 +30,7 @@ export class IdeasController {
     return { idea: await this.ideas.get(req.human.actor, id) };
   }
 
-  /** Any of `{ title, body, status, team }`; `status` is new, exploring or parked. */
+  /** Any of `{ title, body, status, team, labels }` plus `version`, the one the edit started from (a stale one is a 409); `status` is new, exploring or parked. */
   @Patch(":id")
   async update(@Req() req: SessionRequest, @Param("id") id: string, @JsonBody() body: JsonObject) {
     return { idea: await this.ideas.update(req.human.actor, id, body) };

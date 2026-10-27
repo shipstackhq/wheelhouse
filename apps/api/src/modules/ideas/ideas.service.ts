@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { IDEA_STATUSES, type IdeaStatus } from "../../db/schema";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
+import { cleanLabels } from "../../common/labels";
 import { Database } from "../../platform/database/database";
 import { IssuesService } from "../issues/index";
 import { TeamAccessService } from "../teams/index";
@@ -28,7 +29,7 @@ export type IdeaSummary = {
   updatedAt: Date;
 };
 export type IdeaComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date };
-export type IdeaDetail = IdeaSummary & { body: string; comments: IdeaComment[]; canEdit: boolean };
+export type IdeaDetail = IdeaSummary & { body: string; version: number; labels: string[]; comments: IdeaComment[]; canEdit: boolean };
 
 const bad = (field: string, message: string): never => {
   throw new ServiceError("invalid", message, { fields: { [field]: message } });
@@ -102,7 +103,7 @@ export class IdeasService {
     const [summary] = await this.summaries([row]);
     const comments = await this.repo.commentsOf(row.id);
     const role = await this.access.workspaceRoleOf(actor.workspaceId, actor.id);
-    return { ...summary, body: row.body, comments: comments.map(commentView), canEdit: role !== "viewer" };
+    return { ...summary, body: row.body, version: row.version, labels: row.labels, comments: comments.map(commentView), canEdit: role !== "viewer" };
   }
 
   async get(actor: Actor, id: string): Promise<IdeaDetail> {
@@ -123,13 +124,26 @@ export class IdeasService {
     return this.detail(actor, row);
   }
 
-  /** `{ title?, body?, status?, team? }`. `promoted` is only reached by promoting; an idea that was promoted keeps that status. */
+  /**
+   * `{ title?, body?, status?, team?, labels?, version? }`. `promoted` is only reached by promoting; an idea that was promoted keeps that
+   * status but its text stays editable. `version` is the one the edit started from: a change made since is a conflict and nothing is saved.
+   */
   async update(actor: Actor, id: string, input: Record<string, unknown>): Promise<IdeaDetail> {
     return this.db.transaction(async () => {
       await this.may(actor, true);
       const row = await this.repo.lock(actor.workspaceId, id);
       if (!row) throw new ServiceError("not_found", "Idea not found");
-      const set: Partial<IdeaRow> = {};
+      if (input.version !== undefined && input.version !== null) {
+        if (typeof input.version !== "number" || !Number.isSafeInteger(input.version)) bad("version", "version must be a whole number");
+        if (input.version !== row.version) {
+          throw new ServiceError("conflict", `Idea "${row.title}" was changed (version ${row.version}, you had ${input.version}). Re-read and retry.`, { current: await this.detail(actor, row) });
+        }
+      }
+      const set: Partial<IdeaRow> = { version: row.version + 1 };
+      if (input.labels !== undefined) {
+        if (!Array.isArray(input.labels) || input.labels.some((l) => typeof l !== "string")) bad("labels", "labels must be a list of text");
+        set.labels = cleanLabels(input.labels as string[], "idea");
+      }
       const title = str(input.title, "title", TITLE_MAX, input.title !== undefined);
       if (title !== undefined) set.title = title;
       const body = str(input.body, "body", BODY_MAX);
@@ -170,7 +184,7 @@ export class IdeasService {
       if (!teamRef) return bad("team", "team is required");
       const link = `Promoted from the idea [${row.title}](/ideas/${row.id}).`;
       const issue = await this.issues.createIssue(actor, teamRef, { title: row.title, body: row.body ? `${row.body}\n\n---\n${link}` : link });
-      return this.detail(actor, await this.repo.update(row.id, { status: "promoted", promotedIssueId: issue.id }));
+      return this.detail(actor, await this.repo.update(row.id, { status: "promoted", promotedIssueId: issue.id, version: row.version + 1 }));
     });
   }
 }
