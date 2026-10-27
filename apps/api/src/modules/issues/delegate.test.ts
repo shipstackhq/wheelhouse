@@ -11,6 +11,7 @@ if (process.env.TEST_DATABASE_URL) {
 
 import { before, describe, test } from "node:test";
 import assert from "node:assert/strict";
+import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
@@ -59,6 +60,20 @@ describe("issue delegate", () => {
     const i = await createIssue(owner, "DG", { title: "b", assigneeId: ann.id });
     await assert.rejects(updateIssue(ed, i.ref, { delegate: "remy" }), code("forbidden"));
     assert.equal((await updateIssue(owner, i.ref, { delegate: "remy" })).delegateAgentId, remy);
+  });
+
+  test("the assignee hears when someone else delegates their issue, not when they do it themselves", async () => {
+    const db = await getDb();
+    const inbox = async () => db.select().from(schema.notifications).where(and(eq(schema.notifications.recipientUserId, ann.id), eq(schema.notifications.type, "issue.delegated")));
+    const before = (await inbox()).length;
+    const i = await createIssue(owner, "DG", { title: "ping", assigneeId: ann.id });
+    await updateIssue(ann, i.ref, { delegate: "remy" });
+    assert.equal((await inbox()).length, before);
+    await updateIssue(ann, i.ref, { delegate: null });
+    await updateIssue(owner, i.ref, { delegate: "remy" });
+    const items = await inbox();
+    assert.equal(items.length, before + 1);
+    assert.ok(items.some((n) => n.title === `owner asked remy to work on ${i.ref}`));
   });
 
   test("an agent off the roster, or an unknown slug, is refused", async () => {

@@ -296,8 +296,9 @@ export class IssuesService {
    * the current state instead of silently overwriting their change.
    */
   async updateIssue(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
-    const { out, assigned } = await this.applyUpdate(actor, ref, patch, expectedVersion);
+    const { out, assigned, delegated } = await this.applyUpdate(actor, ref, patch, expectedVersion);
     if (assigned) await this.notices.assigned(actor, assigned.team, assigned.row, out.ref);
+    if (delegated) await this.notices.delegated(actor, delegated.team, delegated.row, out.ref, delegated.agent);
     return this.bindSession(actor, out);
   }
 
@@ -329,7 +330,7 @@ export class IssuesService {
           ? undefined
           : await this.projects.resolveIssueProject(team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
       const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange, ...delegateChange } as Record<string, unknown>);
-      if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null };
+      if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null, delegated: null };
       const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
       const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await this.cycles.cycleForIssue(team.id, newCycle)).id };
       const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, ...delegateChange, version: issue.version + 1, updatedAt: new Date() });
@@ -344,7 +345,9 @@ export class IssuesService {
         data: { ref: r, changes },
       });
       const assigned = "assigneeId" in changes && row.assigneeId ? { team, row } : null;
-      return { out: { ...t, ref: r }, assigned };
+      // The assignee hears when someone else hands their issue to an agent (the inbox never tells people what they did themselves).
+      const delegated = "delegateAgentId" in changes && wantDelegate ? { team, row, agent: wantDelegate } : null;
+      return { out: { ...t, ref: r }, assigned, delegated };
     });
   }
 
