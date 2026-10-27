@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { IssueRuns, JobView } from "@wheelhouse/api-client";
 import { apiError, renderIn, serverWithData } from "../../test/harness";
@@ -36,12 +36,12 @@ const runs = (jobs: JobView[]): IssueRuns => ({
   repositories: [{ id: "repo-1", name: "wheelhouse", fullName: "shipstackhq/wheelhouse", defaultBranch: "staging" }],
 });
 
-function mount(jobs: JobView[], setup: (s: ReturnType<typeof serverWithData>) => void = () => {}) {
+function mount(jobs: JobView[], setup: (s: ReturnType<typeof serverWithData>) => void = () => {}, delegated = false) {
   const server = serverWithData();
   server.on("GET /api/app/issues/WH-1/jobs", runs(jobs));
   server.on("GET /api/app/issues/WH-1/jobs/branches", { defaultBranch: "staging", branches: ["staging", "ui-changes"], listed: true });
   setup(server);
-  return renderIn(<IssueRunsSection issueRef="WH-1" />, "/", server);
+  return renderIn(<IssueRunsSection issueRef="WH-1" delegated={delegated} />, "/", server);
 }
 
 describe("runs on a device", () => {
@@ -57,6 +57,18 @@ describe("runs on a device", () => {
     expect(items.map((li) => within(li).getAllByText(/PR opened|no PR|no changes|failed/)[0].textContent)).toEqual(["PR opened", "no PR", "no changes", "failed"]);
     expect(within(items[1]).getByText(/GitHub refused/)).toBeTruthy();
     expect(screen.queryByText("done")).toBeNull();
+  });
+
+  test("a delegated issue can rerun its agent as the caller", async () => {
+    const { server } = mount([], (s) => s.on("POST /api/app/issues/WH-1/delegate/rerun", { ok: true }), true);
+    await userEvent.click(await screen.findByRole("button", { name: "Rerun agent" }));
+    await waitFor(() => expect(server.sent("POST /api/app/issues/WH-1/delegate/rerun")).toHaveLength(1));
+  });
+
+  test("an issue that is not delegated has no Rerun agent button", async () => {
+    mount([]);
+    await screen.findByRole("button", { name: "Run on device" });
+    expect(screen.queryByRole("button", { name: "Rerun agent" })).toBeNull();
   });
 
   test("Continue carries on from the run's branch; Start over makes a fresh run from the same starting branch", async () => {

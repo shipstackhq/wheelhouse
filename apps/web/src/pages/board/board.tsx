@@ -398,6 +398,7 @@ function CardBody({ t, nodes, cycles, projects, relations, selected, overlay }: 
         <span className="font-mono text-[11px] text-muted">{t.ref}</span>
         <div className="flex gap-1">
           {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent"><AgentIcon /></span>}
+          {t.delegateAgentId && <span className="chip bg-agent/10 text-agent" title="Delegated to an agent"><AgentIcon /></span>}
           {t.priority !== "none" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
         </div>
       </div>

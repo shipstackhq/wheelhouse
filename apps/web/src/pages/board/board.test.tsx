@@ -49,6 +49,15 @@ describe("the board", () => {
     expect(within(card).getByText("API")).toBeTruthy();
   });
 
+  test("a delegated issue's card says it is delegated to an agent", async () => {
+    renderApp("/t/AA", (s) =>
+      liveBoard(s, "AA", makeBoard("AA", { issues: [issue({ number: 8, title: "Delegated", delegateAgentId: "a1" }), issue({ number: 9, title: "Plain" })] })),
+    );
+    const card = (await screen.findByText("Delegated")).closest("[data-issue]") as HTMLElement;
+    expect(within(card).getByTitle("Delegated to an agent")).toBeTruthy();
+    expect(within((await screen.findByText("Plain")).closest("[data-issue]") as HTMLElement).queryByTitle("Delegated to an agent")).toBeNull();
+  });
+
   test("the search and filters above the board narrow its cards, and the columns stay", async () => {
     const user = userEvent.setup();
     await open();

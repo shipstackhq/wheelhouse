@@ -233,6 +233,19 @@ describe("the properties", () => {
     expect(server.sent("PATCH /api/app/issues/AA-2")[1].body).toEqual({ assigneeId: "u2", version: 1 });
   });
 
+  test("Delegate lists the team's agents as 'Name · Role' and sends the slug; the current one is shown", async () => {
+    const remy = { id: "wa-1", slug: "remy", name: "Remy", role: "Reviewer" };
+    const { server, d } = await open((s) => {
+      serve(s, { delegateAgentId: "wa-1" });
+      s.on("GET /api/app/teams/AA/agents", { agents: [remy, { id: "wa-2", slug: "bo", name: "Bo", role: "Builder" }] });
+      s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
+    });
+    expect(await within(d).findByText("Runs on your device")).toBeTruthy();
+    await pick(userEvent.setup(), d, "Delegate", "Bo · Builder");
+    await waitFor(() => expect(server.sent("PATCH /api/app/issues/AA-2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/issues/AA-2")[0].body).toEqual({ delegate: "bo", version: 1 });
+  });
+
   test("Unassigned clears the assignee with null", async () => {
     const { server, d } = await open((s) => {
       serve(s, { assigneeId: "u1" });

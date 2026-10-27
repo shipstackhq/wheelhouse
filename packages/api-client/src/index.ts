@@ -38,6 +38,7 @@ import type {
   AdminWorkspace,
   AdminWorkspaceDetail,
   AgentEntry,
+  RosterAgent,
   AgentProfile,
   AgentsPage,
   CatalogAgent,
@@ -312,7 +313,7 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Remove someone from the team, or leave it yourself. */
       removeMember: (teamKey: string, userId: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/members/${encodeURIComponent(userId)}`),
       /** The team's agents; empty while the workspace has agents off. */
-      agents: async (teamKey: string) => (await request<{ agents: AgentEntry[] }>("GET", `${team(teamKey)}/agents`)).agents,
+      agents: async (teamKey: string) => (await request<{ agents: RosterAgent[] }>("GET", `${team(teamKey)}/agents`)).agents,
       addAgent: async (teamKey: string, slug: string) => (await request<{ agent: AgentEntry }>("POST", `${team(teamKey)}/agents`, { slug })).agent,
       removeAgent: (teamKey: string, slug: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/agents/${encodeURIComponent(slug)}`),
       /** A workspace owner or admin joins the team as its admin (audited). */
@@ -601,6 +602,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
       cancel: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/cancel`, {})).job,
       /** Mark a run that cannot be reached lost. If the device reports it after all, it comes back. */
       markLost: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/mark-lost`, {})).job,
+      /** WH-127: run the issue's delegate again with the caller as the requester. */
+      rerunDelegate: (ref: string) => request<{ ok: true }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/delegate/rerun`, {}),
     },
 
     /** Chat with the codebase: a thread with Claude on one of the person's devices, read-only over a repository. */

@@ -803,5 +803,7 @@ export type CustomAgent = AgentView & {
   can?: { edit: boolean; face: boolean };
 };
 export type AgentEntry = CatalogAgent | CustomAgent;
+/** A team's roster entry: the agent plus its workspace agent id, which an issue's `delegateAgentId` names (WH-113). */
+export type RosterAgent = AgentEntry & { id: string };
 export type AgentsPage = { enabled: boolean; catalog: CatalogAgent[]; workspace: CustomAgent[] };
 export type CatalogVersion = { version: number; summary: string; changelog: string };

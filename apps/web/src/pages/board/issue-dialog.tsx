@@ -14,7 +14,7 @@ import { errorText } from "../../components/query-state";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { parseLabels } from "../../lib/labels";
-import { boardQuery, issueQuery } from "../../lib/queries";
+import { boardQuery, issueQuery, teamAgentsQuery } from "../../lib/queries";
 import { parentCandidates } from "../../lib/sub-issues";
 import { PriorityIcon } from "../../components/priority-icon";
 import { SubIssueProgress } from "../../components/sub-issue-progress";
@@ -52,6 +52,7 @@ export function IssueDialog(props: {
   const projects = props.projects ?? [];
   const { api, queryClient } = useServices();
   const query = useQuery(issueQuery(api, issueRef));
+  const roster = useQuery(teamAgentsQuery(api, props.teamKey)).data ?? [];
   const data = query.data ?? null;
   const [error, setError] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState(false);
@@ -306,7 +307,7 @@ export function IssueDialog(props: {
                   onAdd={(title) => mutate(() => api.issues.create(props.teamKey, { title, parent: t.ref }))}
                 />
 
-                <IssueRunsSection issueRef={t.ref} />
+                <IssueRunsSection issueRef={t.ref} delegated={!!t.delegateAgentId} />
 
                 <section>
                   <span className="label">
@@ -351,6 +352,15 @@ export function IssueDialog(props: {
                       options={[{ value: "", label: "Unassigned" }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { assigneeId: v || null, version: t.version }))}
                     />
+                  </Field>
+                  <Field label="Delegate">
+                    <Select
+                      disabled={!roster.length}
+                      value={roster.find((a) => a.id === t.delegateAgentId)?.slug ?? ""}
+                      options={roster.length ? [{ value: "", label: "Nobody" }, ...roster.map((a) => ({ value: a.slug, label: `${a.name} · ${a.role}` }))] : [{ value: "", label: "No agents on this team" }]}
+                      onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { delegate: v || null, version: t.version }))}
+                    />
+                    {t.delegateAgentId && <p className="mt-1 text-xs text-muted">Runs on your device</p>}
                   </Field>
                   <Field label="Parent">
                     <ParentField

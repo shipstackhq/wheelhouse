@@ -31,16 +31,36 @@ const TONE_STYLE: Record<Tone, string> = {
  * Runs on a device: send the issue to an agent on one of your machines (the Wheelhouse daemon), and follow each run. A run works in a
  * worktree on its own branch and pushes it; the board itself is not changed by the agent yet.
  */
-export function IssueRunsSection({ issueRef }: { issueRef: string }) {
-  const { api } = useServices();
+export function IssueRunsSection({ issueRef, delegated }: { issueRef: string; delegated?: boolean }) {
+  const { api, queryClient } = useServices();
   const query = useQuery({ ...issueRunsQuery(api, issueRef), refetchInterval: (q) => (q.state.data?.jobs.some((j) => isActive(j.state)) ? 5_000 : false) });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const data = query.data;
   if (!data) return null;
+  const rerunDelegate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.runs.rerunDelegate(issueRef);
+      await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
+    } catch (e) {
+      setError(describeFailure(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <section aria-label="Runs on a device">
       <span className="label">Runs on a device</span>
       <div className="space-y-3">
         <RunForm issueRef={issueRef} data={data} />
+        {delegated && (
+          <button type="button" className="btn py-0.5 text-xs" disabled={busy} onClick={() => void rerunDelegate()}>
+            Rerun agent
+          </button>
+        )}
+        {error && <p className="text-sm text-danger" role="alert">{error}</p>}
         {data.jobs.length > 0 && <RunsTable jobs={data.jobs} issueRef={issueRef} />}
       </div>
     </section>
