@@ -5,6 +5,7 @@ import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
 import { RepositoriesService, github, type RepositoryRow } from "../github/index";
+import { effectiveProfile } from "../agents/index";
 import { IssuesService } from "../issues/index";
 import { DaemonRepository } from "./daemon.repository";
 import { deviceOnline, deviceView, jobView } from "./daemon.presenter";
@@ -98,7 +99,7 @@ export class RunsService {
    * online. The repository is one of the issue team's GitHub repositories (the only one, if the team has one). The job is offered to
    * the device as a signed message carrying everything it needs, and expires if the device does not take it within a minute.
    */
-  async runOnDevice(actor: Actor, ref: string, input: Record<string, unknown>) {
+  async runOnDevice(actor: Actor, ref: string, input: Record<string, unknown>, agentId?: string) {
     if (actor.kind !== "human") throw new ServiceError("forbidden", "Only a person can send work to their machine");
     const { issue, team, ref: issueRef } = await this.issues.resolveIssue(actor, ref, "edit");
     const device = await this.devices.ownDevice(actor, str(input.deviceId, 60)).catch(() => {
@@ -124,12 +125,16 @@ export class RunsService {
         : validBaseBranch(input.baseBranch);
     if (!baseBranch) throw new ServiceError("invalid", "That is not a branch name", { fields: { baseBranch: "a branch of the repository" } });
 
+    // WH-114: a delegated run carries its agent's profile; the daemon shapes the run with it (WH-115). Without one it is a generic run.
+    const agentRow = agentId ? await this.repo.workspaceAgent(agentId, actor.workspaceId) : undefined;
+    const agent = agentRow ? { id: agentRow.id, slug: agentRow.slug, profile: effectiveProfile(agentRow) } : null;
+
     const id = crypto.randomUUID();
     const branch = previous ? previous.job.branch : jobBranch(issueRef, issue.title, id);
     const offerExpiresAt = new Date(Date.now() + OFFER_TTL_MS);
     const key = await this.stream.signingKey();
     const job = await this.db.transaction(async () => {
-      const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, offerExpiresAt });
+      const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, agentId: agent?.id ?? null, offerExpiresAt });
       await this.stream.send(key, device.id, "job.offer", {
         jobId: j.id,
         workspaceId: j.workspaceId,
@@ -152,6 +157,7 @@ export class RunsService {
           pathLimit: repo.pathLimit,
         },
         requestedBy: { id: actor.id, name: actor.name },
+        agent: agent ? { slug: agent.slug, profile: agent.profile } : null,
       });
       return j;
     });
@@ -182,12 +188,13 @@ export class RunsService {
 
   /**
    * Stop a job. An offer not yet taken ends at once; a job the daemon holds is asked to stop (a signed cancel) and ends when the daemon
-   * reports it. The person who started it, or the device's owner, can cancel.
+   * reports it. The person who started it, the device's owner, or the issue's assignee (WH-127: the issue is theirs) can cancel.
    */
   async cancelJob(actor: Actor, jobId: string) {
     const job = await this.readableJob(actor, jobId);
     const d = await this.repo.deviceById(job.deviceId);
-    if (actor.kind !== "human" || (job.createdBy !== actor.id && d?.ownerId !== actor.id)) throw new ServiceError("forbidden", "Only the person who started it or the device's owner can cancel a run");
+    const assignee = (await this.repo.issueForNotice(job.issueId))?.assigneeId;
+    if (actor.kind !== "human" || (job.createdBy !== actor.id && d?.ownerId !== actor.id && assignee !== actor.id)) throw new ServiceError("forbidden", "Only the person who started it, the device's owner or the assignee can cancel a run");
     if (isFinalState(job.state)) return { job: jobView(job) };
     const now = new Date();
     const key = await this.stream.signingKey();
@@ -199,6 +206,26 @@ export class RunsService {
     this.stream.wake(job.deviceId);
     if (updated) this.stream.signalJob(updated);
     return { job: jobView(updated ?? job) };
+  }
+
+  /**
+   * WH-116: stop an issue's active runs because its delegation changed. The caller has already checked that the actor may delegate the
+   * issue, which is the permission that matters here, so this does not ask whether they started the run.
+   */
+  async stopIssueRuns(actor: Actor, issueId: string, teamId: string) {
+    const now = new Date();
+    const active = (await this.repo.issueRuns(issueId, teamId)).map((r) => r.job).filter((j) => !isFinalState(j.state));
+    if (!active.length) return;
+    const key = await this.stream.signingKey();
+    for (const job of active) {
+      const row = await this.db.transaction(async () => {
+        const r = job.state === "offered" ? await this.repo.cancelOffer(job.id, now, `Stopped: delegation changed by ${actor.name}`) : await this.repo.requestCancel(job.id, now);
+        if (r) await this.stream.send(key, job.deviceId, "job.cancel", { jobId: job.id, requestedBy: { id: actor.id, name: actor.name } });
+        return r;
+      });
+      this.stream.wake(job.deviceId);
+      if (row) this.stream.signalJob(row);
+    }
   }
 
   /**

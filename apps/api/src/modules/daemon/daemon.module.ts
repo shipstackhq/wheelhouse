@@ -19,6 +19,7 @@ import { DevicesController } from "./devices.controller";
 import { DevicesService } from "./devices.service";
 import { RunNotifications } from "./runs.notifications";
 import { RunsService } from "./runs.service";
+import { DelegationService } from "./delegation.service";
 
 /**
  * The controllers a process of this role serves: the paired machine's API (/api/daemon) where the daemon role runs, and the
@@ -40,7 +41,7 @@ export const daemonProviders = (role: ServiceRole): Provider[] => [
   RunNotifications,
   DeviceAuthService,
   ...(servesDaemon(role) ? [DeviceGuard, DaemonSweep] : []),
-  ...(servesApi(role) ? [DevicesService, RunsService, ChatService] : []),
+  ...(servesApi(role) ? [DevicesService, RunsService, ChatService, DelegationService] : []),
 ];
 
 @Module({})

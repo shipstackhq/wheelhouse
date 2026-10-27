@@ -5,6 +5,7 @@ import { teamScope } from "./team-scope";
 import { users, memberships } from "./auth";
 import { repositories } from "./github";
 import { issues } from "./issues";
+import { workspaceAgents } from "./agents";
 
 /**
  * A machine someone paired to run agent jobs on (the Wheelhouse daemon). It belongs to one person, not a workspace: only they can
@@ -120,7 +121,10 @@ export const deviceJobs = table(
     // What the daemon reported at the end: commit, diff stats, cost.
     result: jsonb("result").$type<Record<string, unknown>>().notNull().default({}),
     error: text("error"),
+    // The requester: whoever started the run (WH-114). A delegated run is started for the person who delegated the issue.
     createdBy: uuid("created_by"),
+    // The agent whose profile the run uses (WH-114); null for a generic run.
+    agentId: uuid("agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
     offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }).notNull(),
     cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
     // Set while the device has gone quiet (state `unreachable`): when the server noticed. Nothing is guessed from silence; a run only

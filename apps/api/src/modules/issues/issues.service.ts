@@ -1,4 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import { statusForRole, roleFromText } from "@wheelhouse/shared/status-roles";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
@@ -12,6 +13,7 @@ import { DeliveriesService } from "../github/index";
 import { GraphService, SessionsService } from "../map/index";
 import { TeamAccessService } from "../teams/index";
 import { CyclesService, systemActor } from "./cycles/cycles.service";
+import { ISSUE_DELEGATED, type IssueDelegated } from "./issues.events";
 import { IssueNotifications } from "./issues.notifications";
 import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
 import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, fitsDepth, parseIssueRef, positionAmong, sameLabels, type IssueInput } from "./issues.rules";
@@ -48,6 +50,7 @@ export class IssuesService {
     @Inject(GraphService) private readonly graph: GraphService,
     @Inject(SessionsService) private readonly sessions: SessionsService,
     @Inject(IssueNotifications) private readonly notices: IssueNotifications,
+    @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
   ) {}
 
   // ───────── the board ─────────
@@ -237,6 +240,22 @@ export class IssuesService {
     return id;
   }
 
+  /**
+   * WH-127: run the issue's delegate again, with the actor as the requester (the assignee taking over a run an admin started, or a rerun
+   * after a failure). Same permission as delegating. The active run is stopped and a new one started by the delegation listener.
+   */
+  async rerunDelegate(actor: Actor, ref: string) {
+    const out = await this.db.transaction(async () => {
+      const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "edit");
+      if (!issue.delegateAgentId) throw new ServiceError("invalid", `${r} is not delegated to an agent`);
+      await this.resolveDelegate(actor, team, issue, null);
+      await this.repo.updateIssue(issue.id, { delegatedBy: actor.id, delegatedAt: new Date(), updatedAt: new Date() });
+      return { id: issue.id, ref: r, agentId: issue.delegateAgentId };
+    });
+    await this.emitter.emitAsync(ISSUE_DELEGATED, { actor, issueId: out.id, ref: out.ref, agentId: out.agentId } satisfies IssueDelegated);
+    return { ok: true };
+  }
+
   private async positionAt(statusId: string, index: number | undefined, excludeId?: string) {
     return positionAmong(await this.repo.siblingsInStatus(statusId, excludeId), index);
   }
@@ -296,9 +315,10 @@ export class IssuesService {
    * the current state instead of silently overwriting their change.
    */
   async updateIssue(actor: Actor, ref: string, patch: IssueInput, expectedVersion?: number) {
-    const { out, assigned, delegated } = await this.applyUpdate(actor, ref, patch, expectedVersion);
+    const { out, assigned, delegated, delegation } = await this.applyUpdate(actor, ref, patch, expectedVersion);
     if (assigned) await this.notices.assigned(actor, assigned.team, assigned.row, out.ref);
     if (delegated) await this.notices.delegated(actor, delegated.team, delegated.row, out.ref, delegated.agent);
+    if (delegation) await this.emitter.emitAsync(ISSUE_DELEGATED, { actor, issueId: out.id, ref: out.ref, agentId: delegation.agentId } satisfies IssueDelegated);
     return this.bindSession(actor, out);
   }
 
@@ -324,16 +344,17 @@ export class IssuesService {
       await this.assertAssignee(team.id, clean.assigneeId);
       const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, delegate: wantDelegate, ...cleanRest } = clean;
       const parentChange = wantParent === undefined ? {} : { parentId: await this.resolveParent(team, issue.id, wantParent) };
-      const delegateChange = wantDelegate === undefined ? {} : { delegateAgentId: await this.resolveDelegate(actor, team, issue, wantDelegate) };
+      const delegateId = wantDelegate === undefined ? undefined : await this.resolveDelegate(actor, team, issue, wantDelegate);
+      const delegateChange = delegateId === undefined ? {} : { delegateAgentId: delegateId };
       const projectChoice =
         wantProject === undefined && wantMilestone === undefined
           ? undefined
           : await this.projects.resolveIssueProject(team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
       const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange, ...delegateChange } as Record<string, unknown>);
-      if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null, delegated: null };
+      if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null, delegated: null, delegation: null };
       const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
       const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await this.cycles.cycleForIssue(team.id, newCycle)).id };
-      const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, ...delegateChange, version: issue.version + 1, updatedAt: new Date() });
+      const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, ...delegateChange, ...("delegateAgentId" in changes ? { delegatedBy: delegateId ? actor.id : null, delegatedAt: delegateId ? new Date() : null } : {}), version: issue.version + 1, updatedAt: new Date() });
       if (newLabels) await this.repo.setLabels(team, row.id, newLabels);
       const t = { ...row, labels: newLabels ?? issue.labels, cycle: newCycle === undefined ? issue.cycle : newCycle };
       await this.projects.emitIssueMove(actor, team.id, r, issue.projectId, row.projectId);
@@ -347,7 +368,8 @@ export class IssuesService {
       const assigned = "assigneeId" in changes && row.assigneeId ? { team, row } : null;
       // The assignee hears when someone else hands their issue to an agent (the inbox never tells people what they did themselves).
       const delegated = "delegateAgentId" in changes && wantDelegate ? { team, row, agent: wantDelegate } : null;
-      return { out: { ...t, ref: r }, assigned, delegated };
+      const delegation = "delegateAgentId" in changes ? { agentId: row.delegateAgentId } : null;
+      return { out: { ...t, ref: r }, assigned, delegated, delegation };
     });
   }
 

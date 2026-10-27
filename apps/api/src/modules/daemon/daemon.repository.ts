@@ -5,7 +5,7 @@ import { schema } from "../../db";
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 
-const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages } = schema;
+const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages, workspaceAgents, users, teamMembers, memberships } = schema;
 
 export type DeviceRow = typeof devices.$inferSelect;
 export type PairingRow = typeof devicePairings.$inferSelect;
@@ -236,6 +236,57 @@ export class DaemonRepository {
       .limit(50);
   }
 
+  /** A workspace agent by id (WH-114: the run carries its profile). */
+  async workspaceAgent(id: string, workspaceId: string) {
+    const [a] = await this.db.q.select().from(workspaceAgents).where(and(eq(workspaceAgents.id, id), eq(workspaceAgents.workspaceId, workspaceId)));
+    return a;
+  }
+
+  /** The device the person last started a run on, if any. */
+  async lastRunDevice(userId: string) {
+    const [j] = await this.db.q.select({ deviceId: deviceJobs.deviceId }).from(deviceJobs).where(eq(deviceJobs.createdBy, userId)).orderBy(desc(deviceJobs.createdAt)).limit(1);
+    return j?.deviceId;
+  }
+
+  /** WH-116: delegated issues with no run since they were delegated: they wait for one of the delegator's devices. */
+  waitingDelegations() {
+    return this.db.q
+      .select({ id: issues.id, workspaceId: issues.workspaceId, delegatedBy: issues.delegatedBy, name: users.name })
+      .from(issues)
+      .innerJoin(users, eq(users.id, issues.delegatedBy))
+      .where(
+        and(
+          isNotNull(issues.delegateAgentId),
+          isNotNull(issues.delegatedAt),
+          sql`not exists (select 1 from ${deviceJobs} where ${deviceJobs.issueId} = ${issues.id} and ${deviceJobs.createdAt} >= ${issues.delegatedAt})`,
+        ),
+      )
+      .limit(50);
+  }
+
+  /** WH-127: active runs whose requester has left the issue's team or the workspace, with their issue. */
+  async orphanedRuns(active: DeviceJobState[]) {
+    return this.db.q
+      .select({ job: deviceJobs })
+      .from(deviceJobs)
+      .where(
+        and(
+          inArray(deviceJobs.state, active),
+          isNotNull(deviceJobs.createdBy),
+          or(
+            sql`not exists (select 1 from ${teamMembers} where ${teamMembers.teamId} = ${deviceJobs.teamId} and ${teamMembers.userId} = ${deviceJobs.createdBy})`,
+            sql`not exists (select 1 from ${memberships} where ${memberships.workspaceId} = ${deviceJobs.workspaceId} and ${memberships.userId} = ${deviceJobs.createdBy})`,
+          ),
+        ),
+      )
+      .limit(50);
+  }
+
+  /** Clears an issue's delegation when its requester's run was stopped for leaving. */
+  async clearDelegation(issueId: string) {
+    await this.db.q.update(issues).set({ delegateAgentId: null, delegatedBy: null, delegatedAt: null, updatedAt: new Date() }).where(eq(issues.id, issueId));
+  }
+
   async jobOfIssue(jobId: string, issueId: string) {
     const [j] = await this.db.q.select().from(deviceJobs).where(and(eq(deviceJobs.id, jobId), eq(deviceJobs.issueId, issueId)));
     return j;
@@ -312,7 +363,7 @@ export class DaemonRepository {
   /** What a run's notice names: its issue's number and title and its team's key and workspace. Read only; undefined when the issue is gone. */
   async issueForNotice(issueId: string) {
     const [row] = await this.db.q
-      .select({ number: issues.number, title: issues.title, teamId: issues.teamId, workspaceId: issues.workspaceId, teamKey: teams.key })
+      .select({ number: issues.number, title: issues.title, teamId: issues.teamId, workspaceId: issues.workspaceId, teamKey: teams.key, assigneeId: issues.assigneeId })
       .from(issues)
       .innerJoin(teams, eq(teams.id, issues.teamId))
       .where(eq(issues.id, issueId));

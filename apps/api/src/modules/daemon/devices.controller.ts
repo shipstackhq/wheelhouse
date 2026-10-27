@@ -3,6 +3,7 @@ import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { DevicesService } from "./devices.service";
 import { RunsService } from "./runs.service";
+import { IssuesService } from "../issues/index";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import type { JsonObject } from "../../common/body";
 import { ZodValidationPipe } from "../../common/pipes/zod-validation.pipe";
@@ -15,6 +16,7 @@ export class DevicesController {
   constructor(
     @Inject(DevicesService) private readonly devices: DevicesService,
     @Inject(RunsService) private readonly runs: RunsService,
+    @Inject(IssuesService) private readonly issues: IssuesService,
   ) {}
 
   @Get("devices")
@@ -72,6 +74,13 @@ export class DevicesController {
   @HttpCode(201)
   run(@Req() req: SessionRequest, @Param("ref") ref: string, @JsonBody() body: JsonObject) {
     return this.runs.runOnDevice(req.human.actor, ref, body);
+  }
+
+  /** WH-127: run the issue's delegate again, as the caller (the assignee taking over, or a rerun). */
+  @Post("issues/:ref/delegate/rerun")
+  @HttpCode(200)
+  rerun(@Req() req: SessionRequest, @Param("ref") ref: string) {
+    return this.issues.rerunDelegate(req.human.actor, ref);
   }
 
   /** A run's progress after `after` (an event number). */
