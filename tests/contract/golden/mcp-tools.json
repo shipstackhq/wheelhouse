@@ -383,54 +383,62 @@
           "type": "string",
           "description": "Team key (e.g. \"WH\") or id"
         },
-        "filter": {
-          "type": "object",
-          "properties": {
-            "status": {
-              "description": "Status name",
-              "type": "string"
-            },
-            "assignee": {
-              "description": "\"me\" (assigned to you, or claimed by your key), \"none\", or a member's name",
-              "type": "string"
-            },
-            "cycle": {
+        "status": {
+          "description": "A status name or role (e.g. \"In Progress\", \"review\", \"done\"), or \"open\" = every status except done and canceled. Default \"open\"",
+          "type": "string"
+        },
+        "assignee": {
+          "description": "\"me\" (assigned to you, or claimed by your key), \"none\", or a member's name",
+          "type": "string"
+        },
+        "cycle": {
+          "anyOf": [
+            {
               "anyOf": [
                 {
-                  "anyOf": [
-                    {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    {
-                      "type": "string",
-                      "enum": [
-                        "current",
-                        "next"
-                      ]
-                    }
-                  ]
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
                 },
                 {
                   "type": "string",
-                  "const": "none"
+                  "enum": [
+                    "current",
+                    "next"
+                  ]
                 }
               ]
             },
-            "project": {
-              "description": "Project name or id",
-              "type": "string"
-            },
-            "label": {
-              "type": "string"
-            },
-            "text": {
-              "description": "Substring of the title or body",
-              "type": "string"
+            {
+              "type": "string",
+              "const": "none"
             }
-          },
-          "additionalProperties": false
+          ]
+        },
+        "project": {
+          "description": "Project name or id",
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "priority": {
+          "description": "One of none, low, medium, high, urgent; or a minimum like \">=high\"",
+          "type": "string"
+        },
+        "updated_since": {
+          "description": "ISO date: only issues changed since then",
+          "type": "string"
+        },
+        "text": {
+          "description": "Substring of the title",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Default 50",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
         },
         "session": {
           "type": "string",

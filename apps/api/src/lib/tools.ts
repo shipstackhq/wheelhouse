@@ -267,7 +267,7 @@ function buildTools({ db, access, teamService, teamMembers, issues, cycleService
     get_briefing: tool({
       scope: "read",
       description:
-        "START HERE in a new session. Without `team`: the teams you can reach. With `team` (optional when you reach only one): a compact briefing of what the team is, how it's built, the work in flight (yours first), what changed since you last looked, decisions/gotchas/stale and in-flux areas, repositories and setup gaps, plus the current cycle, active projects and recent activity. An overview with pointers, sized to a budget: read it instead of exploring the codebase from scratch.",
+        "START HERE in a new session. Without `team`: the teams you can reach. With `team` (optional when you reach only one): a compact briefing with totals (`stats.openIssues`) of what the team is, how it's built, the work in flight (yours first), what changed since you last looked, decisions/gotchas/stale and in-flux areas, repositories and setup gaps, plus the current cycle, active projects and recent activity. An overview with pointers, sized to a budget: read it instead of exploring the codebase from scratch.",
       readOnly: true,
       input: z.object({ team: team.optional(), max_chars: z.number().int().optional().describe("Default 6000") }),
       run: async (a, i) => {
@@ -313,45 +313,71 @@ function buildTools({ db, access, teamService, teamMembers, issues, cycleService
     list_issues: tool({
       scope: "read",
       description:
-        "The team's issues grouped by status in board order (ref, title, priority, labels, version, assignee, cycle, project, milestone, claimable/claimed). Narrow with `filter`; all filter fields combine. Read this before creating an issue, to avoid duplicates.",
+        "Find issues. For an overview start with get_briefing or get_cycle; this is for lists. `counts` come first and cover everything matching your filters except `status`, so you can answer \"how many\" from them without counting rows. By default only open issues (not done or canceled) are listed. Rows are compact (ref, title, status, priority, assignee, cycle), most urgent first, cut at `limit` with `more` saying how many were left out. Use get_issue for one issue's details.",
       readOnly: true,
       input: z.object({
         team,
-        filter: z
-          .object({
-            status: z.string().optional().describe("Status name"),
-            assignee: z.string().optional().describe('"me" (assigned to you, or claimed by your key), "none", or a member\'s name'),
-            cycle: z.union([cycleArg, z.literal("none")]).optional(),
-            project: z.string().optional().describe("Project name or id"),
-            label: z.string().optional(),
-            text: z.string().optional().describe("Substring of the title or body"),
-          })
-          .optional(),
+        status: z.string().optional().describe('A status name or role (e.g. "In Progress", "review", "done"), or "open" = every status except done and canceled. Default "open"'),
+        assignee: z.string().optional().describe('"me" (assigned to you, or claimed by your key), "none", or a member\'s name'),
+        cycle: z.union([cycleArg, z.literal("none")]).optional(),
+        project: z.string().optional().describe("Project name or id"),
+        label: z.string().optional(),
+        priority: z.string().optional().describe('One of none, low, medium, high, urgent; or a minimum like ">=high"'),
+        updated_since: z.string().optional().describe("ISO date: only issues changed since then"),
+        text: z.string().optional().describe("Substring of the title"),
+        limit: z.number().int().min(1).max(200).optional().describe("Default 50"),
       }),
       run: async (a, i) => {
-        const f = i.filter ?? {};
         const board = await issues.getBoard(a, i.team);
         const names = await namesFor(a, board.team);
-        const cycle = f.cycle === undefined || f.cycle === "none" ? f.cycle : await findCycle(a, i.team, f.cycle);
-        const project = f.project ? await findProject(a, f.project) : undefined;
         const lc = (s: string) => s.toLowerCase();
-        const match = (t: (typeof board.issues)[number]) => {
-          if (f.status && lc(board.statuses.find((c) => c.id === t.statusId)?.name ?? "") !== lc(f.status)) return false;
-          if (f.assignee === "me" && !(a.kind === "human" ? t.assigneeId === a.id : t.claimedByKeyId === a.id)) return false;
-          if (f.assignee === "none" && (t.assigneeId || t.claimedByKeyId)) return false;
-          if (f.assignee && f.assignee !== "me" && f.assignee !== "none" && lc(names.person(t.assigneeId) ?? "") !== lc(f.assignee)) return false;
-          if (f.cycle === "none" ? t.cycle !== null : cycle !== undefined && t.cycle !== cycle) return false;
+        const cycle = i.cycle === undefined || i.cycle === "none" ? undefined : await findCycle(a, i.team, i.cycle);
+        const project = i.project ? await findProject(a, i.project) : undefined;
+        const since = i.updated_since ? new Date(i.updated_since) : undefined;
+        if (since && isNaN(+since)) throw invalid(`updated_since "${i.updated_since}" is not a date`);
+        const minimum = i.priority?.startsWith(">=");
+        const wanted = i.priority?.replace(/^>=/, "").trim().toLowerCase();
+        if (wanted && !PRIORITIES.some((p) => p === wanted)) throw invalid(`priority must be one of ${PRIORITIES.join(", ")}, optionally as ">=high"`);
+        const rank = (p: string) => PRIORITIES.indexOf(p as (typeof PRIORITIES)[number]);
+        const statusOf = new Map(board.statuses.map((c) => [c.id, c]));
+        const closed = (id: string) => ["done", "canceled"].includes(statusOf.get(id)!.role);
+
+        // Everything but `status`, in memory: a team has hundreds of issues and getBoard already loaded them.
+        const matching = board.issues.filter((t) => {
+          if (i.assignee === "me" && !(a.kind === "human" ? t.assigneeId === a.id : t.claimedByKeyId === a.id)) return false;
+          if (i.assignee === "none" && (t.assigneeId || t.claimedByKeyId)) return false;
+          if (i.assignee && i.assignee !== "me" && i.assignee !== "none" && lc(names.person(t.assigneeId) ?? "") !== lc(i.assignee)) return false;
+          if (i.cycle === "none" ? t.cycle !== null : i.cycle !== undefined && t.cycle !== cycle) return false;
           if (project && t.projectId !== project) return false;
-          if (f.label && !t.labels.some((l) => lc(l) === lc(f.label!))) return false;
-          if (f.text && !lc(`${t.title}\n${t.body}`).includes(lc(f.text))) return false;
+          if (i.label && !t.labels.some((l) => lc(l) === lc(i.label!))) return false;
+          if (wanted && (minimum ? rank(t.priority) < rank(wanted) : t.priority !== wanted)) return false;
+          if (since && new Date(t.updatedAt) < since) return false;
+          if (i.text && !lc(t.title).includes(lc(i.text))) return false;
           return true;
+        });
+        const count = (f: (t: (typeof matching)[number]) => boolean) => matching.filter(f).length;
+        const counts = {
+          ...Object.fromEntries(board.statuses.map((c) => [c.name, count((t) => t.statusId === c.id)])),
+          open: count((t) => !closed(t.statusId)),
+          done: count((t) => statusOf.get(t.statusId)!.role === "done"),
+          canceled: count((t) => statusOf.get(t.statusId)!.role === "canceled"),
+          total: matching.length,
         };
+
+        const want = lc(i.status ?? "open");
+        if (want !== "open" && !board.statuses.some((c) => lc(c.name) === want || c.role === want)) {
+          throw invalid(`Unknown status "${i.status}" for ${board.team.key}. Use "open", a role, or one of: ${board.statuses.map((c) => c.name).join(", ")}`);
+        }
+        const picked = matching
+          .filter((t) => (want === "open" ? !closed(t.statusId) : lc(statusOf.get(t.statusId)!.name) === want || statusOf.get(t.statusId)!.role === want))
+          .sort((x, y) => rank(y.priority) - rank(x.priority) || +new Date(y.updatedAt) - +new Date(x.updatedAt));
+        const limit = i.limit ?? 50;
+        const more = Math.max(0, picked.length - limit);
         return {
-          team: { key: board.team.key, name: board.team.name },
-          statuses: board.statuses.map((c) => ({
-            name: c.name,
-            issues: board.issues.filter((t) => t.statusId === c.id && match(t)).map((t) => ({ ...issueBrief(t, names), comments: t.commentCount, linkedNodes: t.nodeIds.length })),
-          })),
+          counts,
+          issues: picked.slice(0, limit).map((t) => ({ ref: t.ref, title: t.title, status: statusOf.get(t.statusId)!.name, priority: t.priority, assignee: names.person(t.assigneeId), cycle: t.cycle })),
+          more,
+          ...(more > 0 && { hint: `${more} more match. Narrow with status, assignee, cycle, project, label, priority, updated_since or text, or raise limit (max 200).` }),
         };
       },
     }),

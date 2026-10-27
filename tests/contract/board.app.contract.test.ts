@@ -364,8 +364,8 @@ describe("POST /api/app/issues/:ref/move", () => {
     const tk = await make(t.s, { title: "Shared" });
     await app("POST", `/api/app/issues/${tk.ref}/move`, t.s, { body: { status: "review" } });
     const agentsBoard = await v1ok({ key: t.key }, "list_issues", { team: "RKT" });
-    const inReview = agentsBoard.statuses.find((c: { name: string }) => c.name === "Review");
-    assert.deepEqual(inReview.issues.map((x: { ref: string }) => x.ref), [tk.ref]);
+    const inReview = agentsBoard.issues.filter((x: { status: string }) => x.status === "Review");
+    assert.deepEqual(inReview.map((x: { ref: string }) => x.ref), [tk.ref]);
   });
 });
 

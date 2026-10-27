@@ -156,7 +156,7 @@ describe("the cycles endpoints", () => {
     const types = (changes.changes as { type: string; entity: string }[]).map((c) => `${c.type}/${c.entity}`);
     assert.ok(types.includes("cycle.created/cycle"), types.join(", "));
     const board = await v1ok({ key: t.key }, "list_issues", { team: "CYC" });
-    const first = board.statuses.flatMap((c: { issues: object[] }) => c.issues)[0] as Record<string, unknown>;
+    const first = board.issues[0] as Record<string, unknown>;
     assert.ok(first, "the issue is on the agent's board");
     assert.equal(first.cycle, 1);
     const got = await v1ok({ key: t.key }, "get_issue", { ref: tk.ref });

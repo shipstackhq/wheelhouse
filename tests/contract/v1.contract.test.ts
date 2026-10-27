@@ -104,11 +104,8 @@ describe("POST /api/v1/:tool: issues", () => {
   });
 
   test("a new project's board has the six workflow statuses in order", async () => {
-    const board = await v1ok(A, "list_issues", { team: fx.a.teamKey });
-    assert.deepEqual(
-      board.statuses.map((c: { name: string }) => c.name),
-      ["Backlog", "Todo", "In Progress", "Review", "Done", "Canceled"],
-    );
+    const { counts } = await v1ok(A, "list_issues", { team: fx.a.teamKey });
+    assert.deepEqual(Object.keys(counts).slice(0, 6), ["Backlog", "Todo", "In Progress", "Review", "Done", "Canceled"]);
   });
 });
 

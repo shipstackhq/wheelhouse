@@ -225,14 +225,10 @@ describe("who sees what over HTTP", () => {
 });
 
 describe("the agent surface", () => {
-  test("the tools show an issue's project by name", async () => {
+  test("the tools filter issues by project name", async () => {
     const p = await make();
     const t = await issue(teamA, { title: "For the agent", projectId: p.id });
-    const board = await v1ok({ key: apiKey }, "list_issues", { team: teamA });
-    assert.equal(board.team.key, teamA);
-    const card = board.statuses.flatMap((c: { issues: Record<string, unknown>[] }) => c.issues).find((x: { ref: string }) => x.ref === t.ref) as Record<string, unknown>;
-    assert.ok(card, "the issue is on the agent's board");
-    assert.equal(card.project, p.name);
+    assert.equal((await v1ok({ key: apiKey }, "list_issues", { team: teamA, project: p.name })).issues[0].ref, t.ref);
     const got = await v1ok({ key: apiKey }, "get_issue", { ref: t.ref });
     assert.equal(got.issue.project, p.name);
   });

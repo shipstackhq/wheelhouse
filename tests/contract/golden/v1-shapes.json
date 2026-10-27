@@ -38,34 +38,29 @@
     ]
   },
   "list_issues": {
-    "statuses": [
+    "counts": {
+      "Backlog": "number",
+      "Canceled": "number",
+      "Done": "number",
+      "In Progress": "number",
+      "Review": "number",
+      "Todo": "number",
+      "canceled": "number",
+      "done": "number",
+      "open": "number",
+      "total": "number"
+    },
+    "issues": [
       {
-        "issues": [
-          {
-            "agentClaimable": "boolean",
-            "assignee": "null",
-            "claimed": "boolean",
-            "comments": "number",
-            "cycle": "null",
-            "labels": [
-              "string"
-            ],
-            "linkedNodes": "number",
-            "milestone": "null",
-            "priority": "string",
-            "project": "null",
-            "ref": "string",
-            "title": "string",
-            "version": "number"
-          }
-        ],
-        "name": "string"
+        "assignee": "null",
+        "cycle": "null",
+        "priority": "string",
+        "ref": "string",
+        "status": "string",
+        "title": "string"
       }
     ],
-    "team": {
-      "key": "string",
-      "name": "string"
-    }
+    "more": "number"
   },
   "create_issue": {
     "ref": "string",
