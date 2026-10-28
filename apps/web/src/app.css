@@ -108,6 +108,16 @@ body {
   .label {
     @apply mb-1 block text-xs font-medium text-muted;
   }
+  /* Issue dialog: roomier section labels, tighter controls. :where() keeps specificity low so utilities (px-2, mb-0) still win. */
+  :where(.issue-dialog) .label {
+    @apply mb-2;
+  }
+  :where(.issue-dialog) .btn {
+    @apply px-2.5 py-1 text-xs;
+  }
+  :where(.issue-dialog) .input {
+    @apply px-2.5 py-1 text-xs;
+  }
   .card {
     @apply rounded-lg border border-line bg-panel;
   }
@@ -228,4 +238,9 @@ body {
     z-index: 100;
     pointer-events: none;
   }
+}
+
+/* Select triggers carry a py-1.5 utility; unlayered so this wins and dialog dropdowns match the compact inputs. */
+.issue-dialog button.input {
+  padding-block: 0.25rem;
 }

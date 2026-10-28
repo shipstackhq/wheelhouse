@@ -187,7 +187,7 @@ export function IssueDialog(props: {
             e.preventDefault();
             content.current?.focus();
           }}
-          className="fixed inset-0 z-50 flex flex-col bg-panel text-fg outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(92vh,60rem)] sm:w-[min(96vw,64rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border sm:border-line sm:shadow-2xl"
+          className="issue-dialog fixed inset-0 z-50 flex flex-col bg-panel text-fg outline-none sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(92vh,60rem)] sm:w-[min(96vw,64rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border sm:border-line sm:shadow-2xl"
         >
           <Dialog.Title className="sr-only">{t ? `${t.ref}: ${t.title}` : `Issue ${issueRef}`}</Dialog.Title>
           <Dialog.Description className="sr-only">Issue description, discussion, properties and history.</Dialog.Description>
@@ -419,7 +419,7 @@ export function IssueDialog(props: {
                     </Field>
                   )}
                   <Field label="AI">
-                    <label className="flex h-[34px] items-center gap-2 text-sm">
+                    <label className="flex h-7 items-center gap-2 text-xs">
                       <input
                         type="checkbox"
                         checked={t.agentClaimable}

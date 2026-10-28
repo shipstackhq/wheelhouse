@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
@@ -13,19 +13,13 @@ const PREVIEW = 4;
 /**
  * Discussion as a thread (Reddit/Twitter style): avatar column joined by a
  * connector line, name · time on top, markdown body below. Shows the latest
- * four messages; "show earlier" expands to a scrollable list of everything.
+ * four messages; "show earlier" expands to the full list, which grows with the dialog body.
  */
 export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
   const [expanded, setExpanded] = useState(false);
-  const scroller = useRef<HTMLDivElement>(null);
-  const stick = useRef(true); // keep the view pinned to the newest message unless the reader scrolled up
 
   const hidden = Math.max(0, comments.length - PREVIEW);
   const shown = expanded ? comments : comments.slice(-PREVIEW);
-
-  useEffect(() => {
-    if (expanded && scroller.current && stick.current) scroller.current.scrollTop = scroller.current.scrollHeight;
-  }, [expanded, comments.length]);
 
   if (!comments.length) return <p className="text-xs text-muted">No messages yet. Start the discussion below.</p>;
 
@@ -63,10 +57,7 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
       {hidden > 0 && !expanded && (
         <button
           className="mb-2.5 flex w-full items-center gap-2 text-left text-xs text-muted hover:text-fg"
-          onClick={() => {
-            stick.current = true;
-            setExpanded(true);
-          }}
+          onClick={() => setExpanded(true)}
         >
           <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-line"><MoreIcon /></span>
           Show {hidden} earlier {hidden === 1 ? "message" : "messages"}
@@ -74,14 +65,7 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
       )}
       {expanded ? (
         <>
-          <div
-            ref={scroller}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
-            }}
-            className="max-h-80 overflow-y-auto overflow-x-hidden rounded-md border border-line bg-bg/30 p-3"
-          >
+          <div className="overflow-x-hidden rounded-md border border-line bg-bg/30 p-3">
             {list}
           </div>
           {comments.length > PREVIEW && (
