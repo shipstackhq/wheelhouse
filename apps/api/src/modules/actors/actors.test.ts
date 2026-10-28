@@ -62,6 +62,20 @@ describe("ActorsService.resolve", () => {
     assert.equal(out[8].name, "Ada");
   });
 
+  test("author_agent_id wins over author_id: a run key's comment gets the roster agent's face; a deleted agent falls back", async () => {
+    const db = await getDb();
+    const [ws] = await db.insert(schema.workspaces).values({ name: "Actors C" }).returning();
+    const [agent] = await db.insert(schema.workspaceAgents).values({ workspaceId: ws.id, slug: `backend-${RUN}`, source: "catalog", catalogSlug: "backend" }).returning();
+    const actors = new ActorsService(app.get(Database));
+    const [viaKey, gone] = await actors.resolve(ws.id, [
+      { kind: "agent", id: randomUUID(), agentId: agent.id, name: "Bram" },
+      { kind: "agent", id: randomUUID(), agentId: null, name: "Old agent" },
+    ]);
+    assert.equal(viaKey.id, agent.id);
+    assert.equal(viaKey.avatar?.type, "generated");
+    assert.deepEqual(gone.avatar, null);
+  });
+
   test("no refs, no queries", async () => {
     let selects = 0;
     const counting = { get q() { selects++; return {}; } } as unknown as Database;

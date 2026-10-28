@@ -173,7 +173,7 @@ export class IssuesService {
     const { issue, team, ref: r } = await this.resolveIssue(actor, ref);
     const col = await this.repo.statusById(issue.statusId);
     const commentRows = await this.repo.commentsOf(issue.id);
-    const authors = await this.actors.resolve(actor.workspaceId, commentRows.map((c) => ({ kind: c.authorKind, id: c.authorId, name: c.authorName })));
+    const authors = await this.actors.resolve(actor.workspaceId, commentRows.map((c) => ({ kind: c.authorKind, id: c.authorId, agentId: c.authorAgentId, name: c.authorName })));
     const comments = commentRows.map((c, i) => ({ ...c, author: authors[i] }));
     const nodes = await this.repo.linkedNodes(issue.id);
     const history = await this.repo.historyOf(team.id, issue.id);
@@ -530,7 +530,7 @@ export class IssuesService {
 
   /** The comment as the web app shows it: the row plus who wrote it, with a face. */
   async withAuthor(actor: Actor, c: CommentRow) {
-    const [author] = await this.actors.resolve(actor.workspaceId, [{ kind: c.authorKind, id: c.authorId, name: c.authorName }]);
+    const [author] = await this.actors.resolve(actor.workspaceId, [{ kind: c.authorKind, id: c.authorId, agentId: c.authorAgentId, name: c.authorName }]);
     return { ...c, author };
   }
 

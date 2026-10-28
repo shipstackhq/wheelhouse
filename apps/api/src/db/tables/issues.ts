@@ -191,6 +191,8 @@ export const comments = table("comments", {
   issueId: uuid("issue_id").notNull().references(() => issues.id, { onDelete: "cascade" }),
   authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
   authorId: uuid("author_id"),
+  /** WH-140: the roster agent that wrote it, when one did. `author_id` stays the user or key that made the call. */
+  authorAgentId: uuid("author_agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
   createdAt: createdAt(),
