@@ -1,3 +1,4 @@
+import type { AvatarStyle } from "@wheelhouse/shared/agents/avatar";
 import type { AgentView } from "@wheelhouse/shared/agents/render";
 import type { AgentProfile } from "@wheelhouse/shared/agents/schema";
 /** The shapes the web app's API answers with (JSON: every date is an ISO string). Kept by hand and checked by the contract suite. */
@@ -434,7 +435,18 @@ export type NewStatus = { name: string; role: StatusRole; color?: StatusColor | 
 /** `isDefault` can only be set to true. A role cannot change. */
 export type StatusPatch = { name?: string; color?: StatusColor | null; isDefault?: true };
 export type BoardNode = { id: string; name: string; kind: string; parentId: string | null; layer: string };
-export type BoardMember = { id: string; name: string };
+/** How to draw someone: an uploaded picture, a generated agent face, or nothing (show initials). */
+export type ActorAvatar = { type: "image"; url: string } | { type: "generated"; style: AvatarStyle; seed: string } | null;
+
+/** Anyone the UI shows: a person or an agent. `id` is null when the author no longer resolves (deleted user); `name` is the stored name. */
+export type ActorRef = {
+  kind: "human" | "agent";
+  id: string | null; // users.id for humans; workspace agent id for roster agents; the author id stored on the row for any other agent
+  name: string;
+  avatar: ActorAvatar;
+};
+
+export type BoardMember = ActorRef & { kind: "human"; id: string };
 
 export type BoardView = {
   team: { id: string; key: string; name: string; description: string };
@@ -449,7 +461,8 @@ export type BoardView = {
   checklist: ChecklistState;
 };
 
-export type IssueComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
+/** `authorKind` and `authorName` are deprecated aliases of `author` (kept for one release); read `author`. */
+export type IssueComment = { id: string; author: ActorRef; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: string };
 export type IssueHistoryItem = { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: string };
 export type IssuePullRequest = {
   number: number;

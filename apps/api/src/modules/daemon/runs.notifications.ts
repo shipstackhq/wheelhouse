@@ -82,7 +82,7 @@ export class RunNotifications {
           : job.state === "failed"
             ? `**${who}'s run failed.**\n\n${job.error ?? ""}`.trim()
             : `**${who}'s run was stopped.**`;
-      await this.repo.insertComment({ issueId: job.issueId, authorKind: "agent", authorId: job.agentId ?? device.id, authorName: who, body });
+      await this.repo.insertComment({ issueId: job.issueId, authorKind: "agent", authorId: job.agentId ?? device.id, authorAgentId: job.agentId, authorName: who, body });
     } catch (e) {
       this.log.warn(`run summary comment failed: ${e instanceof Error ? e.message : e}`);
     }

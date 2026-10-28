@@ -3,6 +3,7 @@ import { table, createdAt, updatedAt } from "./common";
 import { workspaces } from "./auth";
 import { teams } from "./teams";
 import { issues } from "./issues";
+import { workspaceAgents } from "./agents";
 
 export const IDEA_STATUSES = ["new", "exploring", "promoted", "parked"] as const;
 
@@ -39,6 +40,8 @@ export const ideaComments = table("idea_comments", {
   ideaId: uuid("idea_id").notNull().references(() => ideas.id, { onDelete: "cascade" }),
   authorKind: text("author_kind", { enum: ["human", "agent"] }).notNull(),
   authorId: uuid("author_id"),
+  /** WH-140: the roster agent that wrote it, when one did. */
+  authorAgentId: uuid("author_agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
   authorName: text("author_name").notNull(),
   body: text("body").notNull(),
   createdAt: createdAt(),

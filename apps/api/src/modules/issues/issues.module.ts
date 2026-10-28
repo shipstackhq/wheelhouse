@@ -1,6 +1,7 @@
 import { Inject, Module, type OnModuleInit } from "@nestjs/common";
 import { Database } from "../../platform/database/database";
 import { EventsModule } from "../../platform/events/events.module";
+import { ActorsModule } from "../actors/actors.module";
 import { GithubModule } from "../github/github.module";
 import { MapModule } from "../map/map.module";
 import { NotificationsCoreModule } from "../notifications/index";
@@ -30,7 +31,7 @@ import { ProjectsService } from "./projects/projects.service";
  * through events (`IssuesListeners`), and the map never reaches it (its graph only reads the `issue_nodes` table).
  */
 @Module({
-  imports: [EventsModule, TeamsModule, GithubModule, MapModule, NotificationsCoreModule],
+  imports: [EventsModule, ActorsModule, TeamsModule, GithubModule, MapModule, NotificationsCoreModule],
   controllers: [BoardController, IssuesController, CyclesController, ProjectsController, InitiativesController],
   providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners, IssueNotifications, IssueTargets, IssueScoping],
   exports: [IssuesService, IssueTargets, CyclesService, ProjectsService, InitiativesService],
