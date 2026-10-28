@@ -33,6 +33,8 @@ export type GithubStatus = {
   /** For owners only: the settings an administrator must set to turn it on. */
   missing: string[];
   isOwner: boolean;
+  /** For everyone: the workspace has at least one GitHub App installation. */
+  connected: boolean;
   /** Owners only: each installation of the workspace and the repositories it can see that this team has not connected yet. */
   installations: { installationId: string; account: string; failed: boolean; repositories: { id: string; fullName: string; private: boolean }[] }[];
 };
@@ -123,8 +125,10 @@ export class ConnectService {
     const isOwner = h.membership.role === "owner";
     const connected = (await this.repositories.listRepositories(h.actor, teamKey)).map((r) => r.githubRepoId).filter((x): x is string => !!x);
     const gh = github();
-    if (!githubConfig() || !gh) return { configured: false, missing: isOwner ? githubMissing() : [], isOwner, installations: [] };
-    const installs = isOwner ? await this.listInstallations(h.actor) : [];
+    if (!githubConfig() || !gh) return { configured: false, missing: isOwner ? githubMissing() : [], isOwner, connected: false, installations: [] };
+    // Whether the workspace is connected is for everyone; which installations and repositories, for owners only.
+    const linked = await this.listInstallations(h.actor);
+    const installs = isOwner ? linked : [];
     const installations: GithubStatus["installations"] = [];
     for (const i of installs) {
       try {
@@ -134,7 +138,7 @@ export class ConnectService {
         installations.push({ installationId: i.installationId, account: i.accountLogin, failed: true, repositories: [] });
       }
     }
-    return { configured: true, missing: [], isOwner, installations };
+    return { configured: true, missing: [], isOwner, connected: linked.length > 0, installations };
   }
 
   /** Start connecting: owners only. Sends the person to GitHub to install the App, with a signed `state`. */

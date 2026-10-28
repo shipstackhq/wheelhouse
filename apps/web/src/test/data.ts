@@ -428,13 +428,11 @@ export const repo = (over: Partial<Repository> = {}): Repository => ({
   ...over,
 });
 
-export const githubStatus = (over: Partial<GithubStatus> = {}): GithubStatus => ({
-  configured: true,
-  missing: [],
-  isOwner: true,
-  installations: [{ installationId: "1001", account: "acme", failed: false, repositories: [{ id: "5001", fullName: "acme/web", private: false }, { id: "5002", fullName: "acme/api", private: true }] }],
-  ...over,
-});
+export const githubStatus = (over: Partial<GithubStatus> = {}): GithubStatus => {
+  const installations = over.installations ?? [{ installationId: "1001", account: "acme", failed: false, repositories: [{ id: "5001", fullName: "acme/web", private: false }, { id: "5002", fullName: "acme/api", private: true }] }];
+  // As the server: connected follows the workspace's installations unless a test says otherwise (a member sees none of them).
+  return { configured: true, missing: [], isOwner: true, connected: installations.length > 0, ...over, installations };
+};
 
 export const onboardingPage = (key = "AA", over: Partial<OnboardingPage> = {}): OnboardingPage => ({
   team: { key, name: key === "AA" ? "Alpha" : "Beta" },
