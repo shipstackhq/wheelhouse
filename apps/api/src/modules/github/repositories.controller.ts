@@ -3,6 +3,7 @@ import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { ConnectService } from "./connect.service";
 import { repositoryView } from "./github.presenter";
+import { PrSyncService } from "./pr-sync.service";
 import { RepositoriesService } from "./repositories.service";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
 import type { JsonObject } from "../../common/body";
@@ -14,6 +15,7 @@ export class RepositoriesController {
   constructor(
     @Inject(RepositoriesService) private readonly repositories: RepositoriesService,
     @Inject(ConnectService) private readonly connect: ConnectService,
+    @Inject(PrSyncService) private readonly prSync: PrSyncService,
   ) {}
 
   @Get(":key/repositories")
@@ -39,7 +41,17 @@ export class RepositoriesController {
   /** `{ installationId, repoId, role?, pathLimit? }`. Owners only; the installation must be the workspace's own (ADR-12). Name and branch come from GitHub. */
   @Post(":key/repositories/github")
   async connectGithub(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
-    return { repository: repositoryView(await this.connect.connectGithubAs(req.human.actor, key, body)) };
+    const repository = await this.connect.connectGithubAs(req.human.actor, key, body);
+    await this.prSync.syncRepository(repository.id); // its pull requests are read right away; a failure is logged, never thrown
+    return { repository: repositoryView((await this.repositories.listRepositories(req.human.actor, key)).find((r) => r.id === repository.id) ?? repository) };
+  }
+
+  /** Sync pull requests: read every connected repository's open and recently closed pull requests from GitHub ("check again now"). */
+  @Post(":key/repositories/github/sync")
+  @HttpCode(200)
+  async syncPullRequests(@Req() req: SessionRequest, @Param("key") key: string) {
+    const results = await this.prSync.syncTeam(req.human.actor, key);
+    return { results, repositories: (await this.repositories.listRepositories(req.human.actor, key)).map(repositoryView) };
   }
 
   /** This workspace stops using an installation; other workspaces linked to it keep it. Owners only. */

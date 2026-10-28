@@ -395,6 +395,7 @@ describe("the docs, repositories and onboarding endpoints (WH-98)", () => {
     assert.deepEqual(await sent((a) => a.repos.retire("WH", "r1"), { json: { repository: {} } }), { method: "POST", url: "/api/app/teams/WH/repositories/r1/retire", body: {} });
     assert.deepEqual(await sent((a) => a.repos.tree("WH", "r1"), { json: { files: [], truncated: false } }), { method: "GET", url: "/api/app/teams/WH/repositories/r1/tree", body: undefined });
     assert.deepEqual(await sent((a) => a.repos.github("WH"), { json: { configured: false } }), { method: "GET", url: "/api/app/teams/WH/repositories/github", body: undefined });
+    assert.deepEqual(await sent((a) => a.repos.syncPullRequests("WH"), { json: { results: [], repositories: [] } }), { method: "POST", url: "/api/app/teams/WH/repositories/github/sync", body: {} });
     assert.deepEqual(await sent((a) => a.repos.connectGithub("WH", { installationId: "1", repoId: "5", role: "backend" }), { json: { repository: {} } }), { method: "POST", url: "/api/app/teams/WH/repositories/github", body: { installationId: "1", repoId: "5", role: "backend" } });
   });
 

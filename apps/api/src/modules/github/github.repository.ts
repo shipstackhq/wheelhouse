@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 
@@ -68,6 +68,27 @@ export class GithubRepository {
       .innerJoin(teams, eq(teams.id, repositories.teamId))
       .innerJoin(githubInstallations, and(eq(githubInstallations.installationId, repositories.githubInstallationId), eq(githubInstallations.workspaceId, teams.workspaceId)))
       .where(and(eq(repositories.provider, "github"), eq(repositories.githubInstallationId, installationId), eq(repositories.githubRepoId, repoId), ne(repositories.lifecycle, "retired")));
+  }
+
+  /**
+   * Connected GitHub repositories a pull request sync reads: the same conditions as `targetsFor` (the installation is linked to the
+   * team's workspace), for one team or, with no team, for every team.
+   */
+  syncTargets(teamId?: string, repositoryId?: string) {
+    const where = [eq(repositories.provider, "github"), ne(repositories.lifecycle, "retired"), isNotNull(repositories.githubInstallationId), isNotNull(repositories.githubRepoId)];
+    if (teamId) where.push(eq(repositories.teamId, teamId));
+    if (repositoryId) where.push(eq(repositories.id, repositoryId));
+    return this.db.q
+      .select({ repo: repositories, team: teams })
+      .from(repositories)
+      .innerJoin(teams, eq(teams.id, repositories.teamId))
+      .innerJoin(githubInstallations, and(eq(githubInstallations.installationId, repositories.githubInstallationId), eq(githubInstallations.workspaceId, teams.workspaceId)))
+      .where(and(...where))
+      .orderBy(asc(repositories.createdAt));
+  }
+
+  async markPrSynced(id: string, at: Date) {
+    await this.db.q.update(repositories).set({ lastPrSyncedAt: at }).where(eq(repositories.id, id));
   }
 
   // ───────── installations ─────────

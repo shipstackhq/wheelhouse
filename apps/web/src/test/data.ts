@@ -423,6 +423,7 @@ export const repo = (over: Partial<Repository> = {}): Repository => ({
   pathLimit: null,
   lifecycle: "live",
   lastEventAt: null,
+  lastPrSyncedAt: null,
   browsable: false,
   ...over,
 });
