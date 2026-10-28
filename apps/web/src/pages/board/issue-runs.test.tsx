@@ -39,9 +39,10 @@ const runs = (jobs: JobView[]): IssueRuns => ({
 function mount(jobs: JobView[], setup: (s: ReturnType<typeof serverWithData>) => void = () => {}, delegated = false) {
   const server = serverWithData();
   server.on("GET /api/app/issues/WH-1/jobs", runs(jobs));
+  server.on("GET /api/app/teams/WH/agents", { agents: [] });
   server.on("GET /api/app/issues/WH-1/jobs/branches", { defaultBranch: "staging", branches: ["staging", "ui-changes"], listed: true });
   setup(server);
-  return renderIn(<IssueRunsSection issueRef="WH-1" delegated={delegated} />, "/", server);
+  return renderIn(<IssueRunsSection issueRef="WH-1" teamKey="WH" delegated={delegated} />, "/", server);
 }
 
 describe("runs on a device", () => {
@@ -67,7 +68,7 @@ describe("runs on a device", () => {
 
   test("an issue that is not delegated has no Rerun agent button", async () => {
     mount([]);
-    await screen.findByRole("button", { name: "Run on device" });
+    await screen.findByRole("button", { name: "Start" });
     expect(screen.queryByRole("button", { name: "Rerun agent" })).toBeNull();
   });
 

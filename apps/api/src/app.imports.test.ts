@@ -25,13 +25,13 @@ describe("what each SERVICE_ROLE loads", () => {
   test("all (the default) loads everything: the legacy group and both sides of the daemon module", () => {
     const imports = buildAppImports("all");
     assert.ok(imports.includes(McpModule));
-    assert.deepEqual(names(daemonControllers("all")), ["DaemonController", "DevicesController", "ChatController"]);
+    assert.deepEqual(names(daemonControllers("all")), ["DaemonController", "DevicesController", "ChatController", "LearningsController"]);
     assert.ok(daemonProviders("all").includes(DaemonSweep));
   });
 
   test("api serves people: the legacy group and the devices routes, but not the machine API or the sweep", () => {
     assert.ok(buildAppImports("api").includes(McpModule));
-    assert.deepEqual(names(daemonControllers("api")), ["DevicesController", "ChatController"]);
+    assert.deepEqual(names(daemonControllers("api")), ["DevicesController", "ChatController", "LearningsController"]);
     assert.ok(!daemonProviders("api").includes(DaemonSweep));
   });
 

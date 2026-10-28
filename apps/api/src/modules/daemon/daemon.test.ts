@@ -25,6 +25,8 @@ import { DeviceStreamService } from "./device-stream.service";
 import { DevicesService } from "./devices.service";
 import { RunsService } from "./runs.service";
 import { DelegationService } from "./delegation.service";
+import { LearningsService } from "./learnings.service";
+import { DaemonRepository } from "./daemon.repository";
 import { IssuesService } from "../issues/index";
 import { updateIssue } from "../issues/issues.legacy";
 import { jobDelivery } from "./daemon.presenter";
@@ -746,13 +748,13 @@ describe("run notifications", () => {
 
 describe("delegated runs (WH-116)", () => {
   /** A team member with a catalog agent on the team's roster to delegate to. */
-  async function setup(name: string) {
+  async function setup(name: string, catalog = "fullstack") {
     const db = await getDb();
     const who = await person(owner.workspaceId, name);
     const [team] = await db.select().from(schema.teams).where(eq(schema.teams.key, "DM"));
     await db.insert(schema.teamMembers).values({ teamId: team.id, userId: who.id, workspaceId: owner.workspaceId, role: "editor" });
     const slug = `remy-${name}`;
-    const [agent] = await db.insert(schema.workspaceAgents).values({ workspaceId: owner.workspaceId, slug, source: "catalog", catalogSlug: "reviewer" }).returning();
+    const [agent] = await db.insert(schema.workspaceAgents).values({ workspaceId: owner.workspaceId, slug, source: "catalog", catalogSlug: catalog }).returning();
     await db.insert(schema.teamAgents).values({ teamId: team.id, workspaceId: owner.workspaceId, workspaceAgentId: agent.id });
     return { who, slug, agent };
   }
@@ -762,7 +764,7 @@ describe("delegated runs (WH-116)", () => {
     const { who, slug, agent } = await setup("dana");
     const { device } = await paired(who);
     await online(device);
-    const issue = await createIssue(owner, "DM", { title: "Delegate me", assigneeId: who.id });
+    const issue = await createIssue(owner, "DM", { title: "Delegate me", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
     await updateIssue(who, issue.ref, { delegate: slug });
     const [job] = await jobsOf(issue.id);
     assert.equal(job.state, "offered");
@@ -782,7 +784,7 @@ describe("delegated runs (WH-116)", () => {
     const { who, slug } = await setup("ari");
     const { device } = await paired(owner);
     await online(device);
-    const issue = await createIssue(owner, "DM", { title: "Admin delegates", assigneeId: who.id });
+    const issue = await createIssue(owner, "DM", { title: "Admin delegates", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
     await updateIssue(owner, issue.ref, { delegate: slug });
     const [first] = await jobsOf(issue.id);
     assert.equal(first.createdBy, owner.id, "the admin who delegated is the requester");
@@ -800,7 +802,7 @@ describe("delegated runs (WH-116)", () => {
     const { who, slug } = await setup("lee");
     const { device } = await paired(who);
     await online(device);
-    const issue = await createIssue(owner, "DM", { title: "Leaver", assigneeId: who.id });
+    const issue = await createIssue(owner, "DM", { title: "Leaver", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
     await updateIssue(who, issue.ref, { delegate: slug });
     const db = await getDb();
     await db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, who.id));
@@ -813,7 +815,7 @@ describe("delegated runs (WH-116)", () => {
   test("with no device online the issue waits, and is offered when one comes online", async () => {
     const { who, slug } = await setup("wes");
     const { device } = await paired(who);
-    const issue = await createIssue(owner, "DM", { title: "Wait for me", assigneeId: who.id });
+    const issue = await createIssue(owner, "DM", { title: "Wait for me", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
     await updateIssue(who, issue.ref, { delegate: slug });
     assert.deepEqual(await jobsOf(issue.id), []);
     await online(device);
@@ -821,5 +823,262 @@ describe("delegated runs (WH-116)", () => {
     const [job] = await jobsOf(issue.id);
     assert.equal(job.createdBy, who.id);
     assert.equal(await app.get(DelegationService).offerWaiting(), 0, "an issue with a run since it was delegated no longer waits");
+  });
+
+  test("without targets the issue needs setup: one inbox item, no run, no retry; setting targets lets the sweep start it", async () => {
+    const { who, slug } = await setup("nia");
+    const { device } = await paired(who);
+    await online(device);
+    const issue = await createIssue(owner, "DM", { title: "Where?", assigneeId: who.id });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const items = async () => (await getDb()).select().from(schema.notifications).where(and(eq(schema.notifications.recipientUserId, who.id), eq(schema.notifications.type, "run.needs_setup"), eq(schema.notifications.subjectId, issue.id)));
+    assert.deepEqual(await jobsOf(issue.id), []);
+    assert.equal((await items()).length, 1);
+    assert.equal(await app.get(DelegationService).offerWaiting(), 0, "needs setup is not retried");
+    assert.equal((await items()).length, 1, "and not announced again");
+    await updateIssue(who, issue.ref, { targets: [{ repository: "acme/app" }] });
+    assert.equal(await app.get(DelegationService).offerWaiting(), 1);
+    assert.equal((await jobsOf(issue.id)).length, 1);
+  });
+
+  test("an issue with two targets starts one run per target", async () => {
+    const { who, slug } = await setup("tom");
+    const { device } = await paired(who);
+    await online(device);
+    const db = await getDb();
+    const [team] = await db.select().from(schema.teams).where(eq(schema.teams.key, "DM"));
+    const [second] = await db.insert(schema.repositories).values({ teamId: team.id, workspaceId: owner.workspaceId, displayName: "second", role: "x", provider: "github", slug: "second", githubRepoId: "555", githubInstallationId: "77", githubFullName: "acme/second", defaultBranch: "main" }).returning();
+    const issue = await createIssue(owner, "DM", { title: "Two repos", assigneeId: who.id, targets: [{ repository: "acme/app" }, { repository: "acme/second" }] });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const jobs = await jobsOf(issue.id);
+    assert.deepEqual(jobs.map((j) => j.repositoryId).sort(), [repoId, second.id].sort());
+    assert.equal(new Set(jobs.map((j) => j.branch)).size, 2, "a branch each");
+  });
+
+  test("the issue shows where the delegation stands", async () => {
+    const { who, slug } = await setup("sid");
+    const { device } = await paired(who);
+    const issue = await createIssue(owner, "DM", { title: "Stand", assigneeId: who.id });
+    const state = async () => (await app.get(IssuesService).getIssue(who, issue.ref)).issue.delegation?.state ?? null;
+    assert.equal(await state(), null);
+    await updateIssue(who, issue.ref, { delegate: slug });
+    assert.equal(await state(), "needs_setup");
+    await updateIssue(who, issue.ref, { targets: [{ repository: "acme/app" }] });
+    assert.equal(await state(), "waiting");
+    await online(device);
+    await app.get(DelegationService).offerWaiting();
+    assert.equal(await state(), "running");
+    const [job] = await jobsOf(issue.id);
+    await d.acceptJob(device, job.id);
+    await d.recordJobEvents(device, job.id, { events: [{ seq: 1, at: new Date().toISOString(), type: "tool", data: { name: "Edit" } }] });
+    assert.equal((await app.get(IssuesService).getIssue(who, issue.ref)).issue.delegation?.line, "Using Edit");
+    await d.finishJob(device, job.id, { state: "failed", error: "boom" });
+    assert.equal(await state(), "failed");
+  });
+
+  test("the plan preview is what a start would do, and says what is missing", async () => {
+    const { who, slug } = await setup("pat");
+    const { device } = await paired(who);
+    const issue = await createIssue(owner, "DM", { title: "Preview", assigneeId: who.id });
+    const preview = () => runs.preview(who, issue.ref, slug);
+    assert.deepEqual(await preview(), { missing: "needs_setup" });
+    await updateIssue(who, issue.ref, { targets: [{ repository: "acme/app" }] });
+    assert.deepEqual(await preview(), { missing: "waiting" });
+    await online(device);
+    const out = (await preview()) as { plans: { repository: string; baseBranch: string; device: string; model: string }[] };
+    assert.deepEqual(out.plans.map((p) => [p.device, p.baseBranch]), [[device.name, "main"]]);
+    assert.deepEqual(await jobsOf(issue.id), [], "a preview starts nothing");
+    await assert.rejects(runs.preview(who, issue.ref, "nobody"), code("invalid"));
+  });
+
+  test("an agent's question is a comment and an inbox item; an answer on the issue carries the run on with it", async () => {
+    const { who, slug, agent } = await setup("qin");
+    const { device } = await paired(who);
+    await online(device);
+    const issue = await createIssue(owner, "DM", { title: "Ask me", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const [job] = await jobsOf(issue.id);
+    await d.acceptJob(device, job.id);
+    await d.recordJobEvents(device, job.id, { events: [{ seq: 1, at: new Date().toISOString(), type: "result", data: { text: "QUESTION: which database?" } }] });
+    await d.finishJob(device, job.id, { state: "succeeded" });
+
+    const state = async () => (await app.get(IssuesService).getIssue(who, issue.ref)).issue.delegation?.state;
+    assert.equal(await state(), "asked");
+    const db = await getDb();
+    const comments = async () => db.select().from(schema.comments).where(eq(schema.comments.issueId, issue.id));
+    const [asked] = await comments();
+    assert.equal(asked.authorKind, "agent");
+    assert.match(asked.body, /has a question:\*\*\n\nwhich database\?/);
+    const items = await db.select().from(schema.notifications).where(and(eq(schema.notifications.recipientUserId, who.id), eq(schema.notifications.subjectId, issue.id)));
+    const questions = items.filter((n) => n.type.startsWith("run."));
+    assert.deepEqual(questions.map((n) => n.type), ["run.question"]);
+    assert.match(questions[0].title, / has a question on /);
+    assert.equal((await jobsOf(issue.id)).length, 1, "no pull request, and nothing started until it is answered");
+    assert.ok(agent);
+
+    await app.get(IssuesService).addComment(who, issue.ref, "Postgres, please");
+    const jobs = await jobsOf(issue.id);
+    assert.equal(jobs.length, 2);
+    const next = jobs.find((j) => j.id !== job.id)!;
+    assert.equal(next.continuesJobId, job.id);
+    assert.equal(next.branch, job.branch, "the same branch");
+    const offers = await db.select().from(schema.deviceMessages).where(and(eq(schema.deviceMessages.deviceId, device.id), eq(schema.deviceMessages.type, "job.offer")));
+    const sent = offers.map((o) => o.message as { jobId: string; previous: { answer?: string } | null }).find((m) => m.jobId === next.id)!;
+    assert.equal(sent.previous?.answer, "Postgres, please");
+    assert.equal(await state(), "running");
+    await app.get(IssuesService).addComment(who, issue.ref, "and thanks");
+    assert.equal((await jobsOf(issue.id)).length, 2, "only the answer carries it on");
+  });
+
+  test("only a team admin deletes a comment, and the audit names whose, not what", async () => {
+    const { who, slug } = await setup("del");
+    const issue = await createIssue(owner, "DM", { title: "Delete one", assigneeId: who.id });
+    const c = await app.get(IssuesService).addComment(who, issue.ref, "oops, a secret");
+    await assert.rejects(app.get(IssuesService).deleteComment(who, issue.ref, c.id), code("forbidden"));
+    await app.get(IssuesService).deleteComment(owner, issue.ref, c.id);
+    assert.deepEqual(await (await getDb()).select().from(schema.comments).where(eq(schema.comments.issueId, issue.id)), []);
+    const [ev] = await (await getDb()).select().from(schema.events).where(and(eq(schema.events.entityId, issue.id), eq(schema.events.type, "comment.deleted")));
+    assert.ok(!JSON.stringify(ev).includes("secret"));
+    assert.ok(slug);
+  });
+
+  test("run defaults: the default device wins while online, model and effort fill what the agent leaves open, and an offline default falls back and says so", async () => {
+    const { who, slug } = await setup("dee");
+    const a = await paired(who);
+    const b = await paired(who);
+    await online(a.device);
+    await online(b.device);
+    const issue = await createIssue(owner, "DM", { title: "Defaults", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
+    assert.deepEqual(await devices.getRunDefaults(who), { deviceId: null, model: null, effort: null });
+    await assert.rejects(devices.setRunDefaults(who, { deviceId: (await paired(owner)).device.id }), code("not_found"));
+    await assert.rejects(devices.setRunDefaults(who, { effort: "max" }), code("invalid"));
+    await devices.setRunDefaults(who, { deviceId: b.device.id, model: "opus", effort: "high" });
+    type Plans = { plans: { device: string; model: string; effort: string | null; note?: string }[] };
+    const plan = async () => ((await runs.preview(who, issue.ref, slug)) as Plans).plans[0];
+    const first = await plan();
+    assert.deepEqual([first.device, first.model, first.effort, first.note], [b.device.name, "opus", "high", undefined]);
+
+    // Now b goes quiet: the run uses a, and the plan says its default was offline.
+    await (await getDb()).update(schema.devices).set({ lastSeenAt: new Date(Date.now() - UNREACHABLE_AFTER_MS * 2) }).where(eq(schema.devices.id, b.device.id));
+    const fell = await plan();
+    assert.equal(fell.note, "your default device is offline");
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const [job] = await jobsOf(issue.id);
+    assert.equal(job.deviceId, a.device.id);
+    assert.equal(job.model, "opus");
+    assert.equal(job.effort, "high");
+    await devices.setRunDefaults(who, { effort: null });
+    assert.equal((await devices.getRunDefaults(who)).effort, null);
+    assert.equal((await devices.getRunDefaults(who)).model, "opus", "only what is named changes");
+  });
+
+  test("a reviewer reads the issue's pull request, cannot push, opens no pull request, and leaves one review comment", async () => {
+    const { who, slug } = await setup("rev", "reviewer");
+    const { device } = await paired(who);
+    await online(device);
+    const db = await getDb();
+    const issue = await createIssue(owner, "DM", { title: "Review me", assigneeId: who.id });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    assert.deepEqual(await jobsOf(issue.id), [], "nothing to review yet, so it waits");
+    assert.deepEqual(await runs.preview(who, issue.ref, slug), { missing: "waiting" });
+    await assert.rejects(runs.runOnDevice(who, issue.ref, { deviceId: device.id, model: "opus", agent: slug }), code("conflict"));
+
+    const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 77, title: "The change", url: "https://github.com/acme/app/pull/77", headBranch: "wh/feature", headSha: "abc1234" }).returning();
+    await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
+    assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts once a pull request is linked");
+    const [job] = await jobsOf(issue.id);
+    assert.equal(job.mode, "review");
+    assert.equal(job.branch, "wh/feature");
+    const [offer] = await db.select().from(schema.deviceMessages).where(and(eq(schema.deviceMessages.deviceId, device.id), eq(schema.deviceMessages.type, "job.offer")));
+    const sent = offer.message as { push: boolean; startFrom: string; review: { pullRequest: { number: number } } | null };
+    assert.deepEqual([sent.push, sent.startFrom, sent.review?.pullRequest.number], [false, "wh/feature", 77]);
+
+    await d.acceptJob(device, job.id);
+    await d.recordJobEvents(device, job.id, { events: [{ seq: 1, at: new Date().toISOString(), type: "result", data: { text: "Changes needed: the button is not keyboard reachable" } }] });
+    let opened = 0;
+    await d.finishJob(device, job.id, { state: "succeeded", pushed: true, commit: "abcdef1", diffStats: { files: 2 } }, { api: { openPullRequest: async () => (opened++, { number: 1, url: "x" }) } });
+    assert.equal(opened, 0);
+    const rows = await db.select().from(schema.comments).where(eq(schema.comments.issueId, issue.id));
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].body, /reviewed the pull request\.\*\*\n\nChanges needed/);
+  });
+
+  test("the issue suggests the roster agent its labels point at, until it is delegated", async () => {
+    const { who, slug } = await setup("sug", "frontend");
+    const issue = await createIssue(owner, "DM", { title: "Style it", assigneeId: who.id, labels: ["frontend"] });
+    const suggested = async () => (await app.get(IssuesService).getIssue(who, issue.ref)).suggestedAgent;
+    assert.equal(await suggested(), slug);
+    await updateIssue(who, issue.ref, { delegate: slug });
+    assert.equal(await suggested(), null);
+  });
+
+  test("learnings: a run proposes a few, they are capped and editable by people, and the agent's later runs carry them", async () => {
+    const { who, slug } = await setup("lea");
+    const { device } = await paired(who);
+    await online(device);
+    const learn = app.get(LearningsService);
+    const issue = await createIssue(owner, "DM", { title: "Learn", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const [job] = await jobsOf(issue.id);
+    await d.acceptJob(device, job.id);
+    await d.finishJob(device, job.id, { state: "succeeded", learnings: ["This team keeps tests next to source", "  This team   keeps tests next to source ", "Use pnpm", "No semicolons", "a fourth is dropped"] });
+    const { learnings } = await learn.list(who, "DM", slug);
+    assert.deepEqual(learnings.map((l) => l.note), ["This team keeps tests next to source", "Use pnpm", "No semicolons"], "three a run, tidied, no repeats");
+
+    await app.get(IssuesService).rerunDelegate(who, issue.ref);
+    const next = (await jobsOf(issue.id)).find((j) => j.id !== job.id)!;
+    const offers = await (await getDb()).select().from(schema.deviceMessages).where(and(eq(schema.deviceMessages.deviceId, device.id), eq(schema.deviceMessages.type, "job.offer")));
+    const sent = offers.map((o) => o.message as { jobId: string; agent: { definitions: Record<string, { prompt: string }>; name: string } }).find((m) => m.jobId === next.id)!;
+    assert.match(sent.agent.definitions[sent.agent.name].prompt, /What this team has taught you\n\n- This team keeps tests next to source\n- Use pnpm/);
+
+    await learn.update(who, "DM", slug, learnings[1].id, "Use pnpm, never npm");
+    await learn.remove(who, "DM", slug, learnings[2].id);
+    assert.deepEqual((await learn.list(who, "DM", slug)).learnings.map((l) => l.note), ["This team keeps tests next to source", "Use pnpm, never npm"]);
+    await assert.rejects(learn.update(who, "DM", slug, learnings[1].id, "  "), code("invalid"));
+    await assert.rejects(learn.list(viewer, "DM", "nobody"), code("not_found"));
+
+    const many = Array.from({ length: 30 }, (_, i) => `note ${i}`);
+    for (let n = 0; n < 10; n++) await (await getDb()).insert(schema.agentLearnings).values({ teamId: job.teamId, workspaceId: job.workspaceId, agentId: job.agentId!, note: `filler ${n}` });
+    await app.get(DaemonRepository).addLearnings({ id: job.teamId, workspaceId: job.workspaceId }, job.agentId!, many, 20);
+    assert.equal((await learn.list(who, "DM", slug)).learnings.length, 20, "capped at 20");
+  });
+
+  test("a parent's run is offered its open sub-issues in order, and owns them: a sub-issue cannot be delegated meanwhile", async () => {
+    const { who, slug } = await setup("par");
+    const { device } = await paired(who);
+    await online(device);
+    const db = await getDb();
+    const parent = await createIssue(owner, "DM", { title: "Parent", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
+    const one = await createIssue(owner, "DM", { title: "First part", body: "do the first thing", parent: parent.ref });
+    const two = await createIssue(owner, "DM", { title: "Second part", parent: parent.ref });
+    await updateIssue(owner, two.ref, { assigneeId: who.id });
+    await app.get(IssuesService).moveIssue(owner, one.ref, "Done");
+    const three = await createIssue(owner, "DM", { title: "Third part", parent: parent.ref, assigneeId: who.id });
+    await updateIssue(who, parent.ref, { delegate: slug });
+    const [job] = await jobsOf(parent.id);
+    const [offer] = await db.select().from(schema.deviceMessages).where(and(eq(schema.deviceMessages.deviceId, device.id), eq(schema.deviceMessages.type, "job.offer")));
+    const subs = (offer.message as { issue: { subIssues: { ref: string; title: string }[] } }).issue.subIssues;
+    assert.deepEqual(subs.map((x) => x.ref), [two.ref, three.ref], "the finished one is left out, the rest are in order");
+    assert.equal(job.state, "offered");
+    await assert.rejects(updateIssue(who, three.ref, { delegate: slug }), code("conflict"));
+    await updateIssue(who, parent.ref, { delegate: null });
+    await updateIssue(who, three.ref, { delegate: slug });
+  });
+
+  test("every run leaves one summary comment as the agent", async () => {
+    const { who, slug } = await setup("sum");
+    const { device } = await paired(who);
+    await online(device);
+    const issue = await createIssue(owner, "DM", { title: "Summarise", assigneeId: who.id, targets: [{ repository: "acme/app" }] });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const [job] = await jobsOf(issue.id);
+    await d.acceptJob(device, job.id);
+    await d.recordJobEvents(device, job.id, { events: [{ seq: 1, at: new Date().toISOString(), type: "result", data: { text: "Added the button" } }] });
+    await d.finishJob(device, job.id, { state: "succeeded" });
+    await d.finishJob(device, job.id, { state: "succeeded" });
+    const rows = await (await getDb()).select().from(schema.comments).where(eq(schema.comments.issueId, issue.id));
+    assert.equal(rows.length, 1, "a finish sent again adds nothing");
+    assert.equal(rows[0].authorKind, "agent");
+    assert.match(rows[0].body, /finished\.\*\*\n\nAdded the button/);
   });
 });

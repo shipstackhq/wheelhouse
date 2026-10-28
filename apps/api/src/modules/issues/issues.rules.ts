@@ -56,6 +56,8 @@ export type IssueInput = {
   parent?: string | null;
   /** WH-113: the slug of an agent on the team's roster to delegate to, or null to clear. Only the assignee or an admin. */
   delegate?: string | null;
+  /** WH-129: where the work happens, in order; replaces the issue's own targets (an empty list clears them). */
+  targets?: TargetInput[];
 };
 
 /** Agent claims with no activity from the claiming agent for this long are released. */
@@ -90,6 +92,56 @@ export function intField(b: Record<string, unknown>, name: string): number | und
   if (v === undefined || v === null) return undefined;
   if (typeof v !== "number" || !Number.isSafeInteger(v)) return bad(name, `${name} must be a whole number`);
   return v;
+}
+
+/** WH-132: where a delegation stands. `asked`: the agent stopped with a question (WH-118). */
+export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "failed" | "stopped";
+
+/** What the board and the issue show of a delegation: its state, one line of what the agent is doing while it runs, and the pull requests its runs opened. */
+export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string }[] };
+
+const ACTIVE_RUN = ["offered", "accepted", "running", "unreachable"];
+const FAILED_RUN = ["failed", "lost", "rejected", "expired"];
+
+/**
+ * The state of a delegated issue from its targets and its runs since it was delegated (newest first). A run still going wins; otherwise
+ * each target's latest run counts: a question waits for an answer, any failure fails the delegation, else any stop stops it, else it is done.
+ */
+export function delegationState(hasTargets: boolean, runs: { repositoryId: string | null; state: string; asked?: boolean }[]): DelegationState {
+  if (!runs.length) return hasTargets ? "waiting" : "needs_setup";
+  if (runs.some((r) => ACTIVE_RUN.includes(r.state))) return "running";
+  const latest = [...new Map([...runs].reverse().map((r) => [r.repositoryId, r])).values()];
+  if (latest.some((r) => r.asked)) return "asked";
+  if (latest.some((r) => FAILED_RUN.includes(r.state))) return "failed";
+  return latest.some((r) => r.state === "canceled") ? "stopped" : "done";
+}
+
+/** WH-129: a repository (its id or "owner/name") and optionally the branch to start from (the repository's default when left out). */
+export type TargetInput = { repository: string; branch?: string };
+
+/**
+ * WH-125: the roster agent that fits an issue, or null when none clearly does. A label naming an agent (its slug, or a word of its name
+ * or role) counts 2; each anchor of a linked map node inside the agent's path scope counts 1. The best wins; a tie suggests nothing.
+ */
+export function suggestAgent(agents: { slug: string; name: string; role: string; pathScope: string[] }[], labels: string[], anchors: string[]): string | null {
+  const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const scored = agents.map((a) => {
+    const names = new Set([a.slug.toLowerCase(), ...words(a.name), ...words(a.role)]);
+    const byLabel = labels.filter((l) => names.has(l.toLowerCase())).length * 2;
+    const scope = a.pathScope.map((p) => p.replace(/[*/]+$/, ""));
+    const byPath = anchors.filter((x) => scope.some((p) => p && x.replace(/^\.?\//, "").startsWith(p.replace(/^\.?\//, "")))).length;
+    return { slug: a.slug, score: byLabel + byPath };
+  });
+  const best = Math.max(0, ...scored.map((s) => s.score));
+  const top = scored.filter((s) => s.score === best);
+  return best > 0 && top.length === 1 ? top[0].slug : null;
+}
+
+/** A list of `{ repository, branch? }` from a request, or a 400 naming the field. */
+export function targetInputs(v: unknown, field: string): TargetInput[] {
+  const ok = Array.isArray(v) && v.every((t) => t && typeof t.repository === "string" && t.repository.trim() && (t.branch === undefined || typeof t.branch === "string"));
+  if (!ok) bad(field, `${field} must be a list of { repository, branch? }`);
+  return (v as TargetInput[]).map((t) => ({ repository: t.repository.trim(), branch: t.branch }));
 }
 
 /**
@@ -137,6 +189,7 @@ export function issueInput(b: Record<string, unknown>, o: { create: boolean }): 
     if (b.delegate !== null && (typeof b.delegate !== "string" || !b.delegate.trim())) bad("delegate", "delegate must be an agent's slug, or null for none");
     out.delegate = b.delegate === null ? null : (b.delegate as string).trim();
   }
+  if (b.targets !== undefined) out.targets = targetInputs(b.targets, "targets");
   if (b.cycle !== undefined) {
     if (b.cycle !== null && (typeof b.cycle !== "number" || !Number.isSafeInteger(b.cycle))) bad("cycle", "cycle must be a cycle number, or null for none");
     out.cycle = b.cycle as number | null;
@@ -283,6 +336,8 @@ export type ProjectInput = {
   leadTeam?: unknown;
   /** `null` clears the health that was set by hand. */
   healthOverride?: unknown;
+  /** WH-135: the repositories its work happens in, each with an optional branch; replaces the list. */
+  repositories?: unknown;
   /** When creating: the keys of the other teams taking part. */
   teams?: unknown;
   /** The version last read, for an update. */

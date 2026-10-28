@@ -1,0 +1,2 @@
+ALTER TABLE "device_jobs" ADD COLUMN "mode" text DEFAULT 'work' NOT NULL;--> statement-breakpoint
+ALTER TABLE "device_jobs" ADD CONSTRAINT "device_jobs_mode_check" CHECK ("mode" in ('work', 'review'));

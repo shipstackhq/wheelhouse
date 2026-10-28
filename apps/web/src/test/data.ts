@@ -183,6 +183,7 @@ export const issue = (over: Partial<BoardIssue> = {}): BoardIssue => {
     projectId: null,
     parentId: null,
     delegateAgentId: null,
+    delegation: null,
     milestoneId: null,
     position: n * 1000,
     version: 1,
@@ -238,6 +239,10 @@ export const detail = (t: BoardIssue, over: Partial<IssueDetail> = {}): IssueDet
   pullRequests: [],
   parent: null,
   children: [],
+  targets: [],
+  targetsInherited: false,
+  proposedTargets: [],
+  suggestedAgent: null,
   ...over,
 });
 
@@ -494,6 +499,7 @@ export const projectSummary = (over: Partial<ProjectSummary> = {}): ProjectSumma
 export const projectDetail = (over: Partial<ProjectDetail> = {}): ProjectDetail => ({
   ...projectSummary(),
   canAdmin: true,
+  repositories: [],
   milestones: [],
   teams: [{ key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, issues: [] }],
   others: { count: 0, total: 0, done: 0 },

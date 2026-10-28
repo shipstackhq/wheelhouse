@@ -2,6 +2,7 @@ import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req
 import { statusField, intField, issueInput } from "./issues.rules";
 import { issueDetailView } from "./issues.presenter";
 import { ServiceError } from "../../common/service-error";
+import { IssueScoping } from "./issue-scoping";
 import { IssuesService } from "./issues.service";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
@@ -14,7 +15,10 @@ import { commentDto, type CommentDto } from "./dto/issues.dto";
 @Controller("api/app/issues")
 @AppEndpoints()
 export class IssuesController {
-  constructor(@Inject(IssuesService) private readonly issues: IssuesService) {}
+  constructor(
+    @Inject(IssuesService) private readonly issues: IssuesService,
+    @Inject(IssueScoping) private readonly scoping: IssueScoping,
+  ) {}
 
   /** The issue with its discussion, linked map nodes, history and pull requests. */
   @Get(":ref")
@@ -49,6 +53,20 @@ export class IssuesController {
     if (typeof body !== "string") throw new ServiceError("invalid", "Comment body is required", { fields: { body: "Comment body is required" } });
     const c = await this.issues.addComment(req.human.actor, ref, body);
     return { comment: { id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt } };
+  }
+
+  /** WH-136: which of the team's repositories the work probably belongs in, from a small model reading the issue and the map. Suggestions only; nothing is saved. */
+  @Post(":ref/targets/suggest")
+  @HttpCode(200)
+  suggestTargets(@Req() req: SessionRequest, @Param("ref") ref: string) {
+    return this.scoping.suggest(req.human.actor, ref);
+  }
+
+  /** A team admin deletes a comment (audited); nobody edits one. */
+  @Delete(":ref/comments/:id")
+  @HttpCode(200)
+  removeComment(@Req() req: SessionRequest, @Param("ref") ref: string, @Param("id") id: string) {
+    return this.issues.deleteComment(req.human.actor, ref, id);
   }
 
   /** Link the issue to a map node of its own team (an id or a name). */

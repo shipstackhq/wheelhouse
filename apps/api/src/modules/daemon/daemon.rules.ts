@@ -66,3 +66,14 @@ export function cleanCapabilities(v: unknown): Record<string, unknown> {
     power: { onBattery: power.onBattery === true },
   };
 }
+
+// ───────── learnings (WH-124) ─────────
+
+/** The most learnings an agent keeps for one team. */
+export const LEARNINGS_CAP = 20;
+export const NOTE_MAX = 300;
+
+/** What a run proposes at its end, cleaned: a few short one-line notes, never more than three a run. */
+export function proposedLearnings(v: unknown): string[] {
+  return [...new Set((Array.isArray(v) ? v : []).filter((x): x is string => typeof x === "string").map((x) => x.replace(/\s+/g, " ").trim().slice(0, NOTE_MAX)).filter(Boolean))].slice(0, 3);
+}

@@ -4,6 +4,7 @@ import type { CycleOption } from "./cycles/cycles.service";
 import type { IssueRelative, IssueWithLinks } from "./issues.service";
 import type { TeamProjectOption } from "./projects/projects.service";
 import type { IssueRow } from "./issues.repository";
+import type { Delegation } from "./issues.rules";
 
 /**
  * Rows as the web app's board and issue dialog (WH-96) read them: only what the screens use, never raw rows. Pure functions; the
@@ -33,6 +34,8 @@ export type IssueView = {
   parentId: string | null;
   /** The workspace agent the issue is delegated to (WH-113), or null. */
   delegateAgentId: string | null;
+  /** WH-132, WH-134: where the delegation stands, or null when the issue is not delegated. */
+  delegation: Delegation | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -40,7 +43,7 @@ export type IssueView = {
   updatedAt: Date;
 };
 
-export const issueView = (t: IssueRow & { ref: string; labels: string[]; cycle: number | null }): IssueView => ({
+export const issueView = (t: IssueRow & { ref: string; labels: string[]; cycle: number | null; delegation?: Delegation | null }): IssueView => ({
   id: t.id,
   ref: t.ref,
   number: t.number,
@@ -57,6 +60,7 @@ export const issueView = (t: IssueRow & { ref: string; labels: string[]; cycle: 
   milestoneId: t.milestoneId,
   parentId: t.parentId,
   delegateAgentId: t.delegateAgentId,
+  delegation: t.delegation ?? null,
   position: t.position,
   version: t.version,
   createdByKind: t.createdByKind,
@@ -113,10 +117,17 @@ export type IssueDetail = {
   /** The issue above this one, and the ones directly under it. */
   parent: IssueRelative | null;
   children: IssueRelative[];
+  /** WH-129: where the work happens, in order; the issue's own, or its nearest ancestor's when `targetsInherited`. */
+  targets: { repositoryId: string; repository: string; baseBranch: string }[];
+  targetsInherited: boolean;
+  /** WH-135: with no targets, where the work probably happens; a person confirms them. */
+  proposedTargets: IssueDetail["targets"];
+  /** WH-125: the slug of a roster agent that fits the issue (while it has no delegate), or null. */
+  suggestedAgent: string | null;
 };
 
 type IssuePage = {
-  issue: IssueRow & { ref: string; labels: string[]; cycle: number | null; status: string | undefined };
+  issue: IssueRow & { ref: string; labels: string[]; cycle: number | null; status: string | undefined; delegation: Delegation | null };
   team: { key: string; name: string };
   comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
   nodes: IssueDetail["nodes"];
@@ -124,6 +135,10 @@ type IssuePage = {
   pullRequests: PullRequests;
   parent: IssueRelative | null;
   children: IssueRelative[];
+  targets: IssueDetail["targets"];
+  inherited: boolean;
+  proposedTargets: IssueDetail["targets"];
+  suggestedAgent: string | null;
 };
 
 /** One issue for the dialog: its fields, discussion, linked map nodes, history and the pull requests GitHub reported against it. */
@@ -136,4 +151,8 @@ export const issueDetailView = (d: IssuePage): IssueDetail => ({
   pullRequests: d.pullRequests,
   parent: d.parent,
   children: d.children,
+  targets: d.targets,
+  targetsInherited: d.inherited,
+  proposedTargets: d.proposedTargets,
+  suggestedAgent: d.suggestedAgent,
 });

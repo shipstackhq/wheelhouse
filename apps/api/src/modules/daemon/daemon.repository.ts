@@ -5,7 +5,7 @@ import { schema } from "../../db";
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 
-const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages, workspaceAgents, users, teamMembers, memberships } = schema;
+const { devices, devicePairings, deviceTokens, deviceMessages, deviceJobs, deviceJobEvents, instanceKeys, apiKeys, apiKeyTeams, issues, teams, repositories, chatThreads, chatMessages, workspaceAgents, users, teamMembers, memberships, comments, runDefaults, pullRequests, pullRequestIssues, agentLearnings } = schema;
 
 export type DeviceRow = typeof devices.$inferSelect;
 export type PairingRow = typeof devicePairings.$inferSelect;
@@ -295,6 +295,61 @@ export class DaemonRepository {
   async activeRunOnBranch(branch: string, active: DeviceJobState[]) {
     const [busy] = await this.db.q.select({ id: deviceJobs.id }).from(deviceJobs).where(and(eq(deviceJobs.branch, branch), inArray(deviceJobs.state, active))).limit(1);
     return busy;
+  }
+
+  /** WH-124: an agent's learnings for a team, oldest first. */
+  learningsOf(teamId: string, agentId: string) {
+    return this.db.q.select().from(agentLearnings).where(and(eq(agentLearnings.teamId, teamId), eq(agentLearnings.agentId, agentId))).orderBy(asc(agentLearnings.createdAt));
+  }
+
+  /** Add notes up to `cap` in all, skipping ones already there; returns how many were added. */
+  async addLearnings(team: { id: string; workspaceId: string }, agentId: string, notes: string[], cap: number) {
+    const have = await this.learningsOf(team.id, agentId);
+    const fresh = [...new Set(notes)].filter((n) => !have.some((h) => h.note === n)).slice(0, Math.max(0, cap - have.length));
+    if (fresh.length) await this.db.q.insert(agentLearnings).values(fresh.map((note) => ({ teamId: team.id, workspaceId: team.workspaceId, agentId, note })));
+    return fresh.length;
+  }
+
+  async updateLearning(id: string, teamId: string, agentId: string, note: string) {
+    const [r] = await this.db.q.update(agentLearnings).set({ note }).where(and(eq(agentLearnings.id, id), eq(agentLearnings.teamId, teamId), eq(agentLearnings.agentId, agentId))).returning();
+    return r;
+  }
+
+  async deleteLearning(id: string, teamId: string, agentId: string) {
+    const [r] = await this.db.q.delete(agentLearnings).where(and(eq(agentLearnings.id, id), eq(agentLearnings.teamId, teamId), eq(agentLearnings.agentId, agentId))).returning();
+    return r;
+  }
+
+  /** WH-122: the newest open pull request linked to the issue, the one a reviewer looks at. */
+  async openPullRequestOf(issueId: string) {
+    const [pr] = await this.db.q
+      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha })
+      .from(pullRequestIssues)
+      .innerJoin(pullRequests, eq(pullRequests.id, pullRequestIssues.pullRequestId))
+      .where(and(eq(pullRequestIssues.issueId, issueId), eq(pullRequests.state, "open")))
+      .orderBy(desc(pullRequests.number))
+      .limit(1);
+    return pr;
+  }
+
+  /** WH-123: a person's own defaults for runs started in their name. */
+  async runDefaults(userId: string) {
+    const [r] = await this.db.q.select().from(runDefaults).where(eq(runDefaults.userId, userId));
+    return r;
+  }
+
+  async saveRunDefaults(userId: string, v: { deviceId: string | null; model: string | null; effort: "low" | "medium" | "high" | null }) {
+    await this.db.q.insert(runDefaults).values({ userId, ...v }).onConflictDoUpdate({ target: runDefaults.userId, set: v });
+  }
+
+  /** An agent's comment on an issue (a run's summary or question, WH-118, WH-119). */
+  async insertComment(values: typeof comments.$inferInsert) {
+    await this.db.q.insert(comments).values(values);
+  }
+
+  async userName(userId: string) {
+    const [u] = await this.db.q.select({ name: users.name }).from(users).where(eq(users.id, userId));
+    return u?.name;
   }
 
   /** What a run said at the end (its last `result` event). */

@@ -5,4 +5,5 @@ export { CyclesService } from "./cycles/cycles.service";
 export { ProjectsService } from "./projects/projects.service";
 export { InitiativesService } from "./initiatives/initiatives.service";
 export { boardView } from "./issues.presenter";
-export { ISSUE_DELEGATED, type IssueDelegated } from "./issues.events";
+export { ISSUE_COMMENTED, ISSUE_DELEGATED, type IssueCommented, type IssueDelegated } from "./issues.events";
+export { IssueTargets } from "./issue-targets";

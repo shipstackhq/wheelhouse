@@ -111,6 +111,20 @@ describe("the inbox page", () => {
     await waitFor(async () => expect((await row("Item 1")).dataset.unread).toBeUndefined());
   });
 
+  test("an agent's question is answered from the inbox: the reply is a comment on the issue and the item is archived", async () => {
+    const { server } = renderApp("/inbox?n=n1", (s) => {
+      inbox(s, [item(1, { type: "run.question", title: "Remy has a question on AA-1", body: "which database?" })]);
+      s.on("POST /api/app/issues/AA-1/comments", { comment: { id: "c1", authorKind: "human", authorName: "Ada", body: "Postgres", createdAt: EARLIER } });
+    });
+    const reader = await screen.findByRole("article");
+    const user = userEvent.setup();
+    await user.type(within(reader).getByRole("textbox", { name: "Your answer" }), "Postgres");
+    await user.click(within(reader).getByRole("button", { name: "Reply" }));
+    await waitFor(() => expect(server.sent("POST /api/app/issues/AA-1/comments")).toHaveLength(1));
+    expect(server.sent("POST /api/app/issues/AA-1/comments")[0].body).toEqual({ body: "Postgres" });
+    await waitFor(() => expect(server.sent("POST /api/app/notifications/n1/archive")).toHaveLength(1));
+  });
+
   test("a selection in the URL opens on load; an id that is not in the list shows the empty state", async () => {
     renderApp("/inbox?n=n2", (s) => inbox(s, [item(1), item(2)]));
     expect(await screen.findByRole("heading", { name: "Item 2" })).toBeTruthy();

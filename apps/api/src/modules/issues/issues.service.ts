@@ -10,17 +10,19 @@ import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
 import { DeliveriesService } from "../github/index";
+import { effectiveProfile } from "../agents/index";
 import { GraphService, SessionsService } from "../map/index";
 import { TeamAccessService } from "../teams/index";
 import { CyclesService, systemActor } from "./cycles/cycles.service";
-import { ISSUE_DELEGATED, type IssueDelegated } from "./issues.events";
+import { ISSUE_COMMENTED, ISSUE_DELEGATED, type IssueCommented, type IssueDelegated } from "./issues.events";
+import { IssueTargets } from "./issue-targets";
 import { IssueNotifications } from "./issues.notifications";
 import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
-import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, fitsDepth, parseIssueRef, positionAmong, sameLabels, type IssueInput } from "./issues.rules";
+import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, delegationState, fitsDepth, suggestAgent, parseIssueRef, positionAmong, sameLabels, type Delegation, type IssueInput } from "./issues.rules";
 import { issueView } from "./issues.presenter";
 import { ProjectsService } from "./projects/projects.service";
 
-export type IssueWithLinks = IssueRow & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number };
+export type IssueWithLinks = IssueRow & { ref: string; labels: string[]; cycle: number | null; nodeIds: string[]; commentCount: number; delegation: Delegation | null };
 export type IssueRelative = { ref: string; title: string; priority: IssueRow["priority"]; status: string; done: boolean; canceled: boolean; assigneeId: string | null };
 
 /**
@@ -50,6 +52,7 @@ export class IssuesService {
     @Inject(GraphService) private readonly graph: GraphService,
     @Inject(SessionsService) private readonly sessions: SessionsService,
     @Inject(IssueNotifications) private readonly notices: IssueNotifications,
+    @Inject(IssueTargets) private readonly targets: IssueTargets,
     @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
   ) {}
 
@@ -88,6 +91,7 @@ export class IssuesService {
     const cycleOf = new Map((await this.cycles.withCycle(ts)).map((t) => [t.id, t.cycle]));
     const counts = ids.length ? await this.repo.commentCounts(ids) : [];
     const countMap = new Map(counts.map((c) => [c.issueId, Number(c.n)]));
+    const delegations = await this.delegationsOf(ts);
     const withLinks: IssueWithLinks[] = ts.map((t) => ({
       ...t,
       ref: `${team.key}-${t.number}`,
@@ -95,8 +99,26 @@ export class IssuesService {
       cycle: cycleOf.get(t.id) ?? null,
       nodeIds: links.filter((l) => l.issueId === t.id).map((l) => l.nodeId),
       commentCount: countMap.get(t.id) ?? 0,
+      delegation: delegations.get(t.id) ?? null,
     }));
     return { team, statuses: cols, issues: withLinks };
+  }
+
+  /** WH-132, WH-134: where each delegated issue among `rows` stands: its state, what the running agent last did, and the pull requests of its runs. */
+  private async delegationsOf(rows: { id: string; delegateAgentId: string | null }[]): Promise<Map<string, Delegation>> {
+    const delegated = rows.filter((r) => r.delegateAgentId);
+    const out = new Map<string, Delegation>();
+    if (!delegated.length) return out;
+    const runs = await this.repo.delegationRuns(delegated.map((r) => r.id));
+    const lines = await this.repo.lastLines(runs.filter((x) => ["offered", "accepted", "running"].includes(x.state)).map((x) => x.id));
+    for (const r of delegated) {
+      const mine = runs.filter((x) => x.issueId === r.id);
+      const state = delegationState((await this.targets.of(r.id)).targets.length > 0, mine.map((x) => ({ ...x, asked: !!x.result?.question })));
+      const active = mine.find((x) => lines.has(x.id));
+      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [x.result.pullRequest as { number: number; url: string }] : []));
+      out.set(r.id, { state, line: state === "running" && active ? lines.get(active.id)! : null, prs: [...new Map(prs.map((p) => [p.number, p])).values()] });
+    }
+    return out;
   }
 
   /** The team page's parts: the board, the map nodes an issue can link to, the team's members (the people an issue can be assigned to), and its cycles and projects. */
@@ -153,7 +175,24 @@ export class IssuesService {
     const pullRequests = await this.deliveries.pullRequestsForIssue(issue.id);
     const [withLabel] = await this.decorate([issue]);
     const { parent, children } = await this.relatives(team, issue);
-    return { issue: { ...withLabel, ref: r, status: col?.name }, team, comments, nodes, history, pullRequests, parent, children };
+    const delegation = (await this.delegationsOf([issue])).get(issue.id) ?? null;
+    const suggestedAgent = issue.delegateAgentId ? null : await this.suggestedAgent(issue, withLabel.labels);
+    return { issue: { ...withLabel, ref: r, status: col?.name, delegation }, suggestedAgent, team, comments, nodes, history, pullRequests, parent, children, ...(await this.targetsWithProposals(issue)) };
+  }
+
+  /** WH-125: the roster agent that fits the issue's labels and linked map nodes (a suggestion; a person still picks). */
+  private async suggestedAgent(issue: IssueRow, labels: string[]) {
+    const roster = (await this.repo.rosterAgents(issue.teamId)).map((a) => {
+      const p = effectiveProfile(a);
+      return { slug: a.slug, name: p.name, role: p.role, pathScope: p.pathScope };
+    });
+    return roster.length ? suggestAgent(roster, labels, await this.repo.linkedAnchors(issue.id)) : null;
+  }
+
+  /** The issue's targets, and when it has none, where the work probably happens (WH-135) for the person to confirm. */
+  private async targetsWithProposals(issue: IssueRow) {
+    const settled = await this.targets.of(issue.id);
+    return { ...settled, proposedTargets: settled.targets.length ? [] : await this.targets.proposals(issue) };
   }
 
   /** An issue's parent and its direct sub-issues (in number order), each with the name and kind of its status, so progress can be shown. */
@@ -226,7 +265,7 @@ export class IssuesService {
    * WH-113: who may delegate and to whom. A person only (an agent never hands work to an agent), and only the issue's assignee or an admin
    * of the team or workspace. The agent must be on the team's roster. Returns the workspace agent id, or null to clear.
    */
-  private async resolveDelegate(actor: Actor, team: { id: string }, issue: { assigneeId: string | null }, slug: string | null): Promise<string | null> {
+  private async resolveDelegate(actor: Actor, team: { id: string }, issue: { id: string; assigneeId: string | null }, slug: string | null): Promise<string | null> {
     if (actor.kind !== "human" || actor.system) throw new ServiceError("forbidden", "Only a person can delegate an issue to an agent");
     if (actor.id !== issue.assigneeId) {
       const [teamRole, workspaceRole] = await Promise.all([this.access.roleOn(actor, team.id), this.access.workspaceRoleOf(actor.workspaceId, actor.id)]);
@@ -235,9 +274,21 @@ export class IssuesService {
       }
     }
     if (slug === null) return null;
+    // A parent's run owns its sub-issues (WH-137): one at a time would work on the same thing twice.
+    if (await this.repo.parentRunActive(issue.id)) throw new ServiceError("conflict", "Its parent's run is active and owns this issue", { fields: { delegate: "Its parent's run is active and owns this issue" } });
     const id = await this.repo.rosterAgentId(team.id, slug);
     if (!id) throw new ServiceError("invalid", `${slug} is not on this team's roster`, { fields: { delegate: `${slug} is not on this team's roster` } });
     return id;
+  }
+
+  /** WH-137: the open sub-issues of an issue, in order, as the brief of a run that takes the whole set. */
+  async openSubIssues(team: { key: string }, issueId: string) {
+    return (await this.repo.openSubIssues(issueId)).map((r) => ({ ref: `${team.key}-${r.number}`, title: r.title, body: r.body }));
+  }
+
+  /** The workspace agent with this slug on the team's roster, or undefined. */
+  rosterAgentId(teamId: string, slug: string) {
+    return this.repo.rosterAgentId(teamId, slug);
   }
 
   /**
@@ -271,6 +322,7 @@ export class IssuesService {
           ? { projectId: null, milestoneId: null }
           : await this.projects.resolveIssueProject(team, { projectId: null, milestoneId: null }, { project: input.projectId, milestone: input.milestoneId });
       const parentId = input.parent == null ? null : await this.resolveParent(team, null, input.parent);
+      const targets = input.targets?.length ? await this.targets.resolve({ teamId: team.id, projectId: inProject.projectId }, input.targets) : [];
       const col = await this.resolveStatus(team.id, input.status ?? DEFAULT_STATUSES[0]);
       const number = await this.repo.nextNumber(team.id);
       const position = await this.positionAt(col.id, undefined);
@@ -293,6 +345,7 @@ export class IssuesService {
         createdById: actor.id,
       });
       await this.repo.setLabels(team, t.id, cleanLabels(input.labels ?? []));
+      await this.targets.set(t.id, targets);
       const ref = `${team.key}-${t.number}`;
       await this.projects.emitIssueMove(actor, team.id, ref, null, t.projectId);
       await this.events.emit(actor, team.id, {
@@ -342,7 +395,7 @@ export class IssuesService {
         else clean.labels = want;
       }
       await this.assertAssignee(team.id, clean.assigneeId);
-      const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, delegate: wantDelegate, ...cleanRest } = clean;
+      const { projectId: wantProject, milestoneId: wantMilestone, parent: wantParent, delegate: wantDelegate, targets: wantTargets, ...cleanRest } = clean;
       const parentChange = wantParent === undefined ? {} : { parentId: await this.resolveParent(team, issue.id, wantParent) };
       const delegateId = wantDelegate === undefined ? undefined : await this.resolveDelegate(actor, team, issue, wantDelegate);
       const delegateChange = delegateId === undefined ? {} : { delegateAgentId: delegateId };
@@ -351,11 +404,17 @@ export class IssuesService {
           ? undefined
           : await this.projects.resolveIssueProject(team, { projectId: issue.projectId, milestoneId: issue.milestoneId }, { project: wantProject, milestone: wantMilestone });
       const changes = diff(issue as unknown as Record<string, unknown>, { ...cleanRest, ...(projectChoice ?? {}), ...parentChange, ...delegateChange } as Record<string, unknown>);
+      const newTargets = wantTargets === undefined ? undefined : await this.targets.resolve({ teamId: team.id, projectId: projectChoice ? projectChoice.projectId : issue.projectId }, wantTargets);
+      if (newTargets) {
+        const was = await this.targets.own(issue.id);
+        if (JSON.stringify(was) !== JSON.stringify(newTargets)) changes.targets = { from: was, to: newTargets };
+      }
       if (!Object.keys(changes).length) return { out: { ...issue, ref: r }, assigned: null, delegated: null, delegation: null };
       const { labels: newLabels, cycle: newCycle, ...columnsPatch } = cleanRest;
       const cycleChange = newCycle === undefined ? {} : { cycleId: newCycle === null ? null : (await this.cycles.cycleForIssue(team.id, newCycle)).id };
       const row = await this.repo.updateIssue(issue.id, { ...columnsPatch, ...cycleChange, ...(projectChoice ?? {}), ...parentChange, ...delegateChange, ...("delegateAgentId" in changes ? { delegatedBy: delegateId ? actor.id : null, delegatedAt: delegateId ? new Date() : null } : {}), version: issue.version + 1, updatedAt: new Date() });
       if (newLabels) await this.repo.setLabels(team, row.id, newLabels);
+      if (newTargets && "targets" in changes) await this.targets.set(row.id, newTargets);
       const t = { ...row, labels: newLabels ?? issue.labels, cycle: newCycle === undefined ? issue.cycle : newCycle };
       await this.projects.emitIssueMove(actor, team.id, r, issue.projectId, row.projectId);
       await this.events.emit(actor, team.id, {
@@ -458,8 +517,30 @@ export class IssuesService {
       return { c, issue, team, r };
     });
     await this.notices.commented(actor, team, issue, r, c);
+    await this.emitter.emitAsync(ISSUE_COMMENTED, { actor, issueId: issue.id, ref: r, body: c.body } satisfies IssueCommented);
     await this.bindSession(actor, issue);
     return c;
+  }
+
+  /**
+   * WH-119: no one edits a comment (an agent's stays as it wrote it; people reply under it), but a team admin can delete one, for
+   * example a run's summary that leaked a secret. The event records who and whose, never the text.
+   */
+  async deleteComment(actor: Actor, ref: string, commentId: string) {
+    if (!isUuid(commentId)) throw new ServiceError("not_found", "Comment not found");
+    return this.db.transaction(async () => {
+      const { issue, team, ref: r } = await this.resolveIssue(actor, ref, "admin");
+      const c = await this.repo.deleteComment(issue.id, commentId);
+      if (!c) throw new ServiceError("not_found", "Comment not found");
+      await this.events.emit(actor, team.id, {
+        type: "comment.deleted",
+        entity: "issue",
+        entityId: issue.id,
+        summary: `deleted a comment by ${c.authorName} on ${r}`,
+        data: { ref: r, commentId: c.id, authorKind: c.authorKind, authorName: c.authorName },
+      });
+      return { ok: true };
+    });
   }
 
   /** Link an issue to a map node, or unlink it. This module owns issue_nodes: the table is written only from an issue. */

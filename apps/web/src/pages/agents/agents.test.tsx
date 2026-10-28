@@ -194,6 +194,20 @@ describe("a team's agents", () => {
     await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/agents/backend")).toHaveLength(1));
   });
 
+  test("Learnings lists what the team has taught an agent, and Delete removes one", async () => {
+    const { server } = renderApp("/t/AA/agents", (s) => {
+      roster()(s);
+      s.on("GET /api/app/teams/AA/agents/backend/learnings", { learnings: [{ id: "l1", note: "This team keeps tests next to source", createdAt: "2026-10-20T00:00:00.000Z" }], cap: 20 });
+      s.on("DELETE /api/app/teams/AA/agents/backend/learnings/l1", { ok: true });
+    });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Learnings of Bram" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("This team keeps tests next to source")).toBeTruthy();
+    await user.click(within(dialog).getByRole("button", { name: /^Delete:/ }));
+    await waitFor(() => expect(server.sent("DELETE /api/app/teams/AA/agents/backend/learnings/l1")).toHaveLength(1));
+  });
+
   test("an editor only reads: no Add, no Remove", async () => {
     renderApp("/t/AA/agents", (s) => (roster()(s), as(s, "member", "editor")));
     await screen.findByRole("heading", { name: "Bram" });

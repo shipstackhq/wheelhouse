@@ -16,6 +16,7 @@ import { describeFailure } from "../../lib/form-state";
 import { parseLabels } from "../../lib/labels";
 import { boardQuery, issueQuery, teamAgentsQuery } from "../../lib/queries";
 import { parentCandidates } from "../../lib/sub-issues";
+import { DelegatePlan, IssueTargetsSection } from "./issue-targets";
 import { PriorityIcon } from "../../components/priority-icon";
 import { SubIssueProgress } from "../../components/sub-issue-progress";
 import { useServices } from "../../lib/services";
@@ -307,7 +308,17 @@ export function IssueDialog(props: {
                   onAdd={(title) => mutate(() => api.issues.create(props.teamKey, { title, parent: t.ref }))}
                 />
 
-                <IssueRunsSection issueRef={t.ref} delegated={!!t.delegateAgentId} />
+                <IssueTargetsSection
+                  issueRef={t.ref}
+                  targets={data?.targets ?? []}
+                  proposed={data?.proposedTargets ?? []}
+                  inherited={data?.targetsInherited ?? false}
+                  delegation={t.delegation?.state ?? null}
+                  busy={busy}
+                  onChange={(targets) => void mutate(() => api.issues.update(t.ref, { targets, version: t.version }))}
+                />
+
+                <IssueRunsSection issueRef={t.ref} teamKey={props.teamKey} targets={data?.targets ?? []} delegated={!!t.delegateAgentId} />
 
                 <section>
                   <span className="label">
@@ -360,7 +371,12 @@ export function IssueDialog(props: {
                       options={roster.length ? [{ value: "", label: "Nobody" }, ...roster.map((a) => ({ value: a.slug, label: `${a.name} · ${a.role}` }))] : [{ value: "", label: "No agents on this team" }]}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { delegate: v || null, version: t.version }))}
                     />
-                    {t.delegateAgentId && <p className="mt-1 text-xs text-muted">Runs on your device</p>}
+                    {!t.delegateAgentId && data?.suggestedAgent && roster.some((a) => a.slug === data.suggestedAgent) && (
+                      <button type="button" className="mt-1 text-xs text-accent hover:underline" disabled={busy} onClick={() => void mutate(() => api.issues.update(t.ref, { delegate: data.suggestedAgent, version: t.version }))}>
+                        Suggested: {roster.find((a) => a.slug === data.suggestedAgent)!.name}
+                      </button>
+                    )}
+                    {t.delegateAgentId && <DelegatePlan issueRef={t.ref} agent={roster.find((a) => a.id === t.delegateAgentId)?.slug ?? ""} />}
                   </Field>
                   <Field label="Parent">
                     <ParentField

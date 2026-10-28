@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { statusField, intField, issueInput } from "./issues.rules";
+import { statusField, intField, issueInput, delegationState, suggestAgent } from "./issues.rules";
 import { ServiceError } from "../../common/service-error";
 
 /** Reading a request body for the board and issue endpoints: nothing wrong-typed gets past here to the database. */
@@ -71,5 +71,40 @@ describe("intField and statusField", () => {
     assert.equal(statusField({}, false), undefined);
     assert.deepEqual(fieldsOf(() => statusField({}, true)), ["status"]);
     for (const status of [3, "", "  ", {}, []]) assert.deepEqual(fieldsOf(() => statusField({ status }, true)), ["status"], JSON.stringify(status));
+  });
+});
+
+describe("delegationState (WH-132)", () => {
+  const run = (state: string, repositoryId: string | null = "a") => ({ repositoryId, state });
+  test("no runs: needs setup without targets, waiting with them", () => {
+    assert.equal(delegationState(false, []), "needs_setup");
+    assert.equal(delegationState(true, []), "waiting");
+  });
+  test("a run still going wins; then a failure, a stop, and done", () => {
+    assert.equal(delegationState(true, [run("running"), run("failed", "b")]), "running");
+    assert.equal(delegationState(true, [run("failed"), run("succeeded", "b")]), "failed");
+    assert.equal(delegationState(true, [run("canceled"), run("succeeded", "b")]), "stopped");
+    assert.equal(delegationState(true, [run("succeeded"), run("succeeded", "b")]), "done");
+  });
+  test("only a target's latest run counts: a rerun that worked clears the failure", () => {
+    assert.equal(delegationState(true, [run("succeeded"), run("failed")]), "done");
+  });
+});
+
+describe("suggestAgent (WH-125)", () => {
+  const agents = [
+    { slug: "fe", name: "Frontend", role: "UI engineer", pathScope: ["apps/web/"] },
+    { slug: "be", name: "Backend", role: "API engineer", pathScope: ["apps/api/"] },
+  ];
+  test("a label naming the agent wins, then the paths of its linked map nodes", () => {
+    assert.equal(suggestAgent(agents, ["backend"], []), "be");
+    assert.equal(suggestAgent(agents, ["UI"], []), "fe");
+    assert.equal(suggestAgent(agents, [], ["apps/api/src/**", "apps/api/drizzle/**"]), "be");
+    assert.equal(suggestAgent(agents, ["backend"], ["apps/web/src/**", "apps/web/public/**", "apps/web/index.html"]), "fe");
+  });
+  test("no match, or a tie, suggests nothing", () => {
+    assert.equal(suggestAgent(agents, ["docs"], ["README.md"]), null);
+    assert.equal(suggestAgent(agents, ["backend", "frontend"], []), null);
+    assert.equal(suggestAgent([], ["backend"], []), null);
   });
 });
