@@ -26,6 +26,18 @@ export const MAX_WEBHOOK_BODY = 5 * 1024 * 1024; // GitHub's own limit is 25 MB;
 export type WebhookReply = { status: number; text?: string; json?: unknown };
 
 export type Delivery = { event: string; deliveryId: string; payload: Record<string, any> }; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Target = Awaited<ReturnType<GithubRepository["targetsFor"]>>[number];
+/** The parts of a webhook's `pull_request` that we use; the sync builds the same shape from the REST list. */
+export type PullRequestPayload = {
+  number: number;
+  title?: string;
+  html_url?: string;
+  user?: { login?: string } | null;
+  head?: { sha?: string; ref?: string };
+  draft?: boolean;
+  merged?: boolean;
+  state?: string;
+};
 export type Outcome = { status: "handled" | "ignored" | "duplicate"; detail?: string; matched?: number };
 
 /**
@@ -165,64 +177,70 @@ export class DeliveriesService {
     const targets = await this.targetsFor(installationId, repoId);
     if (!targets.length) return { status: "ignored", detail: "not a connected repository" };
 
-    const action: string = payload.action;
+    for (const t of targets) await this.applyPullRequest(t, pr, String(payload.action), true);
+    return { status: "handled", matched: targets.length };
+  }
+
+  /**
+   * The one write path for a pull request, shared by the webhook and the sync (WH-142): upsert the row, relink its issues, raise the
+   * same events and move requests. `touch` stamps the repository's `lastEventAt` ("last webhook"); the sync passes false so a sync
+   * never looks like a webhook arriving. `pr` has the shape of a webhook's `pull_request`.
+   */
+  async applyPullRequest(t: Target, pr: PullRequestPayload, action: string, touch: boolean): Promise<void> {
     const merged = !!pr.merged;
     const state = merged ? "merged" : pr.state === "closed" ? "closed" : "open";
     const headSha = String(pr.head?.sha ?? "");
     const headBranch = String(pr.head?.ref ?? "");
 
-    for (const t of targets) {
-      const existing = await this.repo.pullRequest(t.repo.id, pr.number);
-      const newCommit = !!existing && existing.headSha !== headSha;
-      const row = await this.repo.upsertPullRequest(
-        { repositoryId: t.repo.id, number: pr.number, title: String(pr.title ?? ""), url: String(pr.html_url ?? ""), author: String(pr.user?.login ?? ""), headBranch, headSha, state, draft: !!pr.draft },
-        {
-          title: String(pr.title ?? ""),
-          url: String(pr.html_url ?? ""),
-          headBranch,
-          headSha,
-          state,
-          draft: !!pr.draft,
-          // A new commit starts a new round of checks.
-          ...(newCommit ? { checks: {}, ciState: null } : {}),
-          updatedAt: new Date(),
-        },
-      );
+    const existing = await this.repo.pullRequest(t.repo.id, pr.number);
+    const newCommit = !!existing && existing.headSha !== headSha;
+    const row = await this.repo.upsertPullRequest(
+      { repositoryId: t.repo.id, number: pr.number, title: String(pr.title ?? ""), url: String(pr.html_url ?? ""), author: String(pr.user?.login ?? ""), headBranch, headSha, state, draft: !!pr.draft },
+      {
+        title: String(pr.title ?? ""),
+        url: String(pr.html_url ?? ""),
+        headBranch,
+        headSha,
+        state,
+        draft: !!pr.draft,
+        // A new commit starts a new round of checks.
+        ...(newCommit ? { checks: {}, ciState: null } : {}),
+        updatedAt: new Date(),
+      },
+    );
 
-      const refs = parseIssueRefs(pr.title, headBranch);
-      const linked = await this.issuesByRefs(t.team.id, t.team.key, refs);
-      await this.repo.replaceLinks(row.id, linked.map((x) => x.id));
-      await this.repo.touchRepository(t.repo.id);
+    const refs = parseIssueRefs(pr.title, headBranch);
+    const linked = await this.issuesByRefs(t.team.id, t.team.key, refs);
+    await this.repo.replaceLinks(row.id, linked.map((x) => x.id));
+    if (touch) await this.repo.touchRepository(t.repo.id);
 
-      const actor = githubActor(t.team.workspaceId, t.team.id);
-      const boardStatuses = await this.repo.boardStatuses(t.team.id);
-      for (const tk of linked) {
-        if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
-          await this.events.emit(actor, t.team.id, {
-            type: "issue.pull_request",
-            entity: "issue",
-            entityId: tk.id,
-            summary: `pull request #${pr.number} ${merged ? "merged" : action === "closed" ? "closed" : action === "ready_for_review" ? "is ready for review" : action} for ${tk.ref}: ${pr.title}`,
-            data: { ref: tk.ref, number: pr.number, url: pr.html_url, state },
-          });
-        }
-        const last = await this.repo.lastMove(tk.id);
-        const current = boardStatuses.find((c) => c.id === tk.statusId);
-        if (!current) continue;
-        const decision = decideMove({
-          action,
-          merged,
-          draft: !!pr.draft,
-          status: current,
-          statuses: boardStatuses,
-          lastMove: last && last.actorId !== GITHUB_ACTOR_ID ? { at: last.at, by: last.by } : null,
-          now: new Date(),
+    const actor = githubActor(t.team.workspaceId, t.team.id);
+    const boardStatuses = await this.repo.boardStatuses(t.team.id);
+    for (const tk of linked) {
+      if (["opened", "reopened", "closed", "ready_for_review"].includes(action)) {
+        await this.events.emit(actor, t.team.id, {
+          type: "issue.pull_request",
+          entity: "issue",
+          entityId: tk.id,
+          summary: `pull request #${pr.number} ${merged ? "merged" : action === "closed" ? "closed" : action === "ready_for_review" ? "is ready for review" : action} for ${tk.ref}: ${pr.title}`,
+          data: { ref: tk.ref, number: pr.number, url: pr.html_url, state },
         });
-        if (decision.move) await this.emitter.emitAsync(ISSUE_MOVE_REQUESTED, { actor, ref: tk.ref, status: decision.move } satisfies IssueMoveRequested); // the issues module moves it
-        if (decision.note) await this.emitter.emitAsync(ISSUE_COMMENT_REQUESTED, { actor, ref: tk.ref, body: `Pull request [#${pr.number}](${pr.html_url}) ${decision.note}` } satisfies IssueCommentRequested);
       }
+      const last = await this.repo.lastMove(tk.id);
+      const current = boardStatuses.find((c) => c.id === tk.statusId);
+      if (!current) continue;
+      const decision = decideMove({
+        action,
+        merged,
+        draft: !!pr.draft,
+        status: current,
+        statuses: boardStatuses,
+        lastMove: last && last.actorId !== GITHUB_ACTOR_ID ? { at: last.at, by: last.by } : null,
+        now: new Date(),
+      });
+      if (decision.move) await this.emitter.emitAsync(ISSUE_MOVE_REQUESTED, { actor, ref: tk.ref, status: decision.move } satisfies IssueMoveRequested); // the issues module moves it
+      if (decision.note) await this.emitter.emitAsync(ISSUE_COMMENT_REQUESTED, { actor, ref: tk.ref, body: `Pull request [#${pr.number}](${pr.html_url}) ${decision.note}` } satisfies IssueCommentRequested);
     }
-    return { status: "handled", matched: targets.length };
   }
 
   private async onCheckRun(payload: Delivery["payload"], installationId: string | null): Promise<Outcome> {

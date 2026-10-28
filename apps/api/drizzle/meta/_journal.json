@@ -449,6 +449,13 @@
       "when": 1793234521174,
       "tag": "0063_comment_author_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1793320921174,
+      "tag": "0064_repository_pr_synced_at",
+      "breakpoints": true
     }
   ]
 }

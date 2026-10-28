@@ -502,6 +502,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** This workspace stops using a GitHub installation (owners only). */
       disconnectGithub: (teamKey: string, installationId: string) =>
         request<unknown>("DELETE", `${team(teamKey)}/repositories/github/${encodeURIComponent(installationId)}`),
+      /** Read every connected repository's open and recently closed pull requests from GitHub ("check again now"). */
+      syncPullRequests: (teamKey: string) =>
+        request<{ results: { repositoryId: string; ok: boolean; pullRequests: number; error?: string }[]; repositories: Repository[] }>("POST", `${team(teamKey)}/repositories/github/sync`, {}),
     },
 
     onboarding: {

@@ -11,7 +11,10 @@ export type RepositoryView = {
   defaultBranch: string;
   pathLimit: string | null;
   lifecycle: (typeof schema.REPO_LIFECYCLES)[number];
+  /** Last webhook (push or pull request) for this repository. */
   lastEventAt: Date | null;
+  /** When the last successful pull request sync of this repository finished. */
+  lastPrSyncedAt: Date | null;
   /** True when its file tree can be browsed (a GitHub repository with its installation), for the doc anchor picker. */
   browsable: boolean;
 };
@@ -28,5 +31,6 @@ export const repositoryView = (r: RepositoryRow): RepositoryView => ({
   pathLimit: r.pathLimit,
   lifecycle: r.lifecycle,
   lastEventAt: r.lastEventAt,
+  lastPrSyncedAt: r.lastPrSyncedAt,
   browsable: r.provider === "github" && !!r.githubInstallationId && !!r.githubRepoId,
 });

@@ -40,7 +40,7 @@ function TeamRepos({ teamKey }: { teamKey: string }) {
   const query = useRepos(teamKey);
   return (
     <Loaded query={query} label="Loading repositories">
-      {(repos) => <Repos teamKey={teamKey} repos={repos} after={<GithubConnect teamKey={teamKey} />} />}
+      {(repos) => <Repos teamKey={teamKey} repos={repos} after={<GithubConnect teamKey={teamKey} repos={repos} />} />}
     </Loaded>
   );
 }

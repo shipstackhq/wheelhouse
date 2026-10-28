@@ -1,6 +1,6 @@
 import { useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
-import type { GithubStatus } from "@wheelhouse/api-client";
+import type { GithubStatus, Repository } from "@wheelhouse/api-client";
 import { SubmitButton } from "../../../components/submit-button";
 import { describeFailure } from "../../../lib/form-state";
 import { githubQuery } from "../../../lib/queries";
@@ -34,7 +34,7 @@ export function githubNote(params: URLSearchParams): { text: string; bad: boolea
  * "Connect GitHub" for a team: installing the App (owners), then choosing which of the installation's repositories this team
  * uses. The list comes from GitHub through the server; everything that matters is checked again there when you press Connect.
  */
-export function GithubConnect({ teamKey }: { teamKey: string }) {
+export function GithubConnect({ teamKey, repos }: { teamKey: string; repos?: Repository[] }) {
   const { api } = useServices();
   const slug = useWorkspaceSlug();
   const query = useQuery(githubQuery(api, teamKey));
@@ -87,6 +87,7 @@ export function GithubConnect({ teamKey }: { teamKey: string }) {
         </p>
       </div>
       {note && <p role="status" className={note.bad ? "text-sm text-danger" : "text-sm text-ok"}>{note.text}</p>}
+      {repos?.some((r) => r.provider === "github" && r.lifecycle !== "retired") && <PullRequestSync teamKey={teamKey} repos={repos} />}
       {!status.isOwner ? (
         <p className="text-sm text-muted">A workspace owner connects GitHub for this team.</p>
       ) : (
@@ -101,6 +102,39 @@ export function GithubConnect({ teamKey }: { teamKey: string }) {
         </>
       )}
     </section>
+  );
+}
+
+const latest = (dates: (string | null)[]) => dates.filter((d): d is string => !!d).sort().at(-1) ?? null;
+const when = (d: string | null) => (d ? new Date(d).toLocaleString() : "never");
+
+/**
+ * WH-142: "Sync pull requests" reads the connected repositories' pull requests from GitHub, for when webhooks do not arrive. "Last webhook"
+ * next to "last synced" tells you webhooks have stopped.
+ */
+function PullRequestSync({ teamKey, repos }: { teamKey: string; repos: Repository[] }) {
+  const { api, queryClient } = useServices();
+  const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
+  const github = repos.filter((r) => r.provider === "github" && r.lifecycle !== "retired");
+  const run = async () => {
+    try {
+      const { results } = await api.repos.syncPullRequests(teamKey);
+      const failed = results.filter((r) => !r.ok);
+      setMessage(failed.length ? { bad: true, text: `Could not read ${failed.length} of ${results.length} repositories: ${failed[0].error ?? "GitHub did not answer"}` } : { bad: false, text: "Pull requests are up to date." });
+    } catch (e) {
+      setMessage({ bad: true, text: describeFailure(e) });
+    }
+    await refreshAll(queryClient);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-sm">
+      <form action={run}>
+        <SubmitButton className="btn py-1 text-xs">Sync pull requests</SubmitButton>
+      </form>
+      <span className="text-muted">last synced {when(latest(github.map((r) => r.lastPrSyncedAt)))}</span>
+      <span className="text-muted">· last webhook {when(latest(github.map((r) => r.lastEventAt)))}</span>
+      {message && <p role="status" className={message.bad ? "w-full text-sm text-danger" : "w-full text-sm text-ok"}>{message.text}</p>}
+    </div>
   );
 }
 
