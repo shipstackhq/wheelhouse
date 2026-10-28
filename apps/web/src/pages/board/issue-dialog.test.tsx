@@ -234,10 +234,10 @@ describe("the properties", () => {
   });
 
   test("Delegate lists the team's agents as 'Name · Role' and sends the slug; the current one is shown", async () => {
-    const remy = { id: "wa-1", slug: "remy", name: "Remy", role: "Reviewer" };
+    const remy = { id: "wa-1", slug: "remy", name: "Remy", role: "Reviewer", avatar: { style: "lorelei", seed: "remy" } };
     const { server, d } = await open((s) => {
       serve(s, { delegateAgentId: "wa-1" });
-      s.on("GET /api/app/teams/AA/agents", { agents: [remy, { id: "wa-2", slug: "bo", name: "Bo", role: "Builder" }] });
+      s.on("GET /api/app/teams/AA/agents", { agents: [remy, { id: "wa-2", slug: "bo", name: "Bo", role: "Builder", avatar: { style: "lorelei", seed: "bo" } }] });
       s.on("GET /api/app/issues/AA-2/plan", { plans: [{ repository: "wheelhouse", baseBranch: "development", device: "MacBook Pro", model: "opus" }] });
       s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
     });
@@ -287,7 +287,7 @@ describe("the properties", () => {
   test("a suggested agent is offered under Delegate and delegates with one click", async () => {
     const { server, d } = await open((s) => {
       s.on("GET /api/app/issues/AA-2", detail(T2, { suggestedAgent: "bo" }));
-      s.on("GET /api/app/teams/AA/agents", { agents: [{ id: "wa-2", slug: "bo", name: "Bo", role: "Builder" }] });
+      s.on("GET /api/app/teams/AA/agents", { agents: [{ id: "wa-2", slug: "bo", name: "Bo", role: "Builder", avatar: { style: "lorelei", seed: "bo" } }] });
       s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
     });
     await userEvent.setup().click(await within(d).findByRole("button", { name: "Suggested: Bo" }));

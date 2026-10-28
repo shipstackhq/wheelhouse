@@ -1,6 +1,6 @@
 import type { BoardStatus, BoardMember, BoardNode, BoardIssue } from "@wheelhouse/api-client";
 
-export type Col = Pick<BoardStatus, "id" | "name">;
+export type Col = Pick<BoardStatus, "id" | "name"> & Partial<Pick<BoardStatus, "role" | "color">>;
 export type NodeLite = BoardNode;
 export type Member = BoardMember;
 export type Issue = BoardIssue;
