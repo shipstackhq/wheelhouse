@@ -183,6 +183,7 @@ export class DaemonRepository {
       .set({ ...set, updatedAt: new Date() })
       .where(and(eq(deviceJobs.id, jobId), inArray(deviceJobs.state, from)))
       .returning();
+    if (row && !["offered", "accepted", "running", "unreachable"].includes(row.state)) await this.dropChatKeys([row.id]);
     return row;
   }
 
@@ -225,12 +226,13 @@ export class DaemonRepository {
     return j;
   }
 
-  /** An issue's runs, newest first, with the device's name and when it was last heard. */
+  /** An issue's runs, newest first, with the device's name, when it was last heard, and the live state of the pull request each opened (webhook-kept, joined, never copied). */
   issueRuns(issueId: string, teamId: string) {
     return this.db.q
-      .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt })
+      .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt, prState: pullRequests.state, prCiState: pullRequests.ciState })
       .from(deviceJobs)
       .innerJoin(devices, eq(devices.id, deviceJobs.deviceId))
+      .leftJoin(pullRequests, and(eq(pullRequests.repositoryId, deviceJobs.repositoryId), sql`${pullRequests.number} = (${deviceJobs.result}->'pullRequest'->>'number')::int`))
       .where(and(eq(deviceJobs.issueId, issueId), eq(deviceJobs.teamId, teamId)))
       .orderBy(desc(deviceJobs.createdAt))
       .limit(50);
@@ -557,7 +559,10 @@ export class DaemonRepository {
     return row;
   }
 
-  /** The key of one chat answer (docs/chat.md, Wheelhouse data): reaches only the thread's team, expires with the answer. */
+  /**
+   * The key of one chat answer (docs/chat.md, Wheelhouse data): reaches only the thread's team, expires with the answer. A run's read-only
+   * key is the same kind, with the job's id in `messageId`: one column marks every short-lived key, and both are dropped when they end.
+   */
   async insertChatKey(v: { scopes: KeyScope[]; workspaceId: string; teamId: string; messageId: string; name: string; keyHash: string; expiresAt: Date }) {
     const [k] = await this.db.q
       .insert(apiKeys)

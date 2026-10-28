@@ -4,7 +4,7 @@ import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
 import type { IssueRuns, IssueTarget, JobEvent, JobView } from "@wheelhouse/api-client";
 import { timeAgo } from "@wheelhouse/shared/time";
-import { ClaudeIcon } from "../../components/icons";
+import { ChevronRightIcon, ClaudeIcon, ExternalLinkIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { isActive, madeNoChanges, runStatus, type Tone } from "../../lib/run-status";
@@ -36,6 +36,8 @@ export function IssueRunsSection({ issueRef, teamKey, targets = [], delegated }:
   const query = useQuery({ ...issueRunsQuery(api, issueRef), refetchInterval: (q) => (q.state.data?.jobs.some((j) => isActive(j.state)) ? 5_000 : false) });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // With runs already listed, the start form stays closed until asked for.
+  const [starting, setStarting] = useState(false);
   const data = query.data;
   if (!data) return null;
   const rerunDelegate = async () => {
@@ -54,20 +56,26 @@ export function IssueRunsSection({ issueRef, teamKey, targets = [], delegated }:
     <section aria-label="Runs on a device">
       <span className="label">Runs</span>
       <div className="space-y-3">
-        <RunForm issueRef={issueRef} teamKey={teamKey} targets={targets} data={data} />
+        {starting || data.jobs.length === 0 ? (
+          <RunForm issueRef={issueRef} teamKey={teamKey} targets={targets} data={data} onStarted={() => setStarting(false)} />
+        ) : (
+          <button type="button" className="btn py-0.5 text-xs" onClick={() => setStarting(true)}>
+            New run
+          </button>
+        )}
         {delegated && (
           <button type="button" className="btn py-0.5 text-xs" disabled={busy} onClick={() => void rerunDelegate()}>
             Rerun agent
           </button>
         )}
         {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-        {data.jobs.length > 0 && <RunsTable jobs={data.jobs} issueRef={issueRef} />}
+        {data.jobs.length > 0 && <RunsTable jobs={data.jobs} issueRef={issueRef} repositories={data.repositories} />}
       </div>
     </section>
   );
 }
 
-function RunForm({ issueRef, teamKey, targets, data }: { issueRef: string; teamKey: string; targets: IssueTarget[]; data: IssueRuns }) {
+function RunForm({ issueRef, teamKey, targets, data, onStarted }: { issueRef: string; teamKey: string; targets: IssueTarget[]; data: IssueRuns; onStarted: () => void }) {
   const { api, queryClient } = useServices();
   const roster = useQuery(teamAgentsQuery(api, teamKey)).data ?? [];
   const [agent, setAgent] = useState("");
@@ -101,6 +109,7 @@ function RunForm({ issueRef, teamKey, targets, data }: { issueRef: string; teamK
     try {
       await api.runs.start(issueRef, { deviceId: device.id, repositoryId: repo.id, model: chosenModel, baseBranch: baseBranch ?? undefined, agent: agent || undefined });
       await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
+      onStarted();
     } catch (e) {
       setError(describeFailure(e));
     } finally {
@@ -173,67 +182,58 @@ export function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { 
   );
 }
 
-/** One line under the branch name: what landed (succeeded), or why not (failed, canceled, …). */
-function RunSummary({ job: j }: { job: JobView }) {
-  const stats = j.result.diffStats;
-  // A newer run took this one's branch over while it was out of reach: its result is kept, but the branch is for a person to sort out.
-  const note = j.result.supersededBy ? <span className="block text-warn">A newer run took over this branch before this one finished, so no pull request was opened.</span> : null;
-  if (j.state === "unreachable")
+/**
+ * The one thing about a run worth seeing without opening it: a pull request, a note that a newer run took its branch, the device being
+ * out of reach, or the error that stopped it.
+ */
+function RunHeadline({ job: j }: { job: JobView }) {
+  if (j.result.supersededBy) return <span className="text-warn">A newer run took over this branch, so no pull request was opened.</span>;
+  if (j.state === "unreachable") return <span className="text-muted">Cannot reach the device. The run is not lost: it carries on if the device comes back.</span>;
+  if (j.result.pullRequest)
     return (
-      <span className="text-muted">
-        Cannot reach the device{j.lastHeardAt ? ` · last heard ${timeAgo(j.lastHeardAt)}` : ""}. The run is not lost: it carries on if the device comes back.
-      </span>
+      <a href={j.result.pullRequest.url} target="_blank" rel="noreferrer" className="text-accent hover:underline" aria-label={`Pull request #${j.result.pullRequest.number}`}>
+        #{j.result.pullRequest.number} ↗{j.pullRequest?.ciState && ` · CI ${j.pullRequest.ciState}`}
+      </a>
     );
+  const problem = j.result.pullRequestError ?? j.error;
+  return problem ? <span className="text-danger">{problem}</span> : null;
+}
+
+/** The rest of a run's outcome, shown when its details are open. */
+function RunStats({ job: j }: { job: JobView }) {
+  const stats = j.result.diffStats;
   if (madeNoChanges(j))
     return (
-      <span className="text-muted">
+      <span>
         Nothing was changed, so nothing was pushed
         {j.result.costUsd != null ? ` · ~$${j.result.costUsd.toFixed(2)}` : ""}
       </span>
     );
-  if (j.state === "succeeded")
-    return (
-      <span className="text-muted">
-        {j.result.pushed ? "Pushed" : "Not pushed"}
-        {j.result.commit ? ` · ${j.result.commit.slice(0, 7)}` : ""}
-        {stats?.files != null ? ` · ${stats.files} files, +${stats.insertions ?? 0} −${stats.deletions ?? 0}` : ""}
-        {j.result.costUsd != null ? ` · ~$${j.result.costUsd.toFixed(2)}` : ""}
-        {j.result.pullRequest ? (
-          <>
-            {" · "}
-            <a href={j.result.pullRequest.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-              PR #{j.result.pullRequest.number}
-            </a>
-          </>
-        ) : null}
-        {j.result.pullRequestError ? <span className="block text-danger">{j.result.pullRequestError}</span> : null}
-        {j.result.pullRequestSkipped ? <span className="block">{j.result.pullRequestSkipped}</span> : null}
-        {note}
-      </span>
-    );
-  if (j.error)
-    return (
-      <>
-        <span className="text-danger">{j.error}</span>
-        {note}
-      </>
-    );
-  return note;
+  if (j.state !== "succeeded") return null;
+  return (
+    <span>
+      {j.result.pushed ? "Pushed" : "Not pushed"}
+      {j.result.commit ? ` · ${j.result.commit.slice(0, 7)}` : ""}
+      {stats?.files != null ? ` · ${stats.files} files, +${stats.insertions ?? 0} −${stats.deletions ?? 0}` : ""}
+      {j.result.costUsd != null ? ` · ~$${j.result.costUsd.toFixed(2)}` : ""}
+      {j.result.pullRequestSkipped ? <span className="block">{j.result.pullRequestSkipped}</span> : null}
+    </span>
+  );
 }
 
 /** The runs on this issue, newest first, as a plain list. Clicking a run's branch expands its log under it. */
-function RunsTable({ jobs, issueRef }: { jobs: JobView[]; issueRef: string }) {
+function RunsTable({ jobs, issueRef, repositories }: { jobs: JobView[]; issueRef: string; repositories: IssueRuns["repositories"] }) {
   const [openId, setOpenId] = useState<string | null>(jobs.find((j) => isActive(j.state))?.id ?? null);
   return (
     <ul className="divide-y divide-line overflow-hidden rounded-md border border-line text-sm" aria-label="Runs">
       {jobs.map((j) => (
-        <RunRow key={j.id} job={j} issueRef={issueRef} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
+        <RunRow key={j.id} job={j} issueRef={issueRef} fullName={repositories.find((r) => r.id === j.repositoryId)?.fullName ?? null} open={openId === j.id} onToggle={() => setOpenId((id) => (id === j.id ? null : j.id))} />
       ))}
     </ul>
   );
 }
 
-function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: string; open: boolean; onToggle: () => void }) {
+function RunRow({ job: j, issueRef, fullName, open, onToggle }: { job: JobView; issueRef: string; fullName: string | null; open: boolean; onToggle: () => void }) {
   const { api, queryClient } = useServices();
   const active = isActive(j.state);
   const status = runStatus(j);
@@ -273,54 +273,25 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
   const canContinue = !active && (j.result.pushed === true || j.state === "canceled" || j.state === "lost");
   return (
     <li className="px-3 py-2">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <div className="truncate font-medium">{j.deviceName ?? "a device"}</div>
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={onToggle}
-            className="block max-w-full truncate rounded text-left font-mono text-xs outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent/50"
-            title={j.branch}
-          >
-            {j.branch}
-          </button>
-          {j.baseBranch && <div className="truncate text-xs text-muted">{j.continuesJobId ? `continues an earlier run · into ${j.baseBranch}` : `from ${j.baseBranch}`}</div>}
-          <div className="truncate text-xs">
-            <RunSummary job={j} />
-          </div>
-          {error && <p className="text-xs text-danger" role="alert">{error}</p>}
-          {confirmLost && (
-            <div className="space-y-1.5 rounded border border-line bg-panel-2 p-2 text-xs">
-              <p>If this machine is only offline, the run may still be going. Marking it lost lets you continue it; if you do, the old run is stopped when the machine comes back.</p>
-              <div className="flex gap-1">
-                <button type="button" className="btn py-0.5 text-xs" onClick={() => void markLost()}>
-                  Mark as lost
-                </button>
-                <button type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => setConfirmLost(false)}>
-                  Keep waiting
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1">
-            <span className={clsx("chip", TONE_STYLE[status.tone])}>{status.label}</span>
-            <ModelLabel model={j.model} />
-            <span className="text-xs text-muted">{timeAgo(j.createdAt)}</span>
-          </div>
-        </div>
-        {!active && (
-          <span className="flex shrink-0 gap-1">
-            {canContinue && (
-              <button type="button" className="btn py-0.5 text-xs" disabled={again} onClick={() => void rerun(true)} title="A new run on this branch, from what this run pushed">
-                Continue
-              </button>
-            )}
-            <button type="button" className="btn btn-ghost py-0.5 text-xs" disabled={again} onClick={() => void rerun(false)} title="A new run on a fresh branch from the same starting branch">
-              Start over
-            </button>
-          </span>
+      <div className="flex items-center gap-2 text-xs">
+        <span className={clsx("chip shrink-0", TONE_STYLE[status.tone])}>{status.label}</span>
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={onToggle}
+          className="min-w-0 flex-1 truncate rounded text-left font-mono outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent/50"
+          title={j.branch}
+        >
+          {j.branch}
+        </button>
+        {fullName && j.result.pushed && (
+          <a href={`https://github.com/${fullName}/tree/${j.branch}`} target="_blank" rel="noreferrer" className="shrink-0 text-muted hover:text-fg" aria-label="Open the branch on GitHub" title="Open the branch on GitHub">
+            <ExternalLinkIcon />
+          </a>
         )}
+        <span className="min-w-0 max-w-[40%] truncate">
+          <RunHeadline job={j} />
+        </span>
         {j.state === "unreachable" && !confirmLost && (
           <button type="button" className="btn btn-ghost shrink-0 py-0.5 text-xs" onClick={() => setConfirmLost(true)} title="Give up waiting for this run">
             Mark as lost
@@ -343,9 +314,48 @@ function RunRow({ job: j, issueRef, open, onToggle }: { job: JobView; issueRef: 
             Stop
           </button>
         )}
+        <span className="shrink-0 text-muted">{timeAgo(j.createdAt)}</span>
+        <button type="button" aria-expanded={open} aria-label="Details" onClick={onToggle} className="btn btn-ghost shrink-0 px-1 py-0.5">
+          <ChevronRightIcon className={clsx("transition-transform", open && "rotate-90")} />
+        </button>
       </div>
+      {error && <p className="mt-1 text-xs text-danger" role="alert">{error}</p>}
+      {confirmLost && (
+            <div className="space-y-1.5 rounded border border-line bg-panel-2 p-2 text-xs">
+              <p>If this machine is only offline, the run may still be going. Marking it lost lets you continue it; if you do, the old run is stopped when the machine comes back.</p>
+              <div className="flex gap-1">
+                <button type="button" className="btn py-0.5 text-xs" onClick={() => void markLost()}>
+                  Mark as lost
+                </button>
+                <button type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => setConfirmLost(false)}>
+                  Keep waiting
+                </button>
+              </div>
+            </div>
+      )}
       {open && (
-        <div className="mt-2 border-t border-line pt-2">
+        <div className="mt-2 space-y-2 border-t border-line pt-2">
+          <div className="space-y-1 text-xs text-muted">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="font-medium text-text">{j.deviceName ?? "a device"}</span>
+              <ModelLabel model={j.model} />
+              {j.baseBranch && <span>{j.continuesJobId ? `continues an earlier run · into ${j.baseBranch}` : `from ${j.baseBranch}`}</span>}
+            </div>
+            {j.lastHeardAt && j.state === "unreachable" && <div>Last heard {timeAgo(j.lastHeardAt)}</div>}
+            <RunStats job={j} />
+            {!active && (
+              <div className="flex gap-1 pt-1">
+                {canContinue && (
+                  <button type="button" className="btn py-0.5 text-xs" disabled={again} onClick={() => void rerun(true)} title="A new run on this branch, from what this run pushed">
+                    Continue
+                  </button>
+                )}
+                <button type="button" className="btn btn-ghost py-0.5 text-xs" disabled={again} onClick={() => void rerun(false)} title="A new run on a fresh branch from the same starting branch">
+                  Start over
+                </button>
+              </div>
+            )}
+          </div>
           <RunLog id={j.id} active={active} />
         </div>
       )}

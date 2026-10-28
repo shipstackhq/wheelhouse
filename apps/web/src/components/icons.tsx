@@ -19,6 +19,7 @@ import {
   RiArrowRightSLine,
   RiArrowUpLine,
   RiArrowUpSFill,
+  RiExternalLinkLine,
   RiArrowDownSFill,
   RiBold,
   RiBookmarkLine,
@@ -191,6 +192,7 @@ export const ArrowUpIcon = icon(RiArrowUpLine);
 export const ArrowDownIcon = icon(RiArrowDownLine);
 export const ArrowLeftIcon = icon(RiArrowLeftLine);
 export const ArrowRightIcon = icon(RiArrowRightLine);
+export const ExternalLinkIcon = icon(RiExternalLinkLine);
 export const ChevronDownIcon = icon(RiArrowDownSLine);
 export const ChevronLeftIcon = icon(RiArrowLeftSLine);
 export const ChevronRightIcon = icon(RiArrowRightSLine);

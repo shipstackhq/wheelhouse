@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, ne, notInArray, or, sql } from "drizzle-or
 import { schema } from "../../db";
 import { Database } from "../../platform/database/database";
 
-const { teams, statuses, issues, comments, nodes, issueNodes, events, labels, issueLabels, teamMembers, users, teamAgents, workspaceAgents, repositories, issueTargets, projectTeams, projectRepositories, deviceJobs } = schema;
+const { teams, statuses, issues, comments, nodes, issueNodes, events, labels, issueLabels, teamMembers, users, teamAgents, workspaceAgents, repositories, issueTargets, projectTeams, projectRepositories, deviceJobs, pullRequests } = schema;
 
 export type IssueRow = typeof issues.$inferSelect;
 export type IssueInsert = typeof issues.$inferInsert;
@@ -331,12 +331,13 @@ export class IssuesRepository {
     return rowsOf<{ repository_id: string }>(res).map((r) => r.repository_id);
   }
 
-  /** WH-132: the runs of delegated issues made since each was delegated, newest first (read only; the daemon module owns the table). */
+  /** WH-132: the runs of delegated issues made since each was delegated, newest first, with their pull request's live state (read only; the daemon module owns the table). */
   delegationRuns(issueIds: string[]) {
     return this.db.q
-      .select({ id: deviceJobs.id, issueId: deviceJobs.issueId, repositoryId: deviceJobs.repositoryId, state: deviceJobs.state, result: deviceJobs.result })
+      .select({ id: deviceJobs.id, issueId: deviceJobs.issueId, repositoryId: deviceJobs.repositoryId, state: deviceJobs.state, result: deviceJobs.result, prState: pullRequests.state })
       .from(deviceJobs)
       .innerJoin(issues, eq(issues.id, deviceJobs.issueId))
+      .leftJoin(pullRequests, and(eq(pullRequests.repositoryId, deviceJobs.repositoryId), sql`${pullRequests.number} = (${deviceJobs.result}->'pullRequest'->>'number')::int`))
       .where(and(inArray(deviceJobs.issueId, issueIds), sql`${deviceJobs.createdAt} >= ${issues.delegatedAt}`))
       .orderBy(desc(deviceJobs.createdAt));
   }

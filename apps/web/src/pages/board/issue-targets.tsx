@@ -15,6 +15,8 @@ const STATE_TEXT: Record<DelegationState, string> = {
   running: "The agent is working on it.",
   asked: "The agent has a question: answer it in the comments below.",
   done: "The agent is done.",
+  in_review: "The agent opened a pull request: review it.",
+  merged: "The agent's pull request was merged.",
   failed: "The agent's run failed.",
   stopped: "The agent was stopped.",
 };
