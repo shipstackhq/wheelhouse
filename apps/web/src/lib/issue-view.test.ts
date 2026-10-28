@@ -15,7 +15,10 @@ const D = issue({ number: 4, title: "Ship it", statusId: "c-done", priority: "lo
 const ALL = [A, B, C, D];
 const CTX = {
   statuses: STATUSES,
-  members: [{ id: "u2", name: "Grace Hopper" }, { id: "u1", name: "Ada Lovelace" }],
+  members: [
+    { kind: "human" as const, id: "u2", name: "Grace Hopper", avatar: null },
+    { kind: "human" as const, id: "u1", name: "Ada Lovelace", avatar: null },
+  ],
   projects: [{ id: "p2", name: "Zeta", status: "active" as const, milestones: [] }, { id: "p1", name: "Alpha", status: "active" as const, milestones: [] }],
   cycles: [{ number: 3, name: "", startsAt: "", endsAt: "", state: "current" as const }, { number: 2, name: "Autumn", startsAt: "", endsAt: "", state: "past" as const }],
 };

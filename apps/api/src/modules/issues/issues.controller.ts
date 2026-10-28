@@ -51,8 +51,8 @@ export class IssuesController {
   async comment(@Req() req: SessionRequest, @Param("ref") ref: string, @JsonBody(new ZodValidationPipe(commentDto)) input: CommentDto) {
     const body = input.body;
     if (typeof body !== "string") throw new ServiceError("invalid", "Comment body is required", { fields: { body: "Comment body is required" } });
-    const c = await this.issues.addComment(req.human.actor, ref, body);
-    return { comment: { id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt } };
+    const c = await this.issues.withAuthor(req.human.actor, await this.issues.addComment(req.human.actor, ref, body));
+    return { comment: { id: c.id, author: c.author, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt } };
   }
 
   /** WH-136: which of the team's repositories the work probably belongs in, from a small model reading the issue and the map. Suggestions only; nothing is saved. */

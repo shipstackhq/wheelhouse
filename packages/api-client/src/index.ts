@@ -89,6 +89,8 @@ import type {
   WorkspaceMember,
   WorkspaceOverview,
   IssueComment,
+  ActorRef,
+  ActorAvatar,
   IssueDetail,
   IssuePatch,
   IssueView,

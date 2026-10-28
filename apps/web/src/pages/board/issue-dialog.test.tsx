@@ -55,7 +55,7 @@ describe("opening an issue", () => {
   test("it shows the ref and version, the title, the description as Markdown, discussion, history and the properties", async () => {
     const { d } = await open((s) => {
       serve(s, { body: "Some **bold** words", version: 3 });
-      s.on("GET /api/app/issues/AA-2", detail({ ...T2, body: "Some **bold** words", version: 3 }, { comments: [{ id: "c1", authorKind: "agent", authorName: "CI bot", body: "Looked at `it`", createdAt: new Date().toISOString() }] }));
+      s.on("GET /api/app/issues/AA-2", detail({ ...T2, body: "Some **bold** words", version: 3 }, { comments: [{ id: "c1", author: { kind: "agent", id: null, name: "CI bot", avatar: null }, authorKind: "agent", authorName: "CI bot", body: "Looked at `it`", createdAt: new Date().toISOString() }] }));
     });
     expect(within(d).getByText("AA-2", { selector: ".font-mono" })).toBeTruthy();
     expect(within(d).getByText("v3")).toBeTruthy();
@@ -176,13 +176,13 @@ describe("a stale edit shows the conflict instead of overwriting", () => {
 describe("comments", () => {
   test("typing and pressing Comment sends it, clears the box and reads the issue again", async () => {
     const { server, d, state } = await open((s) =>
-      s.on("POST /api/app/issues/AA-2/comments", () => Response.json({ comment: { id: "c9", authorKind: "human", authorName: "Ada", body: "Hi", createdAt: new Date().toISOString() } }, { status: 201 })),
+      s.on("POST /api/app/issues/AA-2/comments", () => Response.json({ comment: { id: "c9", author: { kind: "human", id: "u1", name: "Ada", avatar: null }, authorKind: "human", authorName: "Ada", body: "Hi", createdAt: new Date().toISOString() } }, { status: 201 })),
     );
     const user = userEvent.setup();
     const button = within(d).getByRole("button", { name: /^Comment/ }) as HTMLButtonElement;
     expect(button.disabled).toBe(true); // nothing to send yet
     await user.type(within(d).getByRole("textbox", { name: "Comment" }), "Hi **there**");
-    state.comments = [{ id: "c9", authorKind: "human", authorName: "Ada Lovelace", body: "Hi **there**", createdAt: new Date().toISOString() }];
+    state.comments = [{ id: "c9", author: { kind: "human", id: "u1", name: "Ada Lovelace", avatar: null }, authorKind: "human", authorName: "Ada Lovelace", body: "Hi **there**", createdAt: new Date().toISOString() }];
     await user.click(button);
     await waitFor(() => expect(server.sent("POST /api/app/issues/AA-2/comments")).toHaveLength(1));
     expect(server.sent("POST /api/app/issues/AA-2/comments")[0].body).toEqual({ body: "Hi **there**" });
@@ -198,7 +198,7 @@ describe("comments", () => {
   });
 
   test("a long thread shows the latest four with 'show earlier'", async () => {
-    const many = Array.from({ length: 7 }, (_, i) => ({ id: `c${i}`, authorKind: "human" as const, authorName: "Ada", body: `message ${i}`, createdAt: new Date().toISOString() }));
+    const many = Array.from({ length: 7 }, (_, i) => ({ id: `c${i}`, author: { kind: "human" as const, id: "u1", name: "Ada", avatar: null }, authorKind: "human" as const, authorName: "Ada", body: `message ${i}`, createdAt: new Date().toISOString() }));
     const { d } = await open((s) => s.on("GET /api/app/issues/AA-2", detail(T2, { comments: many })));
     expect(within(d).queryByText("message 0")).toBeNull();
     expect(within(d).getByText("message 6")).toBeTruthy();
@@ -414,7 +414,7 @@ describe("live updates while it is open", () => {
   test("a comment by an agent appears without a refresh, and the title you are not editing follows the server", async () => {
     const { d, state } = await open();
     await waitFor(() => expect(FakeEventSource.open.length).toBe(1));
-    state.comments = [{ id: "c1", authorKind: "agent", authorName: "CI bot", body: "Tests are green", createdAt: new Date().toISOString() }];
+    state.comments = [{ id: "c1", author: { kind: "agent", id: null, name: "CI bot", avatar: null }, authorKind: "agent", authorName: "CI bot", body: "Tests are green", createdAt: new Date().toISOString() }];
     state.issue = { ...state.issue, title: "Renamed by an agent", version: 2 };
     act(() => FakeEventSource.open[0].emit("change", { seq: 5 }));
     await within(d).findByText("Tests are green");

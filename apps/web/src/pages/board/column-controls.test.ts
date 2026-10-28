@@ -81,7 +81,7 @@ describe("sorting", () => {
 
 describe("what the controls say", () => {
   test("a filter's label: one value by name, several as a count, a mix as 'N applied'", () => {
-    const members = [{ id: "u1", name: "Ada Lovelace" }];
+    const members = [{ kind: "human" as const, id: "u1", name: "Ada Lovelace", avatar: null }];
     expect(describeFilter(view({ priority: ["high"] }), members)).toBe("High priority");
     expect(describeFilter(view({ priority: ["high", "low"] }), members)).toBe("2 priorities");
     expect(describeFilter(view({ assignee: ["u1"] }), members)).toBe("Ada Lovelace");

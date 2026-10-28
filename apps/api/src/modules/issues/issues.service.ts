@@ -10,6 +10,7 @@ import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
 import { DeliveriesService } from "../github/index";
+import { ActorsService } from "../actors/index";
 import { effectiveProfile } from "../agents/index";
 import { GraphService, SessionsService } from "../map/index";
 import { TeamAccessService } from "../teams/index";
@@ -17,7 +18,7 @@ import { CyclesService, systemActor } from "./cycles/cycles.service";
 import { ISSUE_COMMENTED, ISSUE_DELEGATED, type IssueCommented, type IssueDelegated } from "./issues.events";
 import { IssueTargets } from "./issue-targets";
 import { IssueNotifications } from "./issues.notifications";
-import { IssuesRepository, type IssueRow, type TeamRow } from "./issues.repository";
+import { IssuesRepository, type CommentRow, type IssueRow, type TeamRow } from "./issues.repository";
 import { CLAIM_TTL_MS, DEFAULT_STATUSES, MAX_ISSUE_DEPTH, delegationState, fitsDepth, suggestAgent, parseIssueRef, positionAmong, sameLabels, type Delegation, type IssueInput } from "./issues.rules";
 import { issueView } from "./issues.presenter";
 import { ProjectsService } from "./projects/projects.service";
@@ -54,6 +55,7 @@ export class IssuesService {
     @Inject(IssueNotifications) private readonly notices: IssueNotifications,
     @Inject(IssueTargets) private readonly targets: IssueTargets,
     @Inject(EventEmitter2) private readonly emitter: EventEmitter2,
+    @Inject(ActorsService) private readonly actors: ActorsService,
   ) {}
 
   // ───────── the board ─────────
@@ -124,7 +126,9 @@ export class IssuesService {
   /** The team page's parts: the board, the map nodes an issue can link to, the team's members (the people an issue can be assigned to), and its cycles and projects. */
   async boardPage(actor: Actor, teamKey: string) {
     const board = await this.getBoard(actor, teamKey);
-    const [nodes, members] = await Promise.all([this.repo.boardNodes(board.team.id), this.repo.teamMembersOf(board.team.id)]);
+    const [nodes, people] = await Promise.all([this.repo.boardNodes(board.team.id), this.repo.teamMembersOf(board.team.id)]);
+    const faces = await this.actors.resolve(actor.workspaceId, people.map((p) => ({ kind: "human" as const, id: p.id, name: p.name })));
+    const members = people.map((p, i) => ({ id: p.id, name: p.name, kind: "human" as const, avatar: faces[i].avatar }));
     const cycles = await this.cycles.cycleOptions(board.team.id);
     const projects = await this.projects.projectsOfTeam(board.team.id);
     return { board, nodes, members, cycles, projects };
@@ -168,7 +172,9 @@ export class IssuesService {
   async getIssue(actor: Actor, ref: string) {
     const { issue, team, ref: r } = await this.resolveIssue(actor, ref);
     const col = await this.repo.statusById(issue.statusId);
-    const comments = await this.repo.commentsOf(issue.id);
+    const commentRows = await this.repo.commentsOf(issue.id);
+    const authors = await this.actors.resolve(actor.workspaceId, commentRows.map((c) => ({ kind: c.authorKind, id: c.authorId, name: c.authorName })));
+    const comments = commentRows.map((c, i) => ({ ...c, author: authors[i] }));
     const nodes = await this.repo.linkedNodes(issue.id);
     const history = await this.repo.historyOf(team.id, issue.id);
     // Pull requests GitHub reported against this issue (WH-20).
@@ -520,6 +526,12 @@ export class IssuesService {
     await this.emitter.emitAsync(ISSUE_COMMENTED, { actor, issueId: issue.id, ref: r, body: c.body } satisfies IssueCommented);
     await this.bindSession(actor, issue);
     return c;
+  }
+
+  /** The comment as the web app shows it: the row plus who wrote it, with a face. */
+  async withAuthor(actor: Actor, c: CommentRow) {
+    const [author] = await this.actors.resolve(actor.workspaceId, [{ kind: c.authorKind, id: c.authorId, name: c.authorName }]);
+    return { ...c, author };
   }
 
   /**

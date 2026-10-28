@@ -210,8 +210,8 @@ export const board = (key = "AA", over: Partial<BoardView> = {}): BoardView => (
     { id: "n-board", name: "Board UI", kind: "component", parentId: "n-api", layer: "system" },
   ],
   members: [
-    { id: "u1", name: "Ada Lovelace" },
-    { id: "u2", name: "Grace Hopper" },
+    { kind: "human", id: "u1", name: "Ada Lovelace", avatar: null },
+    { kind: "human", id: "u2", name: "Grace Hopper", avatar: null },
   ],
   cycles: [],
   projects: [],

@@ -1,4 +1,5 @@
 import type { PRIORITIES } from "../../db/schema";
+import type { ActorRef } from "../actors/index";
 import type { DeliveriesService } from "../github/index";
 import type { CycleOption } from "./cycles/cycles.service";
 import type { IssueRelative, IssueWithLinks } from "./issues.service";
@@ -110,7 +111,8 @@ export const boardView = ({ board, nodes, members, cycles, projects }: BoardPage
 export type IssueDetail = {
   issue: IssueView & { status: string | undefined };
   team: { key: string; name: string };
-  comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
+  /** `authorKind` and `authorName` are deprecated aliases of `author`; they go in the next release. */
+  comments: { id: string; authorKind: "human" | "agent"; authorName: string; author: ActorRef; body: string; createdAt: Date }[];
   nodes: { id: string; name: string; kind: string; parentId: string | null }[];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
   pullRequests: PullRequests;
@@ -129,7 +131,7 @@ export type IssueDetail = {
 type IssuePage = {
   issue: IssueRow & { ref: string; labels: string[]; cycle: number | null; status: string | undefined; delegation: Delegation | null };
   team: { key: string; name: string };
-  comments: { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date }[];
+  comments: { id: string; authorKind: "human" | "agent"; authorName: string; author: ActorRef; body: string; createdAt: Date }[];
   nodes: IssueDetail["nodes"];
   history: { seq: number; actorKind: "human" | "agent"; actorName: string; summary: string; createdAt: Date }[];
   pullRequests: PullRequests;
@@ -145,7 +147,7 @@ type IssuePage = {
 export const issueDetailView = (d: IssuePage): IssueDetail => ({
   issue: { ...issueView(d.issue), status: d.issue.status },
   team: { key: d.team.key, name: d.team.name },
-  comments: d.comments.map((c) => ({ id: c.id, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt })),
+  comments: d.comments.map((c) => ({ id: c.id, author: c.author, authorKind: c.authorKind, authorName: c.authorName, body: c.body, createdAt: c.createdAt })), // authorKind/authorName: deprecated aliases of author
   nodes: d.nodes,
   history: d.history.map((e) => ({ seq: e.seq, actorKind: e.actorKind, actorName: e.actorName, summary: e.summary, createdAt: e.createdAt })),
   pullRequests: d.pullRequests,
