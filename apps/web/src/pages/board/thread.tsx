@@ -3,10 +3,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import clsx from "clsx";
 import { timeAgo } from "@wheelhouse/shared/time";
-import { Avatar } from "../../components/profile-menu";
+import type { ActorRef } from "@wheelhouse/api-client";
+import { ActorAvatar } from "../../components/actor-avatar";
 import { AgentIcon, MoreIcon } from "../../components/icons";
 
-export type ThreadComment = { id: string; authorKind: "human" | "agent"; authorName: string; body: string; createdAt: Date | string };
+export type ThreadComment = { id: string; author: ActorRef; body: string; createdAt: Date | string };
 
 const PREVIEW = 4;
 
@@ -33,16 +34,16 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
     <ol>
       {shown.map((c, i) => {
         const last = i === shown.length - 1;
-        const agent = c.authorKind === "agent";
+        const agent = c.author.kind === "agent";
         return (
           <li key={c.id} className="flex gap-2.5">
             <div className="flex flex-col items-center">
-              <Avatar name={c.authorName} email={c.authorName} size={24} />
+              <ActorAvatar actor={c.author} className="size-6" />
               {!last && <div className="my-0.5 w-px flex-1 bg-line" aria-hidden />}
             </div>
             <div className={clsx("min-w-0 flex-1", !last && "pb-2.5")}>
               <div className="flex flex-wrap items-center gap-x-2 text-xs leading-none">
-                <span className={clsx("font-medium", agent ? "text-agent" : "text-muted")}>{c.authorName}</span>
+                <span className={clsx("font-medium", agent ? "text-agent" : "text-muted")}>{c.author.name}</span>
                 {agent && <span className="chip bg-agent/15 text-[10px] text-agent"><AgentIcon /> agent</span>}
                 <span className="text-muted/70" title={new Date(c.createdAt).toLocaleString()}>
                   {timeAgo(c.createdAt)}

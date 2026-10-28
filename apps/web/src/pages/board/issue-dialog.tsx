@@ -18,6 +18,8 @@ import { boardQuery, issueQuery, teamAgentsQuery } from "../../lib/queries";
 import { parentCandidates } from "../../lib/sub-issues";
 import { DelegatePlan, IssueTargetsSection } from "./issue-targets";
 import { PriorityIcon } from "../../components/priority-icon";
+import { StatusIcon } from "../../components/status-icon";
+import { ActorAvatar } from "../../components/actor-avatar";
 import { SubIssueProgress } from "../../components/sub-issue-progress";
 import { useServices } from "../../lib/services";
 import { arrowStep, isDirty, singleLine, type Neighbours } from "../../lib/issue-nav";
@@ -347,20 +349,20 @@ export function IssueDialog(props: {
               <aside className="space-y-5 border-t border-line px-4 py-4 sm:px-5 md:min-h-0 md:overflow-y-auto md:border-l md:border-t-0">
                 <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-1">
                   <Field label="Status">
-                    <Select value={t.statusId} options={columns.map((c) => ({ value: c.id, label: c.name }))} onValueChange={(v) => void mutate(() => api.issues.move(t.ref, { status: v }))} />
+                    <Select value={t.statusId} options={columns.map((c) => ({ value: c.id, label: c.name, icon: c.role ? <StatusIcon role={c.role} color={c.color ?? null} /> : undefined }))} onValueChange={(v) => void mutate(() => api.issues.move(t.ref, { status: v }))} />
                   </Field>
                   <Field label="Priority">
                     <Select
                       triggerClassName={PRIORITY_STYLE[t.priority]}
                       value={t.priority}
-                      options={["none", "low", "medium", "high", "urgent"].map((p) => ({ value: p, label: p === "none" ? "no priority" : p }))}
+                      options={["none", "low", "medium", "high", "urgent"].map((p) => ({ value: p, label: p === "none" ? "no priority" : p, icon: <PriorityIcon priority={p} /> }))}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { priority: v as typeof t.priority, version: t.version }))}
                     />
                   </Field>
                   <Field label="Assignee">
                     <Select
                       value={t.assigneeId ?? ""}
-                      options={[{ value: "", label: "Unassigned" }, ...members.map((m) => ({ value: m.id, label: m.name }))]}
+                      options={[{ value: "", label: "Unassigned" }, ...members.map((m) => ({ value: m.id, label: m.name, icon: <ActorAvatar actor={m} /> }))]}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { assigneeId: v || null, version: t.version }))}
                     />
                   </Field>
@@ -368,7 +370,7 @@ export function IssueDialog(props: {
                     <Select
                       disabled={!roster.length}
                       value={roster.find((a) => a.id === t.delegateAgentId)?.slug ?? ""}
-                      options={roster.length ? [{ value: "", label: "Nobody" }, ...roster.map((a) => ({ value: a.slug, label: `${a.name} · ${a.role}` }))] : [{ value: "", label: "No agents on this team" }]}
+                      options={roster.length ? [{ value: "", label: "Nobody" }, ...roster.map((a) => ({ value: a.slug, label: `${a.name} · ${a.role}`, icon: <ActorAvatar actor={{ name: a.name, avatar: { type: "generated", ...a.avatar } }} /> }))] : [{ value: "", label: "No agents on this team" }]}
                       onValueChange={(v) => void mutate(() => api.issues.update(t.ref, { delegate: v || null, version: t.version }))}
                     />
                     {!t.delegateAgentId && data?.suggestedAgent && roster.some((a) => a.slug === data.suggestedAgent) && (

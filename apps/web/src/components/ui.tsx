@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { AlertDialog, Dialog, Select as RSelect } from "radix-ui";
 import clsx from "clsx";
 import { ChevronDownIcon } from "./icons";
@@ -7,7 +7,8 @@ import { ChevronDownIcon } from "./icons";
 // Radix Select forbids empty-string item values, so "" is mapped to a sentinel.
 const NONE = "__none__";
 
-export type Option = { value: string; label: string };
+/** `icon`: shown before the label, in the list and on the trigger. */
+export type Option = { value: string; label: string; icon?: ReactNode };
 
 export function Select(props: {
   options: Option[];
@@ -64,7 +65,16 @@ export function Select(props: {
                 value={enc(o.value)!}
                 className={clsx("relative flex cursor-pointer select-none items-center rounded outline-none data-[highlighted]:bg-panel-2 data-[state=checked]:text-accent", props.compact ? "px-1.5 py-0.5" : "px-2.5 py-1.5")}
               >
-                <RSelect.ItemText>{o.label}</RSelect.ItemText>
+                <RSelect.ItemText>
+                  {o.icon ? (
+                    <span className="inline-flex items-center gap-2">
+                      {o.icon}
+                      {o.label}
+                    </span>
+                  ) : (
+                    o.label
+                  )}
+                </RSelect.ItemText>
               </RSelect.Item>
             ))}
           </RSelect.Viewport>
