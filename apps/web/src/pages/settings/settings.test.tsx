@@ -45,6 +45,7 @@ describe("settings as a screen of its own", () => {
   test("the left panel groups Personal, Workspace and Integrations sections and marks the one you are in", async () => {
     renderApp("/settings/workspace");
     await screen.findByRole("heading", { level: 1, name: "General" });
+    await panel().findByRole("link", { name: "GitHub" }); // the enabled integration arrives once its status is read
     const links = panel().getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]);
     expect(links).toEqual([
       ["Profile", "/settings/profile"],
@@ -54,6 +55,7 @@ describe("settings as a screen of its own", () => {
       ["Members", "/w/ae/settings/members"],
       ["API keys", "/w/ae/settings/api-keys"],
       ["Teams", "/w/ae/settings/teams"],
+      ["All integrations", "/w/ae/settings/integrations"],
       ["GitHub", "/w/ae/settings/integrations/github"],
     ]);
     expect(panel().getByText("Personal")).toBeTruthy();
@@ -65,8 +67,8 @@ describe("settings as a screen of its own", () => {
 
   test("Integrations lists what can be connected, and GitHub is the repositories page, inside settings", async () => {
     const overview = renderApp("/settings/integrations");
-    await screen.findByRole("heading", { level: 1, name: "Integrations" });
-    await userEvent.click(screen.getAllByRole("link", { name: "GitHub" }).at(-1)!); // the card, after the sidebar entry
+    await screen.findByRole("heading", { level: 1, name: "All integrations" });
+    await userEvent.click(within(screen.getByRole("main")).getByRole("link", { name: "GitHub" })); // the card, not the sidebar entry
     await screen.findByRole("heading", { level: 1, name: "GitHub" });
     expect(await screen.findByRole("heading", { level: 2, name: "Repositories" })).toBeTruthy();
     expect(panel().getByRole("link", { name: "GitHub" }).getAttribute("aria-current")).toBe("page");

@@ -111,24 +111,20 @@ describe("the repositories", () => {
 describe("Connect GitHub", () => {
   test("not set up on this server: an owner is told which settings to set, a member is not", async () => {
     const { unmount } = open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ configured: false, missing: ["GITHUB_APP_ID", "GITHUB_APP_SLUG"], installations: [] })));
-    const owner = await githubCard();
-    expect(owner.textContent).toContain("GitHub is not set up on this server");
-    expect(within(owner).getByText("GITHUB_APP_ID")).toBeTruthy();
-    expect(within(owner).getByText("GITHUB_APP_SLUG")).toBeTruthy();
-    expect(within(owner).queryByRole("link")).toBeNull();
+    // Not enabled, so the page is the details with the reason; the settings are hidden.
+    expect(await screen.findByText(/GitHub is not set up on this server yet\. An administrator creates a GitHub App and sets GITHUB_APP_ID, GITHUB_APP_SLUG/)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Enable" })).toBeNull();
     unmount();
     open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ configured: false, missing: [], isOwner: false, installations: [] })));
-    const member = await githubCard();
-    expect(member.textContent).toContain("GitHub is not set up on this server");
+    const member = await screen.findByText(/GitHub is not set up on this server/);
     expect(member.textContent).not.toContain("GITHUB_");
   });
 
   test("a member is told an owner connects it, and sees no way to", async () => {
     open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ isOwner: false, installations: [] })));
-    const c = await githubCard();
-    expect(c.textContent).toContain("A workspace owner connects GitHub for this team.");
-    expect(within(c).queryByRole("link")).toBeNull();
-    expect(within(c).queryByRole("button", { name: "Connect" })).toBeNull();
+    expect(await screen.findByText("A workspace owner connects GitHub.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Enable" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
   });
 
   test("an owner goes to GitHub with a plain link (a full page load), and sees the repositories to choose from", async () => {
@@ -142,10 +138,9 @@ describe("Connect GitHub", () => {
     expect(within(c).getAllByRole("button", { name: "Connect" })).toHaveLength(2);
   });
 
-  test("before any installation the button says Connect GitHub; the team key is escaped in the link", async () => {
+  test("before any installation the page offers Enable, which is a plain link into the install flow", async () => {
     open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", githubStatus({ installations: [] })));
-    const c = await githubCard();
-    expect(within(c).getByRole("link", { name: "Connect GitHub" }).getAttribute("href")).toBe("/api/github/install?workspace=ae&team=AA");
+    expect((await screen.findByRole("link", { name: "Enable" })).getAttribute("href")).toBe("/api/github/install?workspace=ae&team=AA");
   });
 
   test("Connect sends the installation, the repository's GitHub id, and the role and path limit typed; empty ones are left out", async () => {
@@ -203,7 +198,8 @@ describe("Connect GitHub", () => {
   });
 
   test("when the status cannot be read the card says so instead of hanging", async () => {
-    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", apiError(403, "forbidden", "No")));
+    // A function, so each reader (the sidebar, the page and its card) gets its own response: a Response body can be read once.
+    open(PAGE, (s) => s.on("GET /api/app/teams/AA/repositories/github", () => apiError(403, "forbidden", "No")));
     expect(await screen.findByText("Could not load the GitHub connection. Try again in a moment.")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 2, name: "Repositories" })).toBeTruthy(); // the page is still there
   });

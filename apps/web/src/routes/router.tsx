@@ -19,7 +19,7 @@ import { IdeaPage, IdeasPage } from "../pages/ideas";
 import { InitiativePage, InitiativesPage } from "../pages/initiatives";
 import { ProjectPage, ProjectsPage } from "../pages/projects";
 import { IntegrationsPage } from "../pages/integrations";
-import { GithubIntegrationPage } from "../pages/integrations/github/github-page";
+import { IntegrationPage } from "../pages/integrations/integration-page";
 import { MapPage } from "../pages/map";
 import { TeamMembersPage } from "../pages/members";
 import { TeamOverviewPage } from "../pages/overview";
@@ -86,7 +86,7 @@ export function buildRoutes(services: Services): RouteObject[] {
             { path: "api-keys", Component: ApiKeysPage },
             { path: "teams", Component: TeamsSettingsPage },
             { path: "integrations", Component: IntegrationsPage },
-            { path: "integrations/github", Component: GithubIntegrationPage },
+            { path: "integrations/:id", Component: IntegrationPage },
             { path: "*", Component: NotFound },
           ],
         },
