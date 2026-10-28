@@ -9,7 +9,7 @@ import { FullPageSkeleton } from "../../routes/layouts";
 import { lastAppLocation } from "../../lib/app-location";
 import { canSeePeople } from "../../lib/roles";
 import { useMe } from "../../lib/session";
-import { INTEGRATIONS } from "../integrations/integrations";
+import { integrationPath, useEnabledIntegrations } from "../integrations/integrations";
 
 const ITEMS: { group: string; items: { to: string; label: string; icon?: IconPair }[] }[] = [
   {
@@ -29,7 +29,6 @@ const ITEMS: { group: string; items: { to: string; label: string; icon?: IconPai
       { to: "/settings/teams", label: "Teams", icon: SETTINGS_ICONS.teams },
     ],
   },
-  { group: "Integrations", items: INTEGRATIONS.map((i) => ({ to: i.to, label: i.label, icon: i.icon })) },
 ];
 
 /**
@@ -40,6 +39,7 @@ export function SettingsLayout() {
   const me = useMe().data;
   const navigate = useNavigate();
   const [open, setOpen] = useState(false); // the phone drawer
+  const enabled = useEnabledIntegrations();
   if (me === null) return <Navigate to="/login" replace />;
   if (!me) return <FullPageSkeleton />;
   return (
@@ -60,7 +60,11 @@ export function SettingsLayout() {
         <div className="truncate px-4 pb-1 text-xs text-muted">{me.workspace.name}</div>
         {/* A link closes the phone drawer, so the chosen section is what shows. */}
         <nav aria-label="Settings" className="flex-1 overflow-y-auto px-2 pb-3 text-sm" onClick={(e) => (e.target as HTMLElement).closest("a") && setOpen(false)}>
-          {ITEMS.map((g) => (
+          {[
+            ...ITEMS,
+            // All integrations is always first, then each enabled integration by name.
+            { group: "Integrations", items: [{ to: "/settings/integrations", label: "All integrations" } as { to: string; label: string; icon?: IconPair }, ...enabled.map((i) => ({ to: integrationPath(i.id), label: i.name, icon: i.icon }))] },
+          ].map((g) => (
             <SidebarGroup key={g.group} title={g.group} scope="settings" gap="mt-3">
               {g.items.filter((i) => i.to !== "/settings/members" || canSeePeople(me.role)).map((i) => (
                 <NavLink key={i.to} href={wsPathFor(me.workspace.slug, i.to) as string} icon={i.icon}>

@@ -499,6 +499,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       github: (teamKey: string) => request<GithubStatus>("GET", `${team(teamKey)}/repositories/github`),
       connectGithub: async (teamKey: string, input: { installationId: string; repoId: string; role?: string; pathLimit?: string | null }) =>
         (await request<{ repository: Repository }>("POST", `${team(teamKey)}/repositories/github`, input)).repository,
+      /** This workspace stops using a GitHub installation (owners only). */
+      disconnectGithub: (teamKey: string, installationId: string) =>
+        request<unknown>("DELETE", `${team(teamKey)}/repositories/github/${encodeURIComponent(installationId)}`),
     },
 
     onboarding: {
