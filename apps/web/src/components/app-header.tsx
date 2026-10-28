@@ -2,6 +2,7 @@ import { SidebarToggle } from "./sidebar-toggle";
 import { useWsPathname } from "../lib/workspace";
 import { Breadcrumbs } from "./breadcrumbs";
 import { TeamQueueMenu } from "./team-queue-menu";
+import { TeamAgentsMenu } from "./team-agents-menu";
 import { PageMenu } from "./page-menu";
 import { NotificationsMenu } from "./notifications-menu";
 
@@ -20,6 +21,7 @@ export function AppHeader({ workspaceName, teams, collapsed, onToggleCollapsed }
         <PageMenu />
       </div>
       <div className="flex items-center gap-2">
+        {team && <TeamAgentsMenu teamKey={team.key} />}
         {team && <TeamQueueMenu teamKey={team.key} />}
         <NotificationsMenu />
       </div>
