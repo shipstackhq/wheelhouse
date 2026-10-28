@@ -20,7 +20,8 @@ import { createTeam, deleteTeam, requireTeam } from "../teams/teams.legacy";
 import { land } from "../map/map.legacy";
 import { MapListeners } from "../map/map.listeners";
 import { IssuesListeners } from "../issues/issues.listeners";
-import type { GithubApi } from "./api";
+import type { GithubApi, SyncedPullRequest } from "./api";
+import { PrSyncService, actionFor } from "./pr-sync.service";
 import { ConnectService } from "./connect.service";
 import { DeliveriesService, GITHUB_ACTOR_ID } from "./deliveries.service";
 import { RepositoriesService } from "./repositories.service";
@@ -48,8 +49,15 @@ const fakeGithub = (() => {
     changed: [] as { path: string; hash: string | null }[],
     compareFails: null as number | null,
     calls: [] as string[],
+    prs: [] as SyncedPullRequest[],
+    prsFail: false,
   };
   const api = {
+    pullRequests: async (inst: string, repo: string) => {
+      state.calls.push(`pulls ${inst} ${repo}`);
+      if (state.prsFail) throw new Error("GitHub is down");
+      return state.prs;
+    },
     installationRepositories: async (inst: string) => state.repos.get(inst) ?? [],
     changedBetween: async (inst: string, repo: string, base: string, head: string) => {
       state.calls.push(`compare ${inst} ${repo} ${base}...${head}`);
@@ -398,6 +406,84 @@ describe("pull requests", () => {
   test("a pull request from a repository nobody connected reaches nothing", async () => {
     const r = await deliver("pull_request", prPayload(A, "opened", { repository: { id: 999 } }));
     assert.equal(r.status, "ignored");
+  });
+});
+
+describe("pull request sync", () => {
+  const sync = app.get(PrSyncService);
+  const synced = (n: number, title: string, over: Partial<SyncedPullRequest> = {}): SyncedPullRequest => ({
+    number: n, title, html_url: `https://github.com/acme/aa-app/pull/${n}`, user: { login: "dev" }, head: { ref: `sync/${n}`, sha: String(n).repeat(40).slice(0, 40) }, draft: false, state: "open", merged: false, ...over,
+  });
+  const repoRow = async (ws: Workspace) => (await (await getDb()).select().from(schema.repositories).where(eq(schema.repositories.id, ws.repoRowId)))[0];
+  const rowsOf = async (ws: Workspace) => (await getDb()).select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, ws.repoRowId));
+  const historyOf = async (ref: string) => (await getIssue(A.owner, ref)).history.filter((e) => e.type === "issue.pull_request");
+
+  test("actionFor says what a webhook would", () => {
+    assert.equal(actionFor(null, { state: "open", merged: false }), "opened");
+    assert.equal(actionFor(null, { state: "closed", merged: true }), "closed");
+    assert.equal(actionFor("open", { state: "closed", merged: true }), "closed");
+    assert.equal(actionFor("closed", { state: "open", merged: false }), "reopened");
+    assert.equal(actionFor("merged", { state: "closed", merged: true }), "synchronize");
+  });
+
+  test("writes pull requests through the webhook path and is idempotent", async () => {
+    const t = await issueIn(A, "AA", "Synced", "In Progress");
+    const num = t.ref.split("-")[1];
+    fakeGithub.state.prs = [synced(51, `AA-${num} sync me`)];
+    const before = (await repoRow(A)).lastEventAt;
+    await sync.syncTeam(A.owner, "AA", fakeGithub.api);
+    assert.equal(await columnOf(A, t.ref), "Review");
+    assert.equal((await rowsOf(A)).filter((r) => r.number === 51).length, 1);
+    assert.equal((await historyOf(t.ref)).length, 1);
+    assert.deepEqual((await repoRow(A)).lastEventAt, before, "a sync is not a webhook");
+    assert.ok((await repoRow(A)).lastPrSyncedAt);
+
+    const rowsBefore = (await rowsOf(A)).length;
+    const commentsBefore = (await getIssue(A.owner, t.ref)).comments.length;
+    await sync.syncTeam(A.owner, "AA", fakeGithub.api);
+    assert.equal((await rowsOf(A)).length, rowsBefore);
+    assert.equal((await historyOf(t.ref)).length, 1, "no second event");
+    assert.equal((await getIssue(A.owner, t.ref)).comments.length, commentsBefore);
+  });
+
+  test("a merged pull request found by the sync reads merged, as a webhook would leave it", async () => {
+    const t = await issueIn(A, "AA", "Merged while offline", "In Progress");
+    const num = t.ref.split("-")[1];
+    fakeGithub.state.prs = [synced(52, `AA-${num} done`, { state: "closed", merged: true })];
+    await sync.syncTeam(A.owner, "AA", fakeGithub.api);
+    assert.equal((await rowsOf(A)).find((r) => r.number === 52)?.state, "merged");
+    assert.equal(await columnOf(A, t.ref), "Review"); // the webhook's rule: merged moves an earlier issue to Review, a person closes it
+    assert.equal((await pullRequestsForIssue(t.id))[0].state, "merged");
+  });
+
+  test("a failed read leaves lastPrSyncedAt alone and reports the error", async () => {
+    const stamp = (await repoRow(A)).lastPrSyncedAt;
+    fakeGithub.state.prsFail = true;
+    try {
+      const r = await sync.syncTeam(A.owner, "AA", fakeGithub.api);
+      assert.equal(r[0].ok, false);
+      assert.match(r[0].error ?? "", /GitHub is down/);
+      assert.deepEqual((await repoRow(A)).lastPrSyncedAt, stamp);
+    } finally {
+      fakeGithub.state.prsFail = false;
+    }
+  });
+
+  test("only teammates of the team can sync", async () => {
+    await assert.rejects(sync.syncTeam(B.owner, "AA", fakeGithub.api), /not found/i);
+    await assert.rejects(sync.syncTeam({ ...A.owner, kind: "agent" } as Actor, "AA", fakeGithub.api), /Only teammates/);
+  });
+
+  test("syncAll reads every connected repository and never throws", async () => {
+    fakeGithub.state.prs = [];
+    const results = await sync.syncAll(fakeGithub.api);
+    assert.ok(results.length >= 2 && results.every((r) => r.ok));
+    fakeGithub.state.prsFail = true;
+    try {
+      assert.ok((await sync.syncAll(fakeGithub.api)).every((r) => !r.ok));
+    } finally {
+      fakeGithub.state.prsFail = false;
+    }
   });
 });
 

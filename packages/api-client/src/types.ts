@@ -692,7 +692,10 @@ export type Repository = {
   defaultBranch: string;
   pathLimit: string | null;
   lifecycle: RepoLifecycle;
+  /** The last webhook (push or pull request) for this repository. */
   lastEventAt: string | null;
+  /** When the last successful pull request sync of this repository finished. */
+  lastPrSyncedAt: string | null;
   /** A GitHub repository whose file tree can be browsed (the doc anchor picker). */
   browsable: boolean;
 };

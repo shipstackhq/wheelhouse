@@ -41,6 +41,8 @@ export const repositories = table(
     pathLimit: text("path_limit"),
     lifecycle: text("lifecycle", { enum: REPO_LIFECYCLES }).notNull().default("live"),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    // WH-142: when a pull request sync of this repository last finished successfully. Null = never.
+    lastPrSyncedAt: timestamp("last_pr_synced_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

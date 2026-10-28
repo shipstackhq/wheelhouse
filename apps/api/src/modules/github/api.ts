@@ -25,6 +25,8 @@ export class GithubApiError extends Error {
 
 export type ChangedFile = { path: string; /** blob sha of the new content, null when the file is gone */ hash: string | null };
 
+export type SyncedPullRequest = { number: number; title: string; html_url: string; user: { login: string } | null; head: { sha: string; ref: string }; draft: boolean; state: string; merged: boolean };
+
 const ZERO_SHA = /^0{40}$/;
 export const isZeroSha = (s: string | null | undefined) => !s || ZERO_SHA.test(s);
 
@@ -119,6 +121,30 @@ export class GithubApi {
       body: JSON.stringify({ title: pr.title, head: pr.head, base: pr.base, body: pr.body, draft: pr.draft ?? false }),
     });
     return { number: r.number, url: r.html_url };
+  }
+
+  /**
+   * A repository's open pull requests plus those closed since `closedSince`, in the shape of a webhook's `pull_request` (`merged` from
+   * `merged_at`). Open ones are read in full (at most 1,000); closed ones newest-updated first, stopping once nothing newer remains.
+   */
+  async pullRequests(installationId: string, repoId: string, closedSince: Date): Promise<SyncedPullRequest[]> {
+    const token = await this.installationToken(installationId);
+    type Raw = { number: number; title: string; html_url: string; user: { login: string } | null; head: { sha: string; ref: string }; draft?: boolean; state: string; merged_at: string | null; closed_at: string | null; updated_at: string };
+    const out: SyncedPullRequest[] = [];
+    const shape = (p: Raw): SyncedPullRequest => ({ number: p.number, title: p.title, html_url: p.html_url, user: p.user, head: { sha: p.head.sha, ref: p.head.ref }, draft: !!p.draft, state: p.state, merged: !!p.merged_at });
+    for (const state of ["open", "closed"] as const) {
+      for (let page = 1; page <= 10; page++) {
+        const r = await this.call<Raw[]>(`/repositories/${encodeURIComponent(repoId)}/pulls?state=${state}&sort=updated&direction=desc&per_page=100&page=${page}`, token);
+        let older = false;
+        for (const p of r) {
+          if (state === "open") out.push(shape(p));
+          else if (new Date(p.updated_at) < closedSince) older = true; // sorted by update, and a close is an update: nothing after this is recent
+          else if (p.closed_at && new Date(p.closed_at) >= closedSince) out.push(shape(p));
+        }
+        if (older || r.length < 100) break;
+      }
+    }
+    return out;
   }
 
   /** The installation's account (who owns it), for display. */
