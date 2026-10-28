@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Link } from "../../lib/workspace";
 import clsx from "clsx";
 import { useQuery } from "@tanstack/react-query";
-import type { IssueRuns, JobEvent, JobView } from "@wheelhouse/api-client";
+import type { IssueRuns, IssueTarget, JobEvent, JobView } from "@wheelhouse/api-client";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { ClaudeIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { isActive, madeNoChanges, runStatus, type Tone } from "../../lib/run-status";
-import { issueRunsQuery, runBranchesQuery, runEventsQuery } from "../../lib/queries";
+import { issueRunsQuery, runBranchesQuery, runEventsQuery, teamAgentsQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 
 /** A model name with the Claude mark beside it, wherever one is named: the picker, a run's row. */
@@ -31,24 +31,46 @@ const TONE_STYLE: Record<Tone, string> = {
  * Runs on a device: send the issue to an agent on one of your machines (the Wheelhouse daemon), and follow each run. A run works in a
  * worktree on its own branch and pushes it; the board itself is not changed by the agent yet.
  */
-export function IssueRunsSection({ issueRef }: { issueRef: string }) {
-  const { api } = useServices();
+export function IssueRunsSection({ issueRef, teamKey, targets = [], delegated }: { issueRef: string; teamKey: string; targets?: IssueTarget[]; delegated?: boolean }) {
+  const { api, queryClient } = useServices();
   const query = useQuery({ ...issueRunsQuery(api, issueRef), refetchInterval: (q) => (q.state.data?.jobs.some((j) => isActive(j.state)) ? 5_000 : false) });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const data = query.data;
   if (!data) return null;
+  const rerunDelegate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.runs.rerunDelegate(issueRef);
+      await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
+    } catch (e) {
+      setError(describeFailure(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <section aria-label="Runs on a device">
-      <span className="label">Runs on a device</span>
+      <span className="label">Runs</span>
       <div className="space-y-3">
-        <RunForm issueRef={issueRef} data={data} />
+        <RunForm issueRef={issueRef} teamKey={teamKey} targets={targets} data={data} />
+        {delegated && (
+          <button type="button" className="btn py-0.5 text-xs" disabled={busy} onClick={() => void rerunDelegate()}>
+            Rerun agent
+          </button>
+        )}
+        {error && <p className="text-sm text-danger" role="alert">{error}</p>}
         {data.jobs.length > 0 && <RunsTable jobs={data.jobs} issueRef={issueRef} />}
       </div>
     </section>
   );
 }
 
-function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
+function RunForm({ issueRef, teamKey, targets, data }: { issueRef: string; teamKey: string; targets: IssueTarget[]; data: IssueRuns }) {
   const { api, queryClient } = useServices();
+  const roster = useQuery(teamAgentsQuery(api, teamKey)).data ?? [];
+  const [agent, setAgent] = useState("");
   const online = data.devices.filter((d) => d.status === "online");
   const [deviceId, setDeviceId] = useState("");
   const [repositoryId, setRepositoryId] = useState("");
@@ -68,14 +90,16 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
   const device = online.find((d) => d.id === deviceId) ?? online[0];
   const models = device?.models ?? [];
   const chosenModel = models.includes(model) ? model : (models[0] ?? "");
-  const repo = data.repositories.find((r) => r.id === repositoryId) ?? data.repositories[0];
+  // Where it runs starts as the issue's first target; the other pickers are for running it elsewhere.
+  const repo = data.repositories.find((r) => r.id === (repositoryId || targets[0]?.repositoryId)) ?? data.repositories[0];
+  const baseBranch = base ?? (repo.id === targets[0]?.repositoryId ? targets[0].baseBranch : null);
 
   const start = async () => {
     if (!device) return;
     setBusy(true);
     setError(null);
     try {
-      await api.runs.start(issueRef, { deviceId: device.id, repositoryId: repo.id, model: chosenModel, baseBranch: base ?? undefined });
+      await api.runs.start(issueRef, { deviceId: device.id, repositoryId: repo.id, model: chosenModel, baseBranch: baseBranch ?? undefined, agent: agent || undefined });
       await queryClient.invalidateQueries({ queryKey: issueRunsQuery(api, issueRef).queryKey });
     } catch (e) {
       setError(describeFailure(e));
@@ -87,6 +111,9 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
+        {roster.length > 0 && (
+          <Select className="!w-auto" ariaLabel="Agent" value={agent} options={[{ value: "", label: "No agent" }, ...roster.map((a) => ({ value: a.slug, label: a.name }))]} onValueChange={setAgent} />
+        )}
         <Select
           className="!w-auto"
           ariaLabel="Device"
@@ -98,7 +125,7 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
         {data.repositories.length > 1 && (
           <Select className="!w-auto" ariaLabel="Repository" value={repo.id} options={data.repositories.map((r) => ({ value: r.id, label: r.name }))} onValueChange={(v) => (setBase(null), setRepositoryId(v))} />
         )}
-        <BaseBranchPicker issueRef={issueRef} repositoryId={repo.id} value={base} onChange={setBase} />
+        <BaseBranchPicker issueRef={issueRef} repositoryId={repo.id} value={baseBranch} onChange={(b) => setBase(b ?? repo.defaultBranch)} />
         {models.length > 0 && (
           <span className="flex items-center gap-1">
             <ClaudeIcon />
@@ -106,7 +133,7 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
           </span>
         )}
         <button type="button" className="btn btn-primary" disabled={busy || !device || !chosenModel} onClick={() => void start()}>
-          Run on device
+          Start
         </button>
       </div>
       {!device && <p className="text-xs text-muted">None of your devices is online. Start the daemon on one.</p>}
@@ -120,7 +147,7 @@ function RunForm({ issueRef, data }: { issueRef: string; data: IssueRuns }) {
  * another. When GitHub cannot list them, a text box with the default branch in it. (How runs choose their base will change; this is the
  * simple version.)
  */
-function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { issueRef: string; repositoryId: string; value: string | null; onChange: (v: string | null) => void }) {
+export function BaseBranchPicker({ issueRef, repositoryId, value, onChange }: { issueRef: string; repositoryId: string; value: string | null; onChange: (v: string | null) => void }) {
   const { api } = useServices();
   const q = useQuery(runBranchesQuery(api, issueRef, repositoryId));
   if (!q.data) return null;

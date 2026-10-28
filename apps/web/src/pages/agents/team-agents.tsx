@@ -33,6 +33,7 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
   const { api, queryClient } = useServices();
   const { confirm, dialogs } = useDialogs();
   const [adding, setAdding] = useState(false);
+  const [learning, setLearning] = useState<AgentEntry | null>(null);
   const [error, setError] = useState<string>();
   const attempt = async (run: () => Promise<unknown>) => {
     setError(undefined);
@@ -72,6 +73,7 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
                   action={
                     <div className="flex gap-2">
                       <Link to={`/agents/${a.slug}`} className="btn" aria-label={`Open ${a.name}`}>Open</Link>
+                      <button className="btn" aria-label={`Learnings of ${a.name}`} onClick={() => setLearning(a)}>Learnings</button>
                       {manage && <button className="btn" aria-label={`Remove ${a.name}`} onClick={() => void remove(a)}>Remove</button>}
                     </div>
                   }
@@ -88,6 +90,7 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
         )}
       </div>
       {dialogs}
+      {learning && <LearningsDialog teamKey={teamKey} agent={learning} manage={manage} onClose={() => setLearning(null)} />}
       {adding && <AddDialog teamKey={teamKey} onRoster={agents.map((a) => a.slug)} onClose={() => setAdding(false)} add={(slug) => attempt(() => api.teams.addAgent(teamKey, slug))} />}
     </div>
   );
@@ -113,6 +116,57 @@ function AddDialog({ teamKey, onRoster, onClose, add }: { teamKey: string; onRos
               </li>
             ))}
             {options.length === 0 && <li className="py-2 text-muted">Everything is already on this team.</li>}
+          </ul>
+          <div className="mt-4 flex justify-end">
+            <Dialog.Close className="btn">Done</Dialog.Close>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+/**
+ * What the team has taught an agent (WH-124): short notes the agent proposed at the end of its runs, loaded into each later run for
+ * this team. People can correct or delete them; only this team's notes are here.
+ */
+function LearningsDialog({ teamKey, agent, manage, onClose }: { teamKey: string; agent: AgentEntry; manage: boolean; onClose: () => void }) {
+  const { api, queryClient } = useServices();
+  const key = ["agent-learnings", teamKey, agent.slug];
+  const query = useQuery({ queryKey: key, queryFn: () => api.teams.agentLearnings(teamKey, agent.slug) });
+  const [error, setError] = useState<string>();
+  const change = async (run: () => Promise<unknown>) => {
+    setError(undefined);
+    try {
+      await run();
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (e) {
+      setError(describeFailure(e));
+    }
+  };
+  return (
+    <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[min(92vw,520px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-line bg-panel p-5 text-fg shadow-2xl">
+          <Dialog.Title className="font-semibold">What this team has taught {agent.name}</Dialog.Title>
+          <Dialog.Description className="mt-1 text-xs text-muted">
+            Short notes {agent.name} proposed after its runs; each later run for this team starts with them.{query.data ? ` Up to ${query.data.cap}.` : ""}
+          </Dialog.Description>
+          {error && <p role="alert" className="mt-2 text-sm text-danger">{error}</p>}
+          <ul className="mt-3 space-y-2 text-sm" aria-label="Learnings">
+            {(query.data?.learnings ?? []).map((l) => (
+              <li key={l.id} className="flex items-start gap-2">
+                <span className="flex-1">{l.note}</span>
+                {manage && (
+                  <>
+                    <button className="btn py-0.5 text-xs" aria-label={`Edit: ${l.note}`} onClick={() => { const next = window.prompt("Edit this learning", l.note); if (next && next.trim() !== l.note) void change(() => api.teams.updateLearning(teamKey, agent.slug, l.id, next)); }}>Edit</button>
+                    <button className="btn py-0.5 text-xs" aria-label={`Delete: ${l.note}`} onClick={() => void change(() => api.teams.deleteLearning(teamKey, agent.slug, l.id))}>Delete</button>
+                  </>
+                )}
+              </li>
+            ))}
+            {query.data?.learnings.length === 0 && <li className="text-muted">Nothing yet.</li>}
           </ul>
           <div className="mt-4 flex justify-end">
             <Dialog.Close className="btn">Done</Dialog.Close>

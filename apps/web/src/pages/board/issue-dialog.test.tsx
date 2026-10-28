@@ -233,6 +233,68 @@ describe("the properties", () => {
     expect(server.sent("PATCH /api/app/issues/AA-2")[1].body).toEqual({ assigneeId: "u2", version: 1 });
   });
 
+  test("Delegate lists the team's agents as 'Name · Role' and sends the slug; the current one is shown", async () => {
+    const remy = { id: "wa-1", slug: "remy", name: "Remy", role: "Reviewer" };
+    const { server, d } = await open((s) => {
+      serve(s, { delegateAgentId: "wa-1" });
+      s.on("GET /api/app/teams/AA/agents", { agents: [remy, { id: "wa-2", slug: "bo", name: "Bo", role: "Builder" }] });
+      s.on("GET /api/app/issues/AA-2/plan", { plans: [{ repository: "wheelhouse", baseBranch: "development", device: "MacBook Pro", model: "opus" }] });
+      s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
+    });
+    expect(await within(d).findByText("wheelhouse · development · MacBook Pro · opus")).toBeTruthy();
+    await pick(userEvent.setup(), d, "Delegate", "Bo · Builder");
+    await waitFor(() => expect(server.sent("PATCH /api/app/issues/AA-2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/issues/AA-2")[0].body).toEqual({ delegate: "bo", version: 1 });
+  });
+
+  test("Where it runs says a delegation needs setup, and adding a repository sends the target list", async () => {
+    const { server, d } = await open((s) => {
+      serve(s, { delegateAgentId: "wa-1", delegation: { state: "needs_setup", line: null, prs: [] } });
+      s.on("GET /api/app/issues/AA-2/jobs", { jobs: [], devices: [], repositories: [{ id: "r1", name: "wheelhouse", fullName: "acme/wheelhouse", defaultBranch: "main" }] });
+      s.on("GET /api/app/issues/AA-2/jobs/branches", { defaultBranch: "main", branches: ["main"], listed: true });
+      s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
+    });
+    expect(await within(d).findByText(/Needs setup/)).toBeTruthy();
+    const user = userEvent.setup();
+    await user.click(within(d).getByRole("combobox", { name: "Add repository" }));
+    await user.click(await screen.findByRole("option", { name: "wheelhouse" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/issues/AA-2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/issues/AA-2")[0].body).toEqual({ targets: [{ repository: "r1" }], version: 1 });
+  });
+
+  test("Suggested targets are confirmed with one click, which saves them", async () => {
+    const { server, d } = await open((s) => {
+      s.on("GET /api/app/issues/AA-2", detail(T2, { proposedTargets: [{ repositoryId: "r1", repository: "acme/wheelhouse", baseBranch: "development" }] }));
+      s.on("GET /api/app/issues/AA-2/jobs", { jobs: [], devices: [], repositories: [] });
+      s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
+    });
+    expect(await within(d).findByText(/acme\/wheelhouse · development/)).toBeTruthy();
+    await userEvent.setup().click(within(d).getByRole("button", { name: /^Confirm/ }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/issues/AA-2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/issues/AA-2")[0].body).toEqual({ targets: [{ repository: "r1", branch: "development" }], version: 1 });
+  });
+
+  test("Suggest where asks the server and offers the answer for confirming, saving nothing", async () => {
+    const { server, d } = await open((s) => {
+      s.on("GET /api/app/issues/AA-2/jobs", { jobs: [], devices: [], repositories: [{ id: "r1", name: "wheelhouse", fullName: "acme/wheelhouse", defaultBranch: "main" }] });
+      s.on("POST /api/app/issues/AA-2/targets/suggest", { suggestions: [{ repositoryId: "r1", repository: "acme/wheelhouse", baseBranch: "main" }] });
+    });
+    await userEvent.setup().click(await within(d).findByRole("button", { name: "Suggest where" }));
+    expect(await within(d).findByText(/Suggested: acme\/wheelhouse · main/)).toBeTruthy();
+    expect(server.sent("PATCH /api/app/issues/AA-2")).toHaveLength(0);
+  });
+
+  test("a suggested agent is offered under Delegate and delegates with one click", async () => {
+    const { server, d } = await open((s) => {
+      s.on("GET /api/app/issues/AA-2", detail(T2, { suggestedAgent: "bo" }));
+      s.on("GET /api/app/teams/AA/agents", { agents: [{ id: "wa-2", slug: "bo", name: "Bo", role: "Builder" }] });
+      s.on("PATCH /api/app/issues/AA-2", { issue: T2 });
+    });
+    await userEvent.setup().click(await within(d).findByRole("button", { name: "Suggested: Bo" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/issues/AA-2")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/issues/AA-2")[0].body).toEqual({ delegate: "bo", version: 1 });
+  });
+
   test("Unassigned clears the assignee with null", async () => {
     const { server, d } = await open((s) => {
       serve(s, { assigneeId: "u1" });

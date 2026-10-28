@@ -9,8 +9,9 @@ import { avatarUrl } from "../../images/index";
 import { Database } from "../../../platform/database/database";
 import { EventsService } from "../../../platform/events/events.service";
 import { TeamAccessService } from "../../teams/index";
+import { IssueTargets } from "../issue-targets";
 import { ProjectsRepository, type ProjectRow } from "./projects.repository";
-import { STATUS_ORDER, bad, day, healthOf, oneOf, positionBetween, text, type HealthView, type MilestoneInput, type ProgressCounts, type ProjectInput } from "../issues.rules";
+import { STATUS_ORDER, bad, day, healthOf, oneOf, positionBetween, targetInputs, text, type HealthView, type MilestoneInput, type ProgressCounts, type ProjectInput } from "../issues.rules";
 
 /**
  * Projects (WH-118): an outcome that ends and can span teams, with a lead, dates, milestones and a health worked out from its
@@ -58,6 +59,8 @@ export type ProjectIssueView = { ref: string; title: string; priority: string; s
 export type ProjectTeamView = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; issues: ProjectIssueView[] };
 export type ProjectDetail = ProjectSummary & {
   canAdmin: boolean;
+  /** WH-135: where the project's work happens; the fallback for its issues' targets. */
+  repositories: { repositoryId: string; repository: string; branch: string }[];
   milestones: ProjectMilestoneView[];
   /** The teams of the project the viewer is on, with their issues. */
   teams: ProjectTeamView[];
@@ -86,6 +89,7 @@ export class ProjectsService {
     @Inject(ProjectsRepository) private readonly repo: ProjectsRepository,
     @Inject(TeamAccessService) private readonly access: TeamAccessService,
     @Inject(EventsService) private readonly events: EventsService,
+    @Inject(IssueTargets) private readonly targets: IssueTargets,
   ) {}
 
   // ───────── who may do what ─────────
@@ -255,7 +259,7 @@ export class ProjectsService {
       const candidates = [...roles].filter(([tid, role]) => roleAllows(role, "edit") && !a.teamIds.includes(tid)).map(([tid]) => tid);
       if (candidates.length) addableTeams = (await this.repo.teamsByIds(candidates)).map(({ key, name }) => ({ key, name })).sort((x, y) => x.key.localeCompare(y.key));
     }
-    return { ...summary, canAdmin: a.canAdmin, milestones, teams: teamViews, others, addableTeams };
+    return { ...summary, canAdmin: a.canAdmin, repositories: await this.targets.ofProject(id), milestones, teams: teamViews, others, addableTeams };
   }
 
   // ───────── writing ─────────
@@ -339,6 +343,11 @@ export class ProjectsService {
       const sd = set.startDate === undefined ? cur.startDate : set.startDate;
       const td = set.targetDate === undefined ? cur.targetDate : set.targetDate;
       if (sd && td && td < sd) bad("targetDate", "The target date is before the start date");
+      if (patch.repositories !== undefined) {
+        const was = JSON.stringify(await this.targets.ofProject(id));
+        await this.targets.setProject(cur, targetInputs(patch.repositories, "repositories"));
+        if (was !== JSON.stringify(await this.targets.ofProject(id))) await this.workspaceEvent(actor, { type: "project.updated", entityId: id, summary: `updated project "${cur.name}": repositories`, data: { changed: ["repositories"] } });
+      }
       if (!Object.keys(set).length) return;
       const u = await this.repo.updateProject(id, { ...set, version: cur.version + 1, updatedAt: new Date() });
       const changed = Object.keys(set);

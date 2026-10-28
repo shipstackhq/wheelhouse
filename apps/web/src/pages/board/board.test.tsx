@@ -49,6 +49,33 @@ describe("the board", () => {
     expect(within(card).getByText("API")).toBeTruthy();
   });
 
+  test("a delegated issue's card says it is delegated to an agent", async () => {
+    renderApp("/t/AA", (s) =>
+      liveBoard(s, "AA", makeBoard("AA", { issues: [issue({ number: 8, title: "Delegated", delegateAgentId: "a1" }), issue({ number: 9, title: "Plain" })] })),
+    );
+    const card = (await screen.findByText("Delegated")).closest("[data-issue]") as HTMLElement;
+    expect(within(card).getByTitle("Delegated to an agent")).toBeTruthy();
+    expect(within((await screen.findByText("Plain")).closest("[data-issue]") as HTMLElement).queryByTitle("Delegated to an agent")).toBeNull();
+  });
+
+  test("a delegated card shows its state: a warning dot when it needs setup, a line while it runs, a PR chip when done", async () => {
+    const d = (state: "needs_setup" | "running" | "asked" | "done", over = {}) => ({ state, line: null, prs: [], ...over });
+    renderApp("/t/AA", (s) =>
+      liveBoard(s, "AA", makeBoard("AA", { issues: [
+        issue({ number: 8, title: "Setup", delegateAgentId: "a1", delegation: d("needs_setup") }),
+        issue({ number: 9, title: "Busy", delegateAgentId: "a1", delegation: d("running", { line: "Using Edit" }) }),
+        issue({ number: 11, title: "Asking", delegateAgentId: "a1", delegation: d("asked") }),
+        issue({ number: 10, title: "Finished", delegateAgentId: "a1", delegation: d("done", { prs: [{ number: 7, url: "https://github.com/x/y/pull/7" }] }) }),
+      ] })),
+    );
+    const card = async (title: string) => (await screen.findByText(title)).closest("[data-issue]") as HTMLElement;
+    expect((await card("Setup")).querySelector("[data-delegation-dot]")).toBeTruthy();
+    expect(within(await card("Busy")).getByText("Using Edit")).toBeTruthy();
+    expect((await card("Busy")).querySelector("[data-delegation-dot]")).toBeNull();
+    expect(within(await card("Finished")).getByRole("link", { name: "PR #7" })).toBeTruthy();
+    expect((await card("Asking")).querySelector("[data-delegation-dot=asked]")).toBeTruthy();
+  });
+
   test("the search and filters above the board narrow its cards, and the columns stay", async () => {
     const user = userEvent.setup();
     await open();

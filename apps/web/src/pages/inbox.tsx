@@ -9,6 +9,8 @@ import { ColumnDivider, useColumnWidth } from "../components/column-divider";
 import { Markdown } from "../components/markdown";
 import { errorText } from "../components/query-state";
 import { Skeleton } from "../components/skeleton";
+import { describeFailure } from "../lib/form-state";
+import { useServices } from "../lib/services";
 import { plainSnippet, useInbox, useInboxActions, useUnreadCount, type InboxItem, type InboxView } from "../lib/notifications";
 
 /** The switchers and "Mark all read" share this height so they cannot drift apart. */
@@ -282,6 +284,7 @@ function Detail({ item: n, view, onBack, onAct }: { item: InboxItem; view: Inbox
         <p className="mt-3 whitespace-pre-wrap text-sm">{n.body}</p>
       ))}
       {view === "trash" && <p className="mt-3 text-xs text-muted">{removedNote(n.purgeAt)}</p>}
+      {n.type === "run.question" && n.href && view !== "trash" && <QuestionReply href={n.href} onAnswered={() => onAct("archive")} />}
       <div className="mt-4 flex items-center gap-2">
         {n.href && (
           <Link to={n.href} className="btn btn-primary">
@@ -298,5 +301,32 @@ function Detail({ item: n, view, onBack, onAct }: { item: InboxItem; view: Inbox
         })}
       </div>
     </article>
+  );
+}
+
+/** An agent's question can be answered from the inbox: the reply is a comment on the issue, the same as typing it there, and clears the item. */
+function QuestionReply({ href, onAnswered }: { href: string; onAnswered: () => void }) {
+  const { api } = useServices();
+  const [text, setText] = useState("");
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const ref = new URL(href, "http://x").searchParams.get("t");
+  if (!ref) return null;
+  const send = async () => {
+    setState({ busy: true, error: null });
+    try {
+      await api.issues.comment(ref, text.trim());
+      onAnswered();
+    } catch (e) {
+      setState({ busy: false, error: describeFailure(e) });
+    }
+  };
+  return (
+    <div className="mt-4 space-y-2">
+      <textarea className="input min-h-20 w-full" aria-label="Your answer" placeholder="Answer here, or on the issue" value={text} onChange={(e) => setText(e.target.value)} />
+      <button type="button" className="btn btn-primary" disabled={state.busy || !text.trim()} onClick={() => void send()}>
+        Reply
+      </button>
+      {state.error && <p className="text-sm text-danger" role="alert">{state.error}</p>}
+    </div>
   );
 }

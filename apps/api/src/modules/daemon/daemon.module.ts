@@ -18,6 +18,9 @@ import { DeviceGuard } from "./device.guard";
 import { DevicesController } from "./devices.controller";
 import { DevicesService } from "./devices.service";
 import { RunNotifications } from "./runs.notifications";
+import { LearningsController } from "./learnings.controller";
+import { LearningsService } from "./learnings.service";
+import { RunPlanner } from "./run-planner";
 import { RunsService } from "./runs.service";
 import { DelegationService } from "./delegation.service";
 
@@ -25,7 +28,7 @@ import { DelegationService } from "./delegation.service";
  * The controllers a process of this role serves: the paired machine's API (/api/daemon) where the daemon role runs, and the
  * person's side (/api/app/devices, runs on an issue) where the api role runs, since that is where sessions and CSRF live.
  */
-export const daemonControllers = (role: ServiceRole): Type[] => [...(servesDaemon(role) ? [DaemonController] : []), ...(servesApi(role) ? [DevicesController, ChatController] : [])];
+export const daemonControllers = (role: ServiceRole): Type[] => [...(servesDaemon(role) ? [DaemonController] : []), ...(servesApi(role) ? [DevicesController, ChatController, LearningsController] : [])];
 
 /**
  * The machine side (device auth, the guard, the stream, jobs, the sweep) depends only on this module's own providers and the platform
@@ -41,7 +44,7 @@ export const daemonProviders = (role: ServiceRole): Provider[] => [
   RunNotifications,
   DeviceAuthService,
   ...(servesDaemon(role) ? [DeviceGuard, DaemonSweep] : []),
-  ...(servesApi(role) ? [DevicesService, RunsService, ChatService, DelegationService] : []),
+  ...(servesApi(role) ? [DevicesService, RunsService, RunPlanner, ChatService, DelegationService, LearningsService] : []),
 ];
 
 @Module({})

@@ -38,6 +38,8 @@ import type {
   AdminWorkspace,
   AdminWorkspaceDetail,
   AgentEntry,
+  RosterAgent,
+  AgentLearning,
   AgentProfile,
   AgentsPage,
   CatalogAgent,
@@ -100,6 +102,9 @@ import type {
   JobView,
   PairingPeek,
   RunBranches,
+  RunPlanPreview,
+  IssueTarget,
+  RunDefaults,
 } from "./types";
 
 export type * from "./types";
@@ -312,8 +317,13 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** Remove someone from the team, or leave it yourself. */
       removeMember: (teamKey: string, userId: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/members/${encodeURIComponent(userId)}`),
       /** The team's agents; empty while the workspace has agents off. */
-      agents: async (teamKey: string) => (await request<{ agents: AgentEntry[] }>("GET", `${team(teamKey)}/agents`)).agents,
+      agents: async (teamKey: string) => (await request<{ agents: RosterAgent[] }>("GET", `${team(teamKey)}/agents`)).agents,
       addAgent: async (teamKey: string, slug: string) => (await request<{ agent: AgentEntry }>("POST", `${team(teamKey)}/agents`, { slug })).agent,
+      /** What the team has taught one of its agents (WH-124), and the most it keeps. */
+      agentLearnings: (teamKey: string, slug: string) => request<{ learnings: AgentLearning[]; cap: number }>("GET", `${team(teamKey)}/agents/${encodeURIComponent(slug)}/learnings`),
+      updateLearning: async (teamKey: string, slug: string, id: string, note: string) =>
+        (await request<{ learning: AgentLearning }>("PATCH", `${team(teamKey)}/agents/${encodeURIComponent(slug)}/learnings/${encodeURIComponent(id)}`, { note })).learning,
+      deleteLearning: (teamKey: string, slug: string, id: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/agents/${encodeURIComponent(slug)}/learnings/${encodeURIComponent(id)}`),
       removeAgent: (teamKey: string, slug: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/agents/${encodeURIComponent(slug)}`),
       /** A workspace owner or admin joins the team as its admin (audited). */
       join: (teamKey: string) => request<{ team: { id: string; key: string; name: string } }>("POST", `${team(teamKey)}/join`, {}),
@@ -359,6 +369,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
       move: async (ref: string, move: MoveIssue) =>
         (await request<{ issue: IssueView & { status: string | undefined } }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/move`, move)).issue,
       remove: (ref: string) => request<{ ok: true }>("DELETE", `/api/app/issues/${encodeURIComponent(ref)}`),
+      /** Which of the team's repositories the work probably belongs in (a small model reads the issue and the map); nothing is saved. */
+      suggestTargets: async (ref: string) => (await request<{ suggestions: IssueTarget[] }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/targets/suggest`, {})).suggestions,
       comment: async (ref: string, body: string) => (await request<{ comment: IssueComment }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/comments`, { body })).comment,
       link: (ref: string, nodeId: string) => request<{ ok: true }>("PUT", `/api/app/issues/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`, {}),
       unlink: (ref: string, nodeId: string) => request<{ ok: true }>("DELETE", `/api/app/issues/${encodeURIComponent(ref)}/nodes/${encodeURIComponent(nodeId)}`),
@@ -582,6 +594,9 @@ export function createApiClient(options: ApiClientOptions = {}) {
       denyPairing: (code: string) => request<{ ok: true }>("POST", "/api/app/devices/pair/deny", { code }),
       update: async (id: string, patch: { name?: string; poolSize?: number; chatModel?: string | null }) =>
         (await request<{ device: DeviceView }>("PATCH", `/api/app/devices/${encodeURIComponent(id)}`, patch)).device,
+      runDefaults: () => request<RunDefaults>("GET", "/api/app/run-defaults"),
+      /** Only what is named changes; null clears it. */
+      setRunDefaults: (patch: Partial<RunDefaults>) => request<RunDefaults>("PUT", "/api/app/run-defaults", patch),
       /** Its token stops working and what it was running is canceled. */
       unpair: (id: string) => request<{ ok: true; canceled: number }>("DELETE", `/api/app/devices/${encodeURIComponent(id)}`),
     },
@@ -592,8 +607,10 @@ export function createApiClient(options: ApiClientOptions = {}) {
       /** The branches a run in that repository can start from. */
       branches: (ref: string, repositoryId: string) =>
         request<RunBranches>("GET", `/api/app/issues/${encodeURIComponent(ref)}/jobs/branches?repositoryId=${encodeURIComponent(repositoryId)}`),
-      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string; baseBranch?: string; continuesJobId?: string }) =>
+      start: async (ref: string, input: { deviceId: string; repositoryId?: string; model: string; baseBranch?: string; agent?: string; continuesJobId?: string }) =>
         (await request<{ job: JobView }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/jobs`, input)).job,
+      /** What a start would do now, for the issue's delegate or the given agent (a roster slug). */
+      plan: (ref: string, agent?: string) => request<RunPlanPreview>("GET", `/api/app/issues/${encodeURIComponent(ref)}/plan${agent ? `?agent=${encodeURIComponent(agent)}` : ""}`),
       /** Progress after event number `after`. */
       events: (id: string, after?: number) =>
         request<{ job: JobView; events: JobEvent[] }>("GET", `/api/app/jobs/${encodeURIComponent(id)}/events${after !== undefined ? `?after=${after}` : ""}`),
@@ -601,6 +618,8 @@ export function createApiClient(options: ApiClientOptions = {}) {
       cancel: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/cancel`, {})).job,
       /** Mark a run that cannot be reached lost. If the device reports it after all, it comes back. */
       markLost: async (id: string) => (await request<{ job: JobView }>("POST", `/api/app/jobs/${encodeURIComponent(id)}/mark-lost`, {})).job,
+      /** WH-127: run the issue's delegate again with the caller as the requester. */
+      rerunDelegate: (ref: string) => request<{ ok: true }>("POST", `/api/app/issues/${encodeURIComponent(ref)}/delegate/rerun`, {}),
     },
 
     /** Chat with the codebase: a thread with Claude on one of the person's devices, read-only over a repository. */

@@ -166,7 +166,8 @@ export class AgentsService {
     await this.who(actor);
     const team = await this.access.require(actor, teamKey, "read");
     if (!(await this.repo.agentsEnabled(actor.workspaceId))) return { agents: [] };
-    return { agents: (await this.repo.roster(team.id)).map(agentView) };
+    // `id` lets an issue's delegate (a workspace agent id, WH-113) be matched to its roster entry.
+    return { agents: (await this.repo.roster(team.id)).map((r) => ({ ...agentView(r), id: r.id })) };
   }
 
   /** `{ slug }`: puts a catalog agent, a workspace-wide agent or this team's own agent on the roster. Another team's agent is a 400. */

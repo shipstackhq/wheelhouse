@@ -17,7 +17,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import type { CycleOption, TeamProjectOption } from "@wheelhouse/api-client";
+import type { CycleOption, Delegation, DelegationState, TeamProjectOption } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { useServices } from "../../lib/services";
 import { neighbours, parseIssueParam } from "../../lib/issue-nav";
@@ -398,10 +398,21 @@ function CardBody({ t, nodes, cycles, projects, relations, selected, overlay }: 
         <span className="font-mono text-[11px] text-muted">{t.ref}</span>
         <div className="flex gap-1">
           {t.createdByKind === "agent" && <span className="chip bg-agent/15 text-agent" title="Created by an agent"><AgentIcon /></span>}
+          {t.delegateAgentId && <DelegationBadge delegation={t.delegation} />}
           {t.priority !== "none" && <span className={clsx("chip", PRIORITY_STYLE[t.priority])}>{t.priority}</span>}
         </div>
       </div>
       <div className="mt-1 leading-snug">{t.title}</div>
+      {t.delegation?.line && <div className="mt-1 truncate text-xs text-muted">{t.delegation.line}</div>}
+      {!!t.delegation?.prs.length && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {t.delegation.prs.map((pr) => (
+            <a key={pr.number} className="chip bg-ok/10 text-ok" href={pr.url} target="_blank" rel="noreferrer" title="Pull request from the agent's run">
+              PR #{pr.number}
+            </a>
+          ))}
+        </div>
+      )}
       {(t.labels.length > 0 || linked.length > 0 || t.commentCount > 0 || t.agentClaimable || cycle || project || parentRef || progress) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
           {parentRef && (
@@ -435,5 +446,28 @@ function CardBody({ t, nodes, cycles, projects, relations, selected, overlay }: 
         </div>
       )}
     </div>
+  );
+}
+
+const DELEGATION_TITLE: Record<DelegationState, string> = {
+  needs_setup: "Delegated to an agent: needs a repository and branch",
+  waiting: "Delegated to an agent: waiting for your device",
+  running: "An agent is working on it",
+  asked: "The agent has a question",
+  done: "The agent is done",
+  failed: "The agent's run failed",
+  stopped: "The agent was stopped",
+};
+
+/** The agent badge on a delegated card: muted while it waits, a warning dot when it needs setup or failed, an accent dot (the only loud one) when it asks. */
+function DelegationBadge({ delegation }: { delegation: Delegation | null }) {
+  const state = delegation?.state;
+  const warn = state === "needs_setup" || state === "failed";
+  return (
+    <span className={clsx("chip", state === "waiting" ? "bg-bg text-muted" : "bg-agent/10 text-agent")} title={state ? DELEGATION_TITLE[state] : "Delegated to an agent"}>
+      <AgentIcon />
+      {warn && <span className="ml-0.5 size-1.5 rounded-full bg-warn" data-delegation-dot />}
+      {state === "asked" && <span className="ml-0.5 size-1.5 rounded-full bg-accent" data-delegation-dot="asked" />}
+    </span>
   );
 }

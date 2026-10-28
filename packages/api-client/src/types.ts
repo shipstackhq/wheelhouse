@@ -223,6 +223,10 @@ export type DashboardWidgets = {
 
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
+export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "failed" | "stopped";
+/** Where a delegation stands (WH-132, WH-134): its state, one line of what the agent is doing while it runs, and the pull requests of its runs. */
+export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string }[] };
+
 export type IssueView = {
   id: string;
   ref: string;
@@ -244,6 +248,8 @@ export type IssueView = {
   parentId: string | null;
   /** The workspace agent it is delegated to (WH-113), or null. */
   delegateAgentId: string | null;
+  /** Where the delegation stands, or null when the issue is not delegated. */
+  delegation: Delegation | null;
   position: number;
   version: number;
   createdByKind: "human" | "agent";
@@ -317,6 +323,8 @@ export type ProjectIssue = { ref: string; title: string; priority: Priority; sta
 export type ProjectTeam = { key: string; name: string; role: TeamRole; lead: boolean; total: number; done: number; issues: ProjectIssue[] };
 export type ProjectDetail = ProjectSummary & {
   canAdmin: boolean;
+  /** Where the project's work happens (WH-135); the fallback for its issues' targets. */
+  repositories: { repositoryId: string; repository: string; branch: string }[];
   milestones: ProjectMilestone[];
   /** The teams of the project the viewer is on, with their issues. */
   teams: ProjectTeam[];
@@ -336,6 +344,8 @@ export type ProjectInput = {
   leadTeam?: string;
   /** `null` clears a health that was set by hand. */
   healthOverride?: ProjectHealthValue | null;
+  /** Where the project's work happens: repository ids with the branch to start from (the repository's default when left out). Replaces the list. */
+  repositories?: { repository: string; branch?: string }[];
   /** When creating: the keys of the other teams taking part. */
   teams?: string[];
   /** The version last read, so an edit made since is refused. */
@@ -465,7 +475,16 @@ export type IssueDetail = {
   pullRequests: IssuePullRequest[];
   parent: IssueRelative | null;
   children: IssueRelative[];
+  /** Where the work happens (WH-129), in order: the issue's own, or its nearest ancestor's when `targetsInherited`. */
+  targets: IssueTarget[];
+  targetsInherited: boolean;
+  /** With no targets, where the work probably happens (WH-135); a person confirms them. */
+  proposedTargets: IssueTarget[];
+  /** The slug of a roster agent that fits the issue (WH-125), while it has no delegate; a suggestion only. */
+  suggestedAgent: string | null;
 };
+
+export type IssueTarget = { repositoryId: string; repository: string; baseBranch: string };
 
 /** The fields of an issue a person can change. `version` is what you last read: a change by anyone since is a 409 conflict. */
 export type IssuePatch = {
@@ -485,6 +504,8 @@ export type IssuePatch = {
   parent?: string | null;
   /** The slug of an agent on the team's roster (WH-113); null clears it. Only the assignee or an admin. */
   delegate?: string | null;
+  /** Where the work happens (WH-129): repository ids with the branch to start from (the repository's default when left out). Replaces the list; [] clears it. */
+  targets?: { repository: string; branch?: string }[];
   version?: number;
 };
 export type NewIssue = Omit<IssuePatch, "version"> & { title: string; status?: string };
@@ -683,6 +704,9 @@ export type OnboardingPage = { team: { key: string; name: string }; hasRepos: bo
 
 export type DeviceStatus = "online" | "offline" | "revoked";
 /** A machine paired to run agent jobs (the Wheelhouse daemon). Only its owner sees it. */
+/** A person's own defaults for runs started in their name (WH-123); null is no preference. */
+export type RunDefaults = { deviceId: string | null; model: string | null; effort: "low" | "medium" | "high" | null };
+
 export type DeviceView = {
   id: string;
   name: string;
@@ -748,6 +772,8 @@ export type IssueRuns = {
   devices: { id: string; name: string; status: DeviceStatus; models: string[]; poolSize: number; activeJobs: number }[];
   repositories: { id: string; name: string; fullName: string | null; defaultBranch: string }[];
 };
+/** What starting the issue's work would do now (WH-133): per target the repository, branch, device and model, or what is missing. */
+export type RunPlanPreview = { plans: { repository: string; baseBranch: string; device: string; model: string; effort: string | null; note?: string }[] } | { missing: "needs_setup" | "waiting" };
 /** The branches a run can start from. `listed` is false when they could not be read from GitHub: then only the default is known. */
 export type RunBranches = { defaultBranch: string; branches: string[]; listed: boolean };
 
@@ -803,5 +829,9 @@ export type CustomAgent = AgentView & {
   can?: { edit: boolean; face: boolean };
 };
 export type AgentEntry = CatalogAgent | CustomAgent;
+/** A team's roster entry: the agent plus its workspace agent id, which an issue's `delegateAgentId` names (WH-113). */
+/** A note an agent keeps about one team (WH-124). */
+export type AgentLearning = { id: string; note: string; createdAt: string };
+export type RosterAgent = AgentEntry & { id: string };
 export type AgentsPage = { enabled: boolean; catalog: CatalogAgent[]; workspace: CustomAgent[] };
 export type CatalogVersion = { version: number; summary: string; changelog: string };

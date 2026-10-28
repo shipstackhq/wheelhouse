@@ -5,7 +5,7 @@ import { GithubApiError, github, type GithubApi } from "../github/index";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { DaemonRepository, type DeviceRow, type JobRow } from "./daemon.repository";
-import { REJECT_REASONS, cleanCapabilities } from "./daemon.rules";
+import { LEARNINGS_CAP, REJECT_REASONS, cleanCapabilities, proposedLearnings } from "./daemon.rules";
 import { ACTIVE, type Device, MAX_EVENTS_PER_BATCH, MAX_EVENTS_PER_JOB, UNREACHABLE_AFTER_MS, isFinalState, str } from "./device-common";
 import { DeviceStreamService } from "./device-stream.service";
 import { RunNotifications } from "./runs.notifications";
@@ -186,7 +186,11 @@ export class DeviceJobsService {
     if (!["succeeded", "failed", "canceled"].includes(state)) throw new ServiceError("invalid", "state must be succeeded, failed or canceled");
     const stats = (input.diffStats && typeof input.diffStats === "object" ? input.diffStats : {}) as Record<string, unknown>;
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+    // WH-118: an agent that stops to ask ends its last message with "QUESTION: ..."; the run is then waiting for an answer, not finished work.
+    const said = state === "succeeded" ? (await this.repo.lastResultEvent(j.id))?.data?.text : null;
+    const question = typeof said === "string" && /^\s*QUESTION:/i.test(said) ? said.replace(/^\s*QUESTION:\s*/i, "").trim().slice(0, 2000) : null;
     const result = {
+      ...(question ? { question } : {}),
       commit: /^[0-9a-f]{7,40}$/.test(str(input.commit, 40)) ? str(input.commit, 40) : null,
       pushed: input.pushed === true,
       diffStats: { files: num(stats.files), insertions: num(stats.insertions), deletions: num(stats.deletions) },
@@ -204,9 +208,13 @@ export class DeviceJobsService {
       throw new ServiceError("conflict", `The job is ${j.state}`);
     }
     // Only the finish that moved the job tells the person who started it, so a finish sent again does not (and `lost`, `canceled` say nothing).
+    // WH-124: what the agent says it learned about this team, kept (a few a run, capped) for its later runs here.
+    const learned = proposedLearnings(input.learnings);
+    if (j.agentId && state === "succeeded" && !question && learned.length) await this.repo.addLearnings({ id: j.teamId, workspaceId: j.workspaceId }, j.agentId, learned, LEARNINGS_CAP);
+    await this.notices.summary(device, row);
     if (state === "succeeded" || state === "failed") await this.notices.finished(device, row);
     // Only the finish that moved the job opens one, so a finish sent again never opens a second.
-    if (!supersededBy && state === "succeeded" && result.pushed && result.commit && result.diffStats.files !== 0) await this.openJobPullRequest(row, device, gh);
+    if (!supersededBy && state === "succeeded" && !question && j.mode === "work" && result.pushed && result.commit && result.diffStats.files !== 0) await this.openJobPullRequest(row, device, gh);
     return { job: { id: row.id, state: row.state } };
   }
 

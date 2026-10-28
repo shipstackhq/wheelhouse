@@ -407,6 +407,41 @@
       "when": 1793140000003,
       "tag": "0057_job_effort",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1793140000004,
+      "tag": "0058_issue_targets",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1793146743234,
+      "tag": "0059_project_repositories",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1793147541736,
+      "tag": "0060_run_defaults",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1793147834835,
+      "tag": "0061_job_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1793148121174,
+      "tag": "0062_agent_learnings",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { uuid, text, timestamp, integer, boolean, jsonb, primaryKey, index, uniq
 import { table, createdAt, updatedAt } from "./common";
 import { teamScope } from "./team-scope";
 import { workspaces } from "./auth";
-import { issues } from "./issues";
+import { issues, projects } from "./issues";
 
 /** Server's view of the default branch: content hash per file, updated when code lands. */
 export const REPO_PROVIDERS = ["github", "local"] as const;
@@ -61,6 +61,33 @@ export const teamFiles = table(
     updatedAt: updatedAt(),
   },
   (t) => [teamScope("team_files", t), primaryKey({ columns: [t.teamId, t.path] })],
+);
+
+/**
+ * WH-129: where an issue's work happens, an ordered list of repositories each with the branch the work starts from (the work branch is
+ * always generated). A repository appears once per issue. The service checks that the repository is a connected GitHub repository of
+ * the issue's team or of a team in its project, and that the branch exists, before it writes here.
+ */
+export const issueTargets = table(
+  "issue_targets",
+  {
+    issueId: uuid("issue_id").notNull().references(() => issues.id, { onDelete: "cascade" }),
+    repositoryId: uuid("repository_id").notNull().references(() => repositories.id, { onDelete: "cascade" }),
+    baseBranch: text("base_branch").notNull(),
+    position: integer("position").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.issueId, t.repositoryId] })],
+);
+
+/** WH-135: the repositories a project's work happens in, each with an optional branch its issues start from. The fallback for an issue's targets. */
+export const projectRepositories = table(
+  "project_repositories",
+  {
+    projectId: uuid("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+    repositoryId: uuid("repository_id").notNull().references(() => repositories.id, { onDelete: "cascade" }),
+    branch: text("branch"),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.repositoryId] })],
 );
 
 // Which workspaces an installation of the App serves: one row per link. A row exists only after the installing person proved, through

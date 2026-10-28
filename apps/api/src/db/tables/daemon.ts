@@ -125,6 +125,8 @@ export const deviceJobs = table(
     createdBy: uuid("created_by"),
     // The agent whose profile the run uses (WH-114); null for a generic run.
     agentId: uuid("agent_id").references(() => workspaceAgents.id, { onDelete: "set null" }),
+    // WH-122: `review` is a reviewer agent looking at the head of the issue's pull request: it cannot push, and leaves only a comment.
+    mode: text("mode", { enum: ["work", "review"] }).notNull().default("work"),
     // The effort the run was started with (WH-115): the agent profile's, or null for the CLI's default.
     effort: text("effort"),
     offerExpiresAt: timestamp("offer_expires_at", { withTimezone: true }).notNull(),
@@ -147,6 +149,34 @@ export const deviceJobs = table(
     index("device_jobs_issue_idx").on(t.issueId),
     index("device_jobs_device_state_idx").on(t.deviceId, t.state),
   ],
+);
+
+/**
+ * WH-123: a person's own defaults for runs started in their name: the device, the model and the effort Claude works at. The lowest level
+ * of precedence (a choice for the run, then the agent's profile, then these). Deleting the device clears it here.
+ */
+export const runDefaults = table("run_defaults", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  deviceId: uuid("device_id").references(() => devices.id, { onDelete: "set null" }),
+  model: text("model"),
+  effort: text("effort", { enum: ["low", "medium", "high"] }),
+});
+
+/**
+ * WH-124: short notes an agent proposes at the end of a run, scoped to one team ("This team keeps tests next to source"). Capped per
+ * team and agent, edited and deleted by people, and loaded into every run of that agent for that team. Never transcripts.
+ */
+export const agentLearnings = table(
+  "agent_learnings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    teamId: uuid("team_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    agentId: uuid("agent_id").notNull().references(() => workspaceAgents.id, { onDelete: "cascade" }),
+    note: text("note").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [teamScope("agent_learnings", t), index("agent_learnings_team_agent_idx").on(t.teamId, t.agentId)],
 );
 
 /** A job's progress as the daemon reported it, numbered by the daemon so a retried batch is stored once. */

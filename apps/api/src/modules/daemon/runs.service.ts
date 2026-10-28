@@ -7,11 +7,12 @@ import { Database } from "../../platform/database/database";
 import { RepositoriesService, github, type RepositoryRow } from "../github/index";
 import { agentName, toAgentsJson } from "@wheelhouse/shared/agents/render";
 import { effectiveProfile } from "../agents/index";
-import { IssuesService } from "../issues/index";
+import { IssuesService, IssueTargets } from "../issues/index";
 import { DaemonRepository } from "./daemon.repository";
 import { deviceOnline, deviceView, jobView } from "./daemon.presenter";
 import { jobBranch, validBaseBranch } from "./daemon.rules";
 import { ACTIVE, OFFER_TTL_MS, isFinalState, str } from "./device-common";
+import { RunPlanner, isReviewer } from "./run-planner";
 import { DeviceJobsService } from "./device-jobs.service";
 import { DeviceStreamService } from "./device-stream.service";
 import { DevicesService } from "./devices.service";
@@ -30,6 +31,8 @@ export class RunsService {
     @Inject(DeviceJobsService) private readonly jobs: DeviceJobsService,
     @Inject(DevicesService) private readonly devices: DevicesService,
     @Inject(IssuesService) private readonly issues: IssuesService,
+    @Inject(IssueTargets) private readonly targets: IssueTargets,
+    @Inject(RunPlanner) private readonly planner: RunPlanner,
     @Inject(RepositoriesService) private readonly repositories: RepositoriesService,
   ) {}
 
@@ -54,6 +57,21 @@ export class RunsService {
       devices: mine.map((d) => ({ id: d.id, name: d.name, status: d.status, models: d.models, poolSize: d.poolSize, activeJobs: d.activeJobs })),
       repositories: runnable.map((r) => ({ id: r.id, name: r.displayName, fullName: r.githubFullName, defaultBranch: r.defaultBranch })),
     };
+  }
+
+  /**
+   * WH-133: what starting the issue's work now would do, from the same planner every start uses: one line per target (repository, base
+   * branch, device, model), or what is missing (`needs_setup`, `waiting`). For the given agent (a roster slug), else the issue's delegate.
+   */
+  async preview(actor: Actor, ref: string, agentSlug?: string) {
+    const { issue, team } = await this.issues.resolveIssue(actor, ref);
+    const agentId = agentSlug ? await this.issues.rosterAgentId(team.id, agentSlug) : issue.delegateAgentId;
+    if (agentSlug && !agentId) throw new ServiceError("invalid", `${agentSlug} is not on this team's roster`);
+    const planned = await this.planner.plan(actor, issue.id, agentId ?? null);
+    if ("missing" in planned) return planned;
+    const repos = new Map((await this.targets.candidates(issue)).map((r) => [r.id, r.displayName]));
+    const devices = new Map((await this.devices.listDevices(actor)).map((d) => [d.id, d.name]));
+    return { plans: planned.plans.map((p) => ({ repository: repos.get(p.repositoryId) ?? "", baseBranch: p.baseBranch, device: devices.get(p.deviceId) ?? "", model: p.model, effort: p.effort, ...(p.fellBack ? { note: "your default device is offline" } : {}) })) };
   }
 
   /**
@@ -85,9 +103,9 @@ export class RunsService {
     if (!job) throw new ServiceError("invalid", "There is no such run of this issue to continue", { fields: { continuesJobId: "a run of this issue" } });
     if (job.state === "unreachable") throw new ServiceError("conflict", "That run cannot be reached. If it is gone, mark it lost first, then continue it");
     if (!isFinalState(job.state)) throw new ServiceError("conflict", "That run has not finished yet");
-    // A run that was stopped or lost can be picked up again even if it never pushed; any other run needs a push to continue from.
+    // A run that was stopped or lost, or that stopped with a question, can be picked up again even if it never pushed; any other run needs a push to continue from.
     const pushed = job.result?.pushed === true;
-    if (!pushed && job.state !== "canceled" && job.state !== "lost") throw new ServiceError("invalid", "That run pushed nothing, so there is nothing to continue from: start over instead");
+    if (!pushed && job.state !== "canceled" && job.state !== "lost" && typeof job.result?.question !== "string") throw new ServiceError("invalid", "That run pushed nothing, so there is nothing to continue from: start over instead");
     if (await this.repo.activeRunOnBranch(job.branch, ACTIVE)) throw new ServiceError("conflict", "Another run is already working on that branch");
     const last = await this.repo.lastResultEvent(job.id);
     const summary = typeof last?.data?.text === "string" ? (last.data.text as string) : null;
@@ -95,7 +113,7 @@ export class RunsService {
   }
 
   /**
-   * "Run on device": `{ deviceId, repositoryId?, model, baseBranch?, continuesJobId? }`. With `continuesJobId` the new run works on that
+   * "Run on device": `{ deviceId, repositoryId?, model, baseBranch?, agent?, continuesJobId?, answer? }` (`agent`: a roster slug; `answer`: what someone replied to the run's question, carried to the continuing run). With `continuesJobId` the new run works on that
    * earlier run's branch, from its commits, with the same repository and pull request target; otherwise it starts a new branch. The person must be able to edit the issue and own the device, which must be
    * online. The repository is one of the issue team's GitHub repositories (the only one, if the team has one). The job is offered to
    * the device as a signed message carrying everything it needs, and expires if the device does not take it within a minute.
@@ -107,10 +125,23 @@ export class RunsService {
       throw new ServiceError("invalid", "Pick one of your devices", { fields: { deviceId: "one of your paired devices" } });
     });
     if (!deviceOnline(device)) throw new ServiceError("conflict", `${device.name} is offline. Start the daemon on it and try again.`);
-    const repos = (await this.runnableRepositories(actor, team.key)).runnable;
+    // WH-114: a delegated run carries its agent's profile; the daemon shapes the run with it (WH-115). Without one it is a generic run.
+    const slug = str(input.agent, 80);
+    const chosen = agentId ?? (slug ? await this.issues.rosterAgentId(team.id, slug) : undefined);
+    if (slug && !chosen) throw new ServiceError("invalid", `${slug} is not on this team's roster`, { fields: { agent: "an agent on the team's roster" } });
+    const agentRow = chosen ? await this.repo.workspaceAgent(chosen, actor.workspaceId) : undefined;
+    const agent = agentRow ? { id: agentRow.id, slug: agentRow.slug, profile: effectiveProfile(agentRow) } : null;
+    // WH-123: a choice for this run, else the agent's effort, else the person's default (the planner passes it as the choice).
+    const effort = (["low", "medium", "high"] as const).find((e) => e === input.effort) ?? agent?.profile.effort ?? null;
+
+    // WH-122: a reviewer looks at the head of the issue's open pull request, wherever it is; there is nothing to review without one.
+    const review = isReviewer(agentRow) ? ((await this.repo.openPullRequestOf(issue.id)) ?? null) : null;
+    if (isReviewer(agentRow) && !review) throw new ServiceError("conflict", "Nothing to review yet: open a pull request for this issue first");
+    // Its team's repositories and those of the teams in its project, so a target in another team's repository can run.
+    const repos = await this.targets.candidates(issue);
     // "Continue": carry on from an earlier run of this issue, on its branch and from its commits, with what it said at the end.
-    const previous = input.continuesJobId === undefined || input.continuesJobId === null ? null : await this.continuable(issue.id, input.continuesJobId);
-    const repoId = previous ? (previous.job.repositoryId ?? "") : str(input.repositoryId, 60);
+    const previous = review || input.continuesJobId === undefined || input.continuesJobId === null ? null : await this.continuable(issue.id, input.continuesJobId);
+    const repoId = review ? review.repositoryId : previous ? (previous.job.repositoryId ?? "") : str(input.repositoryId, 60);
     const repo = repoId ? repos.find((r) => r.id === repoId) : repos.length === 1 ? repos[0] : undefined;
     if (!repo)
       throw new ServiceError("invalid", repos.length ? "Pick the repository to work in" : "This team has no GitHub repository the agent can clone yet", {
@@ -119,36 +150,47 @@ export class RunsService {
     const view = deviceView(device);
     const model = str(input.model, 60);
     if (!model || !view.models.includes(model)) throw new ServiceError("invalid", `Pick a model ${device.name} offers: ${view.models.join(", ")}`, { fields: { model: view.models.join(", ") } });
-    const baseBranch = previous
+    const baseBranch = review
+      ? review.headBranch
+      : previous
       ? previous.job.baseBranch || repo.defaultBranch || "main"
       : input.baseBranch === undefined || input.baseBranch === ""
         ? repo.defaultBranch || "main"
         : validBaseBranch(input.baseBranch);
     if (!baseBranch) throw new ServiceError("invalid", "That is not a branch name", { fields: { baseBranch: "a branch of the repository" } });
 
-    // WH-114: a delegated run carries its agent's profile; the daemon shapes the run with it (WH-115). Without one it is a generic run.
-    const agentRow = agentId ? await this.repo.workspaceAgent(agentId, actor.workspaceId) : undefined;
-    const agent = agentRow ? { id: agentRow.id, slug: agentRow.slug, profile: effectiveProfile(agentRow) } : null;
+    // WH-124: what this team has taught the agent goes into its instructions (only this team's, only notes).
+    const definitions = agent ? toAgentsJson(agent.profile) : null;
+    const learned = agent ? (await this.repo.learningsOf(team.id, agent.id)).map((l) => l.note) : [];
+    if (agent && definitions && learned.length) {
+      const k = agentName(agent.profile);
+      definitions[k] = { ...definitions[k], prompt: `${definitions[k].prompt}\n\n## What this team has taught you\n\n${learned.map((n) => `- ${n}`).join("\n")}` };
+    }
 
     const id = crypto.randomUUID();
-    const branch = previous ? previous.job.branch : jobBranch(issueRef, issue.title, id);
+    const branch = review ? review.headBranch : previous ? previous.job.branch : jobBranch(issueRef, issue.title, id);
     const offerExpiresAt = new Date(Date.now() + OFFER_TTL_MS);
     const key = await this.stream.signingKey();
     const job = await this.db.transaction(async () => {
-      const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, agentId: agent?.id ?? null, effort: agent?.profile.effort ?? null, offerExpiresAt });
+      const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, agentId: agent?.id ?? null, effort, mode: review ? "review" : "work", offerExpiresAt });
       await this.stream.send(key, device.id, "job.offer", {
         jobId: j.id,
         workspaceId: j.workspaceId,
         expiresAt: offerExpiresAt.toISOString(),
         model,
+        effort,
         branch,
         baseBranch,
         // Where the worktree starts: the earlier run's pushed branch when continuing, else the base (also when a stopped or lost run never pushed).
         startFrom: previous?.pushed ? branch : baseBranch,
-        previous: previous ? { jobId: previous.job.id, state: previous.job.state, summary: previous.summary, error: previous.job.error } : null,
+        // WH-122: a review reads the pull request's head; its worktree cannot push, and it leaves only a comment.
+        mode: j.mode,
+        push: !review,
+        review: review ? { pullRequest: { number: review.number, url: review.url, headBranch: review.headBranch, headSha: review.headSha } } : null,
+        previous: previous ? { jobId: previous.job.id, state: previous.job.state, summary: previous.summary, error: previous.job.error, ...(str(input.answer, 4000) ? { answer: str(input.answer, 4000) } : {}) } : null,
         // Board writes come with the MCP redesign; until then the agent works only in its worktree.
         boardAccess: "none",
-        issue: { id: issue.id, ref: issueRef, title: issue.title, body: issue.body, team: { key: team.key, name: team.name } },
+        issue: { id: issue.id, ref: issueRef, title: issue.title, body: issue.body, team: { key: team.key, name: team.name }, subIssues: await this.issues.openSubIssues(team, issue.id) },
         repository: {
           id: repo.id,
           name: repo.displayName,
@@ -159,7 +201,7 @@ export class RunsService {
         },
         requestedBy: { id: actor.id, name: actor.name },
         // WH-115: the CLI's own agent definition (instructions with the guardrails, tools, effort); the daemon runs `claude --agents <definitions> --agent <name>`.
-        agent: agent ? { slug: agent.slug, name: agentName(agent.profile), definitions: toAgentsJson(agent.profile) } : null,
+        agent: agent ? { slug: agent.slug, name: agentName(agent.profile), definitions: definitions! } : null,
       });
       return j;
     });

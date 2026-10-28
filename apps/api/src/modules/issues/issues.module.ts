@@ -12,6 +12,8 @@ import { CyclesService } from "./cycles/cycles.service";
 import { InitiativesController } from "./initiatives/initiatives.controller";
 import { InitiativesRepository } from "./initiatives/initiatives.repository";
 import { InitiativesService } from "./initiatives/initiatives.service";
+import { IssueScoping } from "./issue-scoping";
+import { IssueTargets } from "./issue-targets";
 import { IssuesController } from "./issues.controller";
 import { bindIssuesLegacy } from "./issues.legacy";
 import { IssuesListeners } from "./issues.listeners";
@@ -30,8 +32,8 @@ import { ProjectsService } from "./projects/projects.service";
 @Module({
   imports: [EventsModule, TeamsModule, GithubModule, MapModule, NotificationsCoreModule],
   controllers: [BoardController, IssuesController, CyclesController, ProjectsController, InitiativesController],
-  providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners, IssueNotifications],
-  exports: [IssuesService, CyclesService, ProjectsService, InitiativesService],
+  providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners, IssueNotifications, IssueTargets, IssueScoping],
+  exports: [IssuesService, IssueTargets, CyclesService, ProjectsService, InitiativesService],
 })
 export class IssuesModule implements OnModuleInit {
   constructor(

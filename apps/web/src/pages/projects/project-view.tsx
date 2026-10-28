@@ -1,4 +1,5 @@
 import { useState, useTransition } from "react";
+import { useQueries } from "@tanstack/react-query";
 import { Link, useNavigate } from "../../lib/workspace";
 import clsx from "clsx";
 import { DropdownMenu } from "radix-ui";
@@ -250,6 +251,8 @@ export function ProjectView(props: { project: ProjectDetail }) {
           )}
         </section>
 
+        <ProjectRepositories project={p} pending={pending} run={run} />
+
         <section className="mt-6" aria-label="Teams">
           <h3 className="label mb-2">Teams</h3>
           <div className="space-y-3">
@@ -307,5 +310,39 @@ export function ProjectView(props: { project: ProjectDetail }) {
       </div>
       {dialogs}
     </div>
+  );
+}
+
+/**
+ * Where the project's work happens (WH-135): its repositories, each with the branch its issues start from. One repository settles the
+ * targets of every issue in the project that has none of its own; several are suggested on each issue.
+ */
+function ProjectRepositories({ project: p, pending, run }: { project: ProjectDetail; pending: boolean; run: (fn: () => Promise<unknown>) => void }) {
+  const { api } = useServices();
+  const lists = useQueries({ queries: p.teams.map((t) => ({ queryKey: ["team-repos", t.key], queryFn: () => api.repos.list(t.key) })) });
+  const options = lists.flatMap((q) => q.data ?? []).filter((r) => r.provider === "github" && r.githubFullName && !p.repositories.some((x) => x.repositoryId === r.id));
+  const current = p.repositories.map((r) => ({ repository: r.repositoryId, branch: r.branch }));
+  const save = (repositories: { repository: string; branch?: string }[]) => run(() => api.projects.update(p.id, { repositories, version: p.version }));
+  if (!p.repositories.length && !options.length) return null;
+  return (
+    <section className="mt-6" aria-label="Repositories">
+      <h3 className="label mb-2">Repositories</h3>
+      <ul className="space-y-1 text-sm">
+        {p.repositories.map((r, i) => (
+          <li key={r.repositoryId} className="flex items-center gap-2">
+            <span className="font-mono text-xs">{r.repository}</span>
+            <span className="text-muted">from {r.branch}</span>
+            {p.canEdit && (
+              <button type="button" className="btn py-0.5 text-xs" disabled={pending} aria-label={`Remove ${r.repository}`} onClick={() => save(current.filter((_, j) => j !== i))}>
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {p.canEdit && options.length > 0 && (
+        <Select className="mt-2 !w-auto" ariaLabel="Add repository" value="" placeholder="Add a repository…" options={options.map((r) => ({ value: r.id, label: r.githubFullName! }))} onValueChange={(v) => v && save([...current, { repository: v }])} />
+      )}
+    </section>
   );
 }

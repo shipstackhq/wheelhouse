@@ -13,6 +13,8 @@ import { DeviceStreamService } from "./device-stream.service";
  * A person's machines: list, approve a pairing, rename, resize, unpair. The person's side, so it is part of the api role. A device belongs to the person and serves every workspace they are in; devices are
  * selected by owner id: another person's device is not_found. See wheelhouse-cli/daemon/DESIGN.md.
  */
+const EFFORTS = ["low", "medium", "high"] as const;
+
 @Injectable()
 export class DevicesService {
   constructor(
@@ -35,6 +37,26 @@ export class DevicesService {
     const d = await this.repo.ownDevice(actor.id, id);
     if (!d) throw new ServiceError("not_found", "Device not found");
     return d;
+  }
+
+  /** WH-123: the person's own defaults for runs started in their name (null: no preference). */
+  async getRunDefaults(actor: Actor) {
+    if (actor.kind !== "human") throw new ServiceError("forbidden", "Only a person has run defaults");
+    const r = await this.repo.runDefaults(actor.id);
+    return { deviceId: r?.deviceId ?? null, model: r?.model ?? null, effort: r?.effort ?? null };
+  }
+
+  /** `{ deviceId?, model?, effort? }`: only what is named changes; null clears it. The device must be one of the person's own. */
+  async setRunDefaults(actor: Actor, input: Record<string, unknown>) {
+    const next = await this.getRunDefaults(actor);
+    if (input.deviceId !== undefined) next.deviceId = input.deviceId === null ? null : (await this.ownDevice(actor, str(input.deviceId, 60))).id;
+    if (input.model !== undefined) next.model = input.model === null ? null : str(input.model, 60) || null;
+    if (input.effort !== undefined) {
+      if (input.effort !== null && !EFFORTS.includes(input.effort as never)) throw new ServiceError("invalid", `effort must be ${EFFORTS.join(", ")}, or null`, { fields: { effort: EFFORTS.join(", ") } });
+      next.effort = input.effort as typeof next.effort;
+    }
+    await this.repo.saveRunDefaults(actor.id, next);
+    return next;
   }
 
   /** `{ name?, poolSize?, chatModel? }`. A new pool size or chat model is sent to the daemon as a signed settings message. */

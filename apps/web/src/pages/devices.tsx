@@ -9,7 +9,7 @@ import { CopyBlock } from "../components/copy-block";
 import { Loaded, errorText } from "../components/query-state";
 import { Select, useDialogs } from "../components/ui";
 import { describeFailure } from "../lib/form-state";
-import { devicesQuery, useDevices } from "../lib/queries";
+import { devicesQuery, runDefaultsQuery, useDevices } from "../lib/queries";
 import { useServices } from "../lib/services";
 
 /** The most runs a device takes at once; the server and the daemon hold the same limit. */
@@ -47,6 +47,7 @@ export function DevicesSettingsPage() {
         </p>
         <CopyBlock value={pairCommand()} />
       </div>
+      <RunDefaultsCard devices={query.data ?? []} />
       <Loaded query={query} label="Loading devices" rows={2}>
         {(devices) =>
           devices.length === 0 ? (
@@ -61,6 +62,40 @@ export function DevicesSettingsPage() {
         }
       </Loaded>
     </div>
+  );
+}
+
+/**
+ * Your own defaults for runs started in your name (WH-123): the lowest level, under a choice for the run and under what the agent's
+ * profile sets. A default device that is offline is passed over for another online one, and the run's plan says so.
+ */
+function RunDefaultsCard({ devices }: { devices: DeviceView[] }) {
+  const { api, queryClient } = useServices();
+  const query = useQuery(runDefaultsQuery(api));
+  const [error, setError] = useState<string | null>(null);
+  const d = query.data;
+  if (!d || devices.length === 0) return null;
+  const models = [...new Set(devices.flatMap((x) => x.models))];
+  const save = async (patch: Partial<typeof d>) => {
+    setError(null);
+    try {
+      queryClient.setQueryData(runDefaultsQuery(api).queryKey, await api.devices.setRunDefaults(patch));
+    } catch (e) {
+      setError(describeFailure(e));
+    }
+  };
+  const NONE = "";
+  return (
+    <section className="card space-y-3 p-5" aria-label="Run defaults">
+      <h2 className="font-medium">Run defaults</h2>
+      <p className="text-sm text-muted">Used for runs in your name when nothing says otherwise: the run itself, then the agent&apos;s own settings, come first.</p>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <Select className="!w-auto" ariaLabel="Default device" value={d.deviceId ?? NONE} options={[{ value: NONE, label: "No default device" }, ...devices.map((x) => ({ value: x.id, label: x.name }))]} onValueChange={(v) => void save({ deviceId: v || null })} />
+        <Select className="!w-auto" ariaLabel="Default model" value={d.model ?? NONE} options={[{ value: NONE, label: "No default model" }, ...models.map((m) => ({ value: m, label: m }))]} onValueChange={(v) => void save({ model: v || null })} />
+        <Select className="!w-auto" ariaLabel="Default effort" value={d.effort ?? NONE} options={[{ value: NONE, label: "Claude's own effort" }, ...(["low", "medium", "high"] as const).map((e) => ({ value: e, label: `${e} effort` }))]} onValueChange={(v) => void save({ effort: (v || null) as typeof d.effort })} />
+      </div>
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+    </section>
   );
 }
 

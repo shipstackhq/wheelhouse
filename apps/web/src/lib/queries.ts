@@ -88,12 +88,14 @@ export const useTeamMembers = (teamKey: string) => useQuery(teamMembersQuery(use
 /** The person's machines (the agent daemon), an issue's runs on them, and one run's progress. Under "issue" so an issue change refreshes its runs. */
 export const devicesQuery = (api: ApiClient) => ({ queryKey: ["devices"] as const, queryFn: () => api.devices.list() });
 export const issueRunsQuery = (api: ApiClient, ref: string) => ({ queryKey: wsKey(api, "issue", ref, "runs"), queryFn: () => api.runs.forIssue(ref) });
+export const issuePlanQuery = (api: ApiClient, ref: string, agent: string) => ({ queryKey: wsKey(api, "issue", ref, "plan", agent), queryFn: () => api.runs.plan(ref, agent || undefined) });
 export const runBranchesQuery = (api: ApiClient, ref: string, repositoryId: string) => ({
   queryKey: wsKey(api, "run-branches", ref, repositoryId),
   queryFn: () => api.runs.branches(ref, repositoryId),
   staleTime: 60_000,
 });
 export const runEventsQuery = (api: ApiClient, id: string) => ({ queryKey: wsKey(api, "run", id), queryFn: () => api.runs.events(id) });
+export const runDefaultsQuery = (api: ApiClient) => ({ queryKey: ["run-defaults"] as const, queryFn: () => api.devices.runDefaults() });
 export const useDevices = () => useQuery(devicesQuery(useServices().api));
 
 /** Chat with the codebase: the person's threads, one thread with its messages, and what a new chat can use. Threads share the "chats" key so the live signal refreshes them all. */

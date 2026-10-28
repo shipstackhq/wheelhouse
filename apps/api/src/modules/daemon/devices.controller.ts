@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Put, Query, Req } from "@nestjs/common";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { DevicesService } from "./devices.service";
@@ -25,6 +25,18 @@ export class DevicesController {
   }
 
   /** The machine behind a pairing code, before it is approved. */
+  /** WH-123: the person's own run defaults: device, model, effort (null: no preference). */
+  @Get("run-defaults")
+  runDefaults(@Req() req: SessionRequest) {
+    return this.devices.getRunDefaults(req.human.actor);
+  }
+
+  /** `{ deviceId?, model?, effort? }`: change only what is named; null clears it. */
+  @Put("run-defaults")
+  setRunDefaults(@Req() req: SessionRequest, @JsonBody() body: JsonObject) {
+    return this.devices.setRunDefaults(req.human.actor, body);
+  }
+
   @Get("devices/pair")
   peek(@Req() req: SessionRequest, @Query("code") code: string) {
     return this.devices.peekPairing(req.human.actor, code);
@@ -61,6 +73,12 @@ export class DevicesController {
   @Get("issues/:ref/jobs")
   jobs(@Req() req: SessionRequest, @Param("ref") ref: string) {
     return this.runs.issueJobs(req.human.actor, ref);
+  }
+
+  /** What a start would do now (the planner's answer): per target the repository, branch, device and model, or what is missing. `agent` is a roster slug (the issue's delegate when left out). */
+  @Get("issues/:ref/plan")
+  plan(@Req() req: SessionRequest, @Param("ref") ref: string, @Query("agent") agent?: string) {
+    return this.runs.preview(req.human.actor, ref, agent || undefined);
   }
 
   /** The branches a run in `repositoryId` can start from (from GitHub, the default branch first). */
