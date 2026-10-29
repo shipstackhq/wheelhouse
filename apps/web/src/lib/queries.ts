@@ -41,6 +41,9 @@ export const useGraph = (teamKey: string) => useQuery(graphQuery(useServices().a
 /** The docs page (the tree and its side panels), one doc, the repositories, the Connect GitHub card and the onboarding wizard. */
 export const docsQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "docs", teamKey), queryFn: () => api.docs.index(teamKey) });
 export const docQuery = (api: ApiClient, teamKey: string, ref: string) => ({ queryKey: wsKey(api, "doc", teamKey, ref), queryFn: () => api.docs.get(teamKey, ref) });
+/** The drawings grid (no scene bodies) and one drawing. */
+export const drawingsQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "drawings", teamKey), queryFn: () => api.drawings.list(teamKey) });
+export const useDrawings = (teamKey: string) => useQuery(drawingsQuery(useServices().api, teamKey));
 export const reposQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "repos", teamKey), queryFn: () => api.repos.list(teamKey) });
 export const githubQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "github", teamKey), queryFn: () => api.repos.github(teamKey) });
 export const onboardingQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "onboarding", teamKey), queryFn: () => api.onboarding.page(teamKey) });

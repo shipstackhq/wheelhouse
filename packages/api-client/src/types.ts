@@ -681,6 +681,15 @@ export type DocTemplateId = "spec" | "decision-record" | "runbook" | "meeting-no
 export type NewDoc = { title: string; body?: string; parent?: string | null; template?: DocTemplateId };
 export type DocPatch = { title?: string; body?: string; anchors?: string[]; labels?: string[]; version?: number };
 
+// ───────── drawings (WH-146): docs of kind "drawing" ─────────
+
+/** A card in the drawings grid: no scene body. `thumbnail` is an SVG document. */
+export type DrawingListItem = { id: string; slug: string; title: string; version: number; updatedAt: string; thumbnail: string | null; updatedByName: string };
+/** A whole drawing: `body` is the Excalidraw scene JSON. */
+export type Drawing = Doc & { kind: "drawing"; thumbnail: string | null };
+export type NewDrawing = { title: string; body?: string; thumbnail?: string };
+export type DrawingPatch = { title?: string; body?: string; thumbnail?: string; version?: number };
+
 export type RepoLifecycle = "live" | "being_replaced" | "planned" | "retired";
 export type Repository = {
   id: string;

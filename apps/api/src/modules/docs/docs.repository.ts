@@ -125,7 +125,7 @@ export class DocsRepository {
   /** Every live drawing of the team, newest edit first, with its thumbnail (no scene bodies). */
   listLiveDrawings(teamId: string) {
     return this.db.q
-      .select({ id: docs.id, slug: docs.slug, title: docs.title, version: docs.version, updatedAt: docs.updatedAt, thumbnail: docs.thumbnail })
+      .select({ id: docs.id, slug: docs.slug, title: docs.title, version: docs.version, updatedAt: docs.updatedAt, thumbnail: docs.thumbnail, updatedByKind: docs.updatedByKind, updatedById: docs.updatedById })
       .from(docs)
       .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), eq(docs.kind, "drawing")))
       .orderBy(desc(docs.updatedAt));

@@ -15,7 +15,7 @@ export type DocView = DocTreeItem & {
 };
 
 /** A drawing in the grid: no scene body. */
-export type DrawingListItem = { id: string; slug: string; title: string; version: number; updatedAt: Date; thumbnail: string | null };
+export type DrawingListItem = { id: string; slug: string; title: string; version: number; updatedAt: Date; thumbnail: string | null; updatedByName: string };
 
 /** A whole drawing: `body` is the Excalidraw scene JSON. */
 export type DrawingView = DocView & { kind: "drawing"; thumbnail: string | null };

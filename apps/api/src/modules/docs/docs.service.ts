@@ -142,7 +142,13 @@ export class DocsService {
   /** A team's drawings for the grid: newest edit first, thumbnails but no scene bodies. */
   async listDrawings(actor: Actor, teamRef: string) {
     const team = await this.access.require(actor, teamRef);
-    return this.repo.listLiveDrawings(team.id);
+    const [rows, members] = await Promise.all([this.repo.listLiveDrawings(team.id), this.repo.workspaceMembers(team.workspaceId)]);
+    const names = new Map(members.map((m) => [m.id, m.name]));
+    // Who last edited it: a person by name, an agent as "Agent".
+    return rows.map(({ updatedByKind, updatedById, ...d }) => ({
+      ...d,
+      updatedByName: updatedByKind === "agent" ? "Agent" : ((updatedById && names.get(updatedById)) || "Someone"),
+    }));
   }
 
   /** One drawing with its scene body and thumbnail. */
