@@ -44,6 +44,8 @@ export const docQuery = (api: ApiClient, teamKey: string, ref: string) => ({ que
 /** The drawings grid (no scene bodies) and one drawing. */
 export const drawingsQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "drawings", teamKey), queryFn: () => api.drawings.list(teamKey) });
 export const useDrawings = (teamKey: string) => useQuery(drawingsQuery(useServices().api, teamKey));
+export const drawingQuery = (api: ApiClient, teamKey: string, ref: string) => ({ queryKey: wsKey(api, "drawing", teamKey, ref), queryFn: () => api.drawings.get(teamKey, ref) });
+export const useDrawing = (teamKey: string, ref: string) => useQuery(drawingQuery(useServices().api, teamKey, ref));
 export const reposQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "repos", teamKey), queryFn: () => api.repos.list(teamKey) });
 export const githubQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "github", teamKey), queryFn: () => api.repos.github(teamKey) });
 export const onboardingQuery = (api: ApiClient, teamKey: string) => ({ queryKey: wsKey(api, "onboarding", teamKey), queryFn: () => api.onboarding.page(teamKey) });

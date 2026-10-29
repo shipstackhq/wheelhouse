@@ -13,6 +13,7 @@ import { BoardPage } from "../pages/board";
 import { DecisionsPage } from "../pages/decisions";
 import { DocsPage } from "../pages/docs";
 import { DrawingsPage } from "../pages/drawings";
+import { DrawingEditorPage } from "../pages/drawings/editor";
 import { GlossaryPage } from "../pages/glossary";
 import { OnboardingPage } from "../pages/onboarding";
 import { CyclePage, CyclesPage } from "../pages/cycles";
@@ -138,6 +139,7 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { path: "docs", Component: DocsPage },
                 { path: "docs/:docId", Component: DocsPage },
                 { path: "drawings", Component: DrawingsPage },
+                { path: "drawings/:drawingId", Component: DrawingEditorPage, handle: { fullWidth: true } satisfies PageHandle },
                 { path: "decisions", Component: DecisionsPage },
                 { path: "decisions/:number", Component: DecisionsPage },
                 { path: "glossary", Component: GlossaryPage },
