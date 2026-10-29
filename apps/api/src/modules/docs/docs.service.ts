@@ -12,7 +12,7 @@ import { GraphService, SessionsService, anchoredBy } from "../map/index";
 import type { Human } from "../auth/index";
 import { TeamAccessService } from "../teams/index";
 import { DocsRepository, type DocRow } from "./docs.repository";
-import { DOC_BODY_MAX_BYTES, DOC_MAX_DEPTH, DOC_MAX_PER_TEAM, DRAWING_BODY_MAX_BYTES, DRAWING_THUMBNAIL_MAX_BYTES, EMPTY_DRAWING, canWriteDocs, clipText, drawingBodyProblem, extractPathTokens, isSvg, slugifyDoc } from "./docs.rules";
+import { DOC_BODY_MAX_BYTES, DOC_MAX_DEPTH, DOC_MAX_PER_TEAM, DRAWING_BODY_MAX_BYTES, DRAWING_THUMBNAIL_MAX_BYTES, EMPTY_DRAWING, canWriteDocs, clipText, drawingBodyProblem, drawingOutline, extractPathTokens, isSvg, slugifyDoc } from "./docs.rules";
 
 export type { DocRow } from "./docs.repository";
 
@@ -149,6 +149,21 @@ export class DocsService {
       ...d,
       updatedByName: updatedByKind === "agent" ? "Agent" : ((updatedById && names.get(updatedById)) || "Someone"),
     }));
+  }
+
+  /** One drawing for an agent: who last edited it, its linked map nodes, and the scene as a text outline (never the JSON). */
+  async drawingOutlineFor(actor: Actor, teamRef: string, ref: string) {
+    const team = await this.access.require(actor, teamRef);
+    const d = await this.resolveDoc(team.id, ref, "drawing");
+    const [nodes, members] = await Promise.all([this.repo.nodesLinkedTo(d.id), this.repo.workspaceMembers(team.workspaceId)]);
+    const editor = d.updatedByKind === "agent" ? "Agent" : (members.find((m) => m.id === d.updatedById)?.name ?? "Someone");
+    return { drawing: d, editedBy: editor, nodes, outline: drawingOutline(d.body) };
+  }
+
+  /** Whether the ref names a live drawing of the team (the doc tools point an agent to get_drawing). */
+  async isDrawing(actor: Actor, teamRef: string, ref: string) {
+    const team = await this.access.require(actor, teamRef);
+    return !!(await this.resolveDoc(team.id, ref, "drawing").catch(() => undefined));
   }
 
   /** One drawing with its scene body and thumbnail. */
