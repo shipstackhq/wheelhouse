@@ -4,6 +4,25 @@ import { normPath } from "../map/index";
 /** Pure rules of the docs area: no database, so they are tested on their own. */
 
 export const DOC_BODY_MAX_BYTES = 200_000; // 200 KB
+// Drawings (WH-146): the body is Excalidraw scene JSON. Pasted images stay inside the scene (`files`, base64), so the limit is raised
+// instead of adding file storage; the SVG thumbnail has its own, smaller limit.
+export const DRAWING_BODY_MAX_BYTES = 2_000_000; // 2 MB
+export const DRAWING_THUMBNAIL_MAX_BYTES = 300_000; // 300 KB
+export const EMPTY_DRAWING = JSON.stringify({ type: "excalidraw", version: 2, elements: [], appState: {}, files: {} });
+
+/** A drawing body must be a JSON object (the Excalidraw scene); returns the reason it is not, or undefined. */
+export function drawingBodyProblem(body: string): string | undefined {
+  try {
+    const v = JSON.parse(body);
+    return v && typeof v === "object" && !Array.isArray(v) ? undefined : "Drawing body must be a JSON object (the Excalidraw scene)";
+  } catch {
+    return "Drawing body must be valid JSON (the Excalidraw scene)";
+  }
+}
+
+/** A thumbnail is an SVG document; it is only ever shown through <img>, never inlined. */
+export const isSvg = (s: string) => /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(s);
+
 export const DOC_MAX_DEPTH = 4;
 export const DOC_MAX_PER_TEAM = 500;
 

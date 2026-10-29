@@ -14,6 +14,14 @@ export type DocView = DocTreeItem & {
   createdAt: Date;
 };
 
+/** A drawing in the grid: no scene body. */
+export type DrawingListItem = { id: string; slug: string; title: string; version: number; updatedAt: Date; thumbnail: string | null };
+
+/** A whole drawing: `body` is the Excalidraw scene JSON. */
+export type DrawingView = DocView & { kind: "drawing"; thumbnail: string | null };
+
+export const drawingView = (d: DocRow): DrawingView => ({ ...docView(d), kind: "drawing", thumbnail: d.thumbnail });
+
 /** A doc row as the API shows it. */
 export const docView = (d: DocRow): DocView => ({
   id: d.id,
@@ -40,6 +48,19 @@ export const docsIndexView = (idx: { docs: DocTreeItem[]; nodes: { id: string; n
   decisions: idx.decisions.map(({ id, number, title }) => ({ id, number, title })),
   members: idx.members,
 });
+
+/** Same as `withCurrentDoc`, with the current drawing (thumbnail included) in `details.current`. */
+export async function withCurrentDrawing<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (e instanceof ServiceError && e.code === "conflict") {
+      const raw = (e.details as { current?: DocRow } | undefined)?.current;
+      if (raw) throw new ServiceError("conflict", e.message, { current: drawingView(raw) });
+    }
+    throw e;
+  }
+}
 
 /** A stale `version` is a 409 whose `details.current` is the doc as it is now, in the same trimmed shape as every other answer. */
 export async function withCurrentDoc<T>(run: () => Promise<T>): Promise<T> {

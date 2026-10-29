@@ -16,6 +16,10 @@ export const docs = table(
     body: text("body").notNull().default(""), // markdown, <= 200KB (enforced in service.ts)
     version: integer("version").notNull().default(1),
     position: doublePrecision("position").notNull().default(0),
+    // "markdown" (default) or "drawing" (WH-146): a drawing's body is the Excalidraw scene JSON (<= 2MB, enforced in docs.rules.ts).
+    kind: text("kind", { enum: ["markdown", "drawing"] }).notNull().default("markdown"),
+    // A drawing's SVG preview, exported by the editor on save (<= 300KB). Always null for markdown docs.
+    thumbnail: text("thumbnail"),
     createdByKind: text("created_by_kind", { enum: ["human", "agent"] }).notNull(),
     createdById: uuid("created_by_id"),
     updatedByKind: text("updated_by_kind", { enum: ["human", "agent"] }).notNull(),
