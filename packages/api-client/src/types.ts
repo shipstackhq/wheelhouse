@@ -713,6 +713,8 @@ export type GithubStatus = {
   /** Owners only: the settings an administrator must set to turn GitHub on. */
   missing: string[];
   isOwner: boolean;
+  /** Everyone: the workspace has a GitHub App installation. `installations` is for owners only. */
+  connected: boolean;
   installations: { installationId: string; account: string; failed: boolean; repositories: { id: string; fullName: string; private: boolean }[] }[];
 };
 export type OnboardingPage = { team: { key: string; name: string }; hasRepos: boolean; setup: SetupCommands };
