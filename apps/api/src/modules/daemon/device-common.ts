@@ -36,4 +36,4 @@ export const CHAT_KEY_TTL_MS = 10 * 60_000;
 export const RUN_KEY_TTL_MS = 6 * 60 * 60_000;
 export const CHAT_ACTIVITY_MAX = 30;
 export const CHAT_CONTENT_MAX = 400_000;
-export const CHAT_MESSAGE_MAX = 8_000;
+export const CHAT_MESSAGE_MAX = 100_000;

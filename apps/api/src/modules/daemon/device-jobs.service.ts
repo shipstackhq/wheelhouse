@@ -165,7 +165,7 @@ export class DeviceJobsService {
         const at = new Date(typeof e.at === "string" ? e.at : NaN);
         const data = e.data && typeof e.data === "object" && !Array.isArray(e.data) ? (e.data as Record<string, unknown>) : {};
         // One event's data is a summary, not a transcript: oversized payloads are cut to a note.
-        const small = JSON.stringify(data).length <= 8_000 ? data : { truncated: true };
+        const small = JSON.stringify(data).length <= 40_000 ? data : { truncated: true };
         return { jobId: j.id, seq: e.seq as number, at: Number.isNaN(at.getTime()) ? new Date() : at, type: str(e.type, 60), data: small };
       });
     if (rows.length) await this.repo.insertEvents(rows);
@@ -188,7 +188,7 @@ export class DeviceJobsService {
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
     // WH-118: an agent that stops to ask ends its last message with "QUESTION: ..."; the run is then waiting for an answer, not finished work.
     const said = state === "succeeded" ? (await this.repo.lastResultEvent(j.id))?.data?.text : null;
-    const question = typeof said === "string" && /^\s*QUESTION:/i.test(said) ? said.replace(/^\s*QUESTION:\s*/i, "").trim().slice(0, 2000) : null;
+    const question = typeof said === "string" && /^\s*QUESTION:/i.test(said) ? said.replace(/^\s*QUESTION:\s*/i, "").trim().slice(0, 20_000) : null;
     const result = {
       ...(question ? { question } : {}),
       commit: /^[0-9a-f]{7,40}$/.test(str(input.commit, 40)) ? str(input.commit, 40) : null,

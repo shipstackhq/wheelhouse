@@ -18,6 +18,16 @@ type HNode = { type: string; value?: string; tagName?: string; properties?: Reco
 
 const SKIP = new Set(["code", "pre", "a", "abbr"]);
 
+/** rehype plugin: a literal `<br>` (models put them in table cells) becomes a line break; any other raw HTML stays text. */
+function rehypeBreaks() {
+  const walk = (node: HNode) =>
+    node.children?.forEach((c, i, all) => {
+      if (c.type === "raw" && /^<br\s*\/?>$/i.test(c.value ?? "")) all[i] = { type: "element", tagName: "br", properties: {}, children: [] };
+      else walk(c);
+    });
+  return (tree: HNode) => walk(tree);
+}
+
 /** rehype plugin: wrap glossary terms in <abbr data-term> (first occurrence per term). */
 function rehypeGlossary(terms: GlossaryTerm[]) {
   const sorted = [...terms].sort((a, b) => b.term.length - a.term.length);
@@ -89,7 +99,7 @@ export function Markdown({
   onLink?: (href: string) => boolean;
 }) {
   const terms = useContext(GlossaryContext);
-  const plugins = useMemo(() => [rehypeGlossary(terms)], [terms]);
+  const plugins = useMemo(() => [rehypeBreaks, rehypeGlossary(terms)], [terms]);
   const components: Components = {
     abbr: ({ node, children, ...props }) => {
       const key = (node?.properties?.dataTerm as string | undefined) ?? (props as Record<string, string>)["data-term"];

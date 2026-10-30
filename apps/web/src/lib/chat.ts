@@ -1,7 +1,19 @@
 import type { ChatMessageView, ChatOptions } from "@wheelhouse/api-client";
 
 /** The longest message the server takes. */
-export const MAX_MESSAGE = 8000;
+export const MAX_MESSAGE = 100_000;
+/** A paste this long becomes a tile above the message box instead of filling it. */
+export const PASTE_AS_TILE = 2000;
+
+/** What is sent: the typed text, then each pasted block in `<pasted>` tags, so the model sees where it starts and ends and the thread can show it as a tile again. */
+export const joinMessage = (text: string, pastes: string[]) => [text.trim(), ...pastes.map((p) => `<pasted>\n${p}\n</pasted>`)].filter(Boolean).join("\n\n");
+
+/** A sent message back into its typed text and pasted blocks. */
+export function splitMessage(content: string): { text: string; pastes: string[] } {
+  const pastes: string[] = [];
+  const text = content.replace(/<pasted>\n([\s\S]*?)\n<\/pasted>/g, (_, p: string) => (pastes.push(p), "")).trim();
+  return { text, pastes };
+}
 /** How often a thread is read again while an answer is being made, in case the live signal does not get through. */
 export const CHAT_POLL_MS = 1_500;
 

@@ -40,7 +40,8 @@ export class RunNotifications {
           source: "wheelhouse",
           type: question ? "run.question" : ok ? "run.finished" : "run.failed",
           title: question ? `${who} has a question on ${ref}` : ok ? `Run on ${ref} finished` : `Run on ${ref} failed`,
-          body: question ? question.slice(0, SNIPPET) : ok ? issue.title : [issue.title, (job.error ?? "").slice(0, SNIPPET)].filter(Boolean).join("\n"),
+          body: question ? question : ok ? issue.title : [issue.title, (job.error ?? "").slice(0, SNIPPET)].filter(Boolean).join("\n"),
+          bodyFormat: question ? "markdown" : "text",
           actorKind: "agent",
           actorId: device.id,
           actorName: device.name,
@@ -70,7 +71,7 @@ export class RunNotifications {
     try {
       const who = await this.who(job);
       const said = (await this.repo.lastResultEvent(job.id))?.data?.text;
-      const text = typeof said === "string" ? said.trim().slice(0, 1500) : "";
+      const text = typeof said === "string" ? said.trim().slice(0, 20_000) : "";
       const question = typeof job.result?.question === "string" ? job.result.question : null;
       const files = (job.result?.diffStats as { files?: number | null } | undefined)?.files;
       const body = question

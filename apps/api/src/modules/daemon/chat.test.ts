@@ -124,7 +124,7 @@ describe("starting a chat", () => {
     await assert.rejects(chat.create(owner, input(mine.device.id, { model: "gpt" })), code("invalid"));
     await assert.rejects(chat.create(owner, input(mine.device.id, { repositoryId: crypto.randomUUID() })), code("invalid"));
     await assert.rejects(chat.create(owner, input(mine.device.id, { message: "   " })), code("invalid"));
-    await assert.rejects(chat.create(owner, input(mine.device.id, { message: "x".repeat(8001) })), code("invalid"));
+    await assert.rejects(chat.create(owner, input(mine.device.id, { message: "x".repeat(100_001) })), code("invalid"));
     await assert.rejects(chat.create(stranger, input(mine.device.id)), (e) => e instanceof ServiceError, "another workspace");
     await (await getDb()).update(schema.devices).set({ lastSeenAt: new Date(Date.now() - 3600e3) }).where(eq(schema.devices.id, mine.device.id));
     await assert.rejects(chat.create(owner, input(mine.device.id)), code("conflict"));

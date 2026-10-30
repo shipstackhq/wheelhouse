@@ -15,7 +15,8 @@ export default defineConfig({
   // Tailwind runs through its Vite plugin. An inline (even empty) PostCSS config stops Vite searching upwards and finding the
   // Next app's postcss.config.mjs in the repository root, which is for a different toolchain.
   css: { postcss: {} },
-  server: { port: 5173, proxy },
+  // Reachable from the network as this machine's .local name, not only localhost.
+  server: { port: 5173, host: true, allowedHosts: [".local"], proxy },
   preview: { port: 4173, proxy },
   build: { sourcemap: true },
   test: {

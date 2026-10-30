@@ -20,6 +20,7 @@ import {
   RiArrowUpLine,
   RiArrowUpSFill,
   RiExternalLinkLine,
+  RiFileCopyLine,
   RiArrowDownSFill,
   RiBold,
   RiBookmarkLine,
@@ -29,6 +30,7 @@ import {
   RiFlowChart,
   RiMapLine,
   RiPlayFill,
+  RiStopFill,
   RiSubtractLine,
   RiCheckLine,
   RiCircleLine,
@@ -173,6 +175,7 @@ export const PendingIcon = icon(RiCircleLine);
 export const AskIcon = icon(RiSparklingLine);
 export const DoneIcon = icon(RiCheckboxCircleFill);
 export const PlayIcon = icon(RiPlayFill);
+export const StopIcon = icon(RiStopFill);
 export const TidyIcon = icon(RiFlowChart);
 export const TrendUpIcon = icon(RiArrowUpSFill);
 export const TrendDownIcon = icon(RiArrowDownSFill);
@@ -195,6 +198,7 @@ export const ArrowDownIcon = icon(RiArrowDownLine);
 export const ArrowLeftIcon = icon(RiArrowLeftLine);
 export const ArrowRightIcon = icon(RiArrowRightLine);
 export const ExternalLinkIcon = icon(RiExternalLinkLine);
+export const CopyIcon = icon(RiFileCopyLine);
 export const ChevronDownIcon = icon(RiArrowDownSLine);
 export const ChevronLeftIcon = icon(RiArrowLeftSLine);
 export const ChevronRightIcon = icon(RiArrowRightSLine);

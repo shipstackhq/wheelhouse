@@ -2,16 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Outlet, useParams } from "react-router";
 import { Link, NavLink, useNavigate, wsKey } from "../lib/workspace";
 import clsx from "clsx";
+import { Popover } from "radix-ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ChatMessageView, ChatThreadView } from "@wheelhouse/api-client";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { AutoGrowTextarea } from "../components/auto-grow-textarea";
-import { ClaudeIcon, AddIcon, TrashIcon } from "../components/icons";
+import { ClaudeIcon, AddIcon, ArrowUpIcon, CheckIcon, ChevronDownIcon, CloseIcon, CopyIcon, FileIcon, StopIcon, TrashIcon } from "../components/icons";
 import { ColumnDivider, useColumnWidth } from "../components/column-divider";
 import { Markdown } from "../components/markdown";
 import { Loaded } from "../components/query-state";
 import { Select, useDialogs } from "../components/ui";
-import { atBottom, chatPollInterval, deviceAvailability, endNote, isBusy, liveLine, resolveNewChat, type NewChatForm } from "../lib/chat";
+import { atBottom, chatPollInterval, deviceAvailability, endNote, isBusy, joinMessage, liveLine, MAX_MESSAGE, PASTE_AS_TILE, resolveNewChat, splitMessage, type NewChatForm } from "../lib/chat";
 import { describeFailure } from "../lib/form-state";
 import { chatOptionsQuery, chatQuery, chatsQuery, useChats } from "../lib/queries";
 import { useServices } from "../lib/services";
@@ -73,11 +74,13 @@ export function NewChatPane() {
   const navigate = useNavigate();
   const teams = (useTeams().data ?? []).filter((t) => !t.retired);
   const [form, setForm] = useState<NewChatForm>({ teamKey: "", repositoryId: "", deviceId: "", model: "", message: "" });
+  const [pastes, setPastes] = useState<string[]>([]);
   const teamKey = teams.some((t) => t.key === form.teamKey) ? form.teamKey : (teams[0]?.key ?? "");
   const options = useQuery({ ...chatOptionsQuery(api, teamKey), enabled: !!teamKey });
-  const { form: chosen, problem } = resolveNewChat({ ...form, teamKey }, options.data);
+  // The message checked and sent is the typed text plus the pasted tiles; the box keeps only what was typed.
+  const { form: chosen, problem } = resolveNewChat({ ...form, teamKey, message: joinMessage(form.message, pastes) }, options.data);
   const { reason } = deviceAvailability(options.data ?? { devices: [] });
-  const set = (patch: Partial<NewChatForm>) => setForm({ ...chosen, ...patch });
+  const set = (patch: Partial<NewChatForm>) => setForm({ ...chosen, message: form.message, ...patch });
 
   const create = useMutation({
     mutationFn: () => api.chats.create({ ...chosen, message: chosen.message.trim() }),
@@ -97,7 +100,7 @@ export function NewChatPane() {
       </div>
       {options.isError && <p className="text-sm text-danger" role="alert">{describeFailure(options.error)}</p>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {teams.length > 1 && <Select className="!w-auto" ariaLabel="Team" value={teamKey} options={teams.map((t) => ({ value: t.key, label: t.name }))} onValueChange={(v) => setForm({ ...chosen, teamKey: v, repositoryId: "" })} />}
+        {teams.length > 1 && <Select className="!w-auto" ariaLabel="Team" value={teamKey} options={teams.map((t) => ({ value: t.key, label: t.name }))} onValueChange={(v) => set({ teamKey: v, repositoryId: "" })} />}
         {options.data && options.data.repositories.length > 0 && (
           <Select className="!w-auto" ariaLabel="Repository" value={chosen.repositoryId} options={options.data.repositories.map((r) => ({ value: r.id, label: r.name }))} onValueChange={(v) => set({ repositoryId: v })} />
         )}
@@ -120,14 +123,16 @@ export function NewChatPane() {
       </div>
       {reason && <p className="text-sm text-muted">{reason}{" "}<Link className="text-accent hover:underline" to="/settings/devices">Devices</Link></p>}
       <Composer
-        value={chosen.message}
+        value={form.message}
         onChange={(message) => set({ message })}
+        pastes={pastes}
+        onPastesChange={setPastes}
         onSend={send}
         busy={create.isPending}
         disabled={!options.data || !chosen.deviceId || !chosen.repositoryId}
         label="Ask about the code"
         error={create.isError ? describeFailure(create.error) : null}
-        hint={problem && chosen.message.trim() ? problem : null}
+        hint={problem && chosen.message ? problem : null}
         canSend={!problem}
       />
     </div>
@@ -135,18 +140,33 @@ export function NewChatPane() {
 }
 
 /** One message box with its Send (or Stop) button; Enter sends, Shift+Enter makes a new line. */
-function Composer(props: { value: string; onChange: (v: string) => void; onSend: () => void; busy?: boolean; disabled?: boolean; canSend: boolean; label: string; error?: string | null; hint?: string | null; onStop?: () => void; placeholder?: string; tools?: ReactNode }) {
+function Composer(props: { value: string; onChange: (v: string) => void; pastes: string[]; onPastesChange: (p: string[]) => void; onSend: () => void; busy?: boolean; disabled?: boolean; canSend: boolean; label: string; error?: string | null; hint?: string | null; onStop?: () => void; placeholder?: string; tools?: ReactNode }) {
   return (
     <div className="space-y-1">
       {props.error && <p className="text-sm text-danger" role="alert">{props.error}</p>}
-      <div className="card flex items-end gap-2 p-2">
+      <div className="rounded-2xl border border-line bg-panel p-2 transition focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/20">
+        {props.pastes.length > 0 && (
+          <ul className="mb-2 flex flex-wrap gap-2 px-1" aria-label="Pasted text">
+            {props.pastes.map((p, i) => (
+              <li key={i}>
+                <PasteTile text={p} onRemove={() => props.onPastesChange(props.pastes.filter((_, j) => j !== i))} />
+              </li>
+            ))}
+          </ul>
+        )}
         <AutoGrowTextarea
-          className="max-h-48 min-h-6 flex-1 bg-transparent px-1 py-0.5 text-sm outline-none disabled:text-muted"
+          className="max-h-48 min-h-6 w-full bg-transparent px-2 py-1 text-sm outline-none disabled:text-muted"
           aria-label={props.label}
           placeholder={props.placeholder ?? "Ask a question…"}
           value={props.value}
           disabled={props.disabled}
           onChange={(e) => props.onChange(e.target.value)}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData("text/plain");
+            if (text.length < PASTE_AS_TILE) return;
+            e.preventDefault();
+            props.onPastesChange([...props.pastes, text]);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
@@ -154,12 +174,18 @@ function Composer(props: { value: string; onChange: (v: string) => void; onSend:
             }
           }}
         />
-        {props.tools}
-        {props.onStop ? (
-          <button type="button" className="btn shrink-0" onClick={props.onStop}>Stop</button>
-        ) : (
-          <button type="button" className="btn btn-primary shrink-0" disabled={props.disabled || props.busy || !props.canSend} onClick={props.onSend}>Send</button>
-        )}
+        <div className="mt-1 flex items-center gap-2">
+          {props.tools}
+          {props.onStop ? (
+            <button type="button" className="btn ml-auto !h-8 !w-8 shrink-0 !rounded-full p-0" aria-label="Stop" onClick={props.onStop}>
+              <StopIcon />
+            </button>
+          ) : (
+            <button type="button" className="btn btn-primary ml-auto !h-8 !w-8 shrink-0 !rounded-full p-0" aria-label="Send" disabled={props.disabled || props.busy || !props.canSend} onClick={props.onSend}>
+              <ArrowUpIcon />
+            </button>
+          )}
+        </div>
       </div>
       {props.hint && <p className="px-1 text-xs text-muted">{props.hint}</p>}
     </div>
@@ -183,6 +209,7 @@ function Conversation({ chat, messages }: { chat: ChatThreadView; messages: Chat
   const navigate = useNavigate();
   const { confirm, dialogs } = useDialogs();
   const [draft, setDraft] = useState("");
+  const [pastes, setPastes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const busy = messages.some(isBusy);
@@ -208,7 +235,7 @@ function Conversation({ chat, messages }: { chat: ChatThreadView; messages: Chat
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: wsKey(api, "chats") });
   const send = async () => {
-    const message = draft.trim();
+    const message = joinMessage(draft, pastes);
     if (!message || busy || sending || !online) return;
     setSending(true);
     setError(null);
@@ -216,6 +243,7 @@ function Conversation({ chat, messages }: { chat: ChatThreadView; messages: Chat
       const added = await api.chats.send(chat.id, message, model !== chat.model ? model : undefined);
       queryClient.setQueryData(chatQuery(api, chat.id).queryKey, { chat: { ...chat, model, running: true }, messages: [...messages, ...added] });
       setDraft("");
+      setPastes([]);
       following.current = true;
     } catch (e) {
       setError(describeFailure(e));
@@ -272,15 +300,18 @@ function Conversation({ chat, messages }: { chat: ChatThreadView; messages: Chat
         <Composer
           value={draft}
           onChange={setDraft}
+          pastes={pastes}
+          onPastesChange={setPastes}
           onSend={() => void send()}
           busy={sending}
           disabled={busy || !online}
-          canSend={!!draft.trim()}
+          canSend={!!joinMessage(draft, pastes) && joinMessage(draft, pastes).length <= MAX_MESSAGE}
+          hint={joinMessage(draft, pastes).length > MAX_MESSAGE ? `Keep it under ${MAX_MESSAGE.toLocaleString()} characters` : null}
           label="Message"
           placeholder={busy ? "Answering…" : "Ask a follow-up…"}
           error={error}
           onStop={busy ? () => void stop() : undefined}
-          tools={models.length > 1 && <Select className="!w-auto shrink-0" ariaLabel="Model" value={model} options={models.map((m) => ({ value: m, label: m }))} onValueChange={setModel} />}
+          tools={models.length > 1 && <ModelPicker value={model} models={models} onChange={setModel} />}
         />
       </div>
       {dialogs}
@@ -288,11 +319,102 @@ function Conversation({ chat, messages }: { chat: ChatThreadView; messages: Chat
   );
 }
 
+/** The model for the next question: a small ghost trigger that opens a list of the models the device offers. */
+function ModelPicker({ value, models, onChange }: { value: string; models: string[]; onChange: (m: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger className="btn btn-ghost !h-8 !rounded-full px-2.5 text-xs data-[state=open]:bg-panel-2 data-[state=open]:text-fg" aria-label="Model">
+        <ClaudeIcon />
+        {value}
+        <ChevronDownIcon />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          side="top"
+          sideOffset={8}
+          collisionPadding={8}
+          className="z-50 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-line bg-panel p-1 text-fg shadow-xl"
+        >
+          {models.map((m) => (
+            <button
+              key={m}
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-panel-2"
+              onClick={() => {
+                onChange(m);
+                setOpen(false);
+              }}
+            >
+              <span className="flex-1 truncate">{m}</span>
+              {m === value && <CheckIcon />}
+            </button>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** Pasted text as a small card: its first lines and its length. In the box it can be removed; in the thread it opens to the full text. */
+function PasteTile({ text, onRemove }: { text: string; onRemove?: () => void }) {
+  const [open, setOpen] = useState(false);
+  if (open) return <pre className="max-h-96 max-w-full overflow-auto whitespace-pre-wrap break-all rounded-md border border-line bg-panel-2 p-2 text-xs" onClick={() => setOpen(false)}>{text}</pre>;
+  return (
+    <div className="relative w-40 rounded-md border border-line bg-panel-2 p-2 text-left text-xs">
+      <button type="button" className="block w-full text-left" disabled={!!onRemove} onClick={() => setOpen(true)} aria-label={onRemove ? undefined : "Show pasted text"}>
+        <p className="line-clamp-3 whitespace-pre-wrap break-all font-mono text-[10px] leading-tight text-muted">{text.slice(0, 300)}</p>
+        <p className="mt-1 flex items-center gap-1 text-muted"><FileIcon /> {text.split("\n").length} lines</p>
+      </button>
+      {onRemove && (
+        <button type="button" className="absolute right-1 top-1 rounded text-muted hover:text-fg" aria-label="Remove pasted text" onClick={onRemove}>
+          <CloseIcon />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Copies an answer as formatted HTML (tables paste as tables into Slack canvases and docs) with its markdown as the plain text.
+ * The clipboard API needs https or localhost; on a plain-http address it falls back to copying a hidden rendered copy.
+ */
+function CopyAnswer({ markdown }: { markdown: string }) {
+  const [done, setDone] = useState(false);
+  const copy = async (button: HTMLElement) => {
+    const html = button.closest("li")?.querySelector(".md-answer")?.innerHTML ?? "";
+    if (window.isSecureContext && "ClipboardItem" in window) {
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([html], { type: "text/html" }), "text/plain": new Blob([markdown], { type: "text/plain" }) })]);
+    } else {
+      const box = Object.assign(document.createElement("div"), { innerHTML: html });
+      box.style.cssText = "position:fixed;left:-9999px";
+      document.body.append(box);
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      getSelection()?.removeAllRanges();
+      getSelection()?.addRange(range);
+      document.execCommand("copy");
+      getSelection()?.removeAllRanges();
+      box.remove();
+    }
+    setDone(true);
+    setTimeout(() => setDone(false), 1500);
+  };
+  return (
+    <button type="button" className="btn btn-ghost h-6 px-1.5 text-xs text-muted" onClick={(e) => void copy(e.currentTarget)}>
+      {done ? <CheckIcon /> : <CopyIcon />} {done ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
 function MessageRow({ message: m }: { message: ChatMessageView }) {
   if (m.role === "user") {
+    const { text, pastes } = splitMessage(m.content);
     return (
-      <li className="flex justify-end">
-        <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-lg bg-panel-2 px-3 py-2 text-sm">{m.content}</p>
+      <li className="flex flex-col items-end gap-1">
+        {pastes.length > 0 && <div className="flex max-w-[85%] flex-wrap justify-end gap-2">{pastes.map((p, i) => <PasteTile key={i} text={p} />)}</div>}
+        {text && <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-lg bg-panel-2 px-3 py-2 text-sm">{text}</p>}
       </li>
     );
   }
@@ -300,7 +422,8 @@ function MessageRow({ message: m }: { message: ChatMessageView }) {
   const note = endNote(m);
   return (
     <li className="space-y-1 text-sm">
-      {m.content && <Markdown>{m.content}</Markdown>}
+      {m.content && <Markdown className="md md-answer">{m.content}</Markdown>}
+      {m.content && m.state === "done" && <CopyAnswer markdown={m.content} />}
       {live && <p className="animate-pulse text-xs text-muted" role="status">{live}</p>}
       {note && <p className={clsx("text-xs", m.state === "failed" ? "text-danger" : "text-muted")} role={m.state === "failed" ? "alert" : undefined}>{note}</p>}
     </li>

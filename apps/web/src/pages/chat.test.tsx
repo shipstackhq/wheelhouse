@@ -120,10 +120,10 @@ describe("a conversation", () => {
         return { messages: added };
       });
     });
-    const picker = await screen.findByRole("combobox", { name: "Model" });
+    const picker = await screen.findByRole("button", { name: "Model" });
     await waitFor(() => expect(picker.textContent).toBe("haiku"));
     await userEvent.click(picker);
-    await userEvent.click(await screen.findByRole("option", { name: "sonnet" }));
+    await userEvent.click(await screen.findByRole("button", { name: "sonnet" }));
     await userEvent.type(screen.getByLabelText("Message"), "More{Enter}");
     await waitFor(() => expect(server.sent("POST /api/app/chats/c1/messages").map((c) => c.body)).toEqual([{ message: "More", model: "sonnet" }]));
   });

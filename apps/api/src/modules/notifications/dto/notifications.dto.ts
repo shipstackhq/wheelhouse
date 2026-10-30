@@ -9,7 +9,7 @@ export const notificationInput = z.object({
   source: z.string().min(1).max(64),
   type: z.string().min(1).max(100),
   title: z.string().min(1).max(300),
-  body: z.string().max(5000).default(""),
+  body: z.string().max(20_000).default(""),
   /** How the reader shows `body`: as it is, or as markdown. A producer that writes plain text leaves it out. */
   bodyFormat: z.enum(["text", "markdown"]).default("text"),
   actorKind: z.enum(["human", "agent", "system"]).nullish(),
