@@ -17,6 +17,7 @@ const job = (id: string, over: Partial<JobView> = {}): JobView => ({
   repositoryName: "wheelhouse",
   result: { pushed: true, diffStats: { files: 2, insertions: 13, deletions: 2 }, costUsd: 0.02 },
   delivery: "pushed",
+  pullRequest: null,
   continuesJobId: null,
   error: null,
   cancelRequested: false,
@@ -76,7 +77,8 @@ describe("runs on a device", () => {
     const { server } = mount([job("e5", { delivery: "pr_failed", result: { pushed: true, pullRequestError: "no" }, model: "sonnet", baseBranch: "ui-changes" })], (s) =>
       s.on("POST /api/app/issues/WH-1/jobs", { job: job("f6", { state: "offered" }) }),
     );
-    await userEvent.click(await screen.findByRole("button", { name: "Continue" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Details" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     await userEvent.click(screen.getByRole("button", { name: "Start over" }));
     await screen.findByRole("list", { name: "Runs" });
     const sent = server.sent("POST /api/app/issues/WH-1/jobs").map((c) => c.body);
@@ -95,9 +97,13 @@ describe("runs on a device", () => {
     ]);
     const items = within(await screen.findByRole("list", { name: "Runs" })).getAllByRole("listitem");
     expect(within(items[0]).queryByRole("button", { name: "Continue" })).toBeNull();
+    await userEvent.click(within(items[0]).getByRole("button", { name: "Details" }));
     expect(within(items[0]).getByRole("button", { name: "Start over" })).toBeTruthy();
+    await userEvent.click(within(items[1]).getByRole("button", { name: "Details" }));
     expect(within(items[1]).getByText(/continues an earlier run/)).toBeTruthy();
+    await userEvent.click(within(items[2]).getByRole("button", { name: "Details" }));
     expect(within(items[2]).getByRole("button", { name: "Continue" })).toBeTruthy();
+    await userEvent.click(within(items[3]).getByRole("button", { name: "Details" }));
     expect(within(items[3]).getByRole("button", { name: "Continue" })).toBeTruthy();
   });
 
@@ -127,6 +133,7 @@ describe("runs on a device", () => {
     mount([job("g7", { state: "running", delivery: null, result: {} }), job("h8")], (s) => s.on("POST /api/app/issues/WH-1/jobs", apiError(409, "conflict", "Atharva's MacBook Pro is offline.")));
     await screen.findByRole("list", { name: "Runs" });
     expect(screen.getAllByRole("button", { name: "Stop" })).toHaveLength(1);
+    await userEvent.click(screen.getAllByRole("button", { name: "Details" })[1]);
     expect(screen.getAllByRole("button", { name: "Continue" })).toHaveLength(1);
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("alert")).toBeTruthy();

@@ -16,6 +16,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "../../db";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
+import { sha256 } from "../../common/crypto";
 import { createIssue } from "../issues/issues.legacy";
 import { createTeam } from "../teams/teams.legacy";
 import { DeviceAuthError } from "./daemon-errors";
@@ -332,11 +333,15 @@ describe("jobs", () => {
     const db = await getDb();
     const [offer] = await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id));
     assert.equal(offer.type, "job.offer");
-    const msg = offer.message as { jobId: string; repository: { cloneUrl: string }; issue: { body: string }; boardAccess: string; baseBranch: string };
+    const msg = offer.message as { jobId: string; repository: { cloneUrl: string }; issue: { body: string }; boardAccess: string; baseBranch: string; mcp: { token: string } };
     assert.equal(msg.jobId, job.id);
     assert.equal(msg.repository.cloneUrl, "https://github.com/acme/app.git");
     assert.equal(msg.issue.body, "It 500s");
-    assert.equal(msg.boardAccess, "none");
+    assert.equal(msg.boardAccess, "read");
+    const runKey = () => db.select().from(schema.apiKeys).where(eq(schema.apiKeys.chatMessageId, job.id));
+    const [key] = await runKey();
+    assert.equal(key.keyHash, sha256(msg.mcp.token), "the run reads Wheelhouse with its own key");
+    assert.deepEqual(key.capabilities, ["read"], "read-only");
     assert.equal(msg.baseBranch, "main", "the repository's default branch unless another is picked");
     if (poll.status === "approved") assert.ok(verifyValue(publicKeyFromRaw(poll.serverPublicKey)!, msg, offer.signature));
 
@@ -354,6 +359,7 @@ describe("jobs", () => {
     assert.equal(done.state, "succeeded");
     assert.equal(done.delivery, "pushed");
     assert.equal(done.result.commit, "abc1234");
+    assert.equal((await runKey()).length, 0, "the key goes when the run ends");
     await d.finishJob(device, job.id, { state: "succeeded" }); // the same finish again is fine
     await assert.rejects(d.recordJobEvents(device, job.id, { events: [{ seq: 3, type: "x" }] }), code("conflict"));
   });
@@ -384,6 +390,10 @@ describe("jobs", () => {
       const view = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
       assert.deepEqual(view.result.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42" });
       assert.equal(view.result.commit, "abc1234", "the rest of the result is kept");
+      assert.deepEqual(view.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42", state: null, ciState: null }, "state unknown until the webhook has told us");
+      await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 42, title: "t", url: "https://github.com/acme/app/pull/42", state: "merged", ciState: "success" });
+      const live = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
+      assert.deepEqual([live.pullRequest?.state, live.pullRequest?.ciState], ["merged", "success"], "the live state is joined, not copied into the result");
 
       const nothing = await run("Nothing to change");
       await d.finishJob(device, nothing.job.id, { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 0, insertions: 0, deletions: 0 } }, gh);

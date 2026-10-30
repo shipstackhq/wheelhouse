@@ -95,25 +95,29 @@ export function intField(b: Record<string, unknown>, name: string): number | und
 }
 
 /** WH-132: where a delegation stands. `asked`: the agent stopped with a question (WH-118). */
-export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "failed" | "stopped";
+export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "in_review" | "merged" | "failed" | "stopped";
 
 /** What the board and the issue show of a delegation: its state, one line of what the agent is doing while it runs, and the pull requests its runs opened. */
-export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string }[] };
+export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null }[] };
+export type PrState = "open" | "closed" | "merged";
 
 const ACTIVE_RUN = ["offered", "accepted", "running", "unreachable"];
 const FAILED_RUN = ["failed", "lost", "rejected", "expired"];
 
 /**
  * The state of a delegated issue from its targets and its runs since it was delegated (newest first). A run still going wins; otherwise
- * each target's latest run counts: a question waits for an answer, any failure fails the delegation, else any stop stops it, else it is done.
+ * each target's latest run counts: a question waits for an answer, any failure fails the delegation, else any stop stops it, else it is done,
+ * or in review while a latest run's pull request is open, or merged when they all are (a closed one leaves it done).
  */
-export function delegationState(hasTargets: boolean, runs: { repositoryId: string | null; state: string; asked?: boolean }[]): DelegationState {
+export function delegationState(hasTargets: boolean, runs: { repositoryId: string | null; state: string; asked?: boolean; prState?: PrState | null }[]): DelegationState {
   if (!runs.length) return hasTargets ? "waiting" : "needs_setup";
   if (runs.some((r) => ACTIVE_RUN.includes(r.state))) return "running";
   const latest = [...new Map([...runs].reverse().map((r) => [r.repositoryId, r])).values()];
   if (latest.some((r) => r.asked)) return "asked";
   if (latest.some((r) => FAILED_RUN.includes(r.state))) return "failed";
-  return latest.some((r) => r.state === "canceled") ? "stopped" : "done";
+  if (latest.some((r) => r.state === "canceled")) return "stopped";
+  if (latest.some((r) => r.prState === "open")) return "in_review";
+  return latest.some((r) => r.prState === "merged") ? "merged" : "done";
 }
 
 /** WH-129: a repository (its id or "owner/name") and optionally the branch to start from (the repository's default when left out). */
