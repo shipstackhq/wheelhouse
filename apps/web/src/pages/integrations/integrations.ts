@@ -59,7 +59,7 @@ const useGithubRuntime = (): IntegrationRuntime => {
     const set = status.isOwner && status.missing.length ? ` An administrator creates a GitHub App and sets ${status.missing.join(", ")}.` : "";
     return { state: "not_enabled", note: `GitHub is not set up on this server yet.${set}`, enableHref: null, disable: null };
   }
-  const connected = status.installations.length > 0;
+  const connected = status.connected;
   const state: IntegrationState = !connected ? "not_enabled" : status.installations.some((i) => i.failed) ? "attention" : "enabled";
   return {
     state,

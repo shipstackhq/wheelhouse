@@ -5,6 +5,7 @@ import { Link } from "../../lib/workspace";
 import { ApiError, type IdeaDetail, type IdeaInput, type IdeaStatus } from "@wheelhouse/api-client";
 import { BookIcon, CloseIcon } from "../../components/icons";
 import { DescriptionEditor } from "../../components/description-editor";
+import { MermaidPre } from "../../components/mermaid";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
@@ -136,7 +137,7 @@ export function IdeaView(props: { idea: IdeaDetail }) {
                 <DescriptionEditor key={editorKey} value={body} onChange={setBody} size="full" />
               ) : idea.body ? (
                 <div className="md md-quiet rounded-lg bg-panel/40 p-6">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MermaidPre }} skipHtml>
                     {idea.body}
                   </ReactMarkdown>
                 </div>
@@ -164,7 +165,7 @@ export function IdeaView(props: { idea: IdeaDetail }) {
                     {c.authorKind === "agent" && " (agent)"} · {when(c.createdAt)}
                   </p>
                   <div className="md md-quiet mt-1 text-sm">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MermaidPre }} skipHtml>
                       {c.body}
                     </ReactMarkdown>
                   </div>

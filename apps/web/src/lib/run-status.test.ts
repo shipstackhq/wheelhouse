@@ -5,6 +5,14 @@ import { madeNoChanges, runStatus } from "./run-status";
 const job = (state: JobView["state"], delivery: JobView["delivery"] = null, cancelRequested = false) => ({ state, delivery, cancelRequested });
 
 describe("run status", () => {
+  test("a pull request reads by its live state, and stays 'PR opened' until it is known", () => {
+    const pr = (state: "open" | "closed" | "merged" | null) => ({ ...job("succeeded", "pr_opened"), pullRequest: { number: 1, url: "u", state, ciState: null } });
+    expect(runStatus(pr("merged"))).toEqual({ label: "PR merged", tone: "good" });
+    expect(runStatus(pr("closed"))).toEqual({ label: "PR closed", tone: "muted" });
+    expect(runStatus(pr("open"))).toEqual({ label: "PR open", tone: "good" });
+    expect(runStatus(pr(null))).toEqual({ label: "PR opened", tone: "good" });
+  });
+
   test("a clean run says what it left behind, never just 'done'", () => {
     expect(runStatus(job("succeeded", "pr_opened"))).toEqual({ label: "PR opened", tone: "good" });
     expect(runStatus(job("succeeded", "pushed"))).toEqual({ label: "pushed", tone: "good" });

@@ -11,7 +11,8 @@ import { IssuesService, IssueTargets } from "../issues/index";
 import { DaemonRepository } from "./daemon.repository";
 import { deviceOnline, deviceView, jobView } from "./daemon.presenter";
 import { jobBranch, validBaseBranch } from "./daemon.rules";
-import { ACTIVE, OFFER_TTL_MS, isFinalState, str } from "./device-common";
+import { randomToken, sha256 } from "../../common/crypto";
+import { ACTIVE, OFFER_TTL_MS, RUN_KEY_TTL_MS, isFinalState, str } from "./device-common";
 import { RunPlanner, isReviewer } from "./run-planner";
 import { DeviceJobsService } from "./device-jobs.service";
 import { DeviceStreamService } from "./device-stream.service";
@@ -53,7 +54,7 @@ export class RunsService {
     const names = new Map(all.map((r) => [r.id, r.displayName]));
     const mine = actor.kind === "human" ? await this.devices.listDevices(actor) : [];
     return {
-      jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.job.repositoryId ? (names.get(r.job.repositoryId) ?? null) : null, lastHeardAt: r.lastHeardAt })),
+      jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.job.repositoryId ? (names.get(r.job.repositoryId) ?? null) : null, lastHeardAt: r.lastHeardAt, pr: { state: r.prState, ciState: r.prCiState } })),
       devices: mine.map((d) => ({ id: d.id, name: d.name, status: d.status, models: d.models, poolSize: d.poolSize, activeJobs: d.activeJobs })),
       repositories: runnable.map((r) => ({ id: r.id, name: r.displayName, fullName: r.githubFullName, defaultBranch: r.defaultBranch })),
     };
@@ -166,6 +167,11 @@ export class RunsService {
       const k = agentName(agent.profile);
       definitions[k] = { ...definitions[k], prompt: `${definitions[k].prompt}\n\n## What this team has taught you\n\n${learned.map((n) => `- ${n}`).join("\n")}` };
     }
+    // A profile that lists its tools still reads Wheelhouse: the run's key is read-only whatever the profile says.
+    if (agent && definitions) {
+      const k = agentName(agent.profile);
+      if (definitions[k].tools) definitions[k] = { ...definitions[k], tools: [...definitions[k].tools, "mcp__wheelhouse"] };
+    }
 
     const id = crypto.randomUUID();
     const branch = review ? review.headBranch : previous ? previous.job.branch : jobBranch(issueRef, issue.title, id);
@@ -173,6 +179,9 @@ export class RunsService {
     const key = await this.stream.signingKey();
     const job = await this.db.transaction(async () => {
       const j = await this.repo.insertJob({ id, teamId: team.id, workspaceId: actor.workspaceId, deviceId: device.id, issueId: issue.id, repositoryId: repo.id, model, branch, baseBranch, continuesJobId: previous?.job.id ?? null, createdBy: actor.id, agentId: agent?.id ?? null, effort, mode: review ? "review" : "work", offerExpiresAt });
+      // The run reads the team's board, docs and map through /mcp with its own key: read-only, this team only, dropped when the run ends.
+      const token = `wh_${randomToken(24)}`;
+      await this.repo.insertChatKey({ scopes: ["read"], workspaceId: actor.workspaceId, teamId: team.id, messageId: j.id, name: `${actor.name} (run ${issueRef})`.slice(0, 100), keyHash: sha256(token), expiresAt: new Date(Date.now() + RUN_KEY_TTL_MS) });
       await this.stream.send(key, device.id, "job.offer", {
         jobId: j.id,
         workspaceId: j.workspaceId,
@@ -188,8 +197,9 @@ export class RunsService {
         push: !review,
         review: review ? { pullRequest: { number: review.number, url: review.url, headBranch: review.headBranch, headSha: review.headSha } } : null,
         previous: previous ? { jobId: previous.job.id, state: previous.job.state, summary: previous.summary, error: previous.job.error, ...(str(input.answer, 4000) ? { answer: str(input.answer, 4000) } : {}) } : null,
-        // Board writes come with the MCP redesign; until then the agent works only in its worktree.
-        boardAccess: "none",
+        // Board writes come with the MCP redesign; until then the agent reads Wheelhouse and changes only its worktree.
+        boardAccess: "read",
+        mcp: { token },
         issue: { id: issue.id, ref: issueRef, title: issue.title, body: issue.body, team: { key: team.key, name: team.name }, subIssues: await this.issues.openSubIssues(team, issue.id) },
         repository: {
           id: repo.id,

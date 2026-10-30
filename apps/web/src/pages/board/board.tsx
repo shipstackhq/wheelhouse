@@ -455,6 +455,8 @@ const DELEGATION_TITLE: Record<DelegationState, string> = {
   running: "An agent is working on it",
   asked: "The agent has a question",
   done: "The agent is done",
+  in_review: "The agent opened a pull request: in review",
+  merged: "The agent's pull request was merged",
   failed: "The agent's run failed",
   stopped: "The agent was stopped",
 };
@@ -464,7 +466,7 @@ function DelegationBadge({ delegation }: { delegation: Delegation | null }) {
   const state = delegation?.state;
   const warn = state === "needs_setup" || state === "failed";
   return (
-    <span className={clsx("chip", state === "waiting" ? "bg-bg text-muted" : "bg-agent/10 text-agent")} title={state ? DELEGATION_TITLE[state] : "Delegated to an agent"}>
+    <span className={clsx("chip", state === "waiting" ? "bg-bg text-muted" : state === "merged" ? "bg-ok/15 text-ok" : "bg-agent/10 text-agent")} title={state ? DELEGATION_TITLE[state] : "Delegated to an agent"}>
       <AgentIcon />
       {warn && <span className="ml-0.5 size-1.5 rounded-full bg-warn" data-delegation-dot />}
       {state === "asked" && <span className="ml-0.5 size-1.5 rounded-full bg-accent" data-delegation-dot="asked" />}

@@ -117,7 +117,7 @@ export class IssuesService {
       const mine = runs.filter((x) => x.issueId === r.id);
       const state = delegationState((await this.targets.of(r.id)).targets.length > 0, mine.map((x) => ({ ...x, asked: !!x.result?.question })));
       const active = mine.find((x) => lines.has(x.id));
-      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [x.result.pullRequest as { number: number; url: string }] : []));
+      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [{ ...(x.result.pullRequest as { number: number; url: string }), state: x.prState }] : []));
       out.set(r.id, { state, line: state === "running" && active ? lines.get(active.id)! : null, prs: [...new Map(prs.map((p) => [p.number, p])).values()] });
     }
     return out;
