@@ -40,6 +40,7 @@ import {
   RiDoubleQuotesL,
   RiEditLine,
   RiExpandDiagonalLine,
+  RiBrushLine,
   RiFileTextLine,
   RiFolderLine,
   RiFormatClear,
@@ -179,6 +180,7 @@ export const TrendFlatIcon = icon(RiSubtractLine);
 export const AgentIcon = icon(RiRobot2Line);
 export const BookIcon = icon(RiBookOpenLine);
 export const FileIcon = icon(RiFileTextLine);
+export const BrushIcon = icon(RiBrushLine);
 export const FolderIcon = icon(RiFolderLine);
 export const NodeIcon = icon(RiNodeTree);
 export const IssueIcon = icon(RiRecordCircleLine);
@@ -275,6 +277,7 @@ export const NAV_ICONS = {
   activity: { line: ActivityIcon, fill: ActivityFillIcon },
   map: { line: MapIcon, fill: MapFillIcon },
   docs: { line: FileIcon, fill: FileFillIcon },
+  drawings: { line: BrushIcon, fill: icon(RiBrushFill) },
   decisions: { line: DecisionsIcon, fill: DecisionsFillIcon },
   glossary: { line: TermIcon, fill: TermFillIcon },
   teamMembers: { line: TeamMembersIcon, fill: TeamMembersFillIcon },
