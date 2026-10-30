@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { HoverCard } from "radix-ui";
+import { MermaidPre } from "./mermaid";
 
 export type GlossaryTerm = { term: string; definition: string };
 
@@ -94,6 +95,7 @@ export function Markdown({
       const key = (node?.properties?.dataTerm as string | undefined) ?? (props as Record<string, string>)["data-term"];
       return key ? <Term term={key}>{children}</Term> : <abbr {...props}>{children}</abbr>;
     },
+    pre: MermaidPre,
     a: ({ href, children }) => (
       <a
         href={href}

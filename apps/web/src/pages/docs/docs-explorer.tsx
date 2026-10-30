@@ -8,6 +8,7 @@ import { Dialog } from "radix-ui";
 import { ApiError, type DocDetail, type DocPerson, type DocsIndex, type DocTemplateId } from "@wheelhouse/api-client";
 import { DOC_TEMPLATES, extractActionItems } from "@wheelhouse/shared/doc-templates";
 import { DescriptionEditor } from "../../components/description-editor";
+import { MermaidPre } from "../../components/mermaid";
 import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { docQuery, useRepos } from "../../lib/queries";
@@ -600,7 +601,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
               </div>
             ) : d.body ? (
               <div className="md md-quiet rounded-lg bg-panel/40 p-6">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ pre: MermaidPre }} skipHtml>
                   {d.body}
                 </ReactMarkdown>
               </div>
