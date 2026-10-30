@@ -12,11 +12,15 @@ import { GraphService, SessionsService, anchoredBy } from "../map/index";
 import type { Human } from "../auth/index";
 import { TeamAccessService } from "../teams/index";
 import { DocsRepository, type DocRow } from "./docs.repository";
-import { DOC_BODY_MAX_BYTES, DOC_MAX_DEPTH, DOC_MAX_PER_TEAM, canWriteDocs, clipText, extractPathTokens, slugifyDoc } from "./docs.rules";
+import { DOC_BODY_MAX_BYTES, DOC_MAX_DEPTH, DOC_MAX_PER_TEAM, DRAWING_BODY_MAX_BYTES, DRAWING_THUMBNAIL_MAX_BYTES, EMPTY_DRAWING, canWriteDocs, clipText, drawingBodyProblem, drawingOutline, extractPathTokens, isSvg, slugifyDoc } from "./docs.rules";
 
 export type { DocRow } from "./docs.repository";
 
+export type DocKind = "markdown" | "drawing";
+
 export type DocInput = {
+  kind?: DocKind; // WH-146: default "markdown"; a drawing's body is Excalidraw scene JSON
+  thumbnail?: string; // a drawing's SVG preview
   title?: string;
   body?: string;
   parent?: string | null; // parent doc ref (uuid or slug path); null = top level
@@ -27,7 +31,7 @@ export type DocInput = {
   template?: string; // WH-65: template id to seed `body` from on create, if no explicit body is given
 };
 
-export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "describedSha" | "markFresh"> & {
+export type DocUpdateInput = Pick<DocInput, "title" | "body" | "anchors" | "describedSha" | "markFresh" | "kind" | "thumbnail"> & {
   labels?: string[]; // WH-103: free-text tags; they never affect freshness
   forcePublish?: boolean; // skip the in-flux draft check (used when publishing a draft on land)
   describedHashes?: Record<string, string>; // content hashes the edit/confirmation was made against
@@ -69,7 +73,14 @@ export class DocsService {
   }
 
   /** Accepts a doc uuid, or a "slug" / "parent-slug/slug" path, scoped to one team. Never returns a soft-deleted doc. */
-  async resolveDoc(teamId: string, ref: string): Promise<DocRow> {
+  async resolveDoc(teamId: string, ref: string, kind: DocKind = "markdown"): Promise<DocRow> {
+    const d = await this.resolveAnyDoc(teamId, ref);
+    // A drawing is not a doc and a doc is not a drawing: each is "not found" through the other's routes.
+    if (d.kind !== kind) throw new ServiceError("not_found", `${kind === "drawing" ? "Drawing" : "Doc"} "${ref}" not found`);
+    return d;
+  }
+
+  private async resolveAnyDoc(teamId: string, ref: string): Promise<DocRow> {
     if (isUuid(ref)) {
       const d = await this.repo.findDocById(teamId, ref);
       if (!d) throw new ServiceError("not_found", `Doc ${ref} not found`);
@@ -112,7 +123,54 @@ export class DocsService {
     throw new ServiceError("conflict", `Could not find a free slug for "${base}"`);
   }
 
+  /** The body limit of the kind, and a drawing's body must be a JSON object. */
+  private assertBody(kind: DocKind, body: string) {
+    const limit = kind === "drawing" ? DRAWING_BODY_MAX_BYTES : DOC_BODY_MAX_BYTES;
+    const bytes = Buffer.byteLength(body, "utf8");
+    if (bytes > limit) throw new ServiceError("invalid", `${kind === "drawing" ? "Drawing" : "Doc"} body is ${bytes} bytes; the limit is ${limit} (${limit / 1000} KB)`);
+    const problem = kind === "drawing" ? drawingBodyProblem(body) : undefined;
+    if (problem) throw new ServiceError("invalid", problem);
+  }
+
+  private assertThumbnail(thumbnail: string) {
+    if (Buffer.byteLength(thumbnail, "utf8") > DRAWING_THUMBNAIL_MAX_BYTES) throw new ServiceError("invalid", `Thumbnail is too large; the limit is ${DRAWING_THUMBNAIL_MAX_BYTES} bytes`);
+    if (thumbnail && !isSvg(thumbnail)) throw new ServiceError("invalid", "Thumbnail must be an SVG document");
+  }
+
   // ───────── reads ─────────
+
+  /** A team's drawings for the grid: newest edit first, thumbnails but no scene bodies. */
+  async listDrawings(actor: Actor, teamRef: string) {
+    const team = await this.access.require(actor, teamRef);
+    const [rows, members] = await Promise.all([this.repo.listLiveDrawings(team.id), this.repo.workspaceMembers(team.workspaceId)]);
+    const names = new Map(members.map((m) => [m.id, m.name]));
+    // Who last edited it: a person by name, an agent as "Agent".
+    return rows.map(({ updatedByKind, updatedById, ...d }) => ({
+      ...d,
+      updatedByName: updatedByKind === "agent" ? "Agent" : ((updatedById && names.get(updatedById)) || "Someone"),
+    }));
+  }
+
+  /** One drawing for an agent: who last edited it, its linked map nodes, and the scene as a text outline (never the JSON). */
+  async drawingOutlineFor(actor: Actor, teamRef: string, ref: string) {
+    const team = await this.access.require(actor, teamRef);
+    const d = await this.resolveDoc(team.id, ref, "drawing");
+    const [nodes, members] = await Promise.all([this.repo.nodesLinkedTo(d.id), this.repo.workspaceMembers(team.workspaceId)]);
+    const editor = d.updatedByKind === "agent" ? "Agent" : (members.find((m) => m.id === d.updatedById)?.name ?? "Someone");
+    return { drawing: d, editedBy: editor, nodes, outline: drawingOutline(d.body) };
+  }
+
+  /** Whether the ref names a live drawing of the team (the doc tools point an agent to get_drawing). */
+  async isDrawing(actor: Actor, teamRef: string, ref: string) {
+    const team = await this.access.require(actor, teamRef);
+    return !!(await this.resolveDoc(team.id, ref, "drawing").catch(() => undefined));
+  }
+
+  /** One drawing with its scene body and thumbnail. */
+  async getDrawing(actor: Actor, teamRef: string, ref: string) {
+    const team = await this.access.require(actor, teamRef);
+    return this.resolveDoc(team.id, ref, "drawing");
+  }
 
   /**
    * Candidate anchors for a doc: path-like tokens found in its body, plus the anchors of
@@ -203,9 +261,14 @@ export class DocsService {
     await this.assertDocsWritable(actor);
     if (!input.title?.trim()) throw new ServiceError("invalid", "title is required");
     // WH-65: explicit body always wins; the template is only a convenience default for a blank doc.
-    const body = input.body ?? getDocTemplate(input.template)?.body ?? "";
-    const bodyBytes = Buffer.byteLength(body, "utf8");
-    if (bodyBytes > DOC_BODY_MAX_BYTES) throw new ServiceError("invalid", `Doc body is ${bodyBytes} bytes; the limit is ${DOC_BODY_MAX_BYTES} (200 KB)`);
+    const kind = input.kind ?? "markdown";
+    // A drawing starts as an empty scene, lives at the top level (the Docs tree never shows it) and has no template.
+    const body = input.body ?? (kind === "drawing" ? EMPTY_DRAWING : (getDocTemplate(input.template)?.body ?? ""));
+    this.assertBody(kind, body);
+    if (kind === "drawing") {
+      if (input.parent) throw new ServiceError("invalid", "A drawing cannot be nested under a doc");
+      if (input.thumbnail !== undefined) this.assertThumbnail(input.thumbnail);
+    } else if (input.thumbnail !== undefined) throw new ServiceError("invalid", "Only a drawing has a thumbnail");
 
     return this.db.transaction(async () => {
       const parentId = input.parent === null || input.parent === undefined ? null : (await this.resolveDoc(team.id, input.parent)).id;
@@ -226,6 +289,8 @@ export class DocsService {
         slug,
         title: input.title.trim(),
         body,
+        kind,
+        thumbnail: kind === "drawing" ? input.thumbnail || null : null,
         position,
         anchors,
         describedHashes: await this.graph.landedHashesFor(team.id, anchors),
@@ -240,8 +305,8 @@ export class DocsService {
         type: "doc.created",
         entity: "doc",
         entityId: d.id,
-        summary: `created doc "${d.title}"`,
-        data: { slug: d.slug, title: d.title },
+        summary: `created ${kind === "drawing" ? "drawing" : "doc"} "${d.title}"`,
+        data: { slug: d.slug, title: d.title, kind },
       });
       return d;
     });
@@ -259,13 +324,15 @@ export class DocsService {
   async updateDoc(actor: Actor, teamRef: string, ref: string, patch: DocUpdateInput, expectedVersion?: number): Promise<DocRow> {
     const team = await this.access.require(actor, teamRef, "edit");
     await this.assertDocsWritable(actor);
-    if (patch.body !== undefined) {
-      const bodyBytes = Buffer.byteLength(patch.body, "utf8");
-      if (bodyBytes > DOC_BODY_MAX_BYTES) throw new ServiceError("invalid", `Doc body is ${bodyBytes} bytes; the limit is ${DOC_BODY_MAX_BYTES} (200 KB)`);
+    const kind = patch.kind ?? "markdown";
+    if (patch.body !== undefined) this.assertBody(kind, patch.body);
+    if (patch.thumbnail !== undefined) {
+      if (kind !== "drawing") throw new ServiceError("invalid", "Only a drawing has a thumbnail");
+      this.assertThumbnail(patch.thumbnail);
     }
 
     if (actor.kind === "agent" && !patch.forcePublish) {
-      const existing = await this.resolveDoc(team.id, ref).catch(() => undefined);
+      const existing = await this.resolveDoc(team.id, ref, kind).catch(() => undefined);
       if (existing) {
         const d = await this.maybeDraftDoc(actor, existing, patch);
         if (d) return { ...existing, ...d };
@@ -273,7 +340,7 @@ export class DocsService {
     }
 
     return this.db.transaction(async () => {
-      const found = await this.resolveDoc(team.id, ref);
+      const found = await this.resolveDoc(team.id, ref, kind);
       const d = (await this.repo.lockDoc(found.id)) ?? found;
       if (expectedVersion !== undefined && expectedVersion !== d.version) {
         throw new ServiceError("conflict", `Doc "${d.title}" was changed (version ${d.version}, you had ${expectedVersion}). Re-read and retry.`, { current: d });
@@ -283,6 +350,7 @@ export class DocsService {
       if (patch.body !== undefined) clean.body = patch.body;
       if (patch.anchors !== undefined) clean.anchors = patch.anchors;
       if (patch.labels !== undefined) clean.labels = cleanDocLabels(patch.labels);
+      if (patch.thumbnail !== undefined) clean.thumbnail = patch.thumbnail || null;
       const changes = diff(d as unknown as Record<string, unknown>, clean);
       // Editing title/body/anchors, or an explicit confirm (mark_doc_fresh-equivalent), clears staleness —
       // same rule as upsertNode's EXPLAINER_FIELDS/anchors/markFresh check.
@@ -307,7 +375,7 @@ export class DocsService {
           entity: "doc",
           entityId: updated.id,
           summary: `updated doc "${updated.title}"${meaningful.length ? `: ${meaningful.join(", ")}` : ""}${d.stale && described ? " (now fresh)" : ""}`,
-          data: { slug: updated.slug, changes: meaningful },
+          data: { slug: updated.slug, kind, changes: meaningful },
         });
       }
       return updated;
@@ -362,11 +430,11 @@ export class DocsService {
   }
 
   /** Soft delete: sets deletedAt (kept 30 days for recovery/purge); history lives in `events`. */
-  async deleteDoc(actor: Actor, teamRef: string, ref: string) {
+  async deleteDoc(actor: Actor, teamRef: string, ref: string, kind: DocKind = "markdown") {
     const team = await this.access.require(actor, teamRef, "edit");
     await this.assertDocsWritable(actor);
     return this.db.transaction(async () => {
-      const d = await this.resolveDoc(team.id, ref);
+      const d = await this.resolveDoc(team.id, ref, kind);
       await this.repo.softDeleteDocs([d.id]);
       // Soft-delete descendants too, so a deleted branch doesn't linger half-visible.
       const toDelete = [d.id];
@@ -376,7 +444,7 @@ export class DocsService {
         type: "doc.deleted",
         entity: "doc",
         entityId: d.id,
-        summary: `deleted doc "${d.title}"${toDelete.length > 1 ? ` (and ${toDelete.length - 1} nested)` : ""}`,
+        summary: `deleted ${kind === "drawing" ? "drawing" : "doc"} "${d.title}"${toDelete.length > 1 ? ` (and ${toDelete.length - 1} nested)` : ""}`,
         data: { slug: d.slug, title: d.title },
       });
       return { ok: true };
@@ -465,6 +533,18 @@ export class DocsService {
       anchors: anchors?.map((a) => a.trim()).filter(Boolean),
       labels: textList(b, "labels"),
     };
+    if (patch.title !== undefined && !patch.title.trim()) bad("title", "title is required");
+    return this.updateDoc(actor, teamKey, ref, patch, whole(b, "version"));
+  }
+
+  async createDrawingAs(actor: Actor, teamKey: string, b: Body): Promise<DocRow> {
+    const title = text(b, "title", { required: true, max: 300, trim: true })!;
+    return this.createDoc(actor, teamKey, { title, kind: "drawing", body: text(b, "body"), thumbnail: text(b, "thumbnail") });
+  }
+
+  /** `version` is the lock: a change made since is a 409 and nothing is overwritten. */
+  async updateDrawingAs(actor: Actor, teamKey: string, ref: string, b: Body): Promise<DocRow> {
+    const patch = { kind: "drawing" as const, title: text(b, "title", { max: 300 }), body: text(b, "body"), thumbnail: text(b, "thumbnail") };
     if (patch.title !== undefined && !patch.title.trim()) bad("title", "title is required");
     return this.updateDoc(actor, teamKey, ref, patch, whole(b, "version"));
   }

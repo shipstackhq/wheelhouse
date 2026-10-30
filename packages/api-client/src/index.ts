@@ -51,6 +51,10 @@ import type {
   CreatedInvite,
   Doc,
   DocDetail,
+  Drawing,
+  DrawingListItem,
+  DrawingPatch,
+  NewDrawing,
   DocPatch,
   DocsIndex,
   GithubStatus,
@@ -406,6 +410,15 @@ export function createApiClient(options: ApiClientOptions = {}) {
         request<AskAnswer>("POST", `/api/app/teams/${encodeURIComponent(teamKey)}/ask`, { question, ...(focus ? { focus } : {}) }),
       activity: async (teamKey: string, who?: "agent" | "human") =>
         (await request<{ events: ActivityEvent2[] }>("GET", `/api/app/teams/${encodeURIComponent(teamKey)}/activity${who ? `?who=${who}` : ""}`)).events,
+    },
+
+    drawings: {
+      list: async (teamKey: string) => (await request<{ drawings: DrawingListItem[] }>("GET", `${team(teamKey)}/drawings`)).drawings,
+      get: async (teamKey: string, ref: string) => (await request<{ drawing: Drawing }>("GET", `${team(teamKey)}/drawings/${encodeURIComponent(ref)}`)).drawing,
+      create: async (teamKey: string, input: NewDrawing) => (await request<{ drawing: Drawing }>("POST", `${team(teamKey)}/drawings`, input)).drawing,
+      /** With `version`, a drawing changed since rejects with an ApiError whose `current` is the drawing now. */
+      update: async (teamKey: string, ref: string, patch: DrawingPatch) => (await request<{ drawing: Drawing }>("PATCH", `${team(teamKey)}/drawings/${encodeURIComponent(ref)}`, patch)).drawing,
+      delete: (teamKey: string, ref: string) => request<{ ok: true }>("DELETE", `${team(teamKey)}/drawings/${encodeURIComponent(ref)}`),
     },
 
     docs: {

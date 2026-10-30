@@ -23,6 +23,8 @@ export const markDocFresh = (...a: Parameters<DocsService["markDocFresh"]>) => s
 export const moveDoc = (...a: Parameters<DocsService["moveDoc"]>) => s().docs.moveDoc(...a);
 export const deleteDoc = (...a: Parameters<DocsService["deleteDoc"]>) => s().docs.deleteDoc(...a);
 export const linkDocNode = (...a: Parameters<DocsService["linkDocNode"]>) => s().docs.linkDocNode(...a);
+export const listDrawings = (...a: Parameters<DocsService["listDrawings"]>) => s().docs.listDrawings(...a);
+export const getDrawing = (...a: Parameters<DocsService["getDrawing"]>) => s().docs.getDrawing(...a);
 export const searchDocs = (...a: Parameters<DocsService["searchDocs"]>) => s().docs.searchDocs(...a);
 export const suggestDocAnchors = (...a: Parameters<DocsService["suggestDocAnchors"]>) => s().docs.suggestDocAnchors(...a);
 

@@ -31,6 +31,7 @@ const SECTIONS: { group: string; items: { path: string; label: string; icon: Ico
     items: [
       { path: "/map", label: "Map", icon: NAV_ICONS.map },
       { path: "/docs", label: "Docs", icon: NAV_ICONS.docs },
+      { path: "/drawings", label: "Drawings", icon: NAV_ICONS.drawings },
       { path: "/decisions", label: "Decisions", icon: NAV_ICONS.decisions },
       { path: "/glossary", label: "Glossary", icon: NAV_ICONS.glossary },
     ],

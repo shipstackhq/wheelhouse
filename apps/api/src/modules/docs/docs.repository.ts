@@ -118,8 +118,17 @@ export class DocsRepository {
         stale: docs.stale,
       })
       .from(docs)
-      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt)))
+      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), eq(docs.kind, "markdown")))
       .orderBy(asc(docs.position));
+  }
+
+  /** Every live drawing of the team, newest edit first, with its thumbnail (no scene bodies). */
+  listLiveDrawings(teamId: string) {
+    return this.db.q
+      .select({ id: docs.id, slug: docs.slug, title: docs.title, version: docs.version, updatedAt: docs.updatedAt, thumbnail: docs.thumbnail, updatedByKind: docs.updatedByKind, updatedById: docs.updatedById })
+      .from(docs)
+      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), eq(docs.kind, "drawing")))
+      .orderBy(desc(docs.updatedAt));
   }
 
   /** Titles and slugs only, for the briefing. */
@@ -127,7 +136,7 @@ export class DocsRepository {
     return this.db.q
       .select({ slug: docs.slug, title: docs.title, parentId: docs.parentId })
       .from(docs)
-      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt)))
+      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), eq(docs.kind, "markdown")))
       .orderBy(asc(docs.position));
   }
 
@@ -203,7 +212,7 @@ export class DocsRepository {
         snippet: sql<string>`ts_headline('english', ${docs.body}, ${tsq}, 'MaxFragments=2, MinWords=5, MaxWords=25')`,
       })
       .from(docs)
-      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), sql`${vector} @@ ${tsq}`))
+      .where(and(eq(docs.teamId, teamId), isNull(docs.deletedAt), eq(docs.kind, "markdown"), sql`${vector} @@ ${tsq}`))
       .orderBy(desc(sql`ts_rank(${vector}, ${tsq})`))
       .limit(50);
   }

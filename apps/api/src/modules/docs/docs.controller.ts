@@ -1,6 +1,6 @@
 import { Controller, Inject, Delete, Get, HttpCode, Param, Patch, Post, Put, Req } from "@nestjs/common";
 import { DocsService } from "./docs.service";
-import { docView as view, docsIndexView, withCurrentDoc } from "./docs.presenter";
+import { docView as view, docsIndexView, drawingView, withCurrentDoc, withCurrentDrawing } from "./docs.presenter";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
 import { JsonBody } from "../../common/decorators/json-body.decorator";
@@ -16,6 +16,37 @@ export class DocsController {
   @Get(":key/docs")
   async index(@Req() req: SessionRequest, @Param("key") key: string) {
     return docsIndexView(await this.docs.docsIndex(req.human, key));
+  }
+
+  // ───────── drawings (WH-146): docs of kind "drawing", shown under their own menu, never in the Docs tree ─────────
+
+  /** The grid: newest edit first, thumbnails but no scene bodies. */
+  @Get(":key/drawings")
+  async drawings(@Req() req: SessionRequest, @Param("key") key: string) {
+    return { drawings: await this.docs.listDrawings(req.human.actor, key) };
+  }
+
+  @Get(":key/drawings/:ref")
+  async getDrawing(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string) {
+    return { drawing: drawingView(await this.docs.getDrawing(req.human.actor, key, ref)) };
+  }
+
+  /** `{ title, body?, thumbnail? }`: no body is an empty scene. */
+  @Post(":key/drawings")
+  async createDrawing(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
+    return { drawing: drawingView(await this.docs.createDrawingAs(req.human.actor, key, body)) };
+  }
+
+  /** `{ title?, body?, thumbnail?, version? }`: with `version`, a drawing changed since is a 409 `conflict` and nothing is overwritten. */
+  @Patch(":key/drawings/:ref")
+  async updateDrawing(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string, @JsonBody() body: JsonObject) {
+    return { drawing: drawingView(await withCurrentDrawing(() => this.docs.updateDrawingAs(req.human.actor, key, ref, body))) };
+  }
+
+  @Delete(":key/drawings/:ref")
+  @HttpCode(200)
+  removeDrawing(@Req() req: SessionRequest, @Param("key") key: string, @Param("ref") ref: string) {
+    return this.docs.deleteDoc(req.human.actor, key, ref, "drawing");
   }
 
   @Get(":key/docs/:ref")
