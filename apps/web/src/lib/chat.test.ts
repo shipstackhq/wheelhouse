@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { ChatMessageView, ChatOptions } from "@wheelhouse/api-client";
-import { activityLine, atBottom, chatPollInterval, deviceAvailability, endNote, liveLine, resolveNewChat, type NewChatForm } from "./chat";
+import { activityLine, atBottom, chatPollInterval, deviceAvailability, endNote, joinMessage, liveLine, resolveNewChat, splitMessage, type NewChatForm } from "./chat";
 
 const msg = (over: Partial<ChatMessageView> = {}): ChatMessageView => ({ id: "m", seq: 1, role: "assistant", content: "", state: "done", error: null, activity: [], costUsd: null, createdAt: "2026-10-25T00:00:00.000Z", ...over });
 const dev = (id: string, status: "online" | "offline", models: string[] = ["haiku", "sonnet"]) => ({ id, name: id, status, models });
@@ -67,8 +67,8 @@ describe("the new chat form", () => {
     expect(resolveNewChat(form(), options({ repositories: [] })).problem).toMatch(/no repository/);
     expect(resolveNewChat(form(), options({ devices: [dev("a", "offline")] })).problem).toMatch(/online/);
     expect(resolveNewChat(form({ message: "   " }), options()).problem).toBe("Write a message");
-    expect(resolveNewChat(form({ message: "x".repeat(8001) }), options()).problem).toMatch(/8000/);
-    expect(resolveNewChat(form({ message: "x".repeat(8000) }), options()).problem).toBeNull();
+    expect(resolveNewChat(form({ message: "x".repeat(100_001) }), options()).problem).toMatch(/100000/);
+    expect(resolveNewChat(form({ message: "x".repeat(100_000) }), options()).problem).toBeNull();
   });
   test("cannot be sent before the options have loaded", () => {
     expect(resolveNewChat(form(), undefined).problem).not.toBeNull();
@@ -81,4 +81,12 @@ describe("following the text", () => {
     expect(atBottom({ scrollHeight: 1000, scrollTop: 580, clientHeight: 400 })).toBe(true);
     expect(atBottom({ scrollHeight: 1000, scrollTop: 300, clientHeight: 400 })).toBe(false);
   });
+});
+
+test("joinMessage and splitMessage: the typed text and pasted blocks survive the round trip", () => {
+  const sent = joinMessage("  look at this ", ["log a\n\nmore", "log b"]);
+  expect(sent).toBe("look at this\n\n<pasted>\nlog a\n\nmore\n</pasted>\n\n<pasted>\nlog b\n</pasted>");
+  expect(splitMessage(sent)).toEqual({ text: "look at this", pastes: ["log a\n\nmore", "log b"] });
+  expect(joinMessage(" ", [])).toBe("");
+  expect(splitMessage("plain")).toEqual({ text: "plain", pastes: [] });
 });

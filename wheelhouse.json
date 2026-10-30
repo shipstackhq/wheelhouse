@@ -1,5 +1,5 @@
 {
-  "url": "http://localhost:3456",
-  "project": "WH",
+  "url": "http://localhost:3460",
+  "team": "WH",
   "defaultBranch": "staging"
 }

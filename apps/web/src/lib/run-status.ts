@@ -1,6 +1,6 @@
 import type { JobState, JobView } from "@wheelhouse/api-client";
 
-type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested">;
+type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested"> & { pullRequest?: Pick<NonNullable<JobView["pullRequest"]>, "state"> | null };
 
 const ACTIVE: JobState[] = ["offered", "accepted", "running", "unreachable"];
 export const isActive = (state: JobState) => ACTIVE.includes(state);
@@ -13,7 +13,7 @@ export const madeNoChanges = (job: Pick<JobView, "state" | "delivery">) => job.s
 
 /**
  * What a run's chip says, from how it ended (`state`) and what it left behind (`delivery`): a clean run with a pull request reads
- * "PR opened", one whose pull request GitHub refused reads "no PR" (the branch is still pushed), and "done" is never shown on its own.
+ * "PR opened" (or "PR open", "PR merged", "PR closed" once GitHub has said), one whose pull request GitHub refused reads "no PR" (the branch is still pushed), and "done" is never shown on its own.
  */
 export function runStatus(job: RunLike): { label: string; tone: Tone } {
   if (isActive(job.state)) {
@@ -25,7 +25,16 @@ export function runStatus(job: RunLike): { label: string; tone: Tone } {
     case "succeeded":
       switch (job.delivery) {
         case "pr_opened":
-          return { label: "PR opened", tone: "good" };
+          switch (job.pullRequest?.state) {
+            case "merged":
+              return { label: "PR merged", tone: "good" };
+            case "closed":
+              return { label: "PR closed", tone: "muted" };
+            case "open":
+              return { label: "PR open", tone: "good" };
+            default:
+              return { label: "PR opened", tone: "good" };
+          }
         case "pr_failed":
           return { label: "no PR", tone: "warn" };
         case "none":

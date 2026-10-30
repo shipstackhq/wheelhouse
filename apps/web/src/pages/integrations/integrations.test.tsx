@@ -26,6 +26,13 @@ describe("the sidebar", () => {
     expect(links.slice(-2)).toEqual(["All integrations", "GitHub"]);
   });
 
+  test("a member sees GitHub enabled when the workspace is connected, though only owners see its installations", async () => {
+    await open("/settings/integrations", (s) => {
+      for (const key of ["AA", "BB"]) s.on(`GET /api/app/teams/${key}/repositories/github`, githubStatus({ isOwner: false, connected: true, installations: [] }));
+    });
+    await panel().findByRole("link", { name: "GitHub" });
+  });
+
   test("an integration that is not enabled is not in the sidebar", async () => {
     const { server } = await open("/settings/integrations", notConnected);
     await waitFor(() => expect(server.sent("GET /api/app/teams/AA/repositories/github").length).toBeGreaterThan(0));

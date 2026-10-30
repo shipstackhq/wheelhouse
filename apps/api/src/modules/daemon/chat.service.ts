@@ -134,7 +134,7 @@ export class ChatService {
     if (!model || !models.includes(model)) throw new ServiceError("invalid", `Pick a model ${device.name} offers: ${models.join(", ")}`, { fields: { model: models.join(", ") } });
     const id = crypto.randomUUID();
     // The thread and its first pair share one transaction through `ask`'s own; the thread is removed again if the pair cannot be written.
-    const thread = await this.repo.insertThread({ id, teamId: repo.teamId, workspaceId: actor.workspaceId, ownerId: actor.id, deviceId: device.id, repositoryId: repo.id, model, title: text.replace(/\s+/g, " ").slice(0, 80) });
+    const thread = await this.repo.insertThread({ id, teamId: repo.teamId, workspaceId: actor.workspaceId, ownerId: actor.id, deviceId: device.id, repositoryId: repo.id, model, title: (text.replace(/<pasted>[\s\S]*?<\/pasted>/g, "").trim() || "Pasted text").replace(/\s+/g, " ").slice(0, 80) });
     try {
       await this.ask(actor, thread, repo, text);
     } catch (e) {

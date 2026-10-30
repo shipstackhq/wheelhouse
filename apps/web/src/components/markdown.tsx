@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { HoverCard } from "radix-ui";
+import { MermaidPre } from "./mermaid";
 
 export type GlossaryTerm = { term: string; definition: string };
 
@@ -16,6 +17,16 @@ export function GlossaryProvider({ terms, children }: { terms: GlossaryTerm[]; c
 type HNode = { type: string; value?: string; tagName?: string; properties?: Record<string, unknown>; children?: HNode[] };
 
 const SKIP = new Set(["code", "pre", "a", "abbr"]);
+
+/** rehype plugin: a literal `<br>` (models put them in table cells) becomes a line break; any other raw HTML stays text. */
+function rehypeBreaks() {
+  const walk = (node: HNode) =>
+    node.children?.forEach((c, i, all) => {
+      if (c.type === "raw" && /^<br\s*\/?>$/i.test(c.value ?? "")) all[i] = { type: "element", tagName: "br", properties: {}, children: [] };
+      else walk(c);
+    });
+  return (tree: HNode) => walk(tree);
+}
 
 /** rehype plugin: wrap glossary terms in <abbr data-term> (first occurrence per term). */
 function rehypeGlossary(terms: GlossaryTerm[]) {
@@ -88,12 +99,13 @@ export function Markdown({
   onLink?: (href: string) => boolean;
 }) {
   const terms = useContext(GlossaryContext);
-  const plugins = useMemo(() => [rehypeGlossary(terms)], [terms]);
+  const plugins = useMemo(() => [rehypeBreaks, rehypeGlossary(terms)], [terms]);
   const components: Components = {
     abbr: ({ node, children, ...props }) => {
       const key = (node?.properties?.dataTerm as string | undefined) ?? (props as Record<string, string>)["data-term"];
       return key ? <Term term={key}>{children}</Term> : <abbr {...props}>{children}</abbr>;
     },
+    pre: MermaidPre,
     a: ({ href, children }) => (
       <a
         href={href}

@@ -64,19 +64,11 @@ export function DiscussionThread({ comments }: { comments: ThreadComment[] }) {
           Show {hidden} earlier {hidden === 1 ? "message" : "messages"}
         </button>
       )}
-      {expanded ? (
-        <>
-          <div className="overflow-x-hidden rounded-md border border-line bg-bg/30 p-3">
-            {list}
-          </div>
-          {comments.length > PREVIEW && (
-            <button className="mt-2 text-xs text-muted hover:text-fg" onClick={() => setExpanded(false)}>
-              Show less
-            </button>
-          )}
-        </>
-      ) : (
-        list
+      {list}
+      {expanded && hidden > 0 && (
+        <button className="mt-2 text-xs text-muted hover:text-fg" onClick={() => setExpanded(false)}>
+          Show less
+        </button>
       )}
     </div>
   );

@@ -86,6 +86,14 @@ describe("delegationState (WH-132)", () => {
     assert.equal(delegationState(true, [run("canceled"), run("succeeded", "b")]), "stopped");
     assert.equal(delegationState(true, [run("succeeded"), run("succeeded", "b")]), "done");
   });
+  test("a pull request moves a done delegation on: open is in review, merged is merged, closed stays done", () => {
+    const pr = (prState: "open" | "closed" | "merged", repositoryId = "a") => ({ ...run("succeeded", repositoryId), prState });
+    assert.equal(delegationState(true, [pr("open")]), "in_review");
+    assert.equal(delegationState(true, [pr("merged"), pr("open", "b")]), "in_review");
+    assert.equal(delegationState(true, [pr("merged")]), "merged");
+    assert.equal(delegationState(true, [pr("closed")]), "done");
+    assert.equal(delegationState(true, [pr("open"), run("failed", "b")]), "failed");
+  });
   test("only a target's latest run counts: a rerun that worked clears the failure", () => {
     assert.equal(delegationState(true, [run("succeeded"), run("failed")]), "done");
   });
