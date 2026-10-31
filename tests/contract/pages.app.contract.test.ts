@@ -10,7 +10,7 @@ import { anon, app, login, newEmail, sessionFrom, signIn, type Sess } from "./li
  */
 const PW = "a-long-enough-password";
 
-type Person = { email: string; sess: Sess; me: { user: { id: string }; workspace: { id: string }; role: string } };
+type Person = { email: string; sess: Sess; me: { user: { id: string }; workspace: { id: string; name: string }; role: string } };
 
 async function signUp(name = "Owner"): Promise<Person> {
   const email = newEmail();
@@ -107,7 +107,7 @@ describe("the workspace page", () => {
     await app("POST", "/api/app/invites", o.sess, { body: { kind: "join_workspace", email: newEmail() } });
     const owner = await app("GET", "/api/app/workspace", o.sess);
     assert.equal(owner.status, 200);
-    assert.deepEqual(Object.keys(owner.json).sort(), ["members", "pendingInvites", "role", "seats", "workspace"]);
+    assert.deepEqual(Object.keys(owner.json).sort(), ["members", "pendingInvites", "role", "seats", "transfer", "workspace"]);
     assert.equal(owner.json.workspace.id, o.me.workspace.id);
     assert.equal(owner.json.role, "owner");
     assert.deepEqual(owner.json.members.map((x: { role: string }) => x.role).sort(), ["member", "owner"]);
@@ -298,7 +298,7 @@ describe("invites", () => {
     assert.ok(!listed.text.includes(token), "the link is never shown again");
 
     const peek = await app("POST", "/api/app/invites/peek", anon(), { body: { token } });
-    assert.deepEqual(peek.json, { invite: { email, kind: "join_workspace", workspaceName: "Workspace lead workspace" } });
+    assert.deepEqual(peek.json, { invite: { email, kind: "join_workspace", workspaceName: o.me.workspace.name } });
 
     const accepted = await app("POST", "/api/app/invites/accept", anon(), { body: { token, name: "  New Person ", password: PW, confirm: PW } });
     assert.equal(accepted.status, 201);
@@ -492,15 +492,15 @@ describe("the instance admin's workspaces pages", () => {
     assert.equal(wrong.json.error.message, "Type the workspace name exactly to confirm");
     assert.equal((await app("GET", "/api/app/me", victim.sess)).status, 200, "still signed in");
 
-    const done = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: "Victim workspace", reason: "contract test" } });
+    const done = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: victim.me.workspace.name, reason: "contract test" } });
     assert.equal(done.status, 200);
-    assert.deepEqual(done.json, { name: "Victim workspace", sessionsEnded: 1 });
+    assert.deepEqual(done.json, { name: victim.me.workspace.name, sessionsEnded: 1 });
     assert.equal((await app("GET", "/api/app/me", victim.sess)).status, 401, "members are signed out");
     const blocked = await login(victim.email, PW);
     assert.equal(blocked.status, 403);
     assert.equal(blocked.json.error.code, "team_suspended");
     assert.equal((await v1({ key: k }, "get_briefing")).status, 403, "its keys are refused");
-    const again = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: "Victim workspace" } });
+    const again = await app("POST", `/api/app/admin/workspaces/${id}/suspend`, admin, { body: { confirm: victim.me.workspace.name } });
     assert.equal(again.status, 409);
     const detail = (await app("GET", `/api/app/admin/workspaces/${id}`, admin)).json.workspace;
     assert.ok(detail.suspendedAt);

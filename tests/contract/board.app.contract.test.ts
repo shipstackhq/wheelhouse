@@ -82,7 +82,7 @@ describe("GET /api/app/teams/:key/board", () => {
     assert.ok(b.statuses.every((c: { isDefault: boolean }) => c.isDefault), "a new team's statuses are each their role's default");
     assert.deepEqual(b.issues, []);
     assert.deepEqual(b.nodes, []);
-    assert.deepEqual(b.members, [{ id: t.owner.me.user.id, name: "Owner" }]);
+    assert.deepEqual(b.members, [{ id: t.owner.me.user.id, name: "Owner", kind: "human", avatar: null }]);
     assert.equal(b.checklist.total, 5);
     assert.deepEqual(Object.keys(b.checklist.items[0]).sort(), ["done", "href", "id", "label", "status"]);
   });
@@ -94,7 +94,7 @@ describe("GET /api/app/teams/:key/board", () => {
     await app("PUT", `/api/app/issues/${tk.ref}/nodes/${node.id}`, t.s);
     await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "hello" } });
     const b = await board(t.s);
-    assert.deepEqual(Object.keys(b.issues[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "commentCount", "createdAt", "createdByKind", "cycle", "id", "labels", "milestoneId", "nodeIds", "number", "parentId", "position", "priority", "projectId", "ref", "statusId", "title", "updatedAt", "version"]);
+    assert.deepEqual(Object.keys(b.issues[0]).sort(), ["agentClaimable", "assigneeId", "body", "claimedByKeyId", "commentCount", "createdAt", "createdByKind", "cycle", "delegateAgentId", "delegation", "id", "labels", "milestoneId", "nodeIds", "number", "parentId", "position", "priority", "projectId", "ref", "statusId", "title", "updatedAt", "version"]);
     assert.equal(b.issues[0].ref, "RKT-1");
     assert.deepEqual(b.issues[0].nodeIds, [node.id]);
     assert.equal(b.issues[0].commentCount, 1);
@@ -207,12 +207,12 @@ describe("GET /api/app/issues/:ref", () => {
     await app("PATCH", `/api/app/issues/${tk.ref}`, t.s, { body: { priority: "high" } });
     const r = await app("GET", `/api/app/issues/${tk.ref}`, t.s);
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json).sort(), ["children", "comments", "history", "issue", "nodes", "parent", "pullRequests", "team"]);
+    assert.deepEqual(Object.keys(r.json).sort(), ["children", "comments", "history", "issue", "nodes", "parent", "proposedTargets", "pullRequests", "suggestedAgent", "targets", "targetsInherited", "team"]);
     assert.equal(r.json.issue.ref, "RKT-1");
     assert.equal(r.json.issue.status, "Backlog");
     assert.deepEqual(r.json.team, { key: "RKT", name: "Rocket" });
     assert.deepEqual(r.json.comments.map((c: { body: string }) => c.body), ["first"]);
-    assert.deepEqual(Object.keys(r.json.comments[0]).sort(), ["authorKind", "authorName", "body", "createdAt", "id"]);
+    assert.deepEqual(Object.keys(r.json.comments[0]).sort(), ["author", "authorKind", "authorName", "body", "createdAt", "id"]);
     assert.deepEqual(r.json.history.map((h: { summary: string }) => h.summary.split(" ")[0]), ["updated", "commented", "created"], "newest first");
     assert.deepEqual(Object.keys(r.json.history[0]).sort(), ["actorKind", "actorName", "createdAt", "seq", "summary"]);
     assert.deepEqual(r.json.pullRequests, []);
@@ -387,7 +387,7 @@ describe("comments", () => {
     const tk = await make(t.s, { title: "Talk" });
     const r = await app("POST", `/api/app/issues/${tk.ref}/comments`, t.s, { body: { body: "  Looks **good**  " } });
     assert.equal(r.status, 201);
-    assert.deepEqual(Object.keys(r.json.comment).sort(), ["authorKind", "authorName", "body", "createdAt", "id"]);
+    assert.deepEqual(Object.keys(r.json.comment).sort(), ["author", "authorKind", "authorName", "body", "createdAt", "id"]);
     assert.deepEqual([r.json.comment.body, r.json.comment.authorKind, r.json.comment.authorName], ["Looks **good**", "human", "Owner"]);
     assert.equal((await board(t.s)).issues[0].commentCount, 1);
   });

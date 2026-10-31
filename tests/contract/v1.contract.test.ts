@@ -13,7 +13,7 @@ describe("GET /api/v1", () => {
     assert.equal(r.status, 200);
     assert.match(r.json.usage, /POST \/api\/v1\/<name>/);
     const names = r.json.tools.map((t: { name: string }) => t.name).sort();
-    assert.equal(names.length, 25, "19 agent tools and the 6 REST-only ones");
+    assert.equal(names.length, 28, "22 agent tools and the 6 REST-only ones");
     expectGolden("v1-tool-names", names);
   });
 });

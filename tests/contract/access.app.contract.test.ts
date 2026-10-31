@@ -248,6 +248,8 @@ describe("one person in several workspaces", () => {
   test("an invite sent to an account's own address adds a second workspace; the session switches between them; nothing leaks across", async () => {
     const pat = await signUp("Pat"); // owner of Pat's workspace
     const zed = await signUp("Zed"); // owner of a second workspace
+    const zedWs = (await me(zed)).json.workspace.name;
+    const patWs = (await me(pat)).json.workspace.name;
     const zedsTeam = await makeTeam(zed, "Zed's shared");
     const hidden = await makeTeam(zed, "Zed's private");
     const inv = await app("POST", "/api/app/invites", zed.sess, { body: { kind: "join_workspace", email: pat.email, role: "viewer", teams: [{ team: zedsTeam, role: "editor" }] } });
@@ -264,7 +266,7 @@ describe("one person in several workspaces", () => {
 
     const peek = await app("POST", "/api/app/invites/peek-existing", pat.sess, { body: { token } });
     assert.equal(peek.status, 200, peek.text);
-    assert.deepEqual([peek.json.invite.workspaceName, peek.json.invite.role], ["Zed workspace", "viewer"]);
+    assert.deepEqual([peek.json.invite.workspaceName, peek.json.invite.role], [zedWs, "viewer"]);
     const before = (await me(pat)).json.workspace.id;
     const other = await app("POST", "/api/app/auth/login", anon(), { body: { email: pat.email, password: PW } }); // a second session of the same person
     const otherSess = sessionFrom(other);
@@ -275,7 +277,7 @@ describe("one person in several workspaces", () => {
 
     // this session now works in Zed's workspace, as a viewer, in the one team it was given (the workspace viewer role caps it to read only)
     const now = await me(pat);
-    assert.equal(now.json.workspace.name, "Zed workspace");
+    assert.equal(now.json.workspace.name, zedWs);
     assert.equal(now.json.role, "viewer");
     assert.notEqual(now.json.workspace.id, before);
     assert.deepEqual((await app("GET", "/api/app/teams", pat.sess)).json.teams.map((p: { key: string; role: string }) => [p.key, p.role]), [[zedsTeam, "viewer"]]); // given editor, capped to viewer by the workspace role
@@ -284,7 +286,7 @@ describe("one person in several workspaces", () => {
     assert.equal((await app("GET", "/api/app/me", { ...pat.sess, cookie: otherSess.cookie, csrf: otherSess.csrf })).json.workspace.id, before);
 
     const list = await app("GET", "/api/app/me/workspaces", pat.sess);
-    assert.deepEqual(list.json.workspaces.map((w: { name: string; active: boolean }) => [w.name, w.active]).sort(), [["Pat workspace", false], ["Zed workspace", true]]);
+    assert.deepEqual(list.json.workspaces.map((w: { name: string; active: boolean }) => [w.name, w.active]).sort(), [[patWs, false], [zedWs, true]].sort());
     // back to the first, and Zed's team is not found from there
     assert.equal((await app("POST", "/api/app/me/workspace", pat.sess, { body: { workspaceId: before } })).status, 200);
     assert.equal((await me(pat)).json.workspace.id, before);

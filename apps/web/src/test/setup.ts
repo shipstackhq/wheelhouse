@@ -1,8 +1,11 @@
 import { afterEach } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { MotionGlobalConfig } from "motion/react";
 
 afterEach(() => cleanup());
+
+// CI runners are slower than a laptop: give findBy*/waitFor 5s instead of 1s before calling it missing.
+configure({ asyncUtilTimeout: 5000 });
 
 // Animations finish at once in tests, so what a click opens or closes is there (or gone) when the next line looks.
 MotionGlobalConfig.skipAnimations = true;

@@ -23,7 +23,7 @@ describe("with no GitHub App configured", () => {
     const r = await call(`/api/github/install?team=${fx.a.teamKey}`, { cookie: fx.a.sessionToken });
     assert.equal(r.status, 307);
     const to = new URL(r.headers.get("location")!, "http://x");
-    assert.equal(to.pathname, `/settings/integrations/github`);
+    assert.match(to.pathname, /^\/w\/[^/]+\/settings\/integrations\/github$/);
     assert.equal(to.searchParams.get("team"), fx.a.teamKey);
     assert.equal(to.searchParams.get("github_error"), "not_configured");
   });

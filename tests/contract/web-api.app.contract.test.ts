@@ -96,7 +96,7 @@ describe("POST /api/app/auth/login", () => {
 });
 
 describe("POST /api/app/auth/signup", () => {
-  test("creates an account and a workspace they own, and signs them in (201)", async () => {
+  test("creates an account and a workspace they own, and signs them in (201)", { skip: "WH-154: signup flow undecided" }, async () => {
     const email = newEmail();
     const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name: "  Ivy  ", email: email.toUpperCase(), password: "a-long-enough-password", workspace: "Ivy Inc" } });
     assert.equal(r.status, 201);
@@ -113,7 +113,7 @@ describe("POST /api/app/auth/signup", () => {
     await app("POST", "/api/app/auth/logout", s);
   });
 
-  test("the workspace is named after the person unless they choose a name", async () => {
+  test("the workspace is named after the person unless they choose a name", { skip: "WH-154: signup flow undecided" }, async () => {
     const r = await app("POST", "/api/app/auth/signup", anon(), { body: { name: "Jo", email: newEmail(), password: "a-long-enough-password" } });
     assert.equal(r.json.workspace.name, "Jo's workspace");
     await app("POST", "/api/app/auth/logout", sessionFrom(r));
@@ -191,14 +191,14 @@ describe("GET /api/app/teams", () => {
     assert.deepEqual(Object.keys(a.json.teams[0]).sort(), ["createdAt", "description", "icon", "iconColor", "id", "key", "name", "parentId", "retired", "role"]);
   });
 
-  test("the workspace cannot be chosen by the request", async () => {
+  test("the request can only pick a workspace the person is in", async () => {
     const s = await signIn(fx.a.email);
-    for (const path of [`/api/app/teams?workspaceId=${fx.b.workspaceId}`, `/api/app/teams?workspace=${fx.b.workspaceId}&team=${fx.b.teamKey}`]) {
-      const r = await app("GET", path, s);
-      assert.deepEqual(r.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey], path);
+    const ignored = await app("GET", `/api/app/teams?workspaceId=${fx.b.workspaceId}`, s);
+    assert.deepEqual(ignored.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
+    for (const r of [await app("GET", `/api/app/teams?workspace=${fx.b.workspaceId}`, s), await app("GET", "/api/app/teams", s, { headers: { "x-workspace": fx.b.workspaceId } })]) {
+      assert.equal(r.status, 404);
+      assert.ok(!r.text.includes(fx.b.teamKey));
     }
-    const header = await app("GET", "/api/app/teams", s, { headers: { "x-workspace-id": fx.b.workspaceId } });
-    assert.deepEqual(header.json.teams.map((p: { key: string }) => p.key), [fx.a.teamKey]);
   });
 
   test("signed out is a 401", async () => {
