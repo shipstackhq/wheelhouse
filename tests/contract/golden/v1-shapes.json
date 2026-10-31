@@ -101,8 +101,11 @@
     },
     "nodes": [],
     "parent": "null",
+    "proposedTargets": [],
     "pullRequests": [],
-    "readFirst": []
+    "readFirst": [],
+    "targets": [],
+    "targetsInherited": "boolean"
   },
   "get_changes": {
     "changes": [

@@ -26,6 +26,34 @@
     }
   },
   {
+    "name": "create_idea",
+    "readOnly": false,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "team",
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "create_issue",
     "readOnly": false,
     "inputSchema": {
@@ -93,6 +121,27 @@
         "milestone": {
           "description": "Milestone name or id of that project",
           "type": "string"
+        },
+        "targets": {
+          "description": "Where the work happens, in order; a sub-issue without its own uses its parent's. Each branch is checked on GitHub. Replaces the list; [] clears it",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "description": "A connected repository: its id or \"owner/name\""
+              },
+              "branch": {
+                "description": "Branch to start from; the repository's default when left out",
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository"
+            ],
+            "additionalProperties": false
+          }
         },
         "link_nodes": {
           "description": "Graph node names/ids this issue touches",
@@ -268,6 +317,32 @@
     }
   },
   {
+    "name": "get_drawing",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Drawing ref, e.g. \"drawings/architecture\" (or the id)"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "team",
+        "ref"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "get_issue",
     "readOnly": true,
     "inputSchema": {
@@ -354,6 +429,27 @@
   },
   {
     "name": "get_stale",
+    "readOnly": true,
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string",
+          "description": "Team key (e.g. \"WH\") or id"
+        },
+        "session": {
+          "type": "string",
+          "description": "Client session id. Leave this out: the Claude Code plugin sets it automatically on every call. Only non-Claude-Code clients that track their own sessions pass it."
+        }
+      },
+      "required": [
+        "team"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_drawings",
     "readOnly": true,
     "inputSchema": {
       "type": "object",
@@ -466,7 +562,8 @@
           "enum": [
             "docs",
             "decisions",
-            "terms"
+            "terms",
+            "drawings"
           ]
         },
         "session": {
@@ -932,6 +1029,27 @@
             "string",
             "null"
           ]
+        },
+        "targets": {
+          "description": "Where the work happens, in order; a sub-issue without its own uses its parent's. Each branch is checked on GitHub. Replaces the list; [] clears it",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "repository": {
+                "type": "string",
+                "description": "A connected repository: its id or \"owner/name\""
+              },
+              "branch": {
+                "description": "Branch to start from; the repository's default when left out",
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository"
+            ],
+            "additionalProperties": false
+          }
         },
         "link_nodes": {
           "description": "Map nodes this issue touches",

@@ -45,7 +45,7 @@ describe("GET /api/github/install", () => {
     const r = await call(`/api/github/install?team=${fx.a.teamKey}`, { cookie: fx.a.memberSessionToken });
     assert.equal(r.status, 307);
     assert.equal(new URL(location(r), "http://x").searchParams.get("github_error"), "owner_only");
-    assert.equal(new URL(location(r), "http://x").pathname, `/settings/integrations/github`);
+    assert.match(new URL(location(r), "http://x").pathname, /^\/w\/[^/]+\/settings\/integrations\/github$/);
     assert.equal(new URL(location(r), "http://x").searchParams.get("team"), fx.a.teamKey);
   });
 
@@ -88,7 +88,7 @@ describe("GET /api/github/callback", () => {
     const r = await callback(fx.a, { state: s.state, installation_id: gh.connectInstallationId, code: "good" }, s.nonce);
     assert.equal(r.status, 307);
     const to = new URL(location(r), "http://x");
-    assert.equal(to.pathname, `/settings/integrations/github`);
+    assert.match(to.pathname, /^\/w\/[^/]+\/settings\/integrations\/github$/);
     assert.equal(to.searchParams.get("team"), fx.a.teamKey);
     assert.equal(to.searchParams.get("github"), "connected");
     const cleared = cookieOf(r, "wh_gh_state");
@@ -97,10 +97,10 @@ describe("GET /api/github/callback", () => {
     assert.equal(replay.status, 400);
   });
 
-  test("an installation another workspace already holds cannot be taken over", async () => {
+  test("an installation can serve several workspaces (many-to-many since 7753fd7)", async () => {
     const s = await start(fx.b);
     const r = await callback(fx.b, { state: s.state, installation_id: gh.connectInstallationId, code: "good" }, s.nonce);
-    assert.equal(new URL(location(r), "http://x").searchParams.get("github_error"), "taken");
+    assert.equal(new URL(location(r), "http://x").searchParams.get("github"), "connected");
   });
 
   test("a member who is not an owner cannot finish a connection", async () => {

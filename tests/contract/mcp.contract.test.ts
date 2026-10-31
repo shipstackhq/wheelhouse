@@ -91,7 +91,7 @@ describe("POST /mcp: tools and prompts", () => {
     const tools = [...r.json.result.tools]
       .sort((x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name))
       .map((t: { name: string; inputSchema: unknown; annotations?: { readOnlyHint?: boolean } }) => ({ name: t.name, readOnly: !!t.annotations?.readOnlyHint, inputSchema: t.inputSchema }));
-    assert.equal(tools.length, 19, "the 19 agent tools");
+    assert.equal(tools.length, 22, "the 22 agent tools");
     for (const t of r.json.result.tools) assert.ok(typeof t.description === "string" && t.description.length > 0, `${t.name} needs a description`);
     expectGolden("mcp-tools", tools);
   });

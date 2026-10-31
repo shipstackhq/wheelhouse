@@ -12,6 +12,7 @@
   "workspace": {
     "id": "string",
     "imageUrl": "null",
-    "name": "string"
+    "name": "string",
+    "slug": "string"
   }
 }
