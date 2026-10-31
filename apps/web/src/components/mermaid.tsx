@@ -23,6 +23,7 @@ export function Mermaid({ code }: { code: string }) {
 
   useEffect(() => {
     let live = true;
+    setFailed(false);
     import("mermaid")
       .then(async ({ default: mermaid }) => {
         mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: theme === "dark" ? "dark" : "default" });
