@@ -28,7 +28,9 @@ COPY packages/shared packages/shared
 COPY apps/api apps/api
 RUN pnpm --filter @wheelhouse/api deploy --legacy --prod /out
 
-FROM node:24-alpine AS run
+# Plain Alpine with its own Node: no npm, yarn or corepack at run time (~110 MB smaller than node:24-alpine).
+FROM alpine:3.24 AS run
+RUN apk add --no-cache nodejs
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 \
     WHEELHOUSE_MIGRATIONS_DIR=/app/drizzle WEB_DIST=/app/web

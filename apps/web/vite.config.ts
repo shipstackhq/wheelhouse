@@ -18,7 +18,7 @@ export default defineConfig({
   // Reachable from the network as this machine's .local name, not only localhost.
   server: { port: 5173, host: true, allowedHosts: [".local"], proxy },
   preview: { port: 4173, proxy },
-  build: { sourcemap: true },
+  build: { sourcemap: false },
   test: {
     environment: "jsdom",
     include: ["src/**/*.test.{ts,tsx}"],
