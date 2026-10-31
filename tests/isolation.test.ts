@@ -79,6 +79,8 @@ let A: Side & {
   repoSlug: string;
   docId: string;
   docSlug: string;
+  drawingId: string;
+  drawingSlug: string;
   projectId: string;
   projectName: string;
 };
@@ -126,7 +128,8 @@ async function seedMap(s: Awaited<ReturnType<typeof seedSide>>) {
   await upsertTerm(s.owner, k, { term: `${s.tag} term`, definition: `${s.tag} definition`, node: sys.name });
   const doc = await createDoc(s.owner, k, { title: `${s.tag} doc`, body: `${s.tag} body with a secret word` });
   await linkDocNode(s.owner, k, doc.id, sys.name);
-  return { sys, concept, data, doc };
+  const [drawing] = await (await getDb()).insert(schema.docs).values({ teamId: s.teamId, workspaceId: s.workspaceId, slug: `${s.tag.toLowerCase()}-drawing`, title: `${s.tag} drawing`, kind: "drawing", createdByKind: "human", updatedByKind: "human", position: 0 }).returning();
+  return { sys, concept, data, doc, drawing };
 }
 
 const fingerprint = async (s: { workspaceId: string; teamId: string; keyId: string }) => {
@@ -200,6 +203,8 @@ before(async () => {
     repoSlug: repo.slug,
     docId: map.doc.id,
     docSlug: map.doc.slug,
+    drawingId: map.drawing.id,
+    drawingSlug: map.drawing.slug,
     projectId: project.id,
     projectName: project.name,
   };
@@ -261,6 +266,9 @@ const attacks = {
     { team: A.teamKey, ref: A.docId, body: "hijacked" },
     { team: A.teamKey, ref: A.docId, link_nodes: [A.nodeName], unlink_nodes: [A.nodeName] },
   ],
+  list_drawings: () => [{ team: A.teamKey }, { team: A.teamId }],
+  get_drawing: () => [{ team: A.teamKey, ref: `drawings/${A.drawingSlug}` }, { team: A.teamKey, ref: A.drawingId }],
+  create_idea: () => [{ team: A.teamKey, title: "B files an idea in A" }, { team: A.teamId, title: "B files an idea in A", body: "x" }],
   record_decision: () => [{ team: A.teamKey, number: 1, title: "hijacked" }, { team: A.teamKey, title: "B decision in A" }],
   define_term: () => [{ team: A.teamKey, term: A.termName, definition: "hijacked" }],
   resume_session: () => [{ team: A.teamKey, mode: "replay" as const }],
@@ -875,6 +883,7 @@ const DB_FILE_AUDIT: Record<string, string> = {
   "apps/api/src/modules/dashboard/dashboard.repository.ts": "the only file of the dashboard module that queries, and the one place a module reads other modules' tables (teams, statuses, issues, the event log, nodes, docs, keys, sessions, drafts, decisions, members, repositories, memberships, invites): the dashboard is the read model that looks across areas, and rebuilding its aggregates from service calls would be slow and pointless. Read-only, it decides nothing, and every call is by the caller's workspace id and the team ids the person can open (MetricsService: TeamAccessService.visibleTeamIds, or a team resolved through TeamAccessService.require), or by a team that ChecklistService resolved through TeamAccessService.require (tested)",
   "apps/api/src/modules/github/github.repository.ts": "the only file of the github module that queries; it decides nothing, and every caller is a service. Webhooks reach a repository only through its own workspace's link to the installation (targetsFor joins installation workspace = team workspace; tested with two workspaces sharing a GitHub repo id); connecting is owner-only and checks the installation belongs to the caller's workspace; repositories are found inside the team the caller opened through TeamAccessService.require(actor, key, need), so another workspace's repository is not_found (tested)",
   "apps/api/src/modules/docs/docs.repository.ts": "the only file of the docs module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need): a doc, a parent and a linked node are found inside the actor's team only, so another workspace's are not_found (tested in docs.test.ts and in this file's cross-workspace attacks); the members it lists are those of the signed-in person's own workspace, and an agent key's capabilities are read by the key's own id (tested)",
+  "apps/api/src/modules/actors/actors.service.ts": "turns stored authors into names and pictures for presenters: users are read by the ids a row of the actor's own team stored, agents only when they match a workspace_agents row of the given workspace_id, so another workspace's agent keeps its stored name and no picture; it returns nothing but name, kind and avatar",
   "apps/api/src/lib/service-queue.ts": "every function resolves through requireTeam / resolveIssue (tested)",
   "apps/api/src/platform/streams/stream-open.ts": "live streams: human sessions only, scope from stream-scope.ts (requireTeam / the caller's own workspace id, tested in live-events.test.ts), capped per user",
   "apps/api/src/modules/map/map.repository.ts": "the only file of the map module that queries; it decides nothing, and every caller is a service that starts from TeamAccessService.require(actor, key, need) (the former requireTeam / resolveIssue): nodes, edges, flows, decisions, terms, drafts, work sessions, landed files and the docs the map flags are all read and written by the found team's id, a node or flow is looked up inside that team only, and a draft is resolved only when it belongs to the actor's team and is pending, so another workspace's are not_found and stay untouched (tested). Graph: nodes, edges, flows and the data layer (graph.service). Decisions: ADRs and glossary (decisions.service). Freshness: reported changes, landing and draft publishing (freshness.service). Sync: sessions, drafts and debt (sessions.service); every entry point resolves the team first (tested)",
@@ -1111,6 +1120,21 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "GET /api/app/teams/:key/onboarding": "onboardingPage(actor): the team through TeamAccessService.require(actor); the commands carry no API key (tested)",
   "POST /api/app/teams/:key/onboarding/concept": "createConceptAs(actor): the team through TeamAccessService.require(actor, key, edit); the node is written to that team (tested)",
   "GET /api/app/dashboard/:widget": "MetricsService.*(actor): every query is by the actor's workspace id and limited to the teams the person is a member of; `?team=KEY` is resolved through requireTeam(actor, key), so another workspace's team, one the person is not in, a malformed value or a repeated parameter is a 404, and the snapshot is intersected with what they can open anyway; the Focus widget needs a team; an unknown widget is a 404 (tested)",
+  "DELETE /api/app/issues/:ref/comments/:id": "deleteComment(actor): resolveIssue is workspace scoped and needs admin, and the comment is deleted by (issue, id), so another issue's or workspace's comment is not_found",
+  "DELETE /api/app/teams/:key/drawings/:ref": "deleteDoc(actor, kind drawing): the team through requireTeam(actor, edit); the drawing is resolved inside it, so another workspace's is not_found",
+  "GET /api/app/teams/:key/drawings": "listDrawings(actor): the team through requireTeam(actor); rows are that team's live drawings; editors named are the person's own workspace's members",
+  "GET /api/app/teams/:key/drawings/:ref": "getDrawing(actor): the drawing is resolved inside the actor's team (by id or slug), so another workspace's is not_found",
+  "PATCH /api/app/teams/:key/drawings/:ref": "updateDrawingAs(actor): the team through requireTeam(actor, edit); the drawing is resolved inside it, version-locked",
+  "POST /api/app/teams/:key/drawings": "createDrawingAs(actor): the team through requireTeam(actor, edit); the drawing is created in it",
+  "DELETE /api/app/teams/:team/agents/:slug/learnings/:id": "remove(actor): the team through requireTeam(actor, edit), the agent through the team's roster, and the learning is deleted by (id, team, agent), so another team's is not_found",
+  "GET /api/app/teams/:team/agents/:slug/learnings": "list(actor): the team through requireTeam(actor, read) and the agent through its roster; learnings are read by (team, agent)",
+  "PATCH /api/app/teams/:team/agents/:slug/learnings/:id": "update(actor): the team through requireTeam(actor, edit), the agent through the team's roster, and the learning is updated by (id, team, agent)",
+  "GET /api/app/issues/:ref/plan": "preview(actor): resolveIssue is workspace scoped; the agent is looked up on the issue's team roster; devices listed are the person's own",
+  "POST /api/app/issues/:ref/delegate/rerun": "rerunDelegate(actor): resolveIssue is workspace scoped and needs edit",
+  "POST /api/app/issues/:ref/targets/suggest": "suggest(actor): resolveIssue is workspace scoped and needs edit; the map and repositories read are the issue's team's",
+  "GET /api/app/run-defaults": "the caller's own defaults, keyed by their user id; agents refused",
+  "PUT /api/app/run-defaults": "the caller's own defaults, keyed by their user id; the device must be one of their own; agents refused",
+  "POST /api/app/teams/:key/repositories/github/sync": "syncTeam(actor): the team through requireTeam(actor, edit); only that team's connected repositories are synced; agents refused",
 };
 
 const controllerFiles = (dir: string) => walk(dir).filter((f) => f.endsWith(".controller.ts"));
