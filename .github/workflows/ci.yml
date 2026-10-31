@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       server: ${{ steps.diff.outputs.server }}
+      web: ${{ steps.diff.outputs.web }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,6 +30,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "server=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed=$(git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD)
@@ -37,6 +39,9 @@ jobs:
           if echo "$changed" | grep -qvE '^(apps/web/|docs/)|\.md$'; then server=true; else server=false; fi
           echo "server=$server" >> "$GITHUB_OUTPUT"
           echo "server-side suites: $server"
+          # The web app depends on itself, the shared packages, the lockfile and CI.
+          if echo "$changed" | grep -qE '^(apps/web/|packages/|pnpm-lock\.yaml|package\.json|\.github/)'; then web=true; else web=false; fi
+          echo "web=$web" >> "$GITHUB_OUTPUT"
 
   check:
     name: Lint, types, migrations, build
@@ -86,6 +91,8 @@ jobs:
 
   web-tests:
     name: Web tests (${{ matrix.shard }}/2)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -172,6 +179,8 @@ jobs:
 
   image:
     name: Image builds, migrates a fresh Postgres, serves health
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -224,6 +233,8 @@ jobs:
 
   packaged:
     name: The packaged app behind Caddy (smoke test and the contract suite)
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
