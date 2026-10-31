@@ -286,10 +286,9 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
       const before = await fingerprint(A);
       for (const name of Object.keys(mcp.tools) as ToolName[]) {
         for (const args of attacks[name]()) {
-          let result: unknown;
           let error: unknown;
           try {
-            result = await mcp.run(actor, name, args);
+            await mcp.run(actor, name, args);
           } catch (e) {
             error = e;
           }
@@ -301,9 +300,6 @@ describe("every tool, called by workspace B with workspace A's identifiers", () 
             assert.ok(!MARK.test(error.message), `${label}: the refusal leaks workspace A data: ${error.message}`);
           } else {
             assert.fail(`${label}: succeeded against workspace A's identifiers`);
-            const text = JSON.stringify(result);
-            assert.ok(!MARK.test(text), `${label}: returned workspace A data`);
-            for (const id of [A.teamId, A.issueId, A.nodeId, A.ownerId, A.keyId]) assert.ok(!text.includes(id), `${label}: returned an id of workspace A`);
           }
         }
       }
