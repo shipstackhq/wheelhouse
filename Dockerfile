@@ -35,6 +35,7 @@ ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 \
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=api --chown=app:app /out /app
 COPY --from=build --chown=app:app /app/apps/web/dist /app/web
+RUN mkdir -p /app/.data/uploads && chown -R app:app /app/.data
 USER app
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
