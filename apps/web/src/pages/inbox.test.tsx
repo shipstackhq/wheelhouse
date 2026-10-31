@@ -141,7 +141,7 @@ describe("the inbox page", () => {
     const { router } = renderApp("/inbox?n=n1", (s) => inbox(s, [item(1)]));
     await userEvent.setup().click(await screen.findByRole("button", { name: "Back" }));
     await waitFor(() => expect(router.state.location.search).toBe(""));
-    expect(screen.getByText("Select a notification")).toBeTruthy();
+    expect(await screen.findByText("Select a notification")).toBeTruthy();
   });
 
   test("Arrow Down moves the selection to the next row", async () => {
@@ -360,7 +360,7 @@ describe("the inbox views", () => {
     await waitFor(() => expect(server.calls.some((c) => c.url.includes("view=trash"))).toBe(true));
     await pickView(user, "Inbox");
     await waitFor(() => expect(router.state.location.search).toBe(""));
-    expect(screen.getByRole("button", { name: "Filter: Inbox" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Filter: Inbox" })).toBeTruthy();
   });
 
   test("switching view clears the selection", async () => {
@@ -368,7 +368,7 @@ describe("the inbox views", () => {
     await screen.findByRole("article");
     await pickView(userEvent.setup(), "Archived");
     await waitFor(() => expect(router.state.location.search).toBe("?view=archived"));
-    expect(screen.getByText("Select a notification")).toBeTruthy();
+    expect(await screen.findByText("Select a notification")).toBeTruthy();
   });
 
   test("the All / Unread toggle and Mark all read are only in the inbox", async () => {
