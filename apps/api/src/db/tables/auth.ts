@@ -1,4 +1,4 @@
-import { uuid, text, timestamp, integer, jsonb, primaryKey, index, uniqueIndex, unique, foreignKey } from "drizzle-orm/pg-core";
+import { uuid, text, timestamp, integer, jsonb, boolean, primaryKey, index, uniqueIndex, unique, foreignKey } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { table, createdAt } from "./common";
 import { teamScope } from "./team-scope";
@@ -127,6 +127,42 @@ export const apiKeys = table("api_keys", {
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   createdAt: createdAt(),
 }, (t) => [unique("api_keys_id_workspace_id_unique").on(t.id, t.workspaceId)]);
+
+/**
+ * A device grant (ADR-25): a person's own token for a device, separate from `api_keys` (which belong to one workspace). It reaches
+ * every workspace the person is in (`allWorkspaces`) or only those listed in `user_grant_workspaces`. Only the sha256 of the token is
+ * stored. A revoked grant is never looked up (AuthRepository.activeGrantByHash).
+ */
+export const userGrants = table("user_grants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  deviceName: text("device_name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  prefix: text("prefix").notNull(), // first chars, shown in UI
+  allWorkspaces: boolean("all_workspaces").notNull().default(false),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: createdAt(),
+}, (t) => [unique("user_grants_id_user_id_unique").on(t.id, t.userId), index("user_grants_user_idx").on(t.userId)]);
+
+/**
+ * The workspaces a chosen-list grant reaches; no rows when the grant is `allWorkspaces`. The grant and the person's membership are
+ * both matched through `user_id` (composite keys), and deleting the grant, the workspace or the user deletes the row.
+ */
+export const userGrantWorkspaces = table(
+  "user_grant_workspaces",
+  {
+    grantId: uuid("grant_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.grantId, t.workspaceId] }),
+    foreignKey({ name: "user_grant_workspaces_grant_fk", columns: [t.grantId, t.userId], foreignColumns: [userGrants.id, userGrants.userId] }).onDelete("cascade"),
+    foreignKey({ name: "user_grant_workspaces_membership_fk", columns: [t.userId, t.workspaceId], foreignColumns: [memberships.userId, memberships.workspaceId] }).onDelete("cascade"),
+    index("user_grant_workspaces_workspace_idx").on(t.workspaceId),
+  ],
+);
 
 /**
  * The teams an agent key can open (WH-120). A key reaches a team only through a row here, as an editor; a key with no rows reaches
