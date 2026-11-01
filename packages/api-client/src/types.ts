@@ -692,6 +692,7 @@ export type NewDrawing = { title: string; body?: string; thumbnail?: string };
 export type DrawingPatch = { title?: string; body?: string; thumbnail?: string; version?: number };
 
 export type RepoLifecycle = "live" | "being_replaced" | "planned" | "retired";
+export type CiPolicy = { mode: "none" | "github_checks"; required: "branch_protection" | "all" | string[]; optionalIfAbsent: string[]; startTimeoutMinutes: number };
 export type Repository = {
   id: string;
   displayName: string;
@@ -702,6 +703,14 @@ export type Repository = {
   defaultBranch: string;
   pathLimit: string | null;
   lifecycle: RepoLifecycle;
+  /** The CI policy a person confirmed; null until one does. */
+  ciPolicy: CiPolicy | null;
+  /** What detection suggests; null before the first detection. */
+  ciPolicySuggestion: CiPolicy | null;
+  /** The checks GitHub requires of the default branch. */
+  requiredFromProtection: string[];
+  /** Things worth a look, such as a required check no recent pull request has shown. They never block. */
+  ciWarnings: string[];
   /** The last webhook (push or pull request) for this repository. */
   lastEventAt: string | null;
   /** When the last successful pull request sync of this repository finished. */

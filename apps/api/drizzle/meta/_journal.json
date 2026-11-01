@@ -477,6 +477,13 @@
       "when": 1793552122483,
       "tag": "0067_whole_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793567571249,
+      "tag": "0068_freezing_meteorite",
+      "breakpoints": true
     }
   ]
 }

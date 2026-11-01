@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { schema } from "../../db";
-import type { RepositoryCheck } from "../../db/tables/github";
+import type { CiPolicy, RepositoryCheck } from "../../db/tables/github";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
@@ -24,6 +24,7 @@ export type RepositoryInput = {
   pathLimit?: string | null;
   lifecycle?: (typeof schema.REPO_LIFECYCLES)[number];
   checks?: RepositoryCheck[];
+  ciPolicy?: CiPolicy | null;
 };
 
 type Body = Record<string, unknown>;
@@ -41,6 +42,23 @@ function checksField(b: Body): RepositoryCheck[] | undefined {
       required: o.required !== false,
     };
   });
+}
+
+/** WH-189: the confirmed CI policy, or null to clear it. */
+function ciPolicyField(b: Body): CiPolicy | null | undefined {
+  if (b.ciPolicy === undefined) return undefined;
+  if (b.ciPolicy === null) return null;
+  if (typeof b.ciPolicy !== "object" || Array.isArray(b.ciPolicy)) return bad("ciPolicy", "ciPolicy must be an object or null");
+  const o = b.ciPolicy as Body;
+  const names = (key: string): string[] => {
+    const v = o[key];
+    if (!Array.isArray(v) || v.length > 50 || v.some((n) => typeof n !== "string" || !n.trim() || n.length > 200)) return bad(key, `${key} must be a list of at most 50 check names`);
+    return v.map((n: string) => n.trim());
+  };
+  const required = o.required === "branch_protection" || o.required === "all" ? o.required : names("required");
+  const timeout = o.startTimeoutMinutes ?? 10;
+  if (typeof timeout !== "number" || !Number.isInteger(timeout) || timeout < 1 || timeout > 1440) return bad("startTimeoutMinutes", "startTimeoutMinutes must be a whole number of minutes, 1 to 1440");
+  return { mode: oneOf(o, "mode", ["none", "github_checks"] as const, true)!, required, optionalIfAbsent: o.optionalIfAbsent === undefined ? [] : names("optionalIfAbsent"), startTimeoutMinutes: timeout };
 }
 
 export const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "repo";
@@ -115,6 +133,7 @@ export class RepositoriesService {
     if (patch.pathLimit !== undefined) set.pathLimit = patch.pathLimit?.trim() || null;
     if (patch.lifecycle !== undefined) set.lifecycle = patch.lifecycle;
     if (patch.checks !== undefined) set.checks = patch.checks;
+    if (patch.ciPolicy !== undefined) set.ciPolicy = patch.ciPolicy;
     const r = await this.repo.updateRepository(existing.id, set);
     await this.events.emit(actor, team.id, { type: "repository.updated", entity: "team", entityId: r.id, summary: `updated repository "${r.displayName}"` });
     if (patch.lifecycle !== undefined && patch.lifecycle !== existing.lifecycle) await this.systemNode(actor, team.id, r);
@@ -163,6 +182,7 @@ export class RepositoriesService {
       pathLimit: textOrNull(b, "pathLimit"),
       lifecycle: oneOf(b, "lifecycle", schema.REPO_LIFECYCLES),
       checks: checksField(b),
+      ciPolicy: ciPolicyField(b),
     };
     return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined));
   }

@@ -22,6 +22,8 @@ import { MapListeners } from "../map/map.listeners";
 import { IssuesListeners } from "../issues/issues.listeners";
 import type { GithubApi, SyncedPullRequest } from "./api";
 import { PrSyncService, actionFor } from "./pr-sync.service";
+import { CiPolicyService } from "./ci-policy.service";
+import { repositoryView } from "./github.presenter";
 import { ConnectService } from "./connect.service";
 import { DeliveriesService, GITHUB_ACTOR_ID } from "./deliveries.service";
 import { RepositoriesService } from "./repositories.service";
@@ -561,5 +563,54 @@ describe("other events", () => {
     await createTeam(workspace.owner, { name: "Keep", key: "DK" }); // the last active team of a workspace cannot be deleted
     await deleteTeam(workspace.owner, "DD");
     assert.equal((await db.select().from(schema.pullRequests).where(eq(schema.pullRequests.repositoryId, workspace.repoRowId))).length, 0);
+  });
+});
+
+describe("CI policy (WH-189)", () => {
+  const ci = app.get(CiPolicyService);
+  const repos = app.get(RepositoriesService);
+  const view = async () => repositoryView((await (await getDb()).select().from(schema.repositories).where(eq(schema.repositories.id, A.repoRowId)))[0]);
+  const github = (over: { required?: string[]; readable?: boolean; checks?: boolean } = {}) =>
+    ({ requiredChecks: async () => ({ names: over.required ?? [], readable: over.readable ?? true }), branchHasChecks: async () => over.checks ?? false }) as unknown as GithubApi;
+
+  test("a repository without CI is suggested mode none, and a person confirms it", async () => {
+    await ci.detectRepository(A.owner, "AA", A.repoRowId, github());
+    const v = await view();
+    assert.equal(v.ciPolicy, null, "detection suggests, it does not apply");
+    assert.deepEqual(v.ciPolicySuggestion, { mode: "none", required: "all", optionalIfAbsent: [], startTimeoutMinutes: 10 });
+    await repos.updateRepositoryAs(A.owner, "AA", A.repoRowId, { ciPolicy: v.ciPolicySuggestion });
+    assert.equal((await view()).ciPolicy?.mode, "none");
+  });
+
+  test("with branch protection requiring lint, the suggestion follows it; a confirmed policy is never overwritten", async () => {
+    await repos.updateRepositoryAs(A.owner, "AA", A.repoRowId, { ciPolicy: null });
+    await ci.detectRepository(A.owner, "AA", A.repoRowId, github({ required: ["lint"], checks: true }));
+    let v = await view();
+    assert.deepEqual([v.ciPolicySuggestion?.mode, v.ciPolicySuggestion?.required, v.requiredFromProtection], ["github_checks", "branch_protection", ["lint"]]);
+    await repos.updateRepositoryAs(A.owner, "AA", A.repoRowId, { ciPolicy: { mode: "github_checks", required: ["build"], optionalIfAbsent: [], startTimeoutMinutes: 20 } });
+    await ci.detectRepository(A.owner, "AA", A.repoRowId, github({ required: ["lint", "e2e"], checks: true }));
+    v = await view();
+    assert.deepEqual(v.ciPolicy, { mode: "github_checks", required: ["build"], optionalIfAbsent: [], startTimeoutMinutes: 20 }, "what a person confirmed stays");
+    assert.deepEqual(v.requiredFromProtection, ["lint", "e2e"], "while the detected list moves on");
+  });
+
+  test("a required check no recent pull request has shown is a warning, not a block; an unreadable branch is one too", async () => {
+    const db = await getDb();
+    await repos.updateRepositoryAs(A.owner, "AA", A.repoRowId, { ciPolicy: { mode: "github_checks", required: "branch_protection", optionalIfAbsent: ["docs"], startTimeoutMinutes: 10 } });
+    await db.insert(schema.pullRequests).values({ repositoryId: A.repoRowId, number: 9001, title: "t", url: "u", checks: { lint: { status: "completed", conclusion: "success" } } });
+    await ci.detectRepository(A.owner, "AA", A.repoRowId, github({ required: ["lint", "e2e", "docs"], checks: true }));
+    assert.deepEqual((await view()).ciWarnings, ['required check "e2e" has not been seen on a recent pull request'], "docs is optional if absent, lint was seen");
+    await ci.detectRepository(A.owner, "AA", A.repoRowId, github({ readable: false }));
+    assert.match((await view()).ciWarnings[0], /Administration: read/);
+  });
+
+  test("a policy is checked when saved, and only teammates can detect", async () => {
+    const bad = (ciPolicy: unknown) => assert.rejects(async () => repos.updateRepositoryAs(A.owner, "AA", A.repoRowId, { ciPolicy }), /ciPolicy|mode|required|startTimeoutMinutes/);
+    await bad({ mode: "jenkins", required: "all" });
+    await bad({ mode: "none", required: "some" });
+    await bad({ mode: "none", required: "all", startTimeoutMinutes: 0 });
+    await bad("all");
+    await assert.rejects(ci.detectRepository({ ...A.owner, kind: "agent" } as Actor, "AA", A.repoRowId, github()), /Only teammates/);
+    await assert.rejects(ci.detectRepository(B.owner, "AA", A.repoRowId, github()), /not found/i);
   });
 });

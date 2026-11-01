@@ -1,6 +1,7 @@
 import { Controller, Delete, Inject, Get, HttpCode, Param, Patch, Post, Req } from "@nestjs/common";
 import { AppEndpoints } from "../../common/decorators/app-endpoints.decorator";
 import { type SessionRequest } from "../../common/guards/session.guard";
+import { CiPolicyService } from "./ci-policy.service";
 import { ConnectService } from "./connect.service";
 import { repositoryView } from "./github.presenter";
 import { PrSyncService } from "./pr-sync.service";
@@ -16,6 +17,7 @@ export class RepositoriesController {
     @Inject(RepositoriesService) private readonly repositories: RepositoriesService,
     @Inject(ConnectService) private readonly connect: ConnectService,
     @Inject(PrSyncService) private readonly prSync: PrSyncService,
+    @Inject(CiPolicyService) private readonly ci: CiPolicyService,
   ) {}
 
   @Get(":key/repositories")
@@ -43,6 +45,7 @@ export class RepositoriesController {
   async connectGithub(@Req() req: SessionRequest, @Param("key") key: string, @JsonBody() body: JsonObject) {
     const repository = await this.connect.connectGithubAs(req.human.actor, key, body);
     await this.prSync.syncRepository(repository.id); // its pull requests are read right away; a failure is logged, never thrown
+    await this.ci.detectAll(repository.id); // and so is its CI, for a person to confirm
     return { repository: repositoryView((await this.repositories.listRepositories(req.human.actor, key)).find((r) => r.id === repository.id) ?? repository) };
   }
 
@@ -63,6 +66,13 @@ export class RepositoriesController {
   @Patch(":key/repositories/:id")
   async update(@Req() req: SessionRequest, @Param("key") key: string, @Param("id") id: string, @JsonBody() body: JsonObject) {
     return { repository: repositoryView(await this.repositories.updateRepositoryAs(req.human.actor, key, id, body)) };
+  }
+
+  /** Read the repository's CI from GitHub again and suggest a policy (WH-189). Does not change a confirmed one. */
+  @Post(":key/repositories/:id/detect-ci")
+  @HttpCode(200)
+  async detectCi(@Req() req: SessionRequest, @Param("key") key: string, @Param("id") id: string) {
+    return { repository: repositoryView(await this.ci.detectRepository(req.human.actor, key, id)) };
   }
 
   @Post(":key/repositories/:id/retire")
