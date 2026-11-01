@@ -1035,7 +1035,8 @@ describe("delegated runs (WH-116)", () => {
     const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 77, title: "The change", url: "https://github.com/acme/app/pull/77", headBranch: "wh/feature", headSha: "abc1234" }).returning();
     await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
     const setCi = (ciState: "pending" | "failure" | "success", checks = {}) => db.update(schema.pullRequests).set({ ciState, checks }).where(eq(schema.pullRequests.id, pr.id));
-    assert.equal(await app.get(DelegationService).offerWaiting(), 0, "no result yet: it waits for CI");
+    await setCi("pending");
+    assert.equal(await app.get(DelegationService).offerWaiting(), 0, "CI still running: it waits");
     await setCi("failure", { lint: { status: "completed", conclusion: "failure" } });
     assert.equal(await app.get(DelegationService).offerWaiting(), 0, "red CI: still waiting");
     await setCi("success");
@@ -1055,6 +1056,25 @@ describe("delegated runs (WH-116)", () => {
     const rows = await db.select().from(schema.comments).where(eq(schema.comments.issueId, issue.id));
     assert.equal(rows.length, 1);
     assert.match(rows[0].body, /reviewed the pull request\.\*\*\n\nCI was passing when this was reviewed\.\n\nChanges needed/);
+  });
+
+  test("a reviewer does not wait for CI in a repository that has none (WH-188)", async () => {
+    const { who, slug } = await setup("noci", "reviewer");
+    const { device } = await paired(who);
+    await online(device);
+    const db = await getDb();
+    const [team] = await db.select().from(schema.teams).where(eq(schema.teams.key, "DM"));
+    const [bare] = await db.insert(schema.repositories).values({ teamId: team.id, workspaceId: owner.workspaceId, displayName: "bare", role: "app", provider: "github", slug: "5678", githubRepoId: "5678", githubFullName: "acme/bare", defaultBranch: "main" }).returning();
+    const issue = await createIssue(owner, "DM", { title: "No CI here", assigneeId: who.id });
+    await updateIssue(who, issue.ref, { delegate: slug });
+    const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: bare.id, number: 5, title: "Change", url: "https://github.com/acme/bare/pull/5", headBranch: "wh/bare", headSha: "abc1234" }).returning();
+    await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
+    assert.equal((await runs.issueJobs(who, issue.ref)).reviewCi, null, "no CI to ask about");
+    assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts without CI");
+    const [job] = await jobsOf(issue.id);
+    assert.equal(job.mode, "review");
+    await db.update(schema.pullRequests).set({ ciState: "failure" }).where(eq(schema.pullRequests.id, pr.id));
+    assert.equal((await runs.issueJobs(who, issue.ref)).reviewCi?.state, "failure", "once the repository shows CI, it counts again");
   });
 
   test("the issue suggests the roster agent its labels point at, until it is delegated", async () => {
