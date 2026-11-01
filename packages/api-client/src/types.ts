@@ -801,6 +801,8 @@ export type IssueRuns = {
   jobs: JobView[];
   devices: { id: string; name: string; status: DeviceStatus; models: string[]; poolSize: number; activeJobs: number }[];
   repositories: { id: string; name: string; fullName: string | null; defaultBranch: string }[];
+  /** WH-176: the CI of the pull request a reviewer would look at (null: no open pull request), so starting one on a red or running PR can ask first. */
+  reviewCi: { state: "success" | "failure" | "pending" | null; failed: string[] } | null;
 };
 /** What starting the issue's work would do now (WH-133): per target the repository, branch, device and model, or what is missing. */
 export type RunPlanPreview = { plans: { repository: string; baseBranch: string; device: string; model: string; effort: string | null; note?: string }[] } | { missing: "needs_setup" | "waiting" };
