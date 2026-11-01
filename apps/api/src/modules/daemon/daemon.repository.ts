@@ -337,6 +337,20 @@ export class DaemonRepository {
     return pr;
   }
 
+  /**
+   * WH-191: the self-check results for exactly this commit of a repository (the newest run that checked it), or null when none did.
+   * Never falls back to another commit: a commit nobody checked has no results.
+   */
+  async selfChecksFor(repositoryId: string, sha: string) {
+    const [row] = await this.db.q
+      .select({ checks: sql<unknown[]>`${deviceJobs.result}->'checks'` })
+      .from(deviceJobs)
+      .where(and(eq(deviceJobs.repositoryId, repositoryId), sql`${deviceJobs.result}->>'checkedSha' = ${sha}`))
+      .orderBy(desc(deviceJobs.createdAt))
+      .limit(1);
+    return row ? (row.checks ?? []) : null;
+  }
+
   /** WH-123: a person's own defaults for runs started in their name. */
   async runDefaults(userId: string) {
     const [r] = await this.db.q.select().from(runDefaults).where(eq(runDefaults.userId, userId));

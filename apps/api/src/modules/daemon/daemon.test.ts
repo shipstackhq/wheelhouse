@@ -698,6 +698,28 @@ describe("jobs", () => {
     }
   });
 
+  test("self-checks are found by the commit they ran on, never by another (WH-191)", async () => {
+    const { device } = await paired();
+    await online(device);
+    const byCommit = app.get(DaemonRepository);
+    const [sha1, sha2, sha3] = ["1".repeat(40), "2".repeat(40), "3".repeat(40)];
+    const lint = { name: "lint", command: "pnpm lint", required: true, exitCode: 0, durationMs: 9, tail: "" };
+    const finish = async (title: string, extra: Record<string, unknown>) => {
+      const issue = await createIssue(owner, "DM", { title });
+      const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
+      await d.acceptJob(device, job.id);
+      await d.finishJob(device, job.id, { state: "failed", error: "x", commit: "abc1234", pushed: true, diffStats: { files: 1 }, ...extra });
+    };
+    await finish("Passed on one", { checks: [{ ...lint, status: "passed" }], checkedSha: sha1 });
+    await finish("Failed on two", { checks: [{ ...lint, status: "failed", exitCode: 1 }], checkedSha: sha2 });
+    await finish("An older daemon", { checks: [{ ...lint, status: "passed" }] });
+    await finish("A made-up commit", { checks: [{ ...lint, status: "passed" }], checkedSha: "not-a-sha" });
+    assert.deepEqual(((await byCommit.selfChecksFor(repoId, sha1)) as { status: string }[]).map((c) => c.status), ["passed"]);
+    assert.deepEqual(((await byCommit.selfChecksFor(repoId, sha2)) as { status: string }[]).map((c) => c.status), ["failed"], "each commit has its own results");
+    assert.equal(await byCommit.selfChecksFor(repoId, sha3), null, "a commit nobody checked has none, whatever passed before it");
+    assert.equal(await byCommit.selfChecksFor(repoId, "not-a-sha"), null, "and a result sent without a real commit is never found");
+  });
+
   test("cancel: an offer ends at once; a running job is asked to stop with a signed cancel and ends when the daemon says so", async () => {
     const { device } = await paired();
     await online(device);
