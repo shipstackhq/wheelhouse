@@ -5,7 +5,7 @@ import { GithubApiError, github, type GithubApi } from "../github/index";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { DaemonRepository, type DeviceRow, type JobRow } from "./daemon.repository";
-import { LEARNINGS_CAP, REJECT_REASONS, cleanCapabilities, proposedLearnings } from "./daemon.rules";
+import { LEARNINGS_CAP, REJECT_REASONS, cleanCapabilities, cleanCheckResults, proposedLearnings } from "./daemon.rules";
 import { ACTIVE, type Device, MAX_EVENTS_PER_BATCH, MAX_EVENTS_PER_JOB, UNREACHABLE_AFTER_MS, isFinalState, str } from "./device-common";
 import { DeviceStreamService } from "./device-stream.service";
 import { RunNotifications } from "./runs.notifications";
@@ -189,6 +189,9 @@ export class DeviceJobsService {
     // WH-118: an agent that stops to ask ends its last message with "QUESTION: ..."; the run is then waiting for an answer, not finished work.
     const said = state === "succeeded" ? (await this.repo.lastResultEvent(j.id))?.data?.text : null;
     const question = typeof said === "string" && /^\s*QUESTION:/i.test(said) ? said.replace(/^\s*QUESTION:\s*/i, "").trim().slice(0, 20_000) : null;
+    const checks = cleanCheckResults(input.checks);
+    // WH-171: a required check that failed or could not run keeps the branch pushed but never gets a pull request.
+    const failedCheck = checks.find((c) => c.required && c.status !== "passed");
     const result = {
       ...(question ? { question } : {}),
       commit: /^[0-9a-f]{7,40}$/.test(str(input.commit, 40)) ? str(input.commit, 40) : null,
@@ -196,6 +199,7 @@ export class DeviceJobsService {
       diffStats: { files: num(stats.files), insertions: num(stats.insertions), deletions: num(stats.deletions) },
       costUsd: num(input.costUsd),
       durationMs: num(input.durationMs),
+      ...(checks.length ? { checks } : {}),
     };
     const error = state === "succeeded" ? null : str(input.error, 2000) || null;
     const supersededBy = j.state === "lost" ? await this.takenOverBy(j) : null;
@@ -214,7 +218,8 @@ export class DeviceJobsService {
     await this.notices.summary(device, row);
     if (state === "succeeded" || state === "failed") await this.notices.finished(device, row);
     // Only the finish that moved the job opens one, so a finish sent again never opens a second.
-    if (!supersededBy && state === "succeeded" && !question && j.mode === "work" && result.pushed && result.commit && result.diffStats.files !== 0) await this.openJobPullRequest(row, device, gh);
+    if (failedCheck && state === "succeeded") await this.repo.mergeResult(j.id, { pullRequestSkipped: `Check "${failedCheck.name}" ${failedCheck.status === "failed" ? "failed" : "could not run"}, so no pull request was opened` });
+    else if (!supersededBy && state === "succeeded" && !question && j.mode === "work" && result.pushed && result.commit && result.diffStats.files !== 0) await this.openJobPullRequest(row, device, gh);
     return { job: { id: row.id, state: row.state } };
   }
 

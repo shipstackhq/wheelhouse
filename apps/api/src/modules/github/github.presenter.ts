@@ -1,4 +1,5 @@
 import type { schema } from "../../db";
+import type { RepositoryCheck } from "../../db/tables/github";
 import type { RepositoryRow } from "./github.repository";
 
 export type RepositoryView = {
@@ -11,6 +12,7 @@ export type RepositoryView = {
   defaultBranch: string;
   pathLimit: string | null;
   lifecycle: (typeof schema.REPO_LIFECYCLES)[number];
+  checks: RepositoryCheck[];
   /** Last webhook (push or pull request) for this repository. */
   lastEventAt: Date | null;
   /** When the last successful pull request sync of this repository finished. */
@@ -30,6 +32,7 @@ export const repositoryView = (r: RepositoryRow): RepositoryView => ({
   defaultBranch: r.defaultBranch,
   pathLimit: r.pathLimit,
   lifecycle: r.lifecycle,
+  checks: r.checks,
   lastEventAt: r.lastEventAt,
   lastPrSyncedAt: r.lastPrSyncedAt,
   browsable: r.provider === "github" && !!r.githubInstallationId && !!r.githubRepoId,

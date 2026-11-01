@@ -659,6 +659,45 @@ describe("jobs", () => {
     assert.equal(opened, 0);
   });
 
+  test("self-check (WH-170/171): the offer carries the repository's checks; a required check that failed or could not run means no pull request", async () => {
+    const db = await getDb();
+    const checks = [{ name: "lint", command: "pnpm lint", required: true }];
+    await db.update(schema.repositories).set({ githubInstallationId: "77", checks }).where(eq(schema.repositories.id, repoId));
+    try {
+      const { device } = await paired();
+      await online(device);
+      let opened = 0;
+      const gh = { api: { openPullRequest: async () => (opened++, { number: 1, url: "https://github.com/x/y/pull/1" }) } } as never;
+      const run = async (title: string) => {
+        const issue = await createIssue(owner, "DM", { title });
+        const { job } = await d.runOnDevice(owner, issue.ref, { deviceId: device.id, model: "opus" });
+        await d.acceptJob(device, job.id);
+        return { issue, job };
+      };
+      const done = { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 1 } };
+      const lint = { name: "lint", command: "pnpm lint", required: true, exitCode: 1, durationMs: 900, tail: "1 error" };
+
+      const a = await run("Lint error");
+      const offer = (await db.select().from(schema.deviceMessages).where(eq(schema.deviceMessages.deviceId, device.id))).map((m) => m.message as { type: string; jobId: string; repository: { checks: unknown } }).find((m) => m.type === "job.offer" && m.jobId === a.job.id)!;
+      assert.deepEqual(offer.repository.checks, checks);
+      await d.finishJob(device, a.job.id, { ...done, checks: [{ ...lint, status: "failed" }] }, gh);
+      const failed = (await d.jobEvents(owner, a.job.id)).job;
+      assert.equal(opened, 0, "no pull request");
+      assert.match(failed.result.pullRequestSkipped as string, /"lint" failed/);
+      assert.deepEqual((failed.result.checks as { status: string; tail: string }[]).map((c) => [c.status, c.tail]), [["failed", "1 error"]], "the result lists the check and its outcome");
+
+      const b = await run("Lint could not run");
+      await d.finishJob(device, b.job.id, { ...done, checks: [{ ...lint, status: "could_not_run", exitCode: null }] }, gh);
+      assert.equal(opened, 0);
+
+      const c = await run("Lint passes");
+      await d.finishJob(device, c.job.id, { ...done, checks: [{ ...lint, status: "passed", exitCode: 0 }] }, gh);
+      assert.equal(opened, 1, "all required checks passed");
+    } finally {
+      await db.update(schema.repositories).set({ githubInstallationId: null, checks: [] }).where(eq(schema.repositories.id, repoId));
+    }
+  });
+
   test("cancel: an offer ends at once; a running job is asked to stop with a signed cancel and ends when the daemon says so", async () => {
     const { device } = await paired();
     await online(device);
