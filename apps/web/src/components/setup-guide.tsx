@@ -100,7 +100,7 @@ export function SetupGuide({ cmd, emphasize }: { cmd: Cmd; emphasize?: "plugin" 
           <p className="text-sm text-muted">In each repository, in Claude Code (VS Code or terminal):</p>
           <CopyBlock value={cmd.linkRepo} />
           <p className="text-sm text-muted">
-            This writes {code("wheelhouse.json")} (commit it so teammates share the link) and installs git hooks. It does not ask for the key again.
+            This writes {code("wheelhouse.json")} (just for you; each teammate runs this once) and installs git hooks. It does not ask for the key again.
             Then map the codebase once, so people can understand it without reading it:
           </p>
           <CopyBlock value={cmd.buildMap} multiline />

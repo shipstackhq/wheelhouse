@@ -55,3 +55,6 @@ tests/contract/.work/
 .next
 .claude
 temp/
+
+# per person: wheelhouse setup writes it
+wheelhouse.json
