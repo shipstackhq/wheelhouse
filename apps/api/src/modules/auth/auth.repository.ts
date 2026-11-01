@@ -5,7 +5,7 @@ import type { TeamRole, WorkspaceRole } from "../../db/schema";
 import { Database } from "../../platform/database/database";
 import { newWorkspaceSlug } from "./workspaces/workspace-slug";
 
-const { users, sessions, workspaces, memberships, invites, inviteTeams, apiKeys, apiKeyTeams, teams, teamMembers, auditEvents, events } = schema;
+const { users, sessions, workspaces, memberships, invites, inviteTeams, apiKeys, apiKeyTeams, userGrants, userGrantWorkspaces, teams, teamMembers, auditEvents, events } = schema;
 
 export type UserRow = typeof users.$inferSelect;
 export type WorkspaceRowT = typeof workspaces.$inferSelect;
@@ -425,6 +425,18 @@ export class AuthRepository {
       .innerJoin(workspaces, eq(workspaces.id, apiKeys.workspaceId))
       .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt), or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, new Date()))));
     return row;
+  }
+
+  /** The device grant by the sha256 of its token. A revoked grant is never returned. */
+  async activeGrantByHash(tokenHash: string) {
+    const [row] = await this.db.q.select().from(userGrants).where(and(eq(userGrants.tokenHash, tokenHash), isNull(userGrants.revokedAt)));
+    return row;
+  }
+
+  /** The workspace ids a chosen-list grant reaches (empty for an all-workspaces grant). */
+  async grantWorkspaceIds(grantId: string): Promise<string[]> {
+    const rows = await this.db.q.select({ id: userGrantWorkspaces.workspaceId }).from(userGrantWorkspaces).where(eq(userGrantWorkspaces.grantId, grantId));
+    return rows.map((r) => r.id);
   }
 
   async touchKey(id: string, at: Date) {
