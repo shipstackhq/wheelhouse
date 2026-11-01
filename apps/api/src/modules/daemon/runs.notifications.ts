@@ -2,10 +2,15 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
 import { isUuid } from "../../common/uuid";
 import { effectiveProfile } from "../agents/index";
+import { failedChecks } from "../github/index";
 import { NotificationsService } from "../notifications/index";
 import { DaemonRepository, type DeviceRow, type JobRow } from "./daemon.repository";
 
 const SNIPPET = 300;
+
+/** WH-176: the CI state a review was written against, so the verdict is read with it. */
+const ciLine = (pr: { ciState: "success" | "failure" | "pending" | null; checks: Record<string, { status: string; conclusion: string | null }> }) =>
+  `CI was ${pr.ciState === "success" ? "passing" : pr.ciState === "failure" ? `failing (${failedChecks(pr.checks).join(", ")})` : pr.ciState === "pending" ? "still running" : "not reported"} when this was reviewed.`;
 
 /**
  * Tells the person who started a run how it ended (an inbox item, humans only: `createdBy` is always a person, since only a person
@@ -74,10 +79,11 @@ export class RunNotifications {
       const text = typeof said === "string" ? said.trim().slice(0, 20_000) : "";
       const question = typeof job.result?.question === "string" ? job.result.question : null;
       const files = (job.result?.diffStats as { files?: number | null } | undefined)?.files;
+      const review = !question && job.state === "succeeded" && job.mode === "review" ? await this.repo.openPullRequestOf(job.issueId) : undefined;
       const body = question
         ? `**${who} has a question:**\n\n${question}`
         : job.state === "succeeded" && job.mode === "review"
-          ? [`**${who} reviewed the pull request.**`, text].filter(Boolean).join("\n\n")
+          ? [`**${who} reviewed the pull request.**`, review && ciLine(review), text].filter(Boolean).join("\n\n")
           : job.state === "succeeded"
           ? [`**${who} finished.**`, text, `Branch \`${job.branch}\`${files ? ` · ${files} file${files === 1 ? "" : "s"} changed` : ""}`].filter(Boolean).join("\n\n")
           : job.state === "failed"

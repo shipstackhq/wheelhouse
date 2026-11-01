@@ -11,10 +11,11 @@ export type TargetChoice = { repository: string; branch?: string };
 
 const STATE_TEXT: Record<DelegationState, string> = {
   needs_setup: "Needs setup: pick where the agent should work and it starts.",
-  waiting: "Waiting for one of your devices to come online, or for a pull request to review.",
+  waiting: "Waiting for one of your devices to come online, for a pull request to review, or for its checks to pass.",
   running: "The agent is working on it.",
   asked: "The agent has a question: answer it in the comments below.",
   done: "The agent is done.",
+  checks_failing: "The agent's pull request has failing checks: fix them before review.",
   in_review: "The agent opened a pull request: review it.",
   merged: "The agent's pull request was merged.",
   failed: "The agent's run failed.",

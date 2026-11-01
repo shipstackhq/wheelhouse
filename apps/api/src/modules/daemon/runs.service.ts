@@ -4,7 +4,7 @@ import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
-import { RepositoriesService, github, type RepositoryRow } from "../github/index";
+import { RepositoriesService, failedChecks, github, type RepositoryRow } from "../github/index";
 import { agentName, toAgentsJson } from "@wheelhouse/shared/agents/render";
 import { effectiveProfile } from "../agents/index";
 import { IssuesService, IssueTargets } from "../issues/index";
@@ -52,9 +52,11 @@ export class RunsService {
     const rows = await this.repo.issueRuns(issue.id, team.id);
     const { all, runnable } = await this.runnableRepositories(actor, team.key);
     const names = new Map(all.map((r) => [r.id, r.displayName]));
+    const pr = await this.repo.openPullRequestOf(issue.id);
     const mine = actor.kind === "human" ? await this.devices.listDevices(actor) : [];
     return {
-      jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.job.repositoryId ? (names.get(r.job.repositoryId) ?? null) : null, lastHeardAt: r.lastHeardAt, pr: { state: r.prState, ciState: r.prCiState } })),
+      jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.job.repositoryId ? (names.get(r.job.repositoryId) ?? null) : null, lastHeardAt: r.lastHeardAt, pr: { state: r.prState, ciState: r.prCiState, failed: failedChecks(r.prChecks ?? {}) } })),
+      reviewCi: pr ? { state: pr.ciState, failed: failedChecks(pr.checks) } : null,
       devices: mine.map((d) => ({ id: d.id, name: d.name, status: d.status, models: d.models, poolSize: d.poolSize, activeJobs: d.activeJobs })),
       repositories: runnable.map((r) => ({ id: r.id, name: r.displayName, fullName: r.githubFullName, defaultBranch: r.defaultBranch })),
     };

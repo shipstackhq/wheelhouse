@@ -31,10 +31,11 @@ export class RunPlanner {
 
   async plan(requester: Actor, issueId: string, agentId: string | null): Promise<PlanResult> {
     const agent = agentId ? await this.repo.workspaceAgent(agentId, requester.workspaceId) : undefined;
-    // A reviewer works on the issue's open pull request, wherever it is; with none yet, it waits for one.
+    // A reviewer works on the issue's open pull request, wherever it is.
     const pr = isReviewer(agent) ? await this.repo.openPullRequestOf(issueId) : undefined;
     const { targets } = pr ? { targets: [{ repositoryId: pr.repositoryId, baseBranch: pr.headBranch }] } : await this.targets.of(issueId);
-    if (isReviewer(agent) && !pr) return { missing: "waiting" };
+    // WH-176: and only once its checks pass; a red or still running pull request is not reviewed on its own.
+    if (isReviewer(agent) && pr?.ciState !== "success") return { missing: "waiting" };
     if (!targets.length) return { missing: "needs_setup" };
     const online = (await this.devices.listDevices(requester)).filter((d) => d.status === "online");
     if (!online.length) return { missing: "waiting" };

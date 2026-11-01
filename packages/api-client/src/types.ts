@@ -224,9 +224,9 @@ export type DashboardWidgets = {
 
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
-export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "in_review" | "merged" | "failed" | "stopped";
+export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "checks_failing" | "in_review" | "merged" | "failed" | "stopped";
 /** Where a delegation stands (WH-132, WH-134): its state, one line of what the agent is doing while it runs, and the pull requests of its runs. */
-export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null }[] };
+export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null; ciState: "success" | "failure" | "pending" | null; failed: string[] }[] };
 export type PrState = "open" | "closed" | "merged";
 
 export type IssueView = {
@@ -782,7 +782,7 @@ export type JobView = {
     supersededBy?: string };
   delivery: JobDelivery | null;
   /** The pull request the run opened with its live state (null state until GitHub has reported it). */
-  pullRequest: { number: number; url: string; state: PrState | null; ciState: "success" | "failure" | "pending" | null } | null;
+  pullRequest: { number: number; url: string; state: PrState | null; ciState: "success" | "failure" | "pending" | null; failed: string[] } | null;
   error: string | null;
   cancelRequested: boolean;
   /** While the run's device cannot be reached: when that was noticed and when it was last heard. */
@@ -801,6 +801,8 @@ export type IssueRuns = {
   jobs: JobView[];
   devices: { id: string; name: string; status: DeviceStatus; models: string[]; poolSize: number; activeJobs: number }[];
   repositories: { id: string; name: string; fullName: string | null; defaultBranch: string }[];
+  /** WH-176: the CI of the pull request a reviewer would look at (null: no open pull request), so starting one on a red or running PR can ask first. */
+  reviewCi: { state: "success" | "failure" | "pending" | null; failed: string[] } | null;
 };
 /** What starting the issue's work would do now (WH-133): per target the repository, branch, device and model, or what is missing. */
 export type RunPlanPreview = { plans: { repository: string; baseBranch: string; device: string; model: string; effort: string | null; note?: string }[] } | { missing: "needs_setup" | "waiting" };

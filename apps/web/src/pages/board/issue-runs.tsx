@@ -86,6 +86,7 @@ function RunForm({ issueRef, teamKey, targets, data, onStarted }: { issueRef: st
   const [base, setBase] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   if (data.devices.length === 0)
     return (
@@ -102,8 +103,13 @@ function RunForm({ issueRef, teamKey, targets, data, onStarted }: { issueRef: st
   const repo = data.repositories.find((r) => r.id === (repositoryId || targets[0]?.repositoryId)) ?? data.repositories[0];
   const baseBranch = base ?? (repo.id === targets[0]?.repositoryId ? targets[0].baseBranch : null);
 
+  // WH-176: a reviewer started by hand on a pull request whose CI is not green asks first.
+  const ci = agent === "reviewer" ? data.reviewCi : null;
+  const notGreen = !!ci && ci.state !== "success";
+
   const start = async () => {
     if (!device) return;
+    setConfirming(false);
     setBusy(true);
     setError(null);
     try {
@@ -141,10 +147,25 @@ function RunForm({ issueRef, teamKey, targets, data, onStarted }: { issueRef: st
             <Select className="!w-auto" ariaLabel="Model" value={chosenModel} options={models.map((m) => ({ value: m, label: m }))} onValueChange={setModel} />
           </span>
         )}
-        <button type="button" className="btn btn-primary" disabled={busy || !device || !chosenModel} onClick={() => void start()}>
+        <button type="button" className="btn btn-primary" disabled={busy || !device || !chosenModel} onClick={() => (notGreen ? setConfirming(true) : void start())}>
           Start
         </button>
       </div>
+      {confirming && ci && (
+        <div className="space-y-1.5 rounded border border-line bg-panel-2 p-2 text-xs">
+          <p>
+            {ci.state === "failure" ? `CI is failing on the pull request for this issue${ci.failed.length ? ` (${ci.failed.join(", ")})` : ""}.` : "CI is still running on the pull request for this issue."} Review it anyway?
+          </p>
+          <div className="flex gap-1">
+            <button type="button" className="btn py-0.5 text-xs" onClick={() => void start()}>
+              Review anyway
+            </button>
+            <button type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {!device && <p className="text-xs text-muted">None of your devices is online. Start the daemon on one.</p>}
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
     </div>
@@ -192,7 +213,7 @@ function RunHeadline({ job: j }: { job: JobView }) {
   if (j.result.pullRequest)
     return (
       <a href={j.result.pullRequest.url} target="_blank" rel="noreferrer" className="text-accent hover:underline" aria-label={`Pull request #${j.result.pullRequest.number}`}>
-        #{j.result.pullRequest.number} ↗{j.pullRequest?.ciState && ` · CI ${j.pullRequest.ciState}`}
+        #{j.result.pullRequest.number} ↗{j.pullRequest?.ciState && ` · CI ${j.pullRequest.ciState}`}{!!j.pullRequest?.failed.length && ` (${j.pullRequest.failed.join(", ")})`}
       </a>
     );
   const problem = j.result.pullRequestError ?? j.error;

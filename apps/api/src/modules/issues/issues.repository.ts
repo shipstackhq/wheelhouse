@@ -334,7 +334,7 @@ export class IssuesRepository {
   /** WH-132: the runs of delegated issues made since each was delegated, newest first, with their pull request's live state (read only; the daemon module owns the table). */
   delegationRuns(issueIds: string[]) {
     return this.db.q
-      .select({ id: deviceJobs.id, issueId: deviceJobs.issueId, repositoryId: deviceJobs.repositoryId, state: deviceJobs.state, result: deviceJobs.result, prState: pullRequests.state })
+      .select({ id: deviceJobs.id, issueId: deviceJobs.issueId, repositoryId: deviceJobs.repositoryId, state: deviceJobs.state, result: deviceJobs.result, prState: pullRequests.state, ciState: pullRequests.ciState, checks: pullRequests.checks })
       .from(deviceJobs)
       .innerJoin(issues, eq(issues.id, deviceJobs.issueId))
       .leftJoin(pullRequests, and(eq(pullRequests.repositoryId, deviceJobs.repositoryId), sql`${pullRequests.number} = (${deviceJobs.result}->'pullRequest'->>'number')::int`))

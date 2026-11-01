@@ -31,8 +31,9 @@ const job = (id: string, over: Partial<JobView> = {}): JobView => ({
   ...over,
 });
 
-const runs = (jobs: JobView[]): IssueRuns => ({
+const runs = (jobs: JobView[], reviewCi: IssueRuns["reviewCi"] = null): IssueRuns => ({
   jobs,
+  reviewCi,
   devices: [{ id: "dev-1", name: "Atharva's MacBook Pro", status: "online", models: ["haiku", "sonnet"], poolSize: 3, activeJobs: 0 }],
   repositories: [{ id: "repo-1", name: "wheelhouse", fullName: "shipstackhq/wheelhouse", defaultBranch: "staging" }],
 });
@@ -59,6 +60,23 @@ describe("runs on a device", () => {
     expect(items.map((li) => within(li).getAllByText(/PR opened|no PR|no changes|failed/)[0].textContent)).toEqual(["PR opened", "no PR", "no changes", "failed"]);
     expect(within(items[1]).getByText(/GitHub refused/)).toBeTruthy();
     expect(screen.queryByText("done")).toBeNull();
+  });
+
+  test("starting a reviewer by hand on a red pull request asks first; Cancel starts nothing, Review anyway starts it", async () => {
+    const { server } = mount([], (s) => {
+      s.on("GET /api/app/issues/WH-1/jobs", runs([], { state: "failure", failed: ["lint", "build"] }));
+      s.on("GET /api/app/teams/WH/agents", { agents: [{ id: "wa-1", slug: "reviewer", name: "Remy", role: "Reviewer", avatar: { style: "lorelei", seed: "remy" } }] });
+      s.on("POST /api/app/issues/WH-1/jobs", { job: job("f6", { state: "offered" }) });
+    });
+    await userEvent.click(await screen.findByRole("combobox", { name: "Agent" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Remy" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByText(/CI is failing on the pull request for this issue \(lint, build\)\. Review it anyway\?/)).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(server.sent("POST /api/app/issues/WH-1/jobs")).toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Review anyway" }));
+    await waitFor(() => expect(server.sent("POST /api/app/issues/WH-1/jobs")).toHaveLength(1));
   });
 
   test("a delegated issue can rerun its agent as the caller", async () => {

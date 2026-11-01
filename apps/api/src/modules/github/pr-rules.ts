@@ -77,6 +77,10 @@ export function decideMove(i: MoveInput): MoveDecision {
 
 export type CheckState = "success" | "failure" | "pending";
 
+/** The names of the checks that did not pass (running ones and neutral or skipped ones are not failures). */
+export const failedChecks = (checks: Record<string, { status: string; conclusion: string | null }>) =>
+  Object.entries(checks).filter(([, c]) => c.status === "completed" && c.conclusion && !["success", "neutral", "skipped"].includes(c.conclusion)).map(([n]) => n);
+
 /** Collapse a pull request's check runs into one state: any failure wins, then anything still running, then success. */
 export function ciState(checks: Record<string, { status: string; conclusion: string | null }>): CheckState | null {
   const all = Object.values(checks);

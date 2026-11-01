@@ -65,14 +65,14 @@ describe("the board", () => {
         issue({ number: 8, title: "Setup", delegateAgentId: "a1", delegation: d("needs_setup") }),
         issue({ number: 9, title: "Busy", delegateAgentId: "a1", delegation: d("running", { line: "Using Edit" }) }),
         issue({ number: 11, title: "Asking", delegateAgentId: "a1", delegation: d("asked") }),
-        issue({ number: 10, title: "Finished", delegateAgentId: "a1", delegation: d("done", { prs: [{ number: 7, url: "https://github.com/x/y/pull/7" }] }) }),
+        issue({ number: 10, title: "Finished", delegateAgentId: "a1", delegation: d("done", { prs: [{ number: 7, url: "https://github.com/x/y/pull/7", state: "open", ciState: "failure", failed: ["lint"] }] }) }),
       ] })),
     );
     const card = async (title: string) => (await screen.findByText(title)).closest("[data-issue]") as HTMLElement;
     expect((await card("Setup")).querySelector("[data-delegation-dot]")).toBeTruthy();
     expect(within(await card("Busy")).getByText("Using Edit")).toBeTruthy();
     expect((await card("Busy")).querySelector("[data-delegation-dot]")).toBeNull();
-    expect(within(await card("Finished")).getByRole("link", { name: "PR #7" })).toBeTruthy();
+    expect(within(await card("Finished")).getByRole("link", { name: "PR #7 · CI failing" })).toBeTruthy();
     expect((await card("Asking")).querySelector("[data-delegation-dot=asked]")).toBeTruthy();
   });
 
