@@ -322,10 +322,13 @@ export class DaemonRepository {
     return r;
   }
 
-  /** WH-122: the newest open pull request linked to the issue, the one a reviewer looks at. */
+  /**
+   * WH-122: the newest open pull request linked to the issue, the one a reviewer looks at. `reportsCi` (WH-188): the repository has shown
+   * CI on any of its pull requests; one that never has simply has none, so its checks are not waited for (WH-190 replaces this with the policy).
+   */
   async openPullRequestOf(issueId: string) {
     const [pr] = await this.db.q
-      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha, ciState: pullRequests.ciState, checks: pullRequests.checks })
+      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha, ciState: pullRequests.ciState, checks: pullRequests.checks, reportsCi: sql<boolean>`exists (select 1 from pull_requests p where p.repository_id = ${pullRequests.repositoryId} and (p.ci_state is not null or p.checks <> '{}'::jsonb))` })
       .from(pullRequestIssues)
       .innerJoin(pullRequests, eq(pullRequests.id, pullRequestIssues.pullRequestId))
       .where(and(eq(pullRequestIssues.issueId, issueId), eq(pullRequests.state, "open")))

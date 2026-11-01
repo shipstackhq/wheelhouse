@@ -56,7 +56,7 @@ export class RunsService {
     const mine = actor.kind === "human" ? await this.devices.listDevices(actor) : [];
     return {
       jobs: rows.map((r) => jobView(r.job, { deviceName: r.deviceName, repositoryName: r.job.repositoryId ? (names.get(r.job.repositoryId) ?? null) : null, lastHeardAt: r.lastHeardAt, pr: { state: r.prState, ciState: r.prCiState, failed: failedChecks(r.prChecks ?? {}) } })),
-      reviewCi: pr ? { state: pr.ciState, failed: failedChecks(pr.checks) } : null,
+      reviewCi: pr?.reportsCi ? { state: pr.ciState, failed: failedChecks(pr.checks) } : null,
       devices: mine.map((d) => ({ id: d.id, name: d.name, status: d.status, models: d.models, poolSize: d.poolSize, activeJobs: d.activeJobs })),
       repositories: runnable.map((r) => ({ id: r.id, name: r.displayName, fullName: r.githubFullName, defaultBranch: r.defaultBranch })),
     };
