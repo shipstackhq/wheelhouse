@@ -154,10 +154,10 @@ describe("export and import between PGlite directories", () => {
     await assert.rejects(exportData(src.query, exportDir, "again"), /already holds an export/);
   });
 
-  test("tables come parents-first, and the app's own 62 tables are all there", async () => {
+  test("tables come parents-first, and the app's own 64 tables are all there", async () => {
     const src = await track(openConn(copyDirToTemp(source)));
     const order = await tablesInOrder(src.query);
-    assert.equal(order.length, 62);
+    assert.equal(order.length, 64);
     const at = (n: string) => order.findIndex((t) => t.name === n);
     for (const t of order) for (const p of t.parents) assert.ok(at(p) < at(t.name), `${p} before ${t.name}`);
   });
@@ -212,7 +212,7 @@ describe("the command line", () => {
     const out = path.join(work, "cli-export");
     const e = cli("export", "--from", source, "--out", out);
     assert.equal(e.status, 0, e.stderr + e.stdout);
-    assert.match(e.stdout, /exported 62 tables/);
+    assert.match(e.stdout, /exported 64 tables/);
     const after = fs.readdirSync(source, { recursive: true }).map(String).sort().map((f) => `${f}:${fs.statSync(path.join(source, f)).mtimeMs}`);
     assert.deepEqual(after, before, "the source was only copied, never opened");
     const target = path.join(work, "cli-target");
