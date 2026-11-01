@@ -484,6 +484,13 @@
       "when": 1793568170118,
       "tag": "0068_overrated_sentry",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1793571110517,
+      "tag": "0069_wandering_anthem",
+      "breakpoints": true
     }
   ]
 }
