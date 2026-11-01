@@ -190,6 +190,7 @@ export class DeviceJobsService {
     const said = state === "succeeded" ? (await this.repo.lastResultEvent(j.id))?.data?.text : null;
     const question = typeof said === "string" && /^\s*QUESTION:/i.test(said) ? said.replace(/^\s*QUESTION:\s*/i, "").trim().slice(0, 20_000) : null;
     const checks = cleanCheckResults(input.checks);
+    const checkedSha = /^[0-9a-f]{40}$/.test(str(input.checkedSha, 40)) ? str(input.checkedSha, 40) : null;
     // WH-171: a required check that failed or could not run keeps the branch pushed but never gets a pull request.
     const failedCheck = checks.find((c) => c.required && c.status !== "passed");
     const result = {
@@ -199,7 +200,7 @@ export class DeviceJobsService {
       diffStats: { files: num(stats.files), insertions: num(stats.insertions), deletions: num(stats.deletions) },
       costUsd: num(input.costUsd),
       durationMs: num(input.durationMs),
-      ...(checks.length ? { checks } : {}),
+      ...(checks.length ? { checks, ...(checkedSha ? { checkedSha } : {}) } : {}), // WH-191: the commit the checks describe
     };
     const error = state === "succeeded" ? null : str(input.error, 2000) || null;
     const supersededBy = j.state === "lost" ? await this.takenOverBy(j) : null;
