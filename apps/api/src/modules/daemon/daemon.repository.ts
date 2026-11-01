@@ -229,7 +229,7 @@ export class DaemonRepository {
   /** An issue's runs, newest first, with the device's name, when it was last heard, and the live state of the pull request each opened (webhook-kept, joined, never copied). */
   issueRuns(issueId: string, teamId: string) {
     return this.db.q
-      .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt, prState: pullRequests.state, prCiState: pullRequests.ciState })
+      .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt, prState: pullRequests.state, prCiState: pullRequests.ciState, prChecks: pullRequests.checks })
       .from(deviceJobs)
       .innerJoin(devices, eq(devices.id, deviceJobs.deviceId))
       .leftJoin(pullRequests, and(eq(pullRequests.repositoryId, deviceJobs.repositoryId), sql`${pullRequests.number} = (${deviceJobs.result}->'pullRequest'->>'number')::int`))
@@ -325,7 +325,7 @@ export class DaemonRepository {
   /** WH-122: the newest open pull request linked to the issue, the one a reviewer looks at. */
   async openPullRequestOf(issueId: string) {
     const [pr] = await this.db.q
-      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha })
+      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha, ciState: pullRequests.ciState, checks: pullRequests.checks })
       .from(pullRequestIssues)
       .innerJoin(pullRequests, eq(pullRequests.id, pullRequestIssues.pullRequestId))
       .where(and(eq(pullRequestIssues.issueId, issueId), eq(pullRequests.state, "open")))

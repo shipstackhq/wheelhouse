@@ -407,8 +407,8 @@ function CardBody({ t, nodes, cycles, projects, relations, selected, overlay }: 
       {!!t.delegation?.prs.length && (
         <div className="mt-1 flex flex-wrap gap-1">
           {t.delegation.prs.map((pr) => (
-            <a key={pr.number} className="chip bg-ok/10 text-ok" href={pr.url} target="_blank" rel="noreferrer" title="Pull request from the agent's run">
-              PR #{pr.number}
+            <a key={pr.number} className={clsx("chip", pr.ciState === "failure" ? "bg-warn/15 text-warn" : "bg-ok/10 text-ok")} href={pr.url} target="_blank" rel="noreferrer" title={pr.failed.length ? `Failing: ${pr.failed.join(", ")}` : "Pull request from the agent's run"}>
+              PR #{pr.number}{pr.ciState === "failure" && " · CI failing"}
             </a>
           ))}
         </div>
@@ -455,6 +455,7 @@ const DELEGATION_TITLE: Record<DelegationState, string> = {
   running: "An agent is working on it",
   asked: "The agent has a question",
   done: "The agent is done",
+  checks_failing: "The agent's pull request has failing checks",
   in_review: "The agent opened a pull request: in review",
   merged: "The agent's pull request was merged",
   failed: "The agent's run failed",
@@ -464,7 +465,7 @@ const DELEGATION_TITLE: Record<DelegationState, string> = {
 /** The agent badge on a delegated card: muted while it waits, a warning dot when it needs setup or failed, an accent dot (the only loud one) when it asks. */
 function DelegationBadge({ delegation }: { delegation: Delegation | null }) {
   const state = delegation?.state;
-  const warn = state === "needs_setup" || state === "failed";
+  const warn = state === "needs_setup" || state === "failed" || state === "checks_failing";
   return (
     <span className={clsx("chip", state === "waiting" ? "bg-bg text-muted" : state === "merged" ? "bg-ok/15 text-ok" : "bg-agent/10 text-agent")} title={state ? DELEGATION_TITLE[state] : "Delegated to an agent"}>
       <AgentIcon />

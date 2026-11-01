@@ -390,7 +390,7 @@ describe("jobs", () => {
       const view = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
       assert.deepEqual(view.result.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42" });
       assert.equal(view.result.commit, "abc1234", "the rest of the result is kept");
-      assert.deepEqual(view.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42", state: null, ciState: null }, "state unknown until the webhook has told us");
+      assert.deepEqual(view.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42", state: null, ciState: null, failed: [] }, "state unknown until the webhook has told us");
       await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 42, title: "t", url: "https://github.com/acme/app/pull/42", state: "merged", ciState: "success" });
       const live = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
       assert.deepEqual([live.pullRequest?.state, live.pullRequest?.ciState], ["merged", "success"], "the live state is joined, not copied into the result");
@@ -1034,7 +1034,12 @@ describe("delegated runs (WH-116)", () => {
 
     const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 77, title: "The change", url: "https://github.com/acme/app/pull/77", headBranch: "wh/feature", headSha: "abc1234" }).returning();
     await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
-    assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts once a pull request is linked");
+    const setCi = (ciState: "pending" | "failure" | "success", checks = {}) => db.update(schema.pullRequests).set({ ciState, checks }).where(eq(schema.pullRequests.id, pr.id));
+    assert.equal(await app.get(DelegationService).offerWaiting(), 0, "no result yet: it waits for CI");
+    await setCi("failure", { lint: { status: "completed", conclusion: "failure" } });
+    assert.equal(await app.get(DelegationService).offerWaiting(), 0, "red CI: still waiting");
+    await setCi("success");
+    assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts once CI is green");
     const [job] = await jobsOf(issue.id);
     assert.equal(job.mode, "review");
     assert.equal(job.branch, "wh/feature");
@@ -1049,7 +1054,7 @@ describe("delegated runs (WH-116)", () => {
     assert.equal(opened, 0);
     const rows = await db.select().from(schema.comments).where(eq(schema.comments.issueId, issue.id));
     assert.equal(rows.length, 1);
-    assert.match(rows[0].body, /reviewed the pull request\.\*\*\n\nChanges needed/);
+    assert.match(rows[0].body, /reviewed the pull request\.\*\*\n\nCI was passing when this was reviewed\.\n\nChanges needed/);
   });
 
   test("the issue suggests the roster agent its labels point at, until it is delegated", async () => {

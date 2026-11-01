@@ -1,6 +1,6 @@
 import type { JobState, JobView } from "@wheelhouse/api-client";
 
-type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested"> & { pullRequest?: Pick<NonNullable<JobView["pullRequest"]>, "state"> | null };
+type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested"> & { pullRequest?: Pick<NonNullable<JobView["pullRequest"]>, "state" | "ciState"> | null };
 
 const ACTIVE: JobState[] = ["offered", "accepted", "running", "unreachable"];
 export const isActive = (state: JobState) => ACTIVE.includes(state);
@@ -31,6 +31,7 @@ export function runStatus(job: RunLike): { label: string; tone: Tone } {
             case "closed":
               return { label: "PR closed", tone: "muted" };
             case "open":
+              if (job.pullRequest.ciState === "failure") return { label: "checks failing", tone: "warn" };
               return { label: "PR open", tone: "good" };
             default:
               return { label: "PR opened", tone: "good" };

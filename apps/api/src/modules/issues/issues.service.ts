@@ -9,7 +9,7 @@ import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
-import { DeliveriesService } from "../github/index";
+import { DeliveriesService, failedChecks } from "../github/index";
 import { ActorsService } from "../actors/index";
 import { effectiveProfile } from "../agents/index";
 import { GraphService, SessionsService } from "../map/index";
@@ -117,7 +117,7 @@ export class IssuesService {
       const mine = runs.filter((x) => x.issueId === r.id);
       const state = delegationState((await this.targets.of(r.id)).targets.length > 0, mine.map((x) => ({ ...x, asked: !!x.result?.question })));
       const active = mine.find((x) => lines.has(x.id));
-      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [{ ...(x.result.pullRequest as { number: number; url: string }), state: x.prState }] : []));
+      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [{ ...(x.result.pullRequest as { number: number; url: string }), state: x.prState, ciState: x.ciState, failed: failedChecks(x.checks ?? {}) }] : []));
       out.set(r.id, { state, line: state === "running" && active ? lines.get(active.id)! : null, prs: [...new Map(prs.map((p) => [p.number, p])).values()] });
     }
     return out;

@@ -6,10 +6,11 @@ const job = (state: JobView["state"], delivery: JobView["delivery"] = null, canc
 
 describe("run status", () => {
   test("a pull request reads by its live state, and stays 'PR opened' until it is known", () => {
-    const pr = (state: "open" | "closed" | "merged" | null) => ({ ...job("succeeded", "pr_opened"), pullRequest: { number: 1, url: "u", state, ciState: null } });
+    const pr = (state: "open" | "closed" | "merged" | null) => ({ ...job("succeeded", "pr_opened"), pullRequest: { number: 1, url: "u", state, ciState: null, failed: [] } });
     expect(runStatus(pr("merged"))).toEqual({ label: "PR merged", tone: "good" });
     expect(runStatus(pr("closed"))).toEqual({ label: "PR closed", tone: "muted" });
     expect(runStatus(pr("open"))).toEqual({ label: "PR open", tone: "good" });
+    expect(runStatus({ ...pr("open"), pullRequest: { state: "open" as const, ciState: "failure" as const } })).toEqual({ label: "checks failing", tone: "warn" });
     expect(runStatus(pr(null))).toEqual({ label: "PR opened", tone: "good" });
   });
 

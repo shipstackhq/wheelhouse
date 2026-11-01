@@ -224,9 +224,9 @@ export type DashboardWidgets = {
 
 export type Priority = "none" | "low" | "medium" | "high" | "urgent";
 
-export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "in_review" | "merged" | "failed" | "stopped";
+export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "checks_failing" | "in_review" | "merged" | "failed" | "stopped";
 /** Where a delegation stands (WH-132, WH-134): its state, one line of what the agent is doing while it runs, and the pull requests of its runs. */
-export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null }[] };
+export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null; ciState: "success" | "failure" | "pending" | null; failed: string[] }[] };
 export type PrState = "open" | "closed" | "merged";
 
 export type IssueView = {
@@ -782,7 +782,7 @@ export type JobView = {
     supersededBy?: string };
   delivery: JobDelivery | null;
   /** The pull request the run opened with its live state (null state until GitHub has reported it). */
-  pullRequest: { number: number; url: string; state: PrState | null; ciState: "success" | "failure" | "pending" | null } | null;
+  pullRequest: { number: number; url: string; state: PrState | null; ciState: "success" | "failure" | "pending" | null; failed: string[] } | null;
   error: string | null;
   cancelRequested: boolean;
   /** While the run's device cannot be reached: when that was noticed and when it was last heard. */

@@ -192,7 +192,7 @@ function RunHeadline({ job: j }: { job: JobView }) {
   if (j.result.pullRequest)
     return (
       <a href={j.result.pullRequest.url} target="_blank" rel="noreferrer" className="text-accent hover:underline" aria-label={`Pull request #${j.result.pullRequest.number}`}>
-        #{j.result.pullRequest.number} ↗{j.pullRequest?.ciState && ` · CI ${j.pullRequest.ciState}`}
+        #{j.result.pullRequest.number} ↗{j.pullRequest?.ciState && ` · CI ${j.pullRequest.ciState}`}{!!j.pullRequest?.failed.length && ` (${j.pullRequest.failed.join(", ")})`}
       </a>
     );
   const problem = j.result.pullRequestError ?? j.error;

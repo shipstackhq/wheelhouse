@@ -7,7 +7,7 @@ import { GithubApiError, isZeroSha, type ChangedFile, type GithubApi } from "./a
 import { githubConfig } from "./config";
 import { ISSUE_COMMENT_REQUESTED, ISSUE_MOVE_REQUESTED, PUSH_LANDED, type IssueCommentRequested, type IssueMoveRequested, type PushLanded } from "./github.events";
 import { GithubRepository } from "./github.repository";
-import { ciState, decideMove, type CheckState } from "./pr-rules";
+import { ciState, decideMove, failedChecks, type CheckState } from "./pr-rules";
 import { parseIssueRefs, refsForTeam } from "./refs";
 import { github } from "./runtime";
 import { verifySignature } from "./signature";
@@ -269,7 +269,7 @@ export class DeliveriesService {
             const tk = await this.repo.issueById(l.issueId);
             if (!tk) continue;
             const ref = `${t.team.key}-${tk.number}`;
-            const failed = Object.entries(checks).filter(([, c]) => c.status === "completed" && c.conclusion && c.conclusion !== "success" && c.conclusion !== "neutral" && c.conclusion !== "skipped").map(([n]) => n);
+            const failed = failedChecks(checks);
             await this.events.emit(actor, t.team.id, {
               type: "issue.ci",
               entity: "issue",
