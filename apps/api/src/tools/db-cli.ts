@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { preflight, resolveDangling } from "./preflight";
+import { mergeWorkspaces } from "./db-merge";
 import { compare, copyDirToTemp, exportData, importData, integrity, openConn, snapshot, type Finding, type Manifest, type Snapshot } from "./db-copy";
 
 /**
@@ -10,6 +11,7 @@ import { compare, copyDirToTemp, exportData, importData, integrity, openConn, sn
  * pnpm db:preflight --to <target> --resolve                                (first remove the dangling ADR nodes and invite teams it lists, saying each one)
  * pnpm db:export --from <PGlite directory | postgres://…> --out <folder>
  * pnpm db:import --in <folder> --to <PGlite directory | postgres://…>      (the target is migrated first and must then be empty)
+ * pnpm db:merge --in <folder> --to <target> --workspaces a,b --as <email> (copy whole workspaces into a database that holds others)
  * pnpm db:verify --in <folder> --to <target>                               (the target against what the export said)
  * pnpm db:verify --from <source> --to <target>                             (two live databases; a PGlite source is copied first)
  * pnpm db:verify --to <target> --integrity-only                            (only what must be true of any Wheelhouse database)
@@ -33,6 +35,7 @@ function usage(problem?: string): never {
   db:migrate --to <PGlite dir | postgres url> [--through 0020]      (apply this code's migrations to it; run on a copy of the source before exporting)
   db:export --from <PGlite dir | postgres url> --out <folder> [--in-place]
   db:import --in <folder> --to <PGlite dir | postgres url>
+  db:merge --in <folder> --to <PGlite dir | postgres url> --workspaces <slug,slug> --as <email>
   db:verify --in <folder> --to <target>      or      db:verify --from <source> --to <target>   [--json]`);
   process.exit(2);
 }
@@ -102,6 +105,18 @@ async function main() {
       const r = await importData(conn, dir);
       log(`imported ${r.tables.reduce((n, t) => n + t.rows, 0)} rows into ${conn.label} in ${secs(r.seconds)}`);
       for (const t of r.tables.filter((t) => t.rows)) log(`  ${t.name.padEnd(22)} ${t.rows}`);
+    } finally {
+      await conn.close();
+    }
+    return 0;
+  }
+
+  if (command === "merge") {
+    const conn = await openConn(need("to"));
+    try {
+      const r = await mergeWorkspaces(conn, need("in"), need("workspaces").split(","), need("as"));
+      log(`merged ${r.tables.reduce((n, t) => n + t.rows, 0)} rows into ${conn.label}; existing users matched by email: ${r.matchedUsers.join(", ") || "none"}`);
+      for (const t of r.tables) log(`  ${t.name.padEnd(22)} ${t.rows}`);
     } finally {
       await conn.close();
     }

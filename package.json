@@ -16,6 +16,7 @@
     "db:migrate": "tsx apps/api/src/tools/db-cli.ts migrate",
     "db:export": "tsx apps/api/src/tools/db-cli.ts export",
     "db:import": "tsx apps/api/src/tools/db-cli.ts import",
+    "db:merge": "tsx apps/api/src/tools/db-cli.ts merge",
     "db:verify": "tsx apps/api/src/tools/db-cli.ts verify",
     "db:preflight": "tsx apps/api/src/tools/db-cli.ts preflight"
   },
