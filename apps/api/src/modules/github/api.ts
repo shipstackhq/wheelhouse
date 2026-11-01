@@ -147,6 +147,45 @@ export class GithubApi {
     return out;
   }
 
+  /**
+   * The check names GitHub requires of a branch, from classic branch protection and from rulesets. `readable` is false when GitHub
+   * refused (the App lacks "Administration: read"); no protection at all is an empty list.
+   */
+  async requiredChecks(installationId: string, repoId: string, branch: string): Promise<{ names: string[]; readable: boolean }> {
+    const token = await this.installationToken(installationId);
+    const names = new Set<string>();
+    let readable = true;
+    const read = async <T>(path: string): Promise<T | null> => {
+      try {
+        return await this.call<T>(path, token);
+      } catch (e) {
+        if (e instanceof GithubApiError && e.status === 404) return null; // nothing there
+        if (e instanceof GithubApiError && e.status === 403) readable = false;
+        else throw e;
+        return null;
+      }
+    };
+    const repo = `/repositories/${encodeURIComponent(repoId)}`;
+    const protection = await read<{ contexts?: string[]; checks?: { context: string }[] }>(`${repo}/branches/${encodeURIComponent(branch)}/protection/required_status_checks`);
+    for (const c of protection?.contexts ?? []) names.add(c);
+    for (const c of protection?.checks ?? []) names.add(c.context);
+    const rules = await read<{ type: string; parameters?: { required_status_checks?: { context: string }[] } }[]>(`${repo}/rules/branches/${encodeURIComponent(branch)}`);
+    for (const r of rules ?? []) if (r.type === "required_status_checks") for (const c of r.parameters?.required_status_checks ?? []) names.add(c.context);
+    return { names: [...names], readable };
+  }
+
+  /** Whether any of a branch's latest `commits` commits has a check run. */
+  async branchHasChecks(installationId: string, repoId: string, branch: string, commits = 10): Promise<boolean> {
+    const token = await this.installationToken(installationId);
+    const repo = `/repositories/${encodeURIComponent(repoId)}`;
+    const list = await this.call<{ sha: string }[]>(`${repo}/commits?sha=${encodeURIComponent(branch)}&per_page=${commits}`, token);
+    for (const { sha } of list) {
+      const r = await this.call<{ total_count: number }>(`${repo}/commits/${encodeURIComponent(sha)}/check-runs?per_page=1`, token);
+      if (r.total_count > 0) return true;
+    }
+    return false;
+  }
+
   /** The installation's account (who owns it), for display. */
   async installationAccount(installationId: string): Promise<{ login: string; type: string }> {
     const r = await this.call<{ account?: { login: string; type: string } }>(`/app/installations/${encodeURIComponent(installationId)}`, appJwt(this.cfg, this.now()));

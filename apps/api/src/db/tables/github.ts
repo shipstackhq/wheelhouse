@@ -22,6 +22,15 @@ export const REPO_LIFECYCLES = ["live", "being_replaced", "planned", "retired"] 
  */
 export type RepositoryCheck = { name: string; command: string; cwd?: string; required: boolean };
 
+/**
+ * WH-189: what CI a repository has and which checks count (ADR-26). `branch_protection` means the checks GitHub requires of the default
+ * branch (`CiDetected.requiredFromProtection`); `optionalIfAbsent` names required checks that only count when they appear (path-filtered jobs).
+ */
+export type CiPolicy = { mode: "none" | "github_checks"; required: "branch_protection" | "all" | string[]; optionalIfAbsent: string[]; startTimeoutMinutes: number };
+
+/** What the last detection found. A suggestion for a person to accept; it never changes a confirmed `ciPolicy`. */
+export type CiDetected = { at: string; mode: CiPolicy["mode"]; requiredFromProtection: string[]; warnings: string[] };
+
 export const repositories = table(
   "repositories",
   {
@@ -44,6 +53,9 @@ export const repositories = table(
     lifecycle: text("lifecycle", { enum: REPO_LIFECYCLES }).notNull().default("live"),
     // WH-170: the commands a change must pass, in order (install, lint, typecheck, test…). Sent with every run's job.
     checks: jsonb("checks").$type<RepositoryCheck[]>().notNull().default([]),
+    // WH-189: the CI policy a person confirmed (null = none yet) and what detection last found.
+    ciPolicy: jsonb("ci_policy").$type<CiPolicy | null>(),
+    ciDetected: jsonb("ci_detected").$type<CiDetected | null>(),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
     // WH-142: when a pull request sync of this repository last finished successfully. Null = never.
     lastPrSyncedAt: timestamp("last_pr_synced_at", { withTimezone: true }),

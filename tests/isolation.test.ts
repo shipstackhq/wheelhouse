@@ -1112,6 +1112,7 @@ const API_ROUTE_AUDIT: Record<string, string> = {
   "POST /api/app/teams/:key/repositories/github": "connectGithubRepository(actor): owners only, and the installation must be one of the actor's workspace (ADR-12); name and branch are read from GitHub (tested against a fake GitHub)",
   "PATCH /api/app/teams/:key/repositories/:id": "updateRepository(actor): the repository is resolved inside the actor's team (tested)",
   "POST /api/app/teams/:key/repositories/:id/retire": "retireRepository(actor): resolved inside the actor's team (tested)",
+  "POST /api/app/teams/:key/repositories/:id/detect-ci": "detectRepository(actor): the repository is looked up through the actor's team, so another workspace's is not found (tested)",
   "GET /api/app/teams/:key/repositories/:id/tree": "browseRepoTreeAs(actor): the repository is looked up in the actor's own team, so another workspace's repository id is a 404 and no tree is fetched (tested)",
   "GET /api/app/teams/:key/onboarding": "onboardingPage(actor): the team through TeamAccessService.require(actor); the commands carry no API key (tested)",
   "POST /api/app/teams/:key/onboarding/concept": "createConceptAs(actor): the team through TeamAccessService.require(actor, key, edit); the node is written to that team (tested)",

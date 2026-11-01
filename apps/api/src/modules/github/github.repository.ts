@@ -53,6 +53,12 @@ export class GithubRepository {
     return r;
   }
 
+  /** The checks of the repository's most recently updated pull requests, newest first (what CI has recently reported). */
+  async recentPullRequestChecks(repositoryId: string, limit: number) {
+    const rows = await this.db.q.select({ checks: pullRequests.checks }).from(pullRequests).where(eq(pullRequests.repositoryId, repositoryId)).orderBy(desc(pullRequests.updatedAt)).limit(limit);
+    return rows.map((r) => r.checks);
+  }
+
   async touchRepository(id: string) {
     await this.db.q.update(repositories).set({ lastEventAt: new Date() }).where(eq(repositories.id, id));
   }
