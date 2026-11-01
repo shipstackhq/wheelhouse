@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { EventEmitter2 } from "@nestjs/event-emitter";
 import { schema } from "../../db";
+import type { RepositoryCheck } from "../../db/tables/github";
 import type { Actor } from "../../common/actor";
 import { ServiceError } from "../../common/service-error";
 import { isUuid } from "../../common/uuid";
@@ -22,9 +23,25 @@ export type RepositoryInput = {
   defaultBranch?: string;
   pathLimit?: string | null;
   lifecycle?: (typeof schema.REPO_LIFECYCLES)[number];
+  checks?: RepositoryCheck[];
 };
 
 type Body = Record<string, unknown>;
+
+/** WH-170: a repository's check commands, `[{ name, command, cwd?, required? }]` (required unless said otherwise). */
+function checksField(b: Body): RepositoryCheck[] | undefined {
+  if (b.checks === undefined) return undefined;
+  if (!Array.isArray(b.checks) || b.checks.length > 20) return bad("checks", "checks must be a list of at most 20");
+  return b.checks.map((c) => {
+    const o = (c && typeof c === "object" ? c : {}) as Body;
+    return {
+      name: text(o, "name", { required: true, max: 60, trim: true })!,
+      command: text(o, "command", { required: true, max: 1000, trim: true })!,
+      ...(o.cwd ? { cwd: text(o, "cwd", { max: 200, trim: true })! } : {}),
+      required: o.required !== false,
+    };
+  });
+}
 
 export const slugify = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "repo";
 
@@ -97,6 +114,7 @@ export class RepositoriesService {
     if (patch.defaultBranch !== undefined) set.defaultBranch = patch.defaultBranch.trim() || "main";
     if (patch.pathLimit !== undefined) set.pathLimit = patch.pathLimit?.trim() || null;
     if (patch.lifecycle !== undefined) set.lifecycle = patch.lifecycle;
+    if (patch.checks !== undefined) set.checks = patch.checks;
     const r = await this.repo.updateRepository(existing.id, set);
     await this.events.emit(actor, team.id, { type: "repository.updated", entity: "team", entityId: r.id, summary: `updated repository "${r.displayName}"` });
     if (patch.lifecycle !== undefined && patch.lifecycle !== existing.lifecycle) await this.systemNode(actor, team.id, r);
@@ -144,6 +162,7 @@ export class RepositoriesService {
       defaultBranch: text(b, "defaultBranch", { max: 200 }),
       pathLimit: textOrNull(b, "pathLimit"),
       lifecycle: oneOf(b, "lifecycle", schema.REPO_LIFECYCLES),
+      checks: checksField(b),
     };
     return Object.fromEntries(Object.entries(out).filter(([, v]) => v !== undefined));
   }

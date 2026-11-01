@@ -208,6 +208,7 @@ export class RunsService {
           cloneUrl: `https://github.com/${repo.githubFullName}.git`,
           defaultBranch: repo.defaultBranch,
           pathLimit: repo.pathLimit,
+          checks: repo.checks,
         },
         requestedBy: { id: actor.id, name: actor.name },
         // WH-115: the CLI's own agent definition (instructions with the guardrails, tools, effort); the daemon runs `claude --agents <definitions> --agent <name>`.

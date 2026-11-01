@@ -19,6 +19,19 @@ export const PAIRING_STARTS_PER_IP = 20;
 
 export const REJECT_REASONS = ["no_free_slot", "unknown_repository", "bad_signature", "expired", "unsupported_model", "not_ready"] as const;
 
+export const CHECK_STATUSES = ["passed", "failed", "could_not_run"] as const;
+
+/** WH-171: the self-check results in a finish, one per check the daemon ran: outcome, exit code, duration, the tail of the output. */
+export function cleanCheckResults(v: unknown) {
+  return (Array.isArray(v) ? v.slice(0, 20) : []).flatMap((c) => {
+    const o = (c && typeof c === "object" ? c : {}) as Record<string, unknown>;
+    const status = CHECK_STATUSES.find((s) => s === o.status);
+    if (!status || !str(o.name, 60)) return [];
+    const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+    return [{ name: str(o.name, 60), command: str(o.command, 1000), required: o.required !== false, status, exitCode: n(o.exitCode), durationMs: n(o.durationMs), tail: str(o.tail, 4000) }];
+  });
+}
+
 /** The position a device resumes from: its Last-Event-ID header. */
 export function parseLastEventId(v: string | null | undefined): number | null {
   return v != null && /^\d{1,15}$/.test(v.trim()) ? Number(v.trim()) : null;

@@ -20,6 +20,8 @@ export const REPO_LIFECYCLES = ["live", "being_replaced", "planned", "retired"] 
  * (or the GitHub repo id once connected), used to find-or-create the right
  * row per team on each report.
  */
+export type RepositoryCheck = { name: string; command: string; cwd?: string; required: boolean };
+
 export const repositories = table(
   "repositories",
   {
@@ -40,6 +42,8 @@ export const repositories = table(
     // A monorepo directory this team's link is limited to, e.g. "packages/billing/". Null = whole repo.
     pathLimit: text("path_limit"),
     lifecycle: text("lifecycle", { enum: REPO_LIFECYCLES }).notNull().default("live"),
+    // WH-170: the commands a change must pass, in order (install, lint, typecheck, test…). Sent with every run's job.
+    checks: jsonb("checks").$type<RepositoryCheck[]>().notNull().default([]),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }),
     // WH-142: when a pull request sync of this repository last finished successfully. Null = never.
     lastPrSyncedAt: timestamp("last_pr_synced_at", { withTimezone: true }),
