@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Popover } from "radix-ui";
 import clsx from "clsx";
 import { useNavigate } from "react-router";
 import type { Role } from "@wheelhouse/api-client";
@@ -7,6 +6,7 @@ import { forgetAppLocation } from "../lib/app-location";
 import { useServices } from "../lib/services";
 import { ThemeSwitch } from "./theme-toggle";
 import { InstallButton, clearOfflineData } from "./pwa";
+import { Menu, MenuItem, MenuSeparator } from "./menu";
 
 function initials(name: string, email: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -60,8 +60,7 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
   const compact = !!props.compact;
   const { api, queryClient } = useServices();
   const navigate = useNavigate();
-  async function signOut(e: React.FormEvent) {
-    e.preventDefault();
+  async function signOut() {
     await clearOfflineData();
     try {
       await api.auth.logout();
@@ -74,56 +73,49 @@ export function ProfileMenu(props: { name: string; email: string; role: Role; ta
     }
   }
   return (
-    <Popover.Root>
-      <Popover.Trigger
-        className={clsx(
-          "flex w-full items-center gap-2.5 rounded-md p-2 text-left outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2",
-          compact && "md:justify-center md:p-1",
-        )}
-        aria-label="Account menu"
-      >
-        <Avatar name={props.name} email={props.email} imageUrl={props.imageUrl} />
-        <span className={clsx("min-w-0 flex-1", compact && "md:hidden")}>
-          <span className="block truncate text-sm text-fg">{props.name}</span>
-          <span className="block truncate text-xs text-muted">{props.email}</span>
-        </span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          side={compact ? "right" : "top"}
-          align={compact ? "end" : "start"}
-          sideOffset={8}
-          collisionPadding={8}
-          className="z-50 w-64 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl"
+    <Menu
+      side={compact ? "right" : "top"}
+      align={compact ? "end" : "start"}
+      className="w-64"
+      trigger={
+        <button
+          type="button"
+          className={clsx(
+            "flex w-full items-center gap-2.5 rounded-md p-2 text-left outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2",
+            compact && "md:justify-center md:p-1",
+          )}
+          aria-label="Account menu"
         >
-          <div className="flex items-center gap-3 p-3">
-            <Avatar name={props.name} email={props.email} size={40} imageUrl={props.imageUrl} />
-            <div className="min-w-0">
-              <div className="truncate font-medium">{props.name}</div>
-              <div className="truncate text-xs text-muted">{props.email}</div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-1 px-3 pb-3 text-xs">
-            <span className="text-muted">{props.workspace}</span>
-            <span className="text-muted">·</span>
-            <span className={clsx("chip", props.role === "owner" ? "bg-accent/15 text-accent" : "bg-panel-2 text-fg")}>{props.role}</span>
-            {props.tags.map((t) => (
-              <span key={t} className="chip bg-bg text-muted">{t}</span>
-            ))}
-          </div>
-          <div className="border-t border-line px-3 py-3">
-            <ThemeSwitch />
-          </div>
-          <div className="border-t border-line p-1">
-            <InstallButton />
-            <form onSubmit={signOut}>
-            <button className="w-full rounded-md px-2 py-1.5 text-left text-sm text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:bg-panel-2">
-              Sign out
-            </button>
-            </form>
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+          <Avatar name={props.name} email={props.email} imageUrl={props.imageUrl} />
+          <span className={clsx("min-w-0 flex-1", compact && "md:hidden")}>
+            <span className="block truncate text-sm text-fg">{props.name}</span>
+            <span className="block truncate text-xs text-muted">{props.email}</span>
+          </span>
+        </button>
+      }
+    >
+      <div className="flex items-center gap-3 p-3">
+        <Avatar name={props.name} email={props.email} size={40} imageUrl={props.imageUrl} />
+        <div className="min-w-0">
+          <div className="truncate font-medium">{props.name}</div>
+          <div className="truncate text-xs text-muted">{props.email}</div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1 px-3 pb-3 text-xs">
+        <span className="text-muted">{props.workspace}</span>
+        <span className="text-muted">·</span>
+        <span className={clsx("chip", props.role === "owner" ? "bg-accent/15 text-accent" : "bg-panel-2 text-fg")}>{props.role}</span>
+        {props.tags.map((t) => (
+          <span key={t} className="chip bg-bg text-muted">{t}</span>
+        ))}
+      </div>
+      <MenuSeparator />
+      <div className="px-3 py-3">
+        <ThemeSwitch />
+      </div>
+      <MenuSeparator />
+      <InstallButton />
+      <MenuItem onSelect={signOut} className="text-muted">Sign out</MenuItem>
+    </Menu>
   );
 }
