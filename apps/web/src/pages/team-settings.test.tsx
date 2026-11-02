@@ -13,7 +13,7 @@ describe("the team settings page", () => {
     open();
     await screen.findByRole("heading", { level: 1, name: "Team settings" });
     expect((screen.getByLabelText("Name") as HTMLInputElement).value).toBe("Alpha");
-    expect((screen.getByLabelText("Key") as HTMLInputElement).readOnly).toBe(true);
+    expect(screen.getByText("AA", { selector: "span.font-mono" })).toBeTruthy(); // the key is text, not a field
     expect(screen.getByRole("button", { name: "Save changes" })).toBeTruthy();
   });
 
@@ -51,37 +51,41 @@ describe("the team settings page", () => {
 });
 
 describe("a team's icon", () => {
-  test("an admin picks an icon and a colour and saves it; the request carries both", async () => {
-    const { server } = open((s) => s.on("PATCH /api/app/teams/AA", { team: { id: "id-AA", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-16T00:00:00.000Z", icon: "ri:rocket-2", iconColor: "rose" } }));
+  const saved = (icon: string | null, iconColor: string | null) => ({ team: { id: "id-AA", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-16T00:00:00.000Z", icon, iconColor } });
+
+  test("an admin picks an icon from the popover; it is saved at once", async () => {
+    const { server } = open((s) => s.on("PATCH /api/app/teams/AA", saved("ri:rocket-2", null)));
     const user = userEvent.setup();
-    await screen.findByRole("heading", { level: 2, name: "Icon" });
-    expect((screen.getByRole("button", { name: "Save icon" }) as HTMLButtonElement).disabled).toBe(true); // nothing changed yet
+    await user.click(await screen.findByRole("button", { name: "Change icon" }));
     await user.click(screen.getByRole("button", { name: "rocket" }));
-    await user.click(screen.getByRole("button", { name: "rose" }));
-    await user.click(screen.getByRole("button", { name: "Save icon" }));
     await waitFor(() => expect(server.sent("PATCH /api/app/teams/AA")).toHaveLength(1));
-    expect(server.sent("PATCH /api/app/teams/AA")[0].body).toEqual({ icon: "ri:rocket-2", iconColor: "rose" });
+    expect(server.sent("PATCH /api/app/teams/AA")[0].body).toEqual({ icon: "ri:rocket-2", iconColor: null });
   });
 
-  test("an emoji can be typed or picked; more than one is refused before anything is sent", async () => {
-    const { server } = open((s) => s.on("PATCH /api/app/teams/AA", { team: { id: "id-AA", key: "AA", name: "Alpha", description: "", createdAt: "2026-10-16T00:00:00.000Z", icon: "🚀", iconColor: null } }));
+  test("a colour is picked from its own popover and saved at once", async () => {
+    const { server } = open((s) => s.on("PATCH /api/app/teams/AA", saved(null, "rose")));
     const user = userEvent.setup();
-    await user.click(await screen.findByRole("tab", { name: "Emoji" }));
-    await user.type(screen.getByLabelText("Emoji"), "ab");
-    expect((await screen.findByRole("alert")).textContent).toMatch(/single emoji/);
-    expect((screen.getByRole("button", { name: "Save icon" }) as HTMLButtonElement).disabled).toBe(true);
-    await user.clear(screen.getByLabelText("Emoji"));
+    await user.click(await screen.findByRole("button", { name: "Colour" }));
+    await user.click(screen.getByRole("button", { name: "rose" }));
+    await waitFor(() => expect(server.sent("PATCH /api/app/teams/AA")).toHaveLength(1));
+    expect(server.sent("PATCH /api/app/teams/AA")[0].body).toEqual({ icon: null, iconColor: "rose" });
+  });
+
+  test("an emoji is picked on the Emoji tab of the icon popover", async () => {
+    const { server } = open((s) => s.on("PATCH /api/app/teams/AA", saved("🚀", null)));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Change icon" }));
+    await user.click(screen.getByRole("tab", { name: "Emoji" }));
     await user.click(screen.getByRole("button", { name: "🚀" }));
-    await user.click(screen.getByRole("button", { name: "Save icon" }));
     await waitFor(() => expect(server.sent("PATCH /api/app/teams/AA")).toHaveLength(1));
     expect(server.sent("PATCH /api/app/teams/AA")[0].body).toEqual({ icon: "🚀", iconColor: null });
   });
 
-  test("a team without a role of admin sees the icon but cannot change it", async () => {
+  test("a team without a role of admin cannot change the icon", async () => {
     open(() => {}, "editor");
-    await screen.findByRole("heading", { level: 2, name: "Icon" });
-    expect(screen.queryByRole("button", { name: "Save icon" })).toBeNull();
-    expect((screen.getByRole("button", { name: "rocket" }) as HTMLButtonElement).disabled).toBe(true);
+    await screen.findByRole("heading", { level: 1, name: "Team settings" });
+    expect(screen.queryByRole("button", { name: "Change icon" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Colour" })).toBeNull();
   });
 });
 

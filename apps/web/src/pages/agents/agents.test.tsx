@@ -12,13 +12,12 @@ const as = (server: FakeServer, role: "owner" | "member", teamRole?: "admin" | "
 const page = (data = agentsPage()) => (s: FakeServer) => s.on("GET /api/app/agents", data);
 
 describe("the Agents page", () => {
-  test("lists the catalog and the workspace's own agents as cards, the custom ones marked", async () => {
+  test("lists the catalog and the workspace's own agents as rows, the custom ones marked", async () => {
     renderApp("/agents", page());
     await screen.findByRole("heading", { level: 1, name: "Agents" });
-    expect(await screen.findByRole("heading", { name: "Bram" })).toBeTruthy();
-    const casey = screen.getByRole("heading", { name: "Casey" }).closest("article")!;
-    expect(within(casey).getByText(/no warranty/)).toBeTruthy();
-    expect(within(screen.getByRole("heading", { name: "Bram" }).closest("article")!).queryByText(/no warranty/)).toBeNull();
+    expect(await screen.findByText("Bram")).toBeTruthy();
+    expect(within(screen.getByText("Casey").closest("li")!).getByText("(custom)")).toBeTruthy();
+    expect(within(screen.getByText("Bram").closest("li")!).queryByText("(custom)")).toBeNull();
   });
 
   test("switched off: says so, and sends admins to the setting", async () => {
@@ -36,7 +35,7 @@ describe("the Agents page", () => {
 
   test("New agent is for workspace admins and team admins only", async () => {
     renderApp("/agents", (s) => (page()(s), as(s, "member", "editor")));
-    await screen.findByRole("heading", { name: "Bram" });
+    await screen.findByText("Bram");
     expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
   });
 
@@ -170,7 +169,7 @@ describe("a team's agents", () => {
 
   test("lists the roster with the Use in Claude Code box", async () => {
     renderApp("/t/AA/agents", roster());
-    expect(await screen.findByRole("heading", { name: "Bram" })).toBeTruthy();
+    expect(await screen.findByText("Bram")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Use in Claude Code" })).toBeTruthy();
     expect(screen.getByText("/wheelhouse:agents")).toBeTruthy();
     expect(screen.getByText(/use wh-backend to/)).toBeTruthy();
@@ -210,7 +209,7 @@ describe("a team's agents", () => {
 
   test("an editor only reads: no Add, no Remove", async () => {
     renderApp("/t/AA/agents", (s) => (roster()(s), as(s, "member", "editor")));
-    await screen.findByRole("heading", { name: "Bram" });
+    await screen.findByText("Bram");
     expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove Bram" })).toBeNull();
   });

@@ -7,9 +7,9 @@ import clsx from "clsx";
  */
 export const SETTINGS_ROW_PAD = "px-6 py-4";
 
-export function SettingsList({ title, hint, danger, children }: { title?: ReactNode; hint?: string; danger?: boolean; children: ReactNode }) {
+export function SettingsList({ title, hint, danger, label, children }: { title?: ReactNode; hint?: string; danger?: boolean; label?: string; children: ReactNode }) {
   return (
-    <section className="space-y-2" aria-label={typeof title === "string" ? title : undefined}>
+    <section className="space-y-2" aria-label={label ?? (typeof title === "string" ? title : undefined)}>
       <SettingsHeading title={title} hint={hint} danger={danger} />
       <div className={clsx("card divide-y divide-line", danger && "border-danger/40")}>{children}</div>
     </section>

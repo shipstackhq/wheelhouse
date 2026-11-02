@@ -16,18 +16,18 @@ describe("the initiatives list", () => {
         ],
       }),
     );
-    const card = async (name: string) => (await screen.findByText(name, { selector: ".font-semibold" })).closest("a") as HTMLElement;
+    const card = async (name: string) => (await screen.findByText(name)).closest("a") as HTMLElement;
     const top = await card("Enterprise ready");
     expect(within(top).getByText("active", { selector: ".chip" })).toBeTruthy();
     expect(within(top).getByText("On track")).toBeTruthy();
-    expect(top.textContent).toContain("Owned by Ada Lovelace · 2 projects · 1 sub-initiative");
+    expect(top.textContent).toContain("Ada Lovelace · 2 projects · 1 sub-initiative");
     expect(within(top).getByLabelText("4 of 10 issues done")).toBeTruthy();
     expect(top.getAttribute("href")).toBe("/w/ae/initiatives/i1");
     const sub = await card("SSO");
     expect(sub.textContent).toContain("No owner · 1 project");
     expect(sub.textContent).toContain("no target date");
-    expect(sub.style.marginLeft).toBe("1.5rem");
-    expect(top.style.marginLeft).toBe("0rem");
+    expect(sub.style.paddingLeft).toBe("2.5rem");
+    expect(top.style.paddingLeft).toBe("1rem");
   });
 
   test("with none it invites starting one; the sidebar has an Initiatives link", async () => {

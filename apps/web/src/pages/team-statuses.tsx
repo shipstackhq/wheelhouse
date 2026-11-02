@@ -68,7 +68,7 @@ function Editor({ teamKey, canEdit, list }: { teamKey: string; canEdit: boolean;
       )}
       <div className="space-y-6">
         {groups.map((g) => (
-          <SettingsList key={g.role} title={<span className="text-sm text-muted">{g.label}</span>}>
+          <SettingsList key={g.role} label={g.label} title={<span className="text-sm text-muted">{g.label}</span>}>
             <DndContext id={`statuses-${g.role}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd(g.role)}>
               <SortableContext items={g.items.map((s) => s.id)} strategy={verticalListSortingStrategy}>
                 {g.items.map((s) => (

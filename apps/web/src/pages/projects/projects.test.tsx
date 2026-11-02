@@ -18,15 +18,15 @@ describe("the projects list", () => {
         ],
       }),
     );
-    const card = async (name: string) => (await screen.findByText(name, { selector: ".font-semibold" })).closest("a") as HTMLElement;
+    const card = async (name: string) => (await screen.findByText(name)).closest("a") as HTMLElement;
     const sso = await card("Launch SSO");
     expect(within(sso).getByText("active", { selector: ".chip" })).toBeTruthy();
     expect(within(sso).getByText("On track")).toBeTruthy();
-    expect(sso.textContent).toContain("Led by Ada Lovelace · 2 teams");
+    expect(sso.textContent).toContain("Ada Lovelace · 2 teams");
     expect(within(sso).getByLabelText("4 of 10 issues done")).toBeTruthy();
     expect(sso.getAttribute("href")).toBe("/w/ae/projects/p1");
-    expect(sso.querySelector("[data-priority-chip]")).toBeNull(); // no priority is not worth a chip on the list
-    expect((await card("Shaky")).querySelector("[data-priority-chip]")!.textContent).toBe("Urgent");
+    expect(sso.querySelector("[data-priority-chip]")).toBeNull(); // no priority, nothing in the priority slot
+    expect((await card("Shaky")).querySelector("[data-priority-chip]")!.getAttribute("title")).toBe("Urgent");
     const old = await card("Old migration");
     expect(within(old).getByText("completed", { selector: ".chip" })).toBeTruthy();
     expect(within(old).queryByText(/On track|At risk|Off track/)).toBeNull();

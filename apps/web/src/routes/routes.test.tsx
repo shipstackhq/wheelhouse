@@ -20,7 +20,7 @@ const TEAM_PAGES: [path: string, find: () => Promise<unknown>][] = [
   ["/t/AA/map", () => screen.findByRole("tab", { name: /System/ })],
   ["/t/AA/decisions", () => screen.findByRole("heading", { level: 1, name: "Decisions" })],
   ["/t/AA/glossary", () => screen.findByRole("heading", { level: 1, name: "Glossary" })],
-  ["/t/AA/docs", () => screen.findByRole("button", { name: "Plan" })],
+  ["/t/AA/docs", () => screen.findByRole("button", { name: /^Plan/ })],
   ["/t/AA/members", () => screen.findByRole("heading", { level: 1, name: "Team members" })],
   ["/t/AA/settings", () => screen.findByRole("heading", { level: 1, name: "Team settings" })],
   ["/t/AA/onboarding", () => screen.findByRole("heading", { level: 2, name: "Where does your code live?" })],
@@ -66,7 +66,7 @@ describe("signed in: every page is in the shell", () => {
 
   test("a team page has the team's header and its sections in the sidebar", async () => {
     renderApp("/t/BB/docs");
-    await screen.findByRole("button", { name: "Plan" });
+    await screen.findByRole("button", { name: /^Plan/ });
     const trail = within(screen.getByRole("navigation", { name: "Breadcrumb" })); // the header says where you are, naming the team without its key
     expect(trail.getByRole("link", { name: "Beta" }).getAttribute("href")).toBe("/w/ae/t/BB");
     expect(trail.getByText("Docs").getAttribute("aria-current")).toBe("page");
@@ -151,7 +151,7 @@ describe("signed out: the gate", () => {
 describe("the session ends while the page is open", () => {
   test("the next request that learns it goes to /login and forgets the person", async () => {
     const { at, server, services } = renderApp("/t/AA/docs");
-    await screen.findByRole("button", { name: "Plan" });
+    await screen.findByRole("button", { name: /^Plan/ });
     server.me = null; // signed out in another tab
     await services.queryClient.invalidateQueries({ queryKey: ["ae", "teams"] });
     await waitFor(() => expect(at()).toBe("/login"));
@@ -172,7 +172,7 @@ describe("loading and failing", () => {
     expect(screen.getByText("Loading Wheelhouse…")).toBeTruthy();
     expect(screen.queryByRole("navigation")).toBeNull();
     release();
-    await screen.findByRole("button", { name: "Plan" });
+    await screen.findByRole("button", { name: /^Plan/ });
     expect(screen.queryByText("Loading Wheelhouse…")).toBeNull();
   });
 
@@ -203,7 +203,7 @@ describe("loading and failing", () => {
 describe("live updates", () => {
   test("a team page listens to that team's stream; the dashboard listens to the workspace's; other pages to the workspace's too, only to keep the inbox fresh", async () => {
     const { unmount } = renderApp("/t/AA/docs");
-    await screen.findByRole("button", { name: "Plan" });
+    await screen.findByRole("button", { name: /^Plan/ });
     await waitFor(() => expect(FakeEventSource.open.map((s) => s.url)).toEqual(["/api/teams/AA/stream?workspace=ae"]));
     unmount();
     FakeEventSource.reset();
@@ -223,7 +223,7 @@ describe("live updates", () => {
 describe("the workspace in the address", () => {
   test("a /w/:slug page asks for that workspace on every request, and two workspaces never share a cache key", async () => {
     const { server } = renderApp("/w/de/t/AA/docs");
-    await screen.findByRole("button", { name: "Plan" });
+    await screen.findByRole("button", { name: /^Plan/ });
     expect(server.sent("GET /api/app/teams")[0].headers["x-workspace"]).toBe("de");
     expect(server.sent("GET /api/app/teams/AA/docs")[0].headers["x-workspace"]).toBe("de");
 

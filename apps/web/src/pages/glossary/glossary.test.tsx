@@ -15,10 +15,10 @@ const detail = async (id: "t1" | "t2", setup: Parameters<typeof renderApp>[1] = 
 };
 
 describe("the glossary home", () => {
-  test("is a grid of cards, each a link to its term showing the term and the concept it names, not the definition", async () => {
+  test("is a list of rows, each a link to its term showing the term and the concept it names, not the definition", async () => {
     open();
     await screen.findByRole("heading", { name: "Glossary" });
-    expect(screen.getByRole("list").className).toContain("lg:grid-cols-3");
+    expect(screen.getByRole("list").className).toContain("divide-y");
     const links = cards();
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/w/ae/t/AA/glossary/t1", "/w/ae/t/AA/glossary/t2"]);
     const invoice = screen.getByRole("link", { name: /^Invoice/ });

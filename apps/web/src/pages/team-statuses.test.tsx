@@ -6,7 +6,7 @@ import { statusSettings, teamMembers } from "../test/data";
 
 const open = (setup: Parameters<typeof renderApp>[1] = () => {}, myRole: "admin" | "editor" = "admin") =>
   renderApp("/t/AA/settings", (s) => (s.on("GET /api/app/teams/AA/members", teamMembers({ myRole })), setup(s)));
-const section = async () => within(await screen.findByRole("heading", { level: 2, name: "Statuses" }).then((h) => h.closest(".card") as HTMLElement));
+const section = async () => within(await screen.findByRole("heading", { level: 2, name: "Statuses" }).then((h) => h.closest(".space-y-2") as HTMLElement));
 const row = (name: string) => document.querySelector(`[data-status="${name}"]`) as HTMLElement;
 
 /** Todo has two statuses (so a default means something): Todo with two issues, and Blocked with one. */

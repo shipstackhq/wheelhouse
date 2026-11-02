@@ -11,7 +11,9 @@ afterEach(() => localStorage.clear());
 const HOME = "/t/AA/docs";
 const DOC = `${HOME}/d-plan`;
 const open = (path = DOC, setup: (s: FakeServer) => unknown = () => {}) => renderApp(path, setup);
-const row = async (title: string) => screen.findByRole("button", { name: new RegExp(`^${title}$`) });
+/** A home row's button: the title, then when it was updated. */
+const named = (title: string) => new RegExp(`^${title}( Updated .*)?$`);
+const row = async (title: string) => screen.findByRole("button", { name: named(title) });
 /** The doc's own title (the page's h1; the text can have an h1 of its own too). */
 const heading = (title: string) => waitFor(() => expect(document.querySelector("h1.text-3xl")?.textContent).toBe(title));
 const url = (path: string) => `/api/app/teams/AA/${path}`;
@@ -29,9 +31,9 @@ describe("the docs home", () => {
     expect(await row("Phase 1")).toBeTruthy();
     const api = screen.getByRole("button", { name: /API notes/ });
     expect(within(api).getByTitle("Possibly out of date")).toBeTruthy();
-    const phase = screen.getByRole("button", { name: "Phase 1" });
+    const phase = screen.getByRole("button", { name: named("Phase 1") });
     expect(phase.closest("ul")!.className).toContain("border-l"); // nested
-    expect(document.querySelector("h1.text-3xl")?.textContent).toBe("Docs");
+    expect(screen.getByRole("heading", { level: 1, name: "Docs" })).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Doc navigation" })).toBeNull();
   });
 
@@ -56,8 +58,8 @@ describe("the docs home", () => {
     const user = userEvent.setup();
     await row("Plan");
     await user.type(screen.getByLabelText("Filter docs by title"), "phase");
-    expect(screen.queryByRole("button", { name: "Plan" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Phase 1" }).closest("ul")!.className).not.toContain("border-l"); // flat
+    expect(screen.queryByRole("button", { name: named("Plan") })).toBeNull();
+    expect(screen.getByRole("button", { name: named("Phase 1") }).closest("ul")!.className).not.toContain("border-l"); // flat
     await user.clear(screen.getByLabelText("Filter docs by title"));
     await user.type(screen.getByLabelText("Filter docs by title"), "zzz");
     expect(screen.getByText('No docs match "zzz".')).toBeTruthy();
@@ -82,7 +84,7 @@ describe("the doc tree sheet", () => {
     await heading("Plan");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Search docs" }));
-    await user.click(await screen.findByRole("button", { name: "Phase 1" }));
+    await user.click(await screen.findByRole("button", { name: named("Phase 1") }));
     await heading("Phase 1");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Docs" })).toBeNull());
   });
@@ -93,7 +95,7 @@ describe("the doc tree sheet", () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Search docs" }));
     await user.type(await screen.findByLabelText("Filter docs by title"), "api");
-    expect(screen.queryByRole("button", { name: "Plan" })).toBeNull();
+    expect(screen.queryByRole("button", { name: named("Plan") })).toBeNull();
     expect(screen.getByRole("button", { name: /API notes/ })).toBeTruthy();
   });
 
@@ -559,9 +561,9 @@ describe("moving, linking and deleting", () => {
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent(`DELETE ${url("docs/d-plan")}`)).toHaveLength(1));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Phase 1" })).toBeNull());
-    await waitFor(() => expect(document.querySelector("h1.text-3xl")?.textContent).toBe("Docs"));
-    expect(screen.queryByRole("button", { name: "Plan" })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole("button", { name: named("Phase 1") })).toBeNull());
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Docs" })).toBeTruthy());
+    expect(screen.queryByRole("button", { name: named("Plan") })).toBeNull();
     expect(screen.getByRole("button", { name: /API notes/ })).toBeTruthy();
   });
 });
@@ -574,7 +576,7 @@ describe("live", () => {
     await waitFor(() => expect(FakeEventSource.open.length).toBe(1));
     docs = [...DOCS, doc({ id: "d-new", slug: "runbook", title: "Runbook", position: 9 })];
     act(() => FakeEventSource.open[0].emit("change", { seq: 5 }));
-    expect(await screen.findByRole("button", { name: "Runbook" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: named("Runbook") })).toBeTruthy();
   });
 
   test("another workspace's team has no docs page", async () => {

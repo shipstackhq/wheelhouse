@@ -352,6 +352,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
       >
         {k.stale && <span className="text-warn" title="Possibly out of date"><WarningIcon /></span>}
         <span className="min-w-0 flex-1 truncate">{k.title}</span>
+        {home && " "}
         {home && <span className="hidden shrink-0 text-xs text-muted sm:inline">Updated {new Date(k.updatedAt).toLocaleDateString()}</span>}
       </button>
       {!filterTerm && renderNode(k.id, depth + 1, home)}

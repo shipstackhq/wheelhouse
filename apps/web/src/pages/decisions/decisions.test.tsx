@@ -15,28 +15,27 @@ const detail = async (n: number, setup: Parameters<typeof renderApp>[1] = () => 
 const cards = () => within(screen.getByRole("list")).getAllByRole("link");
 
 describe("the decisions home", () => {
-  test("is a grid of cards, newest first, each a link to its decision showing the title and its labels", async () => {
+  test("is a list of rows, newest first, each a link to its decision showing the title, the status and how many map nodes it applies to", async () => {
     open();
     await screen.findByRole("heading", { name: "Decisions" });
     const links = cards();
     expect(links.map((a) => a.getAttribute("href"))).toEqual(["/w/ae/t/AA/decisions/2", "/w/ae/t/AA/decisions/1"]);
-    expect(screen.getByRole("list").className).toContain("lg:grid-cols-3");
-    // The labels: the status, then the map nodes it applies to (as text: the card itself is the link).
+    expect(screen.getByRole("list").className).toContain("divide-y");
+    // The status, and the count of map nodes it applies to (the row itself is the link).
     const one = screen.getByRole("link", { name: /Use REST/ });
     expect(within(one).getByText("accepted")).toBeTruthy();
-    expect(within(one).getByText("API")).toBeTruthy();
+    expect(within(one).getByText("1 map node")).toBeTruthy();
     expect(within(screen.getByRole("link", { name: /Drop GraphQL/ })).getByText("rejected")).toBeTruthy();
     // Not the body, the number or who wrote it.
     expect(screen.queryByText("ADR-1")).toBeNull();
     expect(screen.queryByText("We needed one protocol")).toBeNull();
   });
 
-  test("a card shows at most three nodes and counts the rest", async () => {
+  test("a row counts its map nodes", async () => {
     const many = { ...MAP_DECISIONS[0], nodeIds: ["s-api", "s-api", "s-api", "s-api", "s-api"] };
     open((s) => s.on("GET /api/app/teams/AA/graph", graph("AA", { decisions: [many] })));
     await screen.findByRole("heading", { name: "Decisions" });
-    expect(within(cards()[0]).getAllByText("API")).toHaveLength(3);
-    expect(within(cards()[0]).getByText("+2")).toBeTruthy();
+    expect(within(cards()[0]).getByText("5 map nodes")).toBeTruthy();
   });
 
   test("a rejected or superseded decision's title is struck through", async () => {
