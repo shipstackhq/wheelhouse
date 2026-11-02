@@ -17,6 +17,7 @@ import { useServices } from "../../lib/services";
 import { buildFileTree, containsMatch, readTime, sectionOf, sortedChildren, type FileTreeNode } from "./file-tree";
 import { AgentIcon, ArrowLeftIcon, ArrowRightIcon, BookIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, FileIcon, FolderIcon, NodeIcon, SearchIcon, WarningIcon } from "../../components/icons";
 import { Page } from "../../components/page";
+import { SearchField } from "../../components/search-field";
 
 type TreeDoc = DocsIndex["docs"][number];
 
@@ -368,17 +369,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   const docList = (home: boolean) => (
     <>
       {tree.length > 0 && (
-        <div className="relative mb-3">
-          <input
-            type="search"
-            className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
-            placeholder="Search docs…"
-            aria-label="Filter docs by title"
-            value={treeFilter}
-            onChange={(e) => setTreeFilter(e.target.value)}
-          />
-          <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
-        </div>
+        <SearchField value={treeFilter} onChange={setTreeFilter} placeholder="Search docs…" label="Filter docs by title" />
       )}
       {tree.length === 0 ? (
         <p className="px-2 py-4 text-sm text-muted">No docs yet. Create one to get started.</p>
@@ -412,7 +403,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   return (
     <div className="confluence-docs flex h-full flex-col overflow-hidden bg-page">
       {selectedId === null ? (
-        <Page title="Docs" action={<button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>+ Create</button>}>
+        <Page title="Docs" hint="Everything your team has written down: specs, notes and guides, in a tree you can search." action={<button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>+ Create</button>}>
             {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
             {docList(true)}
 </Page>

@@ -4,12 +4,13 @@ import type { DrawingListItem } from "@wheelhouse/api-client";
 import { Link, useNavigate } from "../../lib/workspace";
 import { Loaded } from "../../components/query-state";
 import { useDialogs } from "../../components/ui";
-import { BrushIcon, EditIcon, SearchIcon } from "../../components/icons";
+import { BrushIcon, EditIcon } from "../../components/icons";
 import { describeFailure } from "../../lib/form-state";
 import { useDrawings } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { Page } from "../../components/page";
+import { SearchField } from "../../components/search-field";
 
 /** `/t/:key/drawings`: the team's drawings as a grid of cards. This page never loads Excalidraw: a card shows the stored SVG preview. */
 export function DrawingsPage() {
@@ -75,17 +76,7 @@ function DrawingsGrid({ teamKey, drawings }: { teamKey: string; drawings: Drawin
             </div>
           ) : (
             <>
-              <div className="relative mb-4">
-                <SearchIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                <input
-                  type="search"
-                  className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pl-9 text-sm focus:!border-accent"
-                  placeholder="Search by name…"
-                  aria-label="Search drawings by name"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-              </div>
+              <SearchField value={filter} onChange={setFilter} placeholder="Search by name…" label="Search drawings by name" />
               {shown.length === 0 ? (
                 <p className="text-sm text-muted">No drawings match “{filter}”.</p>
               ) : (

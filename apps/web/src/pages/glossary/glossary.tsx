@@ -6,8 +6,9 @@ import { Select, useDialogs } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
-import { ArrowLeftIcon, EditIcon, SearchIcon, TermIcon } from "../../components/icons";
+import { ArrowLeftIcon, EditIcon, TermIcon } from "../../components/icons";
 import { Page } from "../../components/page";
+import { SearchField } from "../../components/search-field";
 
 /**
  * `/t/:key/glossary` is the team's vocabulary as a grid of cards (the layout of the docs home), each showing the term and the
@@ -103,17 +104,7 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
               hint="Team vocabulary a newcomer wouldn't know. Terms are underlined with a hover definition wherever they appear in map explainers and decisions."
               action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft({ term: "", definition: "", nodeId: "" }), setEditing("new"))}>+ Add term</button>}>
             {props.terms.length > 0 && (
-              <div className="relative mb-4">
-                <input
-                  type="search"
-                  className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
-                  placeholder="Filter…"
-                  aria-label="Filter terms"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                />
-                <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
-              </div>
+              <SearchField value={filter} onChange={setFilter} placeholder="Filter…" label="Filter terms" />
             )}
             {editing === "new" && <div className="mb-4">{form()}</div>}
             {shown.length === 0 && editing !== "new" && <p className="py-6 text-center text-sm text-muted">No terms{filter ? " match" : " yet"}.</p>}

@@ -11,8 +11,9 @@ import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
-import { AgentIcon, ArrowLeftIcon, CloseIcon, EditIcon, NodeIcon, SearchIcon } from "../../components/icons";
+import { AgentIcon, ArrowLeftIcon, CloseIcon, EditIcon, NodeIcon } from "../../components/icons";
 import { Page } from "../../components/page";
+import { SearchField } from "../../components/search-field";
 
 type NodeLite = { id: string; name: string; layer: string };
 /** `version` is the version being edited: sent back so a change made since is refused, not overwritten. */
@@ -92,18 +93,7 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
               )}
 
               {props.decisions.length > 0 && (
-                <div className="relative mb-4">
-                  <input
-                    type="search"
-                    className="input !rounded-full !border-transparent !bg-panel-2/70 !py-1.5 !pr-8 text-sm focus:!border-accent"
-                    placeholder="Search decisions…"
-                    aria-label="Search decisions by title"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-                  />
-                  <SearchIcon className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-muted" />
-                </div>
+                <SearchField value={query} onChange={setQuery} placeholder="Search decisions…" label="Search decisions by title" onEscape={() => setQuery("")} />
               )}
 
               {props.decisions.length > 0 && shown.length === 0 && (
