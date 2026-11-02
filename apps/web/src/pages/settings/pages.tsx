@@ -3,6 +3,7 @@ import { Link } from "../../lib/workspace";
 import { ChangePasswordForm } from "../../components/change-password-form";
 import { ChevronRightIcon } from "../../components/icons";
 import { ImageUpload } from "../../components/image-upload";
+import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "../../components/settings-list";
 import { Avatar } from "../../components/profile-menu";
 import { useServices } from "../../lib/services";
 import { ThemeSwitch } from "../../components/theme-toggle";
@@ -34,30 +35,24 @@ export function ProfileSettingsPage() {
   if (!me) return null;
   return (
     <Section title="Profile" hint="Who you are in Wheelhouse, and how it looks for you.">
-      <div className="card p-5">
-        <h2 className="font-medium">Profile</h2>
-        <div className="mt-3">
+      <SettingsList title="Profile">
+        <SettingsRow label="Profile picture">
           <ImageUpload
             label="Profile picture"
-            preview={<Avatar name={me.user.name} email={me.user.email} size={56} imageUrl={me.user.avatarUrl} />}
+            preview={<Avatar name={me.user.name} email={me.user.email} size={40} imageUrl={me.user.avatarUrl} />}
             hasImage={!!me.user.avatarUrl}
             onSave={(data) => api.avatar.set(data)}
             onRemove={() => api.avatar.remove()}
           />
-        </div>
-        <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
-          <dt className="text-muted">Name</dt>
-          <dd>{me.user.name}</dd>
-          <dt className="text-muted">Email</dt>
-          <dd>{me.user.email}</dd>
-        </dl>
-      </div>
-      <div className="card p-5">
-        <h2 className="font-medium">Appearance</h2>
-        <div className="mt-3">
+        </SettingsRow>
+        <SettingsRow label="Name">{me.user.name}</SettingsRow>
+        <SettingsRow label="Email">{me.user.email}</SettingsRow>
+      </SettingsList>
+      <SettingsList title="Appearance">
+        <div className={SETTINGS_ROW_PAD}>
           <ThemeSwitch />
         </div>
-      </div>
+      </SettingsList>
     </Section>
   );
 }
