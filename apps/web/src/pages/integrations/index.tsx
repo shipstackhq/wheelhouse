@@ -16,7 +16,7 @@ export function IntegrationsPage() {
         <p className="mt-1 text-sm text-muted">Find an integration, see which are on, and set each one up.</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <input className="input max-w-xs flex-1" type="search" placeholder="Search integrations" aria-label="Search integrations" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="input min-w-48 flex-1" type="search" placeholder="Search integrations" aria-label="Search integrations" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div role="group" aria-label="Filter" className="flex gap-1">
           {(["all", "enabled"] as const).map((f) => (
             <button key={f} type="button" className={filter === f ? "btn btn-primary" : "btn"} aria-pressed={filter === f} onClick={() => setFilter(f)}>
@@ -58,8 +58,10 @@ function Card({ integration: i, filter }: { integration: Integration; filter: Fi
   return (
     <li>
       <Link to={integrationPath(i.id)} aria-label={i.name} className="card flex h-full flex-col gap-2 p-4 hover:border-accent/40">
-        <div className="flex items-start gap-3">
-          <Icon aria-hidden className="shrink-0 text-2xl" />
+        <div className="flex items-center gap-3">
+          <div className="grid size-9 shrink-0 place-items-center">
+            <Icon aria-hidden className="text-2xl" />
+          </div>
           <div className="min-w-0 flex-1">
             <div className="font-medium">{i.name}</div>
             <div className="text-xs text-muted">{i.category}</div>
