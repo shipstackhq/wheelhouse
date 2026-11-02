@@ -219,32 +219,45 @@ describe("one project", () => {
     expect(server.sent("PATCH /api/app/projects/p1")[0].body).toEqual({ healthOverride: "at_risk", version: 1 });
   });
 
-  test("milestones: add one, move one, rename one, delete one (asking first)", async () => {
-    const { server } = page(detail(), (s) => {
-      s.on("POST /api/app/projects/p1/milestones", created(detail()));
-      s.on("PATCH /api/app/projects/p1/milestones/m2", { project: detail() });
-      s.on("DELETE /api/app/projects/p1/milestones/m1", { project: detail() });
-    });
+  const milestoneHandlers: NonNullable<Parameters<typeof renderApp>[1]> = (s) => {
+    s.on("POST /api/app/projects/p1/milestones", created(detail()));
+    s.on("PATCH /api/app/projects/p1/milestones/m2", { project: detail() });
+    s.on("DELETE /api/app/projects/p1/milestones/m1", { project: detail() });
+  };
+
+  test("milestones: a new one is sent with its name and date", async () => {
+    const { server } = page(detail(), milestoneHandlers);
     const user = userEvent.setup();
     await user.type(await screen.findByRole("textbox", { name: "New milestone" }), "Pilot");
     await user.type(screen.getByLabelText("Milestone date"), "2026-12-01");
     await user.click(screen.getByRole("button", { name: "Add milestone" }));
     await waitFor(() => expect(server.sent("POST /api/app/projects/p1/milestones")).toHaveLength(1));
     expect(server.sent("POST /api/app/projects/p1/milestones")[0].body).toEqual({ name: "Pilot", targetDate: "2026-12-01" });
-    expect((screen.getByRole("button", { name: "Move Beta up" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("milestones: the first cannot move up, the last cannot move down, and a move sends its new place", async () => {
+    const { server } = page(detail(), milestoneHandlers);
+    const user = userEvent.setup();
+    expect((await screen.findByRole("button", { name: "Move Beta up" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Move GA down" }) as HTMLButtonElement).disabled).toBe(true);
     await user.click(screen.getByRole("button", { name: "Move GA up" }));
     await waitFor(() => expect(server.sent("PATCH /api/app/projects/p1/milestones/m2")).toHaveLength(1));
     expect(server.sent("PATCH /api/app/projects/p1/milestones/m2")[0].body).toEqual({ index: 0 });
-    await user.click(screen.getByRole("button", { name: "Delete Beta" }));
+  });
+
+  test("milestones: deleting one asks first and says its issues stay in the project", async () => {
+    const { server } = page(detail(), milestoneHandlers);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Delete Beta" }));
     const confirm = await screen.findByRole("alertdialog");
     expect(confirm.textContent).toContain("Its 3 issues stay in the project, in no milestone.");
+    expect(server.sent("DELETE /api/app/projects/p1/milestones/m1")).toHaveLength(0);
     await user.click(within(confirm).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/projects/p1/milestones/m1")).toHaveLength(1));
   });
 
-  test("bringing a team in sends its key; taking one out is refused with its issues and then done on request", async () => {
-    const two = detail({
+  const twoTeams = () =>
+    detail({
       teams: [
         { key: "AA", name: "Alpha", role: "admin", lead: true, total: 0, done: 0, issues: [] },
         { key: "BB", name: "Beta", role: "editor", lead: false, total: 2, done: 0, issues: [] },
@@ -252,19 +265,29 @@ describe("one project", () => {
       others: { count: 0, total: 0, done: 0 },
       addableTeams: [{ key: "CC", name: "Gamma" }],
     });
-    let calls = 0;
-    const { server } = page(two, (s) => {
-      s.on("POST /api/app/projects/p1/teams", created(two));
-      s.on("DELETE /api/app/projects/p1/teams/BB", () => (++calls === 1 ? apiError(409, "conflict", "Beta has 2 issues in this project. Release them with the team, or move them out first.") : { ok: true, released: 2 }));
-    });
+
+  test("bringing a team in sends its key", async () => {
+    const two = twoTeams();
+    const { server } = page(two, (s) => s.on("POST /api/app/projects/p1/teams", created(two)));
     const user = userEvent.setup();
-    expect(screen.queryByRole("button", { name: "Take Alpha out" })).toBeNull(); // the lead team cannot go
     await user.click(await screen.findByRole("combobox", { name: "Team to bring in" }));
     await user.click(await screen.findByRole("option", { name: "Gamma (CC)" }));
     await user.click(screen.getByRole("button", { name: "Bring in" }));
     await waitFor(() => expect(server.sent("POST /api/app/projects/p1/teams")).toHaveLength(1));
     expect(server.sent("POST /api/app/projects/p1/teams")[0].body).toEqual({ team: "CC" });
-    await user.click(screen.getByRole("button", { name: "Take Beta out" }));
+  });
+
+  test("the lead team cannot be taken out", async () => {
+    page(twoTeams());
+    expect(await screen.findByRole("button", { name: "Take Beta out" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Take Alpha out" })).toBeNull();
+  });
+
+  test("taking a team out is refused with its issues, and then done on request", async () => {
+    let calls = 0;
+    const { server } = page(twoTeams(), (s) => s.on("DELETE /api/app/projects/p1/teams/BB", () => (++calls === 1 ? apiError(409, "conflict", "Beta has 2 issues in this project. Release them with the team, or move them out first.") : { ok: true, released: 2 })));
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Take Beta out" }));
     const confirm = await screen.findByRole("alertdialog");
     expect(confirm.textContent).toContain("Beta has 2 issues in this project");
     await user.click(within(confirm).getByRole("button", { name: "Release and take out" }));
