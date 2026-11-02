@@ -54,9 +54,8 @@ export function TeamIconPicker(props: {
             </Popover.Portal>
           </Popover.Root>
           <Popover.Root>
-            <Popover.Trigger className="btn gap-2" disabled={props.pending}>
-              <span className={clsx("size-3.5 rounded-full", color ? ICON_COLOR_CLASS[color].bg : "bg-muted")} aria-hidden />
-              Colour
+            <Popover.Trigger aria-label="Colour" className="grid size-8 place-items-center rounded-md outline-none hover:bg-panel-2 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-40" disabled={props.pending}>
+              <span className={clsx("size-4 rounded-full", color ? ICON_COLOR_CLASS[color].bg : "bg-muted")} aria-hidden />
             </Popover.Trigger>
             <Popover.Portal>
               <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-56")}>
