@@ -86,7 +86,7 @@ export function InviteLayout() {
 }
 
 /** The signed-in app: the sidebar, the header with its breadcrumbs, and whichever page the address calls for. */
-/** A route's `handle`: `fullWidth` pages fill the space beside the sidebar, `narrow` ones sit in a centred column no wider than 5xl; the others, no wider than 7xl. */
+/** A route's `handle`: `fullWidth` pages fill the space beside the sidebar, `narrow` ones sit in a centred column no wider than 4xl; the others, no wider than 7xl. */
 export interface PageHandle {
   fullWidth?: boolean;
   narrow?: boolean;
@@ -122,7 +122,7 @@ export function AppLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <AppHeader workspaceName={me.workspace.name} teams={teams.map((p) => ({ key: p.key, name: p.name }))} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
           <main className="min-h-0 flex-1 overflow-hidden">
-            <div className={fullWidth ? "h-full" : clsx("mx-auto h-full", narrow ? "max-w-5xl" : "max-w-7xl")}>
+            <div className={fullWidth ? "h-full" : clsx("mx-auto h-full", narrow ? "max-w-4xl" : "max-w-7xl")}>
               <Outlet />
             </div>
           </main>
