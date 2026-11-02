@@ -71,18 +71,12 @@ function Page({ integration }: { integration: Integration }) {
       {runtime.note && <p className={on ? "text-sm text-warn" : "text-sm text-muted"}>{runtime.note}</p>}
       {on ? (
         <>
-          {open && (
-            <div className="card p-5">
-              <DetailBody integration={integration} />
-            </div>
-          )}
+          {open && <DetailBody integration={integration} />}
           <Settings />
         </>
       ) : (
         <>
-          <div className="card p-5">
-            <DetailBody integration={integration} />
-          </div>
+          <DetailBody integration={integration} />
           {runtime.state !== "loading" && <p className="text-sm text-muted">Settings appear here once {integration.name} is enabled.</p>}
         </>
       )}
