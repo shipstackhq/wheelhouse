@@ -6,6 +6,7 @@ import { useTeamSettings } from "../lib/queries";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { useMe } from "../lib/session";
+import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "./settings-list";
 
 /**
  * Team settings → Danger zone: leave, retire and delete, each with a one-line description. A blocked action is disabled with the
@@ -37,20 +38,14 @@ export function DangerZone({ teamKey }: { teamKey: string }) {
   };
 
   const row = (title: string, what: string, g: TeamGuard, button: React.ReactNode) => (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line py-4 first:border-t-0 first:pt-0">
-      <div className="min-w-0 flex-1">
-        <div className="font-medium">{title}</div>
-        <p className="text-sm text-muted">{what}</p>
-        {!g.allowed && g.reason && <p className="mt-1 text-sm text-danger">{g.reason}</p>}
-      </div>
+    <SettingsRow label={title} hint={<>{what}{!g.allowed && g.reason && <span className="mt-1 block text-danger">{g.reason}</span>}</>}>
       {button}
-    </div>
+    </SettingsRow>
   );
 
   const retired = settings.team.retired;
   return (
-    <div className="card mt-6 border-danger/40 p-5">
-      <h2 className="mb-3 font-medium text-danger">Danger zone</h2>
+    <SettingsList title="Danger zone" danger>
       {row(
         "Leave team",
         "You lose access to this team until an admin adds you again.",
@@ -87,7 +82,7 @@ export function DangerZone({ teamKey }: { teamKey: string }) {
       )}
       {deleting && settings.canDelete.allowed && (
         <form
-          className="mt-2 flex flex-wrap items-end gap-3"
+          className={`flex flex-wrap items-end gap-3 ${SETTINGS_ROW_PAD}`}
           onSubmit={(e) => {
             e.preventDefault();
             void run(() => api.teams.remove(teamKey, typed), () => navigate("/"));
@@ -102,7 +97,7 @@ export function DangerZone({ teamKey }: { teamKey: string }) {
           </button>
         </form>
       )}
-      {error && <p className="mt-3 text-sm text-danger" role="alert">{error}</p>}
-    </div>
+      {error && <p className={`text-sm text-danger ${SETTINGS_ROW_PAD}`} role="alert">{error}</p>}
+    </SettingsList>
   );
 }

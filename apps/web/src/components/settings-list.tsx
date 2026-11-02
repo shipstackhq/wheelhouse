@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import clsx from "clsx";
 
 /**
  * A settings section as a list: an optional title (and a line under it), then a card divided into rows, one setting each (see `SettingsRow`).
@@ -6,22 +7,22 @@ import type { ReactNode } from "react";
  */
 export const SETTINGS_ROW_PAD = "px-6 py-4";
 
-export function SettingsList({ title, hint, children }: { title?: ReactNode; hint?: string; children: ReactNode }) {
+export function SettingsList({ title, hint, danger, children }: { title?: ReactNode; hint?: string; danger?: boolean; children: ReactNode }) {
   return (
     <section className="space-y-2" aria-label={typeof title === "string" ? title : undefined}>
       {(title || hint) && (
         <div className="space-y-0.5 px-1">
-          {title && <h2 className="flex flex-wrap items-center gap-2 font-medium">{title}</h2>}
+          {title && <h2 className={clsx("flex flex-wrap items-center gap-2 font-medium", danger && "text-danger")}>{title}</h2>}
           {hint && <p className="text-sm text-muted">{hint}</p>}
         </div>
       )}
-      <div className="card divide-y divide-line">{children}</div>
+      <div className={clsx("card divide-y divide-line", danger && "border-danger/40")}>{children}</div>
     </section>
   );
 }
 
 /** One setting: its name (and a line saying what it is) on the left, its value or control on the right. */
-export function SettingsRow({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function SettingsRow({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <div className={`flex flex-wrap items-center justify-between gap-x-6 gap-y-2 ${SETTINGS_ROW_PAD}`}>
       <div className="min-w-0">
