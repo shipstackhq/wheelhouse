@@ -37,13 +37,16 @@ export function ProfileSettingsPage() {
     <Section title="Profile" hint="Who you are in Wheelhouse, and how it looks for you.">
       <SettingsList title="Profile">
         <SettingsRow label="Profile picture">
-          <ImageUpload
-            label="Profile picture"
-            preview={<Avatar name={me.user.name} email={me.user.email} size={20} imageUrl={me.user.avatarUrl} />}
-            hasImage={!!me.user.avatarUrl}
-            onSave={(data) => api.avatar.set(data)}
-            onRemove={() => api.avatar.remove()}
-          />
+          {/* Bigger than the row's text: it spills into the row's padding, so the row keeps its height. */}
+          <div className="-my-1.5">
+            <ImageUpload
+              label="Profile picture"
+              preview={<Avatar name={me.user.name} email={me.user.email} size={32} imageUrl={me.user.avatarUrl} />}
+              hasImage={!!me.user.avatarUrl}
+              onSave={(data) => api.avatar.set(data)}
+              onRemove={() => api.avatar.remove()}
+            />
+          </div>
         </SettingsRow>
         <SettingsRow label="Name">{me.user.name}</SettingsRow>
         <SettingsRow label="Email">{me.user.email}</SettingsRow>
