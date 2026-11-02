@@ -214,7 +214,7 @@ describe("the workspace page and team access (ADR-23)", () => {
       });
       s.on("POST /api/app/teams/BB/join", { team: { id: "p2", key: "BB", name: "Difference Engine" } });
     });
-    const teams = (await screen.findByRole("heading", { name: "Teams" })).closest(".card") as HTMLElement;
+    const teams = (await screen.findByRole("heading", { name: "Teams" })).closest("section") as HTMLElement;
     expect(await within(teams).findByText("Difference Engine")).toBeTruthy();
     expect(within(teams).getByText(/1 member · admin: Charles Babbage/)).toBeTruthy();
     expect(within(teams).getByText("you are in")).toBeTruthy(); // for the team they are already in
@@ -232,7 +232,7 @@ describe("the workspace page and team access (ADR-23)", () => {
         ],
       }),
     );
-    const log = (await screen.findByRole("heading", { name: "Access log" })).closest(".card") as HTMLElement;
+    const log = (await screen.findByRole("heading", { name: "Access log" })).closest("section") as HTMLElement;
     const items = await within(log).findAllByRole("listitem");
     expect(items[0].textContent).toContain("Ada Lovelace joined a team as admin");
     expect(items[0].textContent).toContain("BB");

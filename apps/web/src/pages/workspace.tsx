@@ -3,6 +3,7 @@ import type { Role, WorkspaceMember } from "@wheelhouse/api-client";
 import { InviteForm } from "../components/invite-form";
 import { AccessLog, TeamsAccess } from "../components/workspace-access";
 import { PendingInvites } from "../components/pending-invites";
+import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "../components/settings-list";
 import { Loaded } from "../components/query-state";
 import { SubmitButton } from "../components/submit-button";
 import { Select } from "../components/ui";
@@ -29,30 +30,29 @@ export function WorkspacePage() {
                 <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
               </div>
 
-              <div className="card divide-y divide-line">
+              <SettingsList title="Members">
                 {t.members.map((m) => (
                   <MemberRow key={m.userId} member={m} mine={t.role} isYou={m.userId === youId} />
                 ))}
-              </div>
+              </SettingsList>
 
               {canManage && (
-                <div className="card p-5">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <h2 className="font-medium">Invite someone</h2>
-                    <span className="text-xs text-muted">
+                <>
+                  <SettingsList title="Invite someone" hint="Creates a one-time link for one person. It works until it is used, revoked or expires, and is shown only once.">
+                    <SettingsRow label="Seats">
                       {t.seats.used} of {t.seats.max} seats used ({t.seats.members} members, {t.seats.pending} pending)
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-muted">
-                    Creates a one-time link for one person. It works until it is used, revoked or expires, and is shown only once.
-                  </p>
-                  {t.seats.full && (
-                    <p className="mt-2 text-sm text-warn">Your workspace is full. Revoke a pending invite or remove a member to free a seat.</p>
-                  )}
-                  <InviteForm kind="join_workspace" disabled={t.seats.full} roles={assignableRoles(t.role)} teams={adminOf} />
-                  <h3 className="mt-6 text-sm font-medium">Pending invites</h3>
-                  <PendingInvites invites={t.pendingInvites} />
-                </div>
+                    </SettingsRow>
+                    {t.seats.full && (
+                      <p className={`text-sm text-warn ${SETTINGS_ROW_PAD}`}>Your workspace is full. Revoke a pending invite or remove a member to free a seat.</p>
+                    )}
+                    <div className={SETTINGS_ROW_PAD}>
+                      <InviteForm kind="join_workspace" className="" disabled={t.seats.full} roles={assignableRoles(t.role)} teams={adminOf} />
+                    </div>
+                  </SettingsList>
+                  <SettingsList title="Pending invites">
+                    <PendingInvites bare invites={t.pendingInvites} />
+                  </SettingsList>
+                </>
               )}
 
               {canManage && <TeamsAccess />}
@@ -82,7 +82,7 @@ function MemberRow({ member: m, mine, isYou }: { member: WorkspaceMember; mine: 
   return (
     <form
       action={(fd) => attempt(() => api.workspace.updateMember(m.userId, { role: asRole(field(fd, "role")), tags: field(fd, "tags") }))}
-      className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm"
+      className={`flex flex-wrap items-center gap-3 text-sm ${SETTINGS_ROW_PAD}`}
     >
       <div className="min-w-40 flex-1">
         <div className="font-medium">{m.name}{isYou && <span className="text-muted"> (you)</span>}</div>
