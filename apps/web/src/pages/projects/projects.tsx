@@ -52,16 +52,16 @@ export function Projects(props: { projects: ProjectSummary[] }) {
                 <span className="min-w-0 flex-1 truncate group-hover:underline">{p.name}</span>
                 {statusChip(p.status)}
                 <HealthChip health={p.health} />
-                {p.priority !== "none" && (
-                  <span className="chip bg-panel-2 text-muted" data-priority-chip title={PRIORITY_LABEL[p.priority]} aria-label={PRIORITY_LABEL[p.priority]}>
-                    <PriorityIcon priority={p.priority} />
-                  </span>
-                )}
                 <span className="text-xs text-muted">{dateRange(p)}</span>
                 <span className="text-xs text-muted">
                   {p.leadUser ? p.leadUser.name : "No lead"} · {p.teamCount} team{p.teamCount === 1 ? "" : "s"}
                 </span>
                 <Progress done={p.done} total={p.total} />
+                {p.priority !== "none" && (
+                  <span className="chip bg-panel-2 text-muted" data-priority-chip title={PRIORITY_LABEL[p.priority]} aria-label={PRIORITY_LABEL[p.priority]}>
+                    <PriorityIcon priority={p.priority} />
+                  </span>
+                )}
               </Link>
             </li>
           ))}
