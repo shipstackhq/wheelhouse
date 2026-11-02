@@ -268,7 +268,7 @@ function Row({ item: n, view, selected, onSelect, onAct }: { item: InboxItem; vi
 
 function Detail({ item: n, view, onBack, onAct }: { item: InboxItem; view: InboxView; onBack: () => void; onAct: (a: Action) => void }) {
   return (
-    <article className="mx-auto w-full max-w-3xl px-4 py-3">
+    <article className="w-full max-w-3xl px-4 py-8 sm:px-8 lg:py-12">
       <button type="button" onClick={onBack} className="btn mb-2 md:hidden">
         <ChevronLeftIcon /> Back
       </button>
