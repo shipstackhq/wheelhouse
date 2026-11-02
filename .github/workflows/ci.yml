@@ -63,6 +63,16 @@ jobs:
           pnpm db:generate
           git status --porcelain apps/api/drizzle
           test -z "$(git status --porcelain apps/api/drizzle)" || { echo "::error::apps/api/src/db/schema.ts changed without a migration. Run pnpm db:generate and commit apps/api/drizzle/."; exit 1; }
+      - name: Migrations are in order, and new ones are additive or say why not
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A new branch has no "before"; then only the order is checked.
+          if [ -n "$BASE" ] && [ "$BASE" != 0000000000000000000000000000000000000000 ] && git fetch -q --depth=1 origin "$BASE"; then
+            pnpm exec tsx scripts/check-migrations.ts "$BASE"
+          else
+            pnpm exec tsx scripts/check-migrations.ts
+          fi
       - name: The React app builds
         run: pnpm build
 
