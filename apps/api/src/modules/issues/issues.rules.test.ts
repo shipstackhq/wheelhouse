@@ -93,8 +93,8 @@ describe("delegationState (WH-132)", () => {
     assert.equal(delegationState(true, [pr("merged")]), "merged");
     assert.equal(delegationState(true, [pr("closed")]), "done");
     assert.equal(delegationState(true, [pr("open"), run("failed", "b")]), "failed");
-    assert.equal(delegationState(true, [{ ...pr("open"), ciState: "failure" }]), "checks_failing");
-    assert.equal(delegationState(true, [{ ...pr("open"), ciState: "pending" }]), "in_review");
+    assert.equal(delegationState(true, [{ ...pr("open"), verdict: "red" }]), "checks_failing");
+    assert.equal(delegationState(true, [{ ...pr("open"), verdict: "pending" }]), "in_review");
   });
   test("only a target's latest run counts: a rerun that worked clears the failure", () => {
     assert.equal(delegationState(true, [run("succeeded"), run("failed")]), "done");

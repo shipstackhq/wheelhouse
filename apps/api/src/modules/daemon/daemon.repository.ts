@@ -229,7 +229,7 @@ export class DaemonRepository {
   /** An issue's runs, newest first, with the device's name, when it was last heard, and the live state of the pull request each opened (webhook-kept, joined, never copied). */
   issueRuns(issueId: string, teamId: string) {
     return this.db.q
-      .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt, prState: pullRequests.state, prCiState: pullRequests.ciState, prChecks: pullRequests.checks })
+      .select({ job: deviceJobs, deviceName: devices.name, lastHeardAt: devices.lastSeenAt, prState: pullRequests.state, prHeadSha: pullRequests.headSha, prChecks: pullRequests.checks, prUpdatedAt: pullRequests.updatedAt })
       .from(deviceJobs)
       .innerJoin(devices, eq(devices.id, deviceJobs.deviceId))
       .leftJoin(pullRequests, and(eq(pullRequests.repositoryId, deviceJobs.repositoryId), sql`${pullRequests.number} = (${deviceJobs.result}->'pullRequest'->>'number')::int`))
@@ -323,32 +323,17 @@ export class DaemonRepository {
   }
 
   /**
-   * WH-122: the newest open pull request linked to the issue, the one a reviewer looks at. `reportsCi` (WH-188): the repository has shown
-   * CI on any of its pull requests; one that never has simply has none, so its checks are not waited for (WH-190 replaces this with the policy).
+   * WH-122: the newest open pull request linked to the issue, the one a reviewer looks at.
    */
   async openPullRequestOf(issueId: string) {
     const [pr] = await this.db.q
-      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha, ciState: pullRequests.ciState, checks: pullRequests.checks, reportsCi: sql<boolean>`exists (select 1 from pull_requests p where p.repository_id = ${pullRequests.repositoryId} and (p.ci_state is not null or p.checks <> '{}'::jsonb))` })
+      .select({ number: pullRequests.number, url: pullRequests.url, repositoryId: pullRequests.repositoryId, headBranch: pullRequests.headBranch, headSha: pullRequests.headSha, ciState: pullRequests.ciState, checks: pullRequests.checks })
       .from(pullRequestIssues)
       .innerJoin(pullRequests, eq(pullRequests.id, pullRequestIssues.pullRequestId))
       .where(and(eq(pullRequestIssues.issueId, issueId), eq(pullRequests.state, "open")))
       .orderBy(desc(pullRequests.number))
       .limit(1);
     return pr;
-  }
-
-  /**
-   * WH-191: the self-check results for exactly this commit of a repository (the newest run that checked it), or null when none did.
-   * Never falls back to another commit: a commit nobody checked has no results.
-   */
-  async selfChecksFor(repositoryId: string, sha: string) {
-    const [row] = await this.db.q
-      .select({ checks: sql<unknown[]>`${deviceJobs.result}->'checks'` })
-      .from(deviceJobs)
-      .where(and(eq(deviceJobs.repositoryId, repositoryId), sql`${deviceJobs.result}->>'checkedSha' = ${sha}`))
-      .orderBy(desc(deviceJobs.createdAt))
-      .limit(1);
-    return row ? (row.checks ?? []) : null;
   }
 
   /** WH-123: a person's own defaults for runs started in their name. */

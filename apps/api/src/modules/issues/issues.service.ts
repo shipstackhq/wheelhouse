@@ -9,7 +9,8 @@ import { isUuid } from "../../common/uuid";
 import { Database } from "../../platform/database/database";
 import { diff } from "../../platform/events/emit";
 import { EventsService } from "../../platform/events/events.service";
-import { DeliveriesService, failedChecks } from "../github/index";
+import { DeliveriesService } from "../github/index";
+import { VerdictService } from "../verdict/index";
 import { ActorsService } from "../actors/index";
 import { effectiveProfile } from "../agents/index";
 import { GraphService, SessionsService } from "../map/index";
@@ -51,6 +52,7 @@ export class IssuesService {
     @Inject(ProjectsService) private readonly projects: ProjectsService,
     @Inject(DeliveriesService) private readonly deliveries: DeliveriesService,
     @Inject(GraphService) private readonly graph: GraphService,
+    @Inject(VerdictService) private readonly verdicts: VerdictService,
     @Inject(SessionsService) private readonly sessions: SessionsService,
     @Inject(IssueNotifications) private readonly notices: IssueNotifications,
     @Inject(IssueTargets) private readonly targets: IssueTargets,
@@ -111,13 +113,15 @@ export class IssuesService {
     const delegated = rows.filter((r) => r.delegateAgentId);
     const out = new Map<string, Delegation>();
     if (!delegated.length) return out;
-    const runs = await this.repo.delegationRuns(delegated.map((r) => r.id));
+    const found = await this.repo.delegationRuns(delegated.map((r) => r.id));
+    const verdicts = await this.verdicts.ofJoined(found.map((x) => (x.repositoryId && x.prHeadSha ? { repositoryId: x.repositoryId, headSha: x.prHeadSha, checks: x.prChecks ?? {}, updatedAt: x.prUpdatedAt! } : null)));
+    const runs = found.map((x, i) => ({ ...x, verdict: verdicts[i] }));
     const lines = await this.repo.lastLines(runs.filter((x) => ["offered", "accepted", "running"].includes(x.state)).map((x) => x.id));
     for (const r of delegated) {
       const mine = runs.filter((x) => x.issueId === r.id);
-      const state = delegationState((await this.targets.of(r.id)).targets.length > 0, mine.map((x) => ({ ...x, asked: !!x.result?.question })));
+      const state = delegationState((await this.targets.of(r.id)).targets.length > 0, mine.map((x) => ({ ...x, verdict: x.verdict?.state, asked: !!x.result?.question })));
       const active = mine.find((x) => lines.has(x.id));
-      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [{ ...(x.result.pullRequest as { number: number; url: string }), state: x.prState, ciState: x.ciState, failed: failedChecks(x.checks ?? {}) }] : []));
+      const prs = mine.flatMap((x) => (x.result?.pullRequest ? [{ ...(x.result.pullRequest as { number: number; url: string }), state: x.prState, verdict: x.verdict }] : []));
       out.set(r.id, { state, line: state === "running" && active ? lines.get(active.id)! : null, prs: [...new Map(prs.map((p) => [p.number, p])).values()] });
     }
     return out;

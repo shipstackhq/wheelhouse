@@ -20,6 +20,9 @@ function ModelLabel({ model }: { model: string }) {
   );
 }
 
+/** WH-176, WH-190: how the confirm names a pull request that is not green. */
+const VERDICT_TEXT = { green: "", red: "CI is failing on the pull request for this issue", pending: "The pull request for this issue is not verified yet", stalled: "CI has not started on the pull request for this issue" };
+
 const TONE_STYLE: Record<Tone, string> = {
   active: "bg-agent/15 text-agent",
   good: "bg-ok/15 text-ok",
@@ -104,8 +107,8 @@ function RunForm({ issueRef, teamKey, targets, data, onStarted }: { issueRef: st
   const baseBranch = base ?? (repo.id === targets[0]?.repositoryId ? targets[0].baseBranch : null);
 
   // WH-176: a reviewer started by hand on a pull request whose CI is not green asks first.
-  const ci = agent === "reviewer" ? data.reviewCi : null;
-  const notGreen = !!ci && ci.state !== "success";
+  const verdict = agent === "reviewer" ? data.reviewVerdict : null;
+  const notGreen = !!verdict && verdict.state !== "green";
 
   const start = async () => {
     if (!device) return;
@@ -151,10 +154,10 @@ function RunForm({ issueRef, teamKey, targets, data, onStarted }: { issueRef: st
           Start
         </button>
       </div>
-      {confirming && ci && (
+      {confirming && verdict && (
         <div className="space-y-1.5 rounded border border-line bg-panel-2 p-2 text-xs">
           <p>
-            {ci.state === "failure" ? `CI is failing on the pull request for this issue${ci.failed.length ? ` (${ci.failed.join(", ")})` : ""}.` : "CI is still running on the pull request for this issue."} Review it anyway?
+            {VERDICT_TEXT[verdict.state]}{verdict.reasons.length ? ` (${verdict.reasons.join(", ")})` : ""}. Review it anyway?
           </p>
           <div className="flex gap-1">
             <button type="button" className="btn py-0.5 text-xs" onClick={() => void start()}>
@@ -213,7 +216,7 @@ function RunHeadline({ job: j }: { job: JobView }) {
   if (j.result.pullRequest)
     return (
       <a href={j.result.pullRequest.url} target="_blank" rel="noreferrer" className="text-accent hover:underline" aria-label={`Pull request #${j.result.pullRequest.number}`}>
-        #{j.result.pullRequest.number} ↗{j.pullRequest?.ciState && ` · CI ${j.pullRequest.ciState}`}{!!j.pullRequest?.failed.length && ` (${j.pullRequest.failed.join(", ")})`}
+        #{j.result.pullRequest.number} ↗{j.pullRequest?.verdict && ` · ${j.pullRequest.verdict.state}`}{!!j.pullRequest?.verdict?.reasons.length && ` (${j.pullRequest.verdict.reasons.join(", ")})`}
       </a>
     );
   const problem = j.result.pullRequestError ?? j.error;

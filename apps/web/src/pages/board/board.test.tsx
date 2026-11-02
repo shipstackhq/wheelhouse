@@ -65,7 +65,7 @@ describe("the board", () => {
         issue({ number: 8, title: "Setup", delegateAgentId: "a1", delegation: d("needs_setup") }),
         issue({ number: 9, title: "Busy", delegateAgentId: "a1", delegation: d("running", { line: "Using Edit" }) }),
         issue({ number: 11, title: "Asking", delegateAgentId: "a1", delegation: d("asked") }),
-        issue({ number: 10, title: "Finished", delegateAgentId: "a1", delegation: d("done", { prs: [{ number: 7, url: "https://github.com/x/y/pull/7", state: "open", ciState: "failure", failed: ["lint"] }] }) }),
+        issue({ number: 10, title: "Finished", delegateAgentId: "a1", delegation: d("done", { prs: [{ number: 7, url: "https://github.com/x/y/pull/7", state: "open", verdict: { state: "red", reasons: ["CI job lint failed"] } }] }) }),
       ] })),
     );
     const card = async (title: string) => (await screen.findByText(title)).closest("[data-issue]") as HTMLElement;

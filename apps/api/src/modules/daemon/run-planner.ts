@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Actor } from "../../common/actor";
 import { effectiveProfile } from "../agents/index";
 import { IssueTargets } from "../issues/index";
+import { VerdictService } from "../verdict/index";
 import { DaemonRepository } from "./daemon.repository";
 import { DevicesService } from "./devices.service";
 
@@ -27,6 +28,7 @@ export class RunPlanner {
     @Inject(DaemonRepository) private readonly repo: DaemonRepository,
     @Inject(DevicesService) private readonly devices: DevicesService,
     @Inject(IssueTargets) private readonly targets: IssueTargets,
+    @Inject(VerdictService) private readonly verdicts: VerdictService,
   ) {}
 
   async plan(requester: Actor, issueId: string, agentId: string | null): Promise<PlanResult> {
@@ -34,8 +36,8 @@ export class RunPlanner {
     // A reviewer works on the issue's open pull request, wherever it is.
     const pr = isReviewer(agent) ? await this.repo.openPullRequestOf(issueId) : undefined;
     const { targets } = pr ? { targets: [{ repositoryId: pr.repositoryId, baseBranch: pr.headBranch }] } : await this.targets.of(issueId);
-    // WH-176: and only once its checks pass (a red or still running pull request is not reviewed on its own), unless the repository has no CI (WH-188).
-    if (isReviewer(agent) && (!pr || (pr.reportsCi && pr.ciState !== "success"))) return { missing: "waiting" };
+    // WH-176: and only once its verdict is green (a red, still running or stalled pull request is not reviewed on its own) (WH-190).
+    if (isReviewer(agent) && (!pr || (await this.verdicts.issueVerdict(issueId))?.state !== "green")) return { missing: "waiting" };
     if (!targets.length) return { missing: "needs_setup" };
     const online = (await this.devices.listDevices(requester)).filter((d) => d.status === "online");
     if (!online.length) return { missing: "waiting" };

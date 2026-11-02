@@ -2,6 +2,7 @@ import { DEFAULT_STATUS_DEFS } from "@wheelhouse/shared/status-roles";
 import * as schema from "../../db/schema";
 import type { InitiativeStatus, ProjectHealth, ProjectStatus } from "../../db/schema";
 import { ServiceError } from "../../common/service-error";
+import type { Verdict, VerdictState } from "../verdict/index";
 
 /**
  * The module's pure rules and the readers of a request body: no database, nothing injected. The rules of positions, labels, sub-issue
@@ -98,9 +99,8 @@ export function intField(b: Record<string, unknown>, name: string): number | und
 export type DelegationState = "needs_setup" | "waiting" | "running" | "asked" | "done" | "checks_failing" | "in_review" | "merged" | "failed" | "stopped";
 
 /** What the board and the issue show of a delegation: its state, one line of what the agent is doing while it runs, and the pull requests its runs opened. */
-export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null; ciState: CiState | null; failed: string[] }[] };
+export type Delegation = { state: DelegationState; line: string | null; prs: { number: number; url: string; state: PrState | null; verdict: Verdict | null }[] };
 export type PrState = "open" | "closed" | "merged";
-export type CiState = "success" | "failure" | "pending";
 
 const ACTIVE_RUN = ["offered", "accepted", "running", "unreachable"];
 const FAILED_RUN = ["failed", "lost", "rejected", "expired"];
@@ -108,16 +108,16 @@ const FAILED_RUN = ["failed", "lost", "rejected", "expired"];
 /**
  * The state of a delegated issue from its targets and its runs since it was delegated (newest first). A run still going wins; otherwise
  * each target's latest run counts: a question waits for an answer, any failure fails the delegation, else any stop stops it, else it is done,
- * or in review while a latest run's pull request is open (checks failing when its CI is red), or merged when they all are (a closed one leaves it done).
+ * or in review while a latest run's pull request is open (checks failing when its verdict is red), or merged when they all are (a closed one leaves it done).
  */
-export function delegationState(hasTargets: boolean, runs: { repositoryId: string | null; state: string; asked?: boolean; prState?: PrState | null; ciState?: CiState | null }[]): DelegationState {
+export function delegationState(hasTargets: boolean, runs: { repositoryId: string | null; state: string; asked?: boolean; prState?: PrState | null; verdict?: VerdictState | null }[]): DelegationState {
   if (!runs.length) return hasTargets ? "waiting" : "needs_setup";
   if (runs.some((r) => ACTIVE_RUN.includes(r.state))) return "running";
   const latest = [...new Map([...runs].reverse().map((r) => [r.repositoryId, r])).values()];
   if (latest.some((r) => r.asked)) return "asked";
   if (latest.some((r) => FAILED_RUN.includes(r.state))) return "failed";
   if (latest.some((r) => r.state === "canceled")) return "stopped";
-  if (latest.some((r) => r.prState === "open" && r.ciState === "failure")) return "checks_failing";
+  if (latest.some((r) => r.prState === "open" && r.verdict === "red")) return "checks_failing";
   if (latest.some((r) => r.prState === "open")) return "in_review";
   return latest.some((r) => r.prState === "merged") ? "merged" : "done";
 }

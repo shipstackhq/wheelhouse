@@ -5,6 +5,7 @@ import { ActorsModule } from "../actors/actors.module";
 import { GithubModule } from "../github/github.module";
 import { MapModule } from "../map/map.module";
 import { NotificationsCoreModule } from "../notifications/index";
+import { VerdictModule } from "../verdict/index";
 import { TeamsModule } from "../teams/teams.module";
 import { BoardController } from "./board.controller";
 import { CyclesController } from "./cycles/cycles.controller";
@@ -31,7 +32,7 @@ import { ProjectsService } from "./projects/projects.service";
  * through events (`IssuesListeners`), and the map never reaches it (its graph only reads the `issue_nodes` table).
  */
 @Module({
-  imports: [EventsModule, ActorsModule, TeamsModule, GithubModule, MapModule, NotificationsCoreModule],
+  imports: [EventsModule, ActorsModule, TeamsModule, GithubModule, MapModule, NotificationsCoreModule, VerdictModule],
   controllers: [BoardController, IssuesController, CyclesController, ProjectsController, InitiativesController],
   providers: [IssuesRepository, CyclesRepository, ProjectsRepository, InitiativesRepository, IssuesService, CyclesService, ProjectsService, InitiativesService, IssuesListeners, IssueNotifications, IssueTargets, IssueScoping],
   exports: [IssuesService, IssueTargets, CyclesService, ProjectsService, InitiativesService],

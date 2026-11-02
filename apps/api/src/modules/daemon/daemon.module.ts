@@ -4,6 +4,7 @@ import { StreamsModule } from "../../platform/streams/streams.module";
 import { GithubModule } from "../github/github.module";
 import { IssuesModule } from "../issues/issues.module";
 import { NotificationsCoreModule } from "../notifications/index";
+import { VerdictModule } from "../verdict/index";
 import { TeamsModule } from "../teams/teams.module";
 import { ChatController } from "./chat.controller";
 import { ChatService } from "./chat.service";
@@ -51,7 +52,7 @@ export const daemonProviders = (role: ServiceRole): Provider[] => [
 export class DaemonModule {
   static register(role: ServiceRole): DynamicModule {
     // Teams, issues and github are loaded by the api role already; the person's services use them, the machine's never do.
-    const imports = [StreamsModule, NotificationsCoreModule, ...(servesApi(role) ? [TeamsModule, IssuesModule, GithubModule] : [])];
+    const imports = [StreamsModule, NotificationsCoreModule, ...(servesApi(role) ? [TeamsModule, IssuesModule, GithubModule, VerdictModule] : [])];
     return { module: DaemonModule, imports, controllers: daemonControllers(role), providers: daemonProviders(role), exports: [] };
   }
 }
