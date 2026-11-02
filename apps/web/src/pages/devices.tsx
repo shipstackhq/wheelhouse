@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { DeviceStatus, DeviceView } from "@wheelhouse/api-client";
 import { timeAgo } from "@wheelhouse/shared/time";
 import { CopyBlock } from "../components/copy-block";
+import { NAV_ICONS } from "../components/icons";
 import { Loaded, errorText } from "../components/query-state";
 import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "../components/settings-list";
 import { Select, useDialogs } from "../components/ui";
@@ -96,11 +97,12 @@ function RunDefaultsCard({ devices }: { devices: DeviceView[] }) {
   );
 }
 
-/** One connected device, as a row of the Devices list: who it is and what state it is in, then its details and the ways to change it. */
+/** One connected device, as a row of the Devices list: who it is and what state it is in; its Settings button opens the details and the ways to change it. */
 function DeviceRow({ device: d }: { device: DeviceView }) {
   const { api, queryClient } = useServices();
   const { confirm, prompt, dialogs } = useDialogs();
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const run = async (fn: () => Promise<unknown>) => {
     setError(null);
     try {
@@ -121,65 +123,78 @@ function DeviceRow({ device: d }: { device: DeviceView }) {
           <span className="chip bg-panel-2 text-muted">{d.os}</span>
           {d.activeJobs > 0 && <span className="chip bg-agent/15 text-agent">{d.activeJobs} running</span>}
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="btn"
-            onClick={async () => {
-              const name = await prompt({ title: "Rename device", placeholder: d.name, confirmLabel: "Rename" });
-              if (name) await run(() => api.devices.update(d.id, { name }));
-            }}
-          >
-            Rename
-          </button>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={async () => {
-              const ok = await confirm({
-                title: `Unpair ${d.name}?`,
-                description: "It stops getting work at once, and any run on it is canceled. Branches it already pushed stay. To use it again, pair it again.",
-                confirmLabel: "Unpair",
-                danger: true,
-              });
-              if (ok) await run(() => api.devices.unpair(d.id));
-            }}
-          >
-            Unpair
-          </button>
-        </div>
+        <button
+          type="button"
+          aria-label="Settings"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="rounded text-lg text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 aria-expanded:text-fg"
+        >
+          <NAV_ICONS.settings.line aria-hidden />
+        </button>
       </div>
-      <dl className="grid items-center gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
-        <dt className="text-muted">Claude Code</dt>
-        <dd>
-          {!claude ? (
-            <span className="text-muted">Not reported yet</span>
-          ) : !claude.installed ? (
-            <span className="text-warn">Not installed</span>
-          ) : !claude.signedIn ? (
-            <span className="text-warn">Installed, not signed in</span>
-          ) : (
-            <span>
-              Signed in{claude.subscriptionType ? ` (${claude.subscriptionType})` : ""}
-              {claude.version ? <span className="text-muted"> · {claude.version}</span> : null}
-            </span>
-          )}
-        </dd>
-        <dt className="text-muted">Models</dt>
-        <dd>{d.models.join(", ") || <span className="text-muted">none until Claude Code is installed and signed in</span>}</dd>
-        <dt className="text-muted">Runs at once</dt>
-        <dd className="max-w-[120px]">
-          <Select
-            ariaLabel="Runs at once"
-            value={String(d.poolSize)}
-            options={Array.from({ length: MAX_POOL }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
-            onValueChange={(v) => void run(() => api.devices.update(d.id, { poolSize: Number(v) }))}
-          />
-        </dd>
-        <dt className="text-muted">Last seen</dt>
-        <dd>{d.lastSeenAt ? timeAgo(d.lastSeenAt) : "never"}{d.daemonVersion && <span className="text-muted"> · daemon {d.daemonVersion}</span>}</dd>
-      </dl>
-      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+      {open && (
+        <div className="space-y-3">
+          <dl className="grid items-center gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
+            <dt className="text-muted">Claude Code</dt>
+            <dd>
+              {!claude ? (
+                <span className="text-muted">Not reported yet</span>
+              ) : !claude.installed ? (
+                <span className="text-warn">Not installed</span>
+              ) : !claude.signedIn ? (
+                <span className="text-warn">Installed, not signed in</span>
+              ) : (
+                <span>
+                  Signed in{claude.subscriptionType ? ` (${claude.subscriptionType})` : ""}
+                  {claude.version ? <span className="text-muted"> · {claude.version}</span> : null}
+                </span>
+              )}
+            </dd>
+            <dt className="text-muted">Models</dt>
+            <dd>{d.models.join(", ") || <span className="text-muted">none until Claude Code is installed and signed in</span>}</dd>
+            <dt className="text-muted">Runs at once</dt>
+            <dd className="max-w-[120px]">
+              <Select
+                ariaLabel="Runs at once"
+                value={String(d.poolSize)}
+                options={Array.from({ length: MAX_POOL }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                onValueChange={(v) => void run(() => api.devices.update(d.id, { poolSize: Number(v) }))}
+              />
+            </dd>
+            <dt className="text-muted">Last seen</dt>
+            <dd>{d.lastSeenAt ? timeAgo(d.lastSeenAt) : "never"}{d.daemonVersion && <span className="text-muted"> · daemon {d.daemonVersion}</span>}</dd>
+          </dl>
+          {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn"
+              onClick={async () => {
+                const name = await prompt({ title: "Rename device", placeholder: d.name, confirmLabel: "Rename" });
+                if (name) await run(() => api.devices.update(d.id, { name }));
+              }}
+            >
+              Rename
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Unpair ${d.name}?`,
+                  description: "It stops getting work at once, and any run on it is canceled. Branches it already pushed stay. To use it again, pair it again.",
+                  confirmLabel: "Unpair",
+                  danger: true,
+                });
+                if (ok) await run(() => api.devices.unpair(d.id));
+              }}
+            >
+              Unpair
+            </button>
+          </div>
+        </div>
+      )}
       {dialogs}
     </div>
   );
