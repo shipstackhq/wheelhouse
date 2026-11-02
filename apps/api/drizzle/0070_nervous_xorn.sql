@@ -1,0 +1,4 @@
+ALTER TABLE "statuses" DROP CONSTRAINT "statuses_color_check";--> statement-breakpoint
+ALTER TABLE "teams" DROP CONSTRAINT "teams_icon_color_check";--> statement-breakpoint
+ALTER TABLE "statuses" ADD CONSTRAINT "statuses_color_check" CHECK ("color" in ('slate', 'sky', 'emerald', 'amber', 'rose', 'violet', 'teal', 'orange', 'fuchsia', 'lime', 'indigo', 'red', 'pink', 'purple', 'blue', 'cyan', 'green', 'yellow', 'stone'));--> statement-breakpoint
+ALTER TABLE "teams" ADD CONSTRAINT "teams_icon_color_check" CHECK ("icon_color" in ('slate', 'sky', 'emerald', 'amber', 'rose', 'violet', 'teal', 'orange', 'fuchsia', 'lime', 'indigo', 'red', 'pink', 'purple', 'blue', 'cyan', 'green', 'yellow', 'stone'));
