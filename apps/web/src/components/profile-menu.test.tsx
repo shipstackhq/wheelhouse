@@ -40,7 +40,7 @@ describe("the account menu", () => {
     const trigger = screen.getByRole("button", { name: "Account menu" });
     expect(within(trigger).getByText("Ada Lovelace").parentElement!.className).toContain("md:hidden"); // name and email leave the button
     await userEvent.setup().click(trigger);
-    expect(await screen.findByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(await screen.findByRole("menuitem", { name: "Sign out" })).toBeTruthy();
     expect(screen.getByText("Analytical Engines")).toBeTruthy();
   });
 
@@ -51,7 +51,7 @@ describe("the account menu", () => {
     services.queryClient.setQueryData(["teams"], [{ key: "AA" }]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
-    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(server.requests).toContain("POST /api/app/auth/logout");
     expect(wipe).toHaveBeenCalledWith("CLEAR_CACHES");
@@ -64,7 +64,7 @@ describe("the account menu", () => {
     services.queryClient.setQueryData(["teams"], [{ key: "AA" }]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Account menu" }));
-    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Sign out" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/login"));
     expect(services.queryClient.getQueryData(["teams"])).toBeUndefined();
   });
