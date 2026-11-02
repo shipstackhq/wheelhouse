@@ -15,6 +15,7 @@ import { asRole, assignableRoles, canManagePeople } from "../lib/roles";
 import { useMe, useTeams } from "../lib/session";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
+import { SettingsPage } from "../components/settings-page";
 
 export function WorkspacePage() {
   const query = useWorkspace();
@@ -25,16 +26,11 @@ export function WorkspacePage() {
       {(t) => {
         const canManage = canManagePeople(t.role);
         return (
-          <div className="h-full overflow-y-auto">
-            <div className="w-full space-y-8 px-6 py-10">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-xl font-semibold">{t.workspace.name}</h1>
-                  <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
-                </div>
-                {canManage && <InviteDialog seats={t.seats} roles={assignableRoles(t.role)} teams={adminOf} />}
-              </div>
-
+          <SettingsPage
+            title={t.workspace.name}
+            hint="Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm)."
+            action={canManage && <InviteDialog seats={t.seats} roles={assignableRoles(t.role)} teams={adminOf} />}
+          >
               <SettingsList title="Members">
                 {t.members.map((m) => (
                   <MemberRow key={m.userId} member={m} mine={t.role} isYou={m.userId === youId} />
@@ -49,8 +45,7 @@ export function WorkspacePage() {
 
               {canManage && <TeamsAccess />}
               {canManage && <AccessLog />}
-            </div>
-          </div>
+          </SettingsPage>
         );
       }}
     </Loaded>

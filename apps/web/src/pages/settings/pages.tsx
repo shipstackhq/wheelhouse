@@ -14,19 +14,7 @@ import { failure, field } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { canManagePeople } from "../../lib/roles";
 import { useMe, useTeams } from "../../lib/session";
-
-/** One settings section: a title, a line saying what it is, and its cards. */
-function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
-  return (
-    <div className="w-full space-y-4 px-6 py-10">
-      <div className="pb-4">
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-muted">{hint}</p>
-      </div>
-      {children}
-    </div>
-  );
-}
+import { SettingsPage } from "../../components/settings-page";
 
 /** `/settings/profile`: who you are, and how the app looks for you. */
 export function ProfileSettingsPage() {
@@ -34,7 +22,7 @@ export function ProfileSettingsPage() {
   const me = useMe().data;
   if (!me) return null;
   return (
-    <Section title="Profile" hint="Who you are in Wheelhouse, and how it looks for you.">
+    <SettingsPage title="Profile" hint="Who you are in Wheelhouse, and how it looks for you.">
       <SettingsList title="Profile">
         <SettingsRow label="Profile picture">
           {/* Bigger than the row's text: it spills into the row's padding, so the row keeps its height. */}
@@ -56,16 +44,16 @@ export function ProfileSettingsPage() {
           <ThemeSwitch />
         </div>
       </SettingsList>
-    </Section>
+    </SettingsPage>
   );
 }
 
 /** `/settings/password`: change your own password. */
 export function PasswordSettingsPage() {
   return (
-    <Section title="Password" hint="Change the password you sign in with.">
+    <SettingsPage title="Password" hint="Change the password you sign in with.">
       <ChangePasswordForm />
-    </Section>
+    </SettingsPage>
   );
 }
 
@@ -78,7 +66,7 @@ export function WorkspaceSettingsPage() {
   if (!me) return null;
   const manages = canManagePeople(me.role);
   return (
-    <Section title="General" hint="This workspace, and your place in it.">
+    <SettingsPage title="General" hint="This workspace, and your place in it.">
       <SettingsList title="Workspace" hint="To switch workspace, go back to the app and use the round icon at the top of its sidebar.">
         <SettingsRow label="Name">{me.workspace.name}</SettingsRow>
         {manages && (
@@ -128,7 +116,7 @@ export function WorkspaceSettingsPage() {
           </SettingsRow>
         </SettingsList>
       )}
-    </Section>
+    </SettingsPage>
   );
 }
 
@@ -136,7 +124,7 @@ export function WorkspaceSettingsPage() {
 export function TeamsSettingsPage() {
   const teams = useTeams().data ?? [];
   return (
-    <Section title="Teams" hint="The teams you are on. A team's name, description and members are managed on the team itself.">
+    <SettingsPage title="Teams" hint="The teams you are on. A team's name, description and members are managed on the team itself.">
       <div className="card p-5">
         {teams.length === 0 ? (
           <p className="text-sm text-muted">You are not on a team yet.</p>
@@ -155,7 +143,7 @@ export function TeamsSettingsPage() {
           </ul>
         )}
       </div>
-    </Section>
+    </SettingsPage>
   );
 }
 

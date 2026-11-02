@@ -9,6 +9,7 @@ import { useApiKeysPage } from "../lib/queries";
 import { useTeams } from "../lib/session";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
+import { SettingsPage } from "../components/settings-page";
 
 export function ApiKeysPage() {
   const { api, queryClient } = useServices();
@@ -23,16 +24,12 @@ export function ApiKeysPage() {
         const rows: KeyRow[] = keys.map((k) => ({ id: k.id, name: k.name, prefix: k.prefix, lastUsedAt: k.lastUsedAt, revokedAt: k.revokedAt, scopes: k.scopes, teams: k.teams }));
         const { active, revoked } = splitKeys(rows);
         return (
-          <div className="h-full overflow-y-auto">
-            <div className="w-full space-y-8 px-6 py-10">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h1 className="text-xl font-semibold">API keys</h1>
-                  <p className="mt-1 text-sm text-muted">One key per agent (each dev&apos;s Claude Code, a CI bot…): it gets its own change queue, and what it does is attributed to it on the board.</p>
-                </div>
-                <button type="button" className="btn btn-primary shrink-0" onClick={() => setDialog("new")}>New key</button>
-              </div>
-
+          <>
+            <SettingsPage
+              title="API keys"
+              hint="One key per agent (each dev's Claude Code, a CI bot…): it gets its own change queue, and what it does is attributed to it on the board."
+              action={<button type="button" className="btn btn-primary shrink-0" onClick={() => setDialog("new")}>New key</button>}
+            >
               <div>
                 <ActiveKeys
                   keys={active}
@@ -65,9 +62,9 @@ export function ApiKeysPage() {
                   </div>
                 </div>
               </details>
-            </div>
+            </SettingsPage>
             {dialog && <KeyDialog teams={teamOptions} setup={cmd} editing={dialog === "new" ? undefined : dialog} onClose={() => setDialog(null)} />}
-          </div>
+          </>
         );
       }}
     </Loaded>
