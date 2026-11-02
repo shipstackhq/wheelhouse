@@ -39,8 +39,8 @@ export function TeamIconPicker(props: {
           <Popover.Root>
             <Popover.Trigger className="btn" disabled={props.pending}>Icon</Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-80 space-y-3")}>
-                <div role="group" aria-label="Icon" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto">
+              <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-80")}>
+                <div role="group" aria-label="Icon" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto overscroll-contain">
                   {TEAM_ICON_NAMES.map((n) => {
                     const Icon = TEAM_ICONS[n];
                     return (
@@ -50,7 +50,17 @@ export function TeamIconPicker(props: {
                     );
                   })}
                 </div>
-                <div role="group" aria-label="Colour" className="flex flex-wrap gap-2 px-1 pb-1">
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+          <Popover.Root>
+            <Popover.Trigger className="btn gap-2" disabled={props.pending}>
+              <span className={clsx("size-3.5 rounded-full", color ? ICON_COLOR_CLASS[color].bg : "bg-muted")} aria-hidden />
+              Colour
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-56")}>
+                <div role="group" aria-label="Colour" className="flex flex-wrap gap-2 p-1">
                   {TEAM_ICON_COLORS.map((c) => (
                     <button key={c} type="button" aria-label={c} aria-pressed={color === c} onClick={() => props.onSave(ri ? props.icon : null, c)} className={clsx("size-6 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent/50", ICON_COLOR_CLASS[c].bg, color === c ? "ring-2 ring-fg ring-offset-2 ring-offset-panel" : "opacity-80 hover:opacity-100")} />
                   ))}
