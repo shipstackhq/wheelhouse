@@ -686,6 +686,8 @@ describe("jobs", () => {
       assert.equal(opened, 0, "no pull request");
       assert.match(failed.result.pullRequestSkipped as string, /"lint" failed/);
       assert.deepEqual((failed.result.checks as { status: string; tail: string }[]).map((c) => [c.status, c.tail]), [["failed", "1 error"]], "the result lists the check and its outcome");
+      const comments = await db.select().from(schema.comments).where(eq(schema.comments.issueId, a.issue.id));
+      assert.match(comments[0].body, /Checks stopped the pull request: lint failed\./, "the run's comment names the failed check in one line");
 
       const b = await run("Lint could not run");
       await d.finishJob(device, b.job.id, { ...done, checks: [{ ...lint, status: "could_not_run", exitCode: null }] }, gh);

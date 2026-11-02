@@ -773,6 +773,8 @@ export type JobState = "offered" | "accepted" | "running" | "unreachable" | "suc
 /** One "Run on device" of an issue. */
 /** What a run left behind: nothing, a pushed branch, an open pull request, or a pushed branch whose pull request GitHub refused. Null until the run has finished. */
 export type JobDelivery = "none" | "pushed" | "pr_opened" | "pr_failed";
+/** WH-170: one self-check a run made before pushing: the command, how it ended, and the tail of its output. */
+export type SelfCheckResult = { name: string; command: string; required: boolean; status: "passed" | "failed" | "could_not_run"; exitCode: number | null; durationMs: number | null; tail: string };
 export type JobView = {
   id: string;
   state: JobState;
@@ -789,6 +791,8 @@ export type JobView = {
   result: { commit?: string | null; pushed?: boolean; diffStats?: { files: number | null; insertions: number | null; deletions: number | null }; costUsd?: number | null; durationMs?: number | null;
     /** The pull request the GitHub App opened for the branch, or why it could not. */
     pullRequest?: { number: number; url: string }; pullRequestError?: string; pullRequestSkipped?: string;
+    /** The self-checks the daemon ran before pushing, and the commit they ran on. */
+    checks?: SelfCheckResult[]; checkedSha?: string;
     /** Set when a newer run took this run's branch over before it reported: its outcome is recorded, but no pull request was opened. */
     supersededBy?: string };
   delivery: JobDelivery | null;

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { JobView } from "@wheelhouse/api-client";
 import { madeNoChanges, runStatus } from "./run-status";
 
-const job = (state: JobView["state"], delivery: JobView["delivery"] = null, cancelRequested = false) => ({ state, delivery, cancelRequested });
+const job = (state: JobView["state"], delivery: JobView["delivery"] = null, cancelRequested = false) => ({ state, delivery, cancelRequested, result: {} });
 
 describe("run status", () => {
   test("a pull request reads by its live state, and stays 'PR opened' until it is known", () => {
@@ -19,6 +19,14 @@ describe("run status", () => {
     expect(runStatus(job("succeeded", "pushed"))).toEqual({ label: "pushed", tone: "good" });
     expect(runStatus(job("succeeded", "pr_failed"))).toEqual({ label: "no PR", tone: "warn" });
     expect(runStatus(job("succeeded", "none"))).toEqual({ label: "no changes", tone: "muted" });
+  });
+
+  test("a pushed run with no pull request says whether a required check failed or did not run, and ignores optional ones", () => {
+    const check = (status: "passed" | "failed" | "could_not_run", required = true) => ({ name: "lint", command: "pnpm lint", required, status, exitCode: null, durationMs: null, tail: "" });
+    const pushed = (checks: ReturnType<typeof check>[]) => ({ ...job("succeeded", "pushed"), result: { checks } });
+    expect(runStatus(pushed([check("failed")]))).toEqual({ label: "no PR: checks failed", tone: "warn" });
+    expect(runStatus(pushed([check("could_not_run")]))).toEqual({ label: "no PR: checks did not run", tone: "warn" });
+    expect(runStatus(pushed([check("failed", false)]))).toEqual({ label: "pushed", tone: "good" });
   });
 
   test("a run that went wrong, was stopped or never started says so", () => {

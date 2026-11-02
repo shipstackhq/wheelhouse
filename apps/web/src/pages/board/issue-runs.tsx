@@ -7,7 +7,7 @@ import { timeAgo } from "@wheelhouse/shared/time";
 import { ChevronRightIcon, ClaudeIcon, ExternalLinkIcon } from "../../components/icons";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
-import { isActive, madeNoChanges, runStatus, type Tone } from "../../lib/run-status";
+import { isActive, madeNoChanges, runStatus, selfChecks, type Tone } from "../../lib/run-status";
 import { issueRunsQuery, runBranchesQuery, runEventsQuery, teamAgentsQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 
@@ -219,8 +219,31 @@ function RunHeadline({ job: j }: { job: JobView }) {
         #{j.result.pullRequest.number} ↗{j.pullRequest?.verdict && ` · ${j.pullRequest.verdict.state}`}{!!j.pullRequest?.verdict?.reasons.length && ` (${j.pullRequest.verdict.reasons.join(", ")})`}
       </a>
     );
+  const { blocking } = selfChecks(j);
+  if (blocking.length) return <span className="text-warn">{blocking.map((c) => c.name).join(", ")} {blocking.some((c) => c.status === "failed") ? "failed" : "did not run"}</span>;
   const problem = j.result.pullRequestError ?? j.error;
   return problem ? <span className="text-danger">{problem}</span> : null;
+}
+
+/** WH-172: what the daemon's self-checks said before it pushed: a count, and each command's result with the tail of its output. */
+function RunChecks({ job: j }: { job: JobView }) {
+  const { all, passed } = selfChecks(j);
+  if (!all.length) return null;
+  return (
+    <details>
+      <summary className="cursor-pointer">{passed}/{all.length} checks passed{j.result.checkedSha ? ` on ${j.result.checkedSha.slice(0, 7)}` : ""}</summary>
+      <ul className="mt-1 space-y-1">
+        {all.map((c) => (
+          <li key={c.name}>
+            <span className={c.status === "passed" ? "text-ok" : "text-warn"}>{c.status === "passed" ? "passed" : c.status === "failed" ? "failed" : "did not run"}</span> <span className="font-mono">{c.name}</span>
+            {!c.required && " (optional)"}
+            {c.durationMs != null && ` · ${(c.durationMs / 1000).toFixed(1)}s`}
+            {c.tail && <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-panel-2 p-1.5 font-mono">{c.tail}</pre>}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 /** The rest of a run's outcome, shown when its details are open. */
@@ -367,6 +390,7 @@ function RunRow({ job: j, issueRef, fullName, open, onToggle }: { job: JobView; 
             </div>
             {j.lastHeardAt && j.state === "unreachable" && <div>Last heard {timeAgo(j.lastHeardAt)}</div>}
             <RunStats job={j} />
+            <RunChecks job={j} />
             {!active && (
               <div className="flex gap-1 pt-1">
                 {canContinue && (

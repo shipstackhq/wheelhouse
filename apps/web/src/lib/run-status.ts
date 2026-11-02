@@ -1,8 +1,14 @@
-import type { JobState, JobView } from "@wheelhouse/api-client";
+import type { JobState, JobView, SelfCheckResult } from "@wheelhouse/api-client";
 
-type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested"> & { pullRequest?: Pick<NonNullable<JobView["pullRequest"]>, "state" | "verdict"> | null };
+type RunLike = Pick<JobView, "state" | "delivery" | "cancelRequested" | "result"> & { pullRequest?: Pick<NonNullable<JobView["pullRequest"]>, "state" | "verdict"> | null };
 
 const ACTIVE: JobState[] = ["offered", "accepted", "running", "unreachable"];
+/** WH-172: a run's self-checks: how many passed, and the required ones that did not (these stop the pull request). */
+export function selfChecks(job: Pick<JobView, "result">) {
+  const all = job.result.checks ?? [];
+  return { all, passed: all.filter((c) => c.status === "passed").length, blocking: all.filter((c) => c.required && c.status !== "passed") as SelfCheckResult[] };
+}
+
 export const isActive = (state: JobState) => ACTIVE.includes(state);
 
 /** How a status chip is coloured: running, went well, needs a look, went wrong, or nothing to say. */
@@ -40,8 +46,12 @@ export function runStatus(job: RunLike): { label: string; tone: Tone } {
           return { label: "no PR", tone: "warn" };
         case "none":
           return { label: "no changes", tone: "muted" };
-        default:
+        default: {
+          // Pushed with no pull request because a required self-check stopped it (WH-171).
+          const { blocking } = selfChecks(job);
+          if (blocking.length) return { label: blocking.some((c) => c.status === "failed") ? "no PR: checks failed" : "no PR: checks did not run", tone: "warn" };
           return { label: "pushed", tone: "good" };
+        }
       }
     case "failed":
       return { label: "failed", tone: "bad" };
