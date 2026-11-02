@@ -8,6 +8,7 @@ import { useServices } from "../../lib/services";
 import { useTeams } from "../../lib/session";
 import { Progress } from "../cycles/cycle-bits";
 import { dateRange, HealthChip, inputOf, newDraft, ProjectForm, statusChip, type ProjectDraft } from "./project-bits";
+import { Page } from "../../components/page";
 
 /**
  * The projects the person can see: outcomes that end and can span teams. A project is visible through a team of yours that takes
@@ -36,27 +37,19 @@ export function Projects(props: { projects: ProjectSummary[] }) {
     });
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="w-full px-6 py-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Projects</h2>
-            <p className="mt-1 text-sm text-muted">
-              An outcome that ends: a launch, a migration. A project can span several teams, each keeping its own board; you see the issues of
-              the teams you are on and only totals for the others.
-            </p>
-          </div>
-          <button className="btn btn-primary shrink-0" onClick={() => (setDraft(newDraft(editable[0]?.key ?? "")), setError(null), setCreating(true))}>
-            + New project
-          </button>
-        </div>
-        <div className="mt-5 space-y-2">
-          {creating && <ProjectForm draft={draft} onChange={setDraft} onSubmit={create} onCancel={() => (setCreating(false), setError(null))} submitLabel="Create project" pending={pending} error={error} teams={editable} />}
-          {props.projects.length === 0 && !creating && <p className="py-6 text-center text-sm text-muted">No projects yet. A project appears here for everyone on a team that takes part in it.</p>}
+    <Page
+      title="Projects"
+      hint="An outcome that ends: a launch, a migration. A project can span several teams, each keeping its own board; you see the issues of the teams you are on and only totals for the others."
+      action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft(newDraft(editable[0]?.key ?? "")), setError(null), setCreating(true))}>+ New project</button>}
+    >
+      {creating && <div className="mb-4"><ProjectForm draft={draft} onChange={setDraft} onSubmit={create} onCancel={() => (setCreating(false), setError(null))} submitLabel="Create project" pending={pending} error={error} teams={editable} /></div>}
+      {props.projects.length === 0 && !creating && <p className="py-6 text-center text-sm text-muted">No projects yet. A project appears here for everyone on a team that takes part in it.</p>}
+      {props.projects.length > 0 && (
+        <ul className="card divide-y divide-line overflow-hidden">
           {props.projects.map((p) => (
-            <Link key={p.id} to={`/projects/${p.id}`} className="card block px-4 py-3 hover:border-muted/50">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">{p.name}</span>
+            <li key={p.id}>
+              <Link to={`/projects/${p.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
                 {statusChip(p.status)}
                 <HealthChip health={p.health} />
                 {p.priority !== "none" && (
@@ -65,18 +58,16 @@ export function Projects(props: { projects: ProjectSummary[] }) {
                     {PRIORITY_LABEL[p.priority]}
                   </span>
                 )}
-                <span className="text-sm text-muted">{dateRange(p)}</span>
-              </div>
-              <p className="mt-1 text-sm text-muted">
-                {p.leadUser ? `Led by ${p.leadUser.name}` : "No lead"} · {p.teamCount} team{p.teamCount === 1 ? "" : "s"}
-              </p>
-              <div className="mt-2">
+                <span className="text-xs text-muted">{dateRange(p)}</span>
+                <span className="text-xs text-muted">
+                  {p.leadUser ? p.leadUser.name : "No lead"} · {p.teamCount} team{p.teamCount === 1 ? "" : "s"}
+                </span>
                 <Progress done={p.done} total={p.total} />
-              </div>
-            </Link>
+              </Link>
+            </li>
           ))}
-        </div>
-      </div>
-    </div>
+        </ul>
+      )}
+    </Page>
   );
 }

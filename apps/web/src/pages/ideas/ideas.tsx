@@ -1,7 +1,8 @@
 import { useState, useTransition } from "react";
 import { Link, useNavigate } from "../../lib/workspace";
 import type { IdeaStatus, IdeaSummary } from "@wheelhouse/api-client";
-import { SearchIcon } from "../../components/icons";
+import { Page } from "../../components/page";
+import { SearchField } from "../../components/search-field";
 import { DescriptionEditor } from "../../components/description-editor";
 import { Select } from "../../components/ui";
 import { describeFailure } from "../../lib/form-state";
@@ -40,34 +41,22 @@ export function Ideas(props: { ideas: IdeaSummary[] }) {
     });
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-4xl px-6 py-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Ideas</h2>
-            <p className="mt-1 text-sm text-muted">A light place to capture what is not work yet. Promote an idea to an issue when it is ready to be committed to.</p>
-          </div>
-          <button className="btn btn-primary shrink-0" onClick={() => (setDraft({ title: "", body: "", team: "" }), setError(null), setCreating(true))}>
-            + New idea
+    <Page
+      title="Ideas"
+      hint="A light place to capture what is not work yet. Promote an idea to an issue when it is ready to be committed to."
+      action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft({ title: "", body: "", team: "" }), setError(null), setCreating(true))}>+ New idea</button>}
+    >
+      <SearchField value={search} onChange={setSearch} placeholder="Search ideas…" label="Search ideas by title" />
+      <div className="mb-4 flex flex-wrap gap-1" role="group" aria-label="Filter by status">
+        {(["all", ...IDEA_STATUSES] as const).map((s) => (
+          <button key={s} type="button" aria-pressed={filter === s} className={filter === s ? "btn btn-primary" : "btn"} onClick={() => setFilter(s)}>
+            {s}
           </button>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap gap-1" role="group" aria-label="Filter by status">
-            {(["all", ...IDEA_STATUSES] as const).map((s) => (
-              <button key={s} type="button" aria-pressed={filter === s} className={filter === s ? "btn btn-primary" : "btn"} onClick={() => setFilter(s)}>
-                {s}
-              </button>
-            ))}
-          </div>
-          <label className="relative ml-auto block">
-            <SearchIcon className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted" />
-            <input className="input !w-56 !pl-7" type="search" placeholder="Search titles" aria-label="Search ideas by title" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </label>
-        </div>
-
+        ))}
+      </div>
         {creating && (
           <form
-            className="mt-5 space-y-3 rounded-lg border border-accent/40 bg-panel/40 p-4"
+            className="mb-4 space-y-3 rounded-lg border border-accent/40 bg-panel/40 p-4"
             onSubmit={(e) => {
               e.preventDefault();
               create();
@@ -100,33 +89,31 @@ export function Ideas(props: { ideas: IdeaSummary[] }) {
             </div>
           </form>
         )}
-
-        {shown.length > 0 && (
-          <ul className="mt-5 divide-y divide-line/70 rounded-lg border border-line/70">
-            {shown.map((i) => (
-              <li key={i.id}>
-                <Link to={`/ideas/${i.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-panel/60">
-                  <span className="min-w-0 flex-1 truncate font-medium">{i.title}</span>
-                  {ideaStatusChip(i.status)}
-                  <span className="text-xs text-muted">
-                    {i.author.name}
-                    {i.author.kind === "agent" && " (agent)"}
-                  </span>
-                  <span className="text-xs text-muted">{when(i.updatedAt)}</span>
-                  <span className="text-xs text-muted">
-                    {i.commentCount} comment{i.commentCount === 1 ? "" : "s"}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        {shown.length === 0 && !creating && (
-          <p className="py-6 text-center text-sm text-muted">
-            {props.ideas.length === 0 ? "No ideas yet. Capture the first one." : needle ? `No ideas match "${search.trim()}".` : `No ${filter} ideas.`}
-          </p>
-        )}
-      </div>
-    </div>
+      {shown.length > 0 && (
+        <ul className="card divide-y divide-line overflow-hidden">
+          {shown.map((i) => (
+            <li key={i.id}>
+              <Link to={`/ideas/${i.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
+                <span className="min-w-0 flex-1 truncate">{i.title}</span>
+                {ideaStatusChip(i.status)}
+                <span className="text-xs text-muted">
+                  {i.author.name}
+                  {i.author.kind === "agent" && " (agent)"}
+                </span>
+                <span className="text-xs text-muted">{when(i.updatedAt)}</span>
+                <span className="text-xs text-muted">
+                  {i.commentCount} comment{i.commentCount === 1 ? "" : "s"}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {shown.length === 0 && !creating && (
+        <p className="py-6 text-center text-sm text-muted">
+          {props.ideas.length === 0 ? "No ideas yet. Capture the first one." : needle ? `No ideas match "${search.trim()}".` : `No ${filter} ideas.`}
+        </p>
+      )}
+    </Page>
   );
 }

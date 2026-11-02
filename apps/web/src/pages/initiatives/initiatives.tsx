@@ -7,6 +7,7 @@ import { useServices } from "../../lib/services";
 import { Progress } from "../cycles/cycle-bits";
 import { HealthChip } from "../projects/project-bits";
 import { initiativeStatusChip, InitiativeForm, inputOf, newDraft, targetOf, type InitiativeDraft } from "./initiative-bits";
+import { Page } from "../../components/page";
 
 const MAX_DEPTH = 3;
 
@@ -36,42 +37,32 @@ export function Initiatives(props: { initiatives: InitiativeSummary[] }) {
     });
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="w-full px-6 py-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Initiatives</h2>
-            <p className="mt-1 text-sm text-muted">
-              A goal that groups projects, and smaller initiatives under it (up to {MAX_DEPTH} levels). Progress rolls up from the issues of everything
-              below; you see the projects of your own teams and only totals for the rest.
-            </p>
-          </div>
-          <button className="btn btn-primary shrink-0" onClick={() => (setDraft(newDraft()), setError(null), setCreating(true))}>
-            + New initiative
-          </button>
-        </div>
-        <div className="mt-5 space-y-2">
-          {creating && <InitiativeForm draft={draft} onChange={setDraft} onSubmit={create} onCancel={() => (setCreating(false), setError(null))} submitLabel="Create initiative" pending={pending} error={error} parents={parents} />}
-          {props.initiatives.length === 0 && !creating && <p className="py-6 text-center text-sm text-muted">No initiatives yet. Start one to group the projects that work towards the same goal.</p>}
+    <Page
+      title="Initiatives"
+      hint={`A goal that groups projects, and smaller initiatives under it (up to ${MAX_DEPTH} levels). Progress rolls up from the issues of everything below; you see the projects of your own teams and only totals for the rest.`}
+      action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft(newDraft()), setError(null), setCreating(true))}>+ New initiative</button>}
+    >
+      {creating && <div className="mb-4"><InitiativeForm draft={draft} onChange={setDraft} onSubmit={create} onCancel={() => (setCreating(false), setError(null))} submitLabel="Create initiative" pending={pending} error={error} parents={parents} /></div>}
+      {props.initiatives.length === 0 && !creating && <p className="py-6 text-center text-sm text-muted">No initiatives yet. Start one to group the projects that work towards the same goal.</p>}
+      {props.initiatives.length > 0 && (
+        <ul className="card divide-y divide-line overflow-hidden">
           {props.initiatives.map((i) => (
-            <Link key={i.id} to={`/initiatives/${i.id}`} className="card block px-4 py-3 hover:border-muted/50" style={{ marginLeft: `${(i.depth - 1) * 1.5}rem` }}>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold">{i.name}</span>
+            <li key={i.id}>
+              <Link to={`/initiatives/${i.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70 hover:underline" style={{ paddingLeft: `${1 + (i.depth - 1) * 1.5}rem` }}>
+                <span className="min-w-0 flex-1 truncate">{i.name}</span>
                 {initiativeStatusChip(i.status)}
                 <HealthChip health={i.health} />
-                <span className="text-sm text-muted">{targetOf(i)}</span>
-              </div>
-              <p className="mt-1 text-sm text-muted">
-                {i.owner ? `Owned by ${i.owner.name}` : "No owner"} · {i.projectCount} project{i.projectCount === 1 ? "" : "s"}
-                {i.childCount > 0 && ` · ${i.childCount} sub-initiative${i.childCount === 1 ? "" : "s"}`}
-              </p>
-              <div className="mt-2">
+                <span className="text-xs text-muted">{targetOf(i)}</span>
+                <span className="text-xs text-muted">
+                  {i.owner ? i.owner.name : "No owner"} · {i.projectCount} project{i.projectCount === 1 ? "" : "s"}
+                  {i.childCount > 0 && ` · ${i.childCount} sub-initiative${i.childCount === 1 ? "" : "s"}`}
+                </span>
                 <Progress done={i.done} total={i.total} />
-              </div>
-            </Link>
+              </Link>
+            </li>
           ))}
-        </div>
-      </div>
-    </div>
+        </ul>
+      )}
+    </Page>
   );
 }
