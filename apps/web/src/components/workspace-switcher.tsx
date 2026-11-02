@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Dialog, Popover } from "radix-ui";
+import { Dialog } from "radix-ui";
 import clsx from "clsx";
-import { Link, useNavigate } from "../lib/workspace";
+import { useNavigate } from "../lib/workspace";
 import { useServices } from "../lib/services";
 import { ApiError } from "@wheelhouse/api-client";
 import { describeFailure } from "../lib/form-state";
-import { ChevronDownIcon, ChevronRightIcon, NAV_ICONS } from "./icons";
+import { ChevronDownIcon, NAV_ICONS } from "./icons";
+import { Menu, MenuGroup, MenuItem, MenuSeparator, MenuSub } from "./menu";
 import { SubmitButton } from "./submit-button";
 
-const ITEM = "flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-panel-2 focus-visible:bg-panel-2";
-
 /**
- * The workspace, as a round icon with its initial and a down arrow, at the top of the sidebar. It opens a menu: Settings, and Workspaces, a second popover
+ * The workspace, as a round icon with its initial and a down arrow, at the top of the sidebar. It opens a menu: Settings, and Workspaces, a submenu
  * with the person's workspaces (personal first); choosing another opens it (its own address, so its own cache) and tells the server it is the last one used.
  * Ctrl/Cmd+1...9 choose the first nine. "Create workspace" opens a small dialog. With a single workspace the menu just names it. `collapsed` is the icon-only rail, where the arrow is hidden and only the icon stays.
  */
@@ -21,9 +20,7 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
   const navigate = useNavigate();
   const query = useQuery({ queryKey: ["me", "workspaces"] as const, queryFn: () => api.workspaces.list() });
   const list = query.data ?? [];
-  const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [sub, setSub] = useState(false);
   const go = async ({ id, slug }: { id: string; slug: string }) => {
     try {
       await api.workspaces.switchTo(id);
@@ -44,69 +41,44 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
   });
   return (
     <>
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
-        aria-label={`Workspace menu: ${name}`}
-        title={name}
-        className={clsx(
-          "group flex shrink-0 items-center gap-0.5 rounded-full py-0.5 pl-0.5 pr-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2 data-[state=open]:text-fg",
-          collapsed && "md:gap-0 md:pr-0.5", // in the icon-only rail the arrow goes and only the icon stays
-        )}
-      >
-        {imageUrl ? (
-          <img src={imageUrl} alt="" aria-hidden className="size-5 rounded-full object-cover" />
-        ) : (
-          <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
-            {name.trim().charAt(0) || "W"}
-          </span>
-        )}
-        <ChevronDownIcon aria-hidden className={clsx("text-sm transition-transform group-data-[state=open]:rotate-180", collapsed && "md:hidden")} />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content side={collapsed ? "right" : "bottom"} align="start" sideOffset={6} collisionPadding={8} className="z-50 w-52 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl">
-          <Link to="/settings" onClick={() => setOpen(false)} className={clsx(ITEM, "gap-2.5")}>
-            <NAV_ICONS.settings.line aria-hidden className="shrink-0 text-base" />
-            Settings
-          </Link>
-          <Popover.Root open={sub} onOpenChange={setSub}>
-            <Popover.Trigger className={clsx(ITEM, "justify-between data-[state=open]:bg-panel-2")}>
-              Workspaces
-              <ChevronRightIcon aria-hidden className="text-sm text-muted" />
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content side="right" align="start" sideOffset={4} collisionPadding={8} className="z-50 w-60 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl">
-                <div role="group" aria-label="Workspaces">
-                  {(list.length ? list : [{ id: "current", slug: "", name, role: "", active: true }]).map((w) => (
-                    <button
-                      key={w.id}
-                      type="button"
-                      disabled={w.active}
-                      aria-current={w.active ? "true" : undefined}
-                      onClick={() => go(w)}
-                      className={clsx(ITEM, "justify-between gap-2 disabled:cursor-default disabled:hover:bg-transparent")}
-                    >
-                      <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
-                      <span className="shrink-0 text-xs text-muted">{w.active ? "current" : w.role}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSub(false);
-                      setOpen(false);
-                      setCreating(true);
-                    }}
-                    className={clsx(ITEM, "mt-1 border-t border-line text-muted hover:text-fg")}
-                  >
-                    Create workspace
-                  </button>
-                </div>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    <Menu
+      side={collapsed ? "right" : "bottom"}
+      className="w-52"
+      trigger={
+        <button
+          type="button"
+          aria-label={`Workspace menu: ${name}`}
+          title={name}
+          className={clsx(
+            "group flex shrink-0 items-center gap-0.5 rounded-full py-0.5 pl-0.5 pr-1 text-muted outline-none hover:bg-panel-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50 data-[state=open]:bg-panel-2 data-[state=open]:text-fg",
+            collapsed && "md:gap-0 md:pr-0.5", // in the icon-only rail the arrow goes and only the icon stays
+          )}
+        >
+          {imageUrl ? (
+            <img src={imageUrl} alt="" aria-hidden className="size-5 rounded-full object-cover" />
+          ) : (
+            <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
+              {name.trim().charAt(0) || "W"}
+            </span>
+          )}
+          <ChevronDownIcon aria-hidden className={clsx("text-sm transition-transform group-data-[state=open]:rotate-180", collapsed && "md:hidden")} />
+        </button>
+      }
+    >
+      <MenuItem href="/settings" icon={NAV_ICONS.settings.line}>Settings</MenuItem>
+      <MenuSub label="Workspaces" className="w-60">
+        <MenuGroup label="Workspaces">
+          {(list.length ? list : [{ id: "current", slug: "", name, role: "", active: true }]).map((w) => (
+            <MenuItem key={w.id} disabled={w.active} aria-current={w.active ? "true" : undefined} onSelect={() => void go(w)} className="justify-between gap-2">
+              <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
+              <span className="shrink-0 text-xs text-muted">{w.active ? "current" : w.role}</span>
+            </MenuItem>
+          ))}
+        </MenuGroup>
+        <MenuSeparator />
+        <MenuItem onSelect={() => setCreating(true)} className="text-muted">Create workspace</MenuItem>
+      </MenuSub>
+    </Menu>
     <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} />
     </>
   );

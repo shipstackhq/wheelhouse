@@ -4,9 +4,15 @@ import userEvent from "@testing-library/user-event";
 import { apiError, renderIn, serverWithData } from "../test/harness";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
+// jsdom has no layout, so Radix's pointer tracking in a submenu eats clicks: items there are chosen from the keyboard.
+const choose = async (user: ReturnType<typeof userEvent.setup>, item: HTMLElement) => {
+  item.focus();
+  await user.keyboard("{Enter}");
+};
+
 const openWorkspaces = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
-  await user.click(await screen.findByRole("button", { name: "Workspaces" }));
+  await user.click(await screen.findByRole("menuitem", { name: "Workspaces" }));
 };
 
 const two = () => {
@@ -31,9 +37,9 @@ describe("the workspace switcher", () => {
     expect(button.querySelector("svg")).toBeTruthy(); // the down arrow that says it is a menu
     await openWorkspaces(userEvent.setup());
     const group = await screen.findByRole("group", { name: "Workspaces" });
-    const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
-    expect(current.disabled).toBe(true);
-    expect(within(group).getAllByRole("button")).toHaveLength(2); // the workspace and Create workspace
+    const current = within(group).getByRole("menuitem", { name: /Analytical Engines/ }) as HTMLElement;
+    expect(current.getAttribute("aria-disabled")).toBe("true");
+    expect(within(group).getAllByRole("menuitem")).toHaveLength(1); // the one workspace
   });
 
   test("with several it lists them, marks the current one, and switching tells the server and opens the other workspace's address, keeping what was read", async () => {
@@ -42,12 +48,12 @@ describe("the workspace switcher", () => {
     const user = userEvent.setup();
     await openWorkspaces(user);
     const group = await screen.findByRole("group", { name: "Workspaces" });
-    await within(group).findByRole("button", { name: /Difference Engines/ });
-    const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
-    expect(current.disabled).toBe(true);
+    await within(group).findByRole("menuitem", { name: /Difference Engines/ });
+    const current = within(group).getByRole("menuitem", { name: /Analytical Engines/ }) as HTMLElement;
+    expect(current.getAttribute("aria-disabled")).toBe("true");
     expect(current.getAttribute("aria-current")).toBe("true");
     expect(within(group).getByText("viewer")).toBeTruthy();
-    await user.click(within(group).getByRole("button", { name: /Difference Engines/ }));
+    await choose(user, within(group).getByRole("menuitem", { name: /Difference Engines/ }));
     await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
     expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ workspaceId: "t2" });
     await waitFor(() => expect(router.state.location.pathname).toBe("/w/de"));
@@ -66,7 +72,7 @@ describe("the workspace switcher", () => {
     const { router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
-    await user.click(await screen.findByRole("link", { name: "Settings" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Settings" }));
     await waitFor(() => expect(router.state.location.pathname).toBe("/settings"));
   });
 
@@ -85,7 +91,7 @@ describe("the workspace switcher", () => {
     const { server, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", s);
     const user = userEvent.setup();
     await openWorkspaces(user);
-    await user.click(await screen.findByRole("button", { name: "Create workspace" }));
+    await choose(user, await screen.findByRole("menuitem", { name: "Create workspace" }));
     await user.type(await screen.findByLabelText("Name"), "New Co");
     expect((screen.getByLabelText("Address") as HTMLInputElement).value).toBe("new-co");
     await user.click(screen.getByRole("button", { name: "Create" }));
