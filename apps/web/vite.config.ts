@@ -24,5 +24,7 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // jsdom renders on the two-core CI runner run many times slower than locally (about 120 ms became over 5 s), and which test it hits changes from run to run.
+    testTimeout: process.env.CI ? 15_000 : 5_000,
   },
 });
