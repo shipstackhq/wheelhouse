@@ -21,7 +21,7 @@ export function TeamOverviewPage() {
         <div className="px-6 py-6">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold">Overview{name ? ` of ${name}` : ""}</h1>
+              <h1 className="sr-only">Overview{name ? ` of ${name}` : ""}</h1>
               <p className="mt-1 text-sm text-muted">What matters most in this team right now. The workspace dashboard is on the home page.</p>
             </div>
             <Link to={`/t/${key}`} className="btn">Open the board</Link>

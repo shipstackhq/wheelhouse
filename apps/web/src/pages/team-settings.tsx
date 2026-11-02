@@ -33,7 +33,7 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
   return (
     <div className="h-full overflow-y-auto bg-page">
       <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-        <h1 className="mb-2 text-3xl font-bold tracking-tight">Team settings</h1>
+        <h1 className="sr-only">Team settings</h1>
         <p className="mb-6 text-sm text-muted">
           {myRole === "admin" ? "Rename the team or change what agents are told it is." : "Ask a team admin to change these."}
         </p>

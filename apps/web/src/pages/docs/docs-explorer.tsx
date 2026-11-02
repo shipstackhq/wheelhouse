@@ -413,8 +413,8 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
       {selectedId === null ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
           <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-            <div className="mb-6 flex items-center justify-between gap-3">
-              <h1 className="text-3xl font-bold tracking-tight">Docs</h1>
+            <div className="mb-6 flex items-center justify-end gap-3">
+              <h1 className="sr-only">Docs</h1>
               <button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
                 + Create
               </button>

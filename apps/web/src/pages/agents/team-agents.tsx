@@ -52,7 +52,7 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
       <div className="w-full space-y-6 px-6 py-10">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold">Agents</h1>
+            <h1 className="sr-only">Agents</h1>
             <p className="mt-1 text-sm text-muted">The agents this team uses in Claude Code.</p>
           </div>
           {enabled && manage && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>Add</button>}
