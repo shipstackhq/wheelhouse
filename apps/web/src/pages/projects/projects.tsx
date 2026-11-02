@@ -53,9 +53,8 @@ export function Projects(props: { projects: ProjectSummary[] }) {
                 {statusChip(p.status)}
                 <HealthChip health={p.health} />
                 {p.priority !== "none" && (
-                  <span className="chip gap-1 bg-panel-2 text-muted" data-priority-chip>
+                  <span className="chip bg-panel-2 text-muted" data-priority-chip title={PRIORITY_LABEL[p.priority]} aria-label={PRIORITY_LABEL[p.priority]}>
                     <PriorityIcon priority={p.priority} />
-                    {PRIORITY_LABEL[p.priority]}
                   </span>
                 )}
                 <span className="text-xs text-muted">{dateRange(p)}</span>
