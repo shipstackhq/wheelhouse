@@ -76,7 +76,7 @@ export function SettingsLayout() {
         </nav>
       </SidebarFrame>
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl">
+        <div className="mx-auto max-w-5xl">
           <Outlet />
         </div>
       </main>
