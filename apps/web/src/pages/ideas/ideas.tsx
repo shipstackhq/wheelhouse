@@ -1,6 +1,7 @@
 import { useState, useTransition } from "react";
 import { Link, useNavigate } from "../../lib/workspace";
 import type { IdeaStatus, IdeaSummary } from "@wheelhouse/api-client";
+import { CommentIcon } from "../../components/icons";
 import { Page } from "../../components/page";
 import { SearchField } from "../../components/search-field";
 import { DescriptionEditor } from "../../components/description-editor";
@@ -101,8 +102,8 @@ export function Ideas(props: { ideas: IdeaSummary[] }) {
                   {i.author.kind === "agent" && " (agent)"}
                 </span>
                 <span className="text-xs text-muted">{when(i.updatedAt)}</span>
-                <span className="text-xs text-muted">
-                  {i.commentCount} comment{i.commentCount === 1 ? "" : "s"}
+                <span className="inline-flex items-center gap-1 text-xs text-muted" title={`${i.commentCount} comment${i.commentCount === 1 ? "" : "s"}`}>
+                  <CommentIcon aria-hidden /> {i.commentCount}
                 </span>
               </Link>
             </li>
