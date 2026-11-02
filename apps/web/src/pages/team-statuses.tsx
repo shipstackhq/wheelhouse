@@ -125,7 +125,7 @@ function Row(props: {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={clsx("flex items-center gap-2 bg-panel px-4 py-2", isDragging && "relative z-10 shadow-lg")}
+      className={clsx("flex items-center gap-2 px-4 py-2", isDragging && "relative z-10 rounded-lg bg-panel shadow-lg")}
       data-status={s.name}
     >
       {canEdit && (
