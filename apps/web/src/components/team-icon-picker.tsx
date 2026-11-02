@@ -10,7 +10,7 @@ const BOX = "z-60 rounded-lg border border-line bg-panel p-2 text-fg shadow-xl";
 const CELL = "grid size-9 place-items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
 
 /**
- * A team's icon: its preview, and two popovers to change it, one of Remix icons with a colour, one of emoji (whatever the system's emoji
+ * A team's icon: its preview, which opens a popover with a pill switch between Remix icons and emoji, and a colour button beside it (whatever the system's emoji
  * font draws; pick a common one, or type or paste one). A pick is saved at once: `onSave` gets what to store (`ri:<name>` or the emoji)
  * and the colour; a `null` icon is the default glyph.
  */
@@ -25,16 +25,17 @@ export function TeamIconPicker(props: {
 }) {
   const ri = props.icon?.startsWith("ri:") ? props.icon.slice(3) : null;
   const color = (TEAM_ICON_COLORS as readonly string[]).includes(props.iconColor ?? "") ? (props.iconColor as TeamIconColor) : null;
-  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"icon" | "emoji">(ri || !props.icon ? "icon" : "emoji");
   const [typed, setTyped] = useState("");
   const typedBad = typed.trim() !== "" && !isEmoji(typed.trim());
-  const pickEmoji = (e: string) => (setEmojiOpen(false), setTyped(""), props.onSave(e, null));
+  const pickEmoji = (e: string) => (setOpen(false), setTyped(""), props.onSave(e, null));
+  const preview = <TeamIcon team={{ key: props.teamKey, icon: props.icon, iconColor: props.iconColor }} />;
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <span className="grid size-8 place-items-center rounded-lg border border-line bg-panel-2 text-xl">
-        <TeamIcon team={{ key: props.teamKey, icon: props.icon, iconColor: props.iconColor }} />
-      </span>
-      {props.canEdit && (
+      {!props.canEdit ? (
+        <span className="grid size-[34px] place-items-center rounded-md border border-line bg-panel-2 text-xl">{preview}</span>
+      ) : (
         <>
           <Popover.Root>
             <Popover.Trigger aria-label="Colour" className="btn size-[34px] !p-0" disabled={props.pending}>
@@ -50,39 +51,44 @@ export function TeamIconPicker(props: {
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
-          <Popover.Root>
-            <Popover.Trigger className="btn" disabled={props.pending}>Icon</Popover.Trigger>
+          <Popover.Root open={open} onOpenChange={setOpen}>
+            <Popover.Trigger aria-label="Change icon" className="btn size-[34px] !p-0 text-xl" disabled={props.pending}>{preview}</Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-80")}>
-                <div role="group" aria-label="Icon" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto overscroll-contain">
-                  {TEAM_ICON_NAMES.map((n) => {
-                    const Icon = TEAM_ICONS[n];
-                    return (
-                      <button key={n} type="button" aria-label={n.replace(/-\d+$/, "").replace(/-/g, " ")} aria-pressed={ri === n} onClick={() => props.onSave(`ri:${n}`, color)} className={clsx(CELL, "text-lg", ri === n ? "bg-accent/15 text-accent" : "text-muted hover:bg-panel-2 hover:text-fg")}>
-                        <Icon aria-hidden />
-                      </button>
-                    );
-                  })}
-                </div>
-              </Popover.Content>
-            </Popover.Portal>
-          </Popover.Root>
-          <Popover.Root open={emojiOpen} onOpenChange={setEmojiOpen}>
-            <Popover.Trigger className="btn" disabled={props.pending}>Emoji</Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-72 space-y-2")}>
-                <div role="group" aria-label="Common emoji" className="grid grid-cols-8 gap-1">
-                  {EMOJI_PRESETS.map((e) => (
-                    <button key={e} type="button" aria-label={e} aria-pressed={props.icon === e} onClick={() => pickEmoji(e)} className={clsx(CELL, "text-xl", props.icon === e ? "bg-accent/15" : "hover:bg-panel-2")}>
-                      {e}
+              <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-80 space-y-2")}>
+                <div role="tablist" aria-label="Kind of icon" className="flex w-fit gap-0.5 rounded-full bg-panel-2 p-0.5 text-xs">
+                  {(["icon", "emoji"] as const).map((t) => (
+                    <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={clsx("rounded-full px-3 py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent/50", tab === t ? "bg-panel text-fg shadow-sm" : "text-muted hover:text-fg")}>
+                      {t === "icon" ? "Icon" : "Emoji"}
                     </button>
                   ))}
                 </div>
-                <form className="flex gap-2" onSubmit={(e) => (e.preventDefault(), typed.trim() && !typedBad && pickEmoji(typed.trim()))}>
-                  <input className="input min-w-0 flex-1" aria-label="Emoji" placeholder="Type or paste an emoji" value={typed} maxLength={16} onChange={(e) => setTyped(e.target.value)} aria-invalid={typedBad || undefined} />
-                  <button type="submit" className="btn" disabled={!typed.trim() || typedBad}>Use</button>
-                </form>
-                {typedBad && <p className="text-xs text-danger" role="alert">Use a single emoji.</p>}
+                {tab === "icon" ? (
+                  <div role="group" aria-label="Icon" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto overscroll-contain">
+                    {TEAM_ICON_NAMES.map((n) => {
+                      const Icon = TEAM_ICONS[n];
+                      return (
+                        <button key={n} type="button" aria-label={n.replace(/-\d+$/, "").replace(/-/g, " ")} aria-pressed={ri === n} onClick={() => props.onSave(`ri:${n}`, color)} className={clsx(CELL, "text-lg", ri === n ? "bg-accent/15 text-accent" : "text-muted hover:bg-panel-2 hover:text-fg")}>
+                          <Icon aria-hidden />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    <div role="group" aria-label="Common emoji" className="grid grid-cols-8 gap-1">
+                      {EMOJI_PRESETS.map((e) => (
+                        <button key={e} type="button" aria-label={e} aria-pressed={props.icon === e} onClick={() => pickEmoji(e)} className={clsx(CELL, "text-xl", props.icon === e ? "bg-accent/15" : "hover:bg-panel-2")}>
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                    <form className="flex gap-2" onSubmit={(e) => (e.preventDefault(), typed.trim() && !typedBad && pickEmoji(typed.trim()))}>
+                      <input className="input min-w-0 flex-1" aria-label="Emoji" placeholder="Type or paste an emoji" value={typed} maxLength={16} onChange={(e) => setTyped(e.target.value)} aria-invalid={typedBad || undefined} />
+                      <button type="submit" className="btn" disabled={!typed.trim() || typedBad}>Use</button>
+                    </form>
+                    {typedBad && <p className="text-xs text-danger" role="alert">Use a single emoji.</p>}
+                  </>
+                )}
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
