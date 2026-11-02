@@ -233,7 +233,7 @@ function Row({ item: n, view, selected, onSelect, onAct }: { item: InboxItem; vi
         className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
       />
       <div className="pointer-events-none relative flex gap-2 p-3">
-        <span aria-hidden className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", unread ? "bg-accent" : "bg-transparent")} />
+        {unread && <span aria-hidden className="absolute left-1 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-accent" />}
         <span className="min-w-0 flex-1 leading-tight">
           <span className="flex items-center gap-2">
             <span className={clsx("min-w-0 flex-1 truncate text-sm", unread ? "font-medium text-fg" : "text-muted")}>{n.title}</span>
