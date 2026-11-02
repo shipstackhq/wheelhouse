@@ -17,7 +17,9 @@
     "db:export": "tsx apps/api/src/tools/db-cli.ts export",
     "db:import": "tsx apps/api/src/tools/db-cli.ts import",
     "db:verify": "tsx apps/api/src/tools/db-cli.ts verify",
-    "db:preflight": "tsx apps/api/src/tools/db-cli.ts preflight"
+    "db:preflight": "tsx apps/api/src/tools/db-cli.ts preflight",
+    "db:staging-copy": "bash scripts/staging-copy.sh",
+    "dev:staging-copy": "bash scripts/staging-copy.sh dev"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.9",
