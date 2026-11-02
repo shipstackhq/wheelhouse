@@ -17,7 +17,7 @@ const CELL = "grid size-9 place-items-center rounded-md outline-none focus-visib
 
 /**
  * A team's icon: its preview, which opens a popover with a pill switch between Remix icons and emoji, and a colour button beside it (whatever the system's emoji
- * font draws; pick a common one, or type or paste one). A pick is saved at once: `onSave` gets what to store (`ri:<name>` or the emoji)
+ * font draws; pick one from the list). A pick is saved at once: `onSave` gets what to store (`ri:<name>` or the emoji)
  * and the colour; a `null` icon is the default glyph.
  */
 export function TeamIconPicker(props: {
