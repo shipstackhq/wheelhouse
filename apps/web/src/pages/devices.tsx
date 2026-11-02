@@ -115,8 +115,8 @@ function DeviceRow({ device: d }: { device: DeviceView }) {
   };
   const claude = d.capabilities.claude;
   return (
-    <div className={`space-y-3 ${SETTINGS_ROW_PAD}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <>
+      <div className={`flex flex-wrap items-center justify-between gap-3 ${SETTINGS_ROW_PAD}`}>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-medium">{d.name}</h3>
           <span className={clsx("chip", STATUS_STYLE[d.status])}>{d.status}</span>
@@ -132,71 +132,71 @@ function DeviceRow({ device: d }: { device: DeviceView }) {
         >
           <NAV_ICONS.settings.line aria-hidden />
         </button>
+        {dialogs}
       </div>
       {open && (
-        <div className="space-y-3">
-          <dl className="grid items-center gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
-            <dt className="text-muted">Claude Code</dt>
-            <dd>
-              {!claude ? (
-                <span className="text-muted">Not reported yet</span>
-              ) : !claude.installed ? (
-                <span className="text-warn">Not installed</span>
-              ) : !claude.signedIn ? (
-                <span className="text-warn">Installed, not signed in</span>
-              ) : (
-                <span>
-                  Signed in{claude.subscriptionType ? ` (${claude.subscriptionType})` : ""}
-                  {claude.version ? <span className="text-muted"> · {claude.version}</span> : null}
-                </span>
-              )}
-            </dd>
-            <dt className="text-muted">Models</dt>
-            <dd>{d.models.join(", ") || <span className="text-muted">none until Claude Code is installed and signed in</span>}</dd>
-            <dt className="text-muted">Runs at once</dt>
-            <dd className="max-w-[120px]">
-              <Select
-                ariaLabel="Runs at once"
-                value={String(d.poolSize)}
-                options={Array.from({ length: MAX_POOL }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
-                onValueChange={(v) => void run(() => api.devices.update(d.id, { poolSize: Number(v) }))}
-              />
-            </dd>
-            <dt className="text-muted">Last seen</dt>
-            <dd>{d.lastSeenAt ? timeAgo(d.lastSeenAt) : "never"}{d.daemonVersion && <span className="text-muted"> · daemon {d.daemonVersion}</span>}</dd>
-          </dl>
-          {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="btn"
-              onClick={async () => {
-                const name = await prompt({ title: "Rename device", placeholder: d.name, confirmLabel: "Rename" });
-                if (name) await run(() => api.devices.update(d.id, { name }));
-              }}
-            >
-              Rename
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: `Unpair ${d.name}?`,
-                  description: "It stops getting work at once, and any run on it is canceled. Branches it already pushed stay. To use it again, pair it again.",
-                  confirmLabel: "Unpair",
-                  danger: true,
-                });
-                if (ok) await run(() => api.devices.unpair(d.id));
-              }}
-            >
-              Unpair
-            </button>
+        <>
+          <SettingsRow label="Claude Code">
+            {!claude ? (
+              "Not reported yet"
+            ) : !claude.installed ? (
+              <span className="text-warn">Not installed</span>
+            ) : !claude.signedIn ? (
+              <span className="text-warn">Installed, not signed in</span>
+            ) : (
+              <span>
+                <span className="text-fg">Signed in{claude.subscriptionType ? ` (${claude.subscriptionType})` : ""}</span>
+                {claude.version ? ` · ${claude.version}` : null}
+              </span>
+            )}
+          </SettingsRow>
+          <SettingsRow label="Models">{d.models.join(", ") || "none until Claude Code is installed and signed in"}</SettingsRow>
+          <SettingsRow label="Runs at once">
+            <Select
+              className="!w-auto"
+              ariaLabel="Runs at once"
+              value={String(d.poolSize)}
+              options={Array.from({ length: MAX_POOL }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+              onValueChange={(v) => void run(() => api.devices.update(d.id, { poolSize: Number(v) }))}
+            />
+          </SettingsRow>
+          <SettingsRow label="Last seen">
+            {d.lastSeenAt ? timeAgo(d.lastSeenAt) : "never"}
+            {d.daemonVersion && ` · daemon ${d.daemonVersion}`}
+          </SettingsRow>
+          <div className={`flex flex-wrap items-center justify-between gap-3 ${SETTINGS_ROW_PAD}`}>
+            <p className="min-w-0 text-sm text-danger" role={error ? "alert" : undefined}>{error}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn"
+                onClick={async () => {
+                  const name = await prompt({ title: "Rename device", placeholder: d.name, confirmLabel: "Rename" });
+                  if (name) await run(() => api.devices.update(d.id, { name }));
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Unpair ${d.name}?`,
+                    description: "It stops getting work at once, and any run on it is canceled. Branches it already pushed stay. To use it again, pair it again.",
+                    confirmLabel: "Unpair",
+                    danger: true,
+                  });
+                  if (ok) await run(() => api.devices.unpair(d.id));
+                }}
+              >
+                Unpair
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
-      {dialogs}
-    </div>
+    </>
   );
 }
 
