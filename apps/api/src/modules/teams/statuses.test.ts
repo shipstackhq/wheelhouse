@@ -103,7 +103,7 @@ describe("adding", () => {
 
   test("a role is needed and must be one of the roles; a colour must be from the palette", async () => {
     for (const role of [undefined, null, "", "blocked", 3]) await assert.rejects(st.createStatus(owner, "SA", { name: "R", role }), code("invalid"), String(role));
-    await assert.rejects(st.createStatus(owner, "SA", { name: "C", role: "todo", color: "pink" }), code("invalid"));
+    await assert.rejects(st.createStatus(owner, "SA", { name: "C", role: "todo", color: "chartreuse" }), code("invalid"));
   });
 
   test("a role that has no status yet (review was deleted) gets its first one as the default", async () => {

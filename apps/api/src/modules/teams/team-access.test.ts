@@ -317,7 +317,7 @@ describe("a team's icon", () => {
     assert.equal(emoji.icon, "🚀");
     assert.equal((await updateTeam(ada, t.key, { icon: "👨‍👩‍👧‍👦" })).icon, "👨‍👩‍👧‍👦", "one emoji built from several is still one");
     for (const bad of ["ri:nonsense", "ab", "🚀🚀", "http://x", 5]) await assert.rejects(() => updateTeam(ada, t.key, { icon: bad }), code("invalid"), String(bad));
-    await assert.rejects(() => updateTeam(ada, t.key, { iconColor: "pink" }), code("invalid"));
+    await assert.rejects(() => updateTeam(ada, t.key, { iconColor: "chartreuse" }), code("invalid"));
     const cleared = await updateTeam(ada, t.key, { icon: null, iconColor: null });
     assert.deepEqual([cleared.icon, cleared.iconColor], [null, null]);
     await assert.rejects(() => updateTeam(bob, t.key, { icon: "ri:star" }), code("forbidden"));

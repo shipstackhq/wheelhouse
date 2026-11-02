@@ -123,7 +123,7 @@ describe("POST /api/app/teams/:key/statuses", () => {
     assert.equal(r.status, 201, r.text);
     assert.deepEqual({ ...r.json.status, id: "-", position: 0 }, { id: "-", name: "In Review", role: "in_progress", isDefault: false, color: "violet", position: 0, issueCount: 0 });
     assert.deepEqual((await list(t.owner.sess)).map((s) => s.name), ["Backlog", "Todo", "In Progress", "In Review", "Review", "Done", "Canceled"]);
-    for (const [body, field] of [[{ role: "todo" }, "name"], [{ name: "", role: "todo" }, "name"], [{ name: 3, role: "todo" }, "name"], [{ name: "x".repeat(41), role: "todo" }, "name"], [{ name: "Fine" }, "role"], [{ name: "Fine", role: "blocked" }, "role"], [{ name: "Fine", role: "todo", color: "pink" }, "color"]] as const) {
+    for (const [body, field] of [[{ role: "todo" }, "name"], [{ name: "", role: "todo" }, "name"], [{ name: 3, role: "todo" }, "name"], [{ name: "x".repeat(41), role: "todo" }, "name"], [{ name: "Fine" }, "role"], [{ name: "Fine", role: "blocked" }, "role"], [{ name: "Fine", role: "todo", color: "chartreuse" }, "color"]] as const) {
       const bad = await app("POST", "/api/app/teams/STT/statuses", t.owner.sess, { body });
       assert.equal(bad.status, 400, JSON.stringify(body));
       assert.deepEqual(Object.keys(bad.json.error.details.fields), [field], JSON.stringify(body));
@@ -147,7 +147,7 @@ describe("PATCH /api/app/teams/:key/statuses/:id", () => {
     const role = await app("PATCH", `/api/app/teams/STT/statuses/${more.id}`, t.owner.sess, { body: { role: "done" } });
     assert.equal(role.status, 400);
     assert.deepEqual(Object.keys(role.json.error.details.fields), ["role"]);
-    for (const body of [{ isDefault: false }, { name: "Done" }, { color: "pink" }, { name: 4 }]) {
+    for (const body of [{ isDefault: false }, { name: "Done" }, { color: "chartreuse" }, { name: 4 }]) {
       assert.ok([400, 409].includes((await app("PATCH", `/api/app/teams/STT/statuses/${more.id}`, t.owner.sess, { body })).status), JSON.stringify(body));
     }
     assert.equal((await app("PATCH", "/api/app/teams/STT/statuses/00000000-0000-4000-8000-000000000000", t.owner.sess, { body: { name: "x" } })).status, 404);
