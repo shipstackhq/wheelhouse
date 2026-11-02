@@ -48,8 +48,8 @@ export function Projects(props: { projects: ProjectSummary[] }) {
         <ul className="card divide-y divide-line overflow-hidden">
           {props.projects.map((p) => (
             <li key={p.id}>
-              <Link to={`/projects/${p.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
-                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              <Link to={`/projects/${p.id}`} className="group flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70">
+                <span className="min-w-0 flex-1 truncate group-hover:underline">{p.name}</span>
                 {statusChip(p.status)}
                 <HealthChip health={p.health} />
                 {p.priority !== "none" && (
