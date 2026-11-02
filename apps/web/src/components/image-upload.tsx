@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useServices } from "../lib/services";
 import { failure } from "../lib/form-state";
-import { Menu, MenuItem, MenuLabel } from "./menu";
+import { Menu, MenuItem } from "./menu";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -61,7 +61,6 @@ export function ImageUpload({ label, preview, hasImage, onSave, onRemove }: {
           </button>
         }
       >
-        <MenuLabel>PNG, JPEG, WebP or GIF, 2 MB at most</MenuLabel>
         <MenuItem onSelect={() => input.current?.click()}>{hasImage ? "Change image" : "Upload image"}</MenuItem>
         {hasImage && (
           <MenuItem danger onSelect={() => void run(onRemove)}>
