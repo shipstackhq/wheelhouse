@@ -108,16 +108,16 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
             )}
             {editing === "new" && <div className="mb-4">{form()}</div>}
             {shown.length === 0 && editing !== "new" && <p className="py-6 text-center text-sm text-muted">No terms{filter ? " match" : " yet"}.</p>}
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {shown.length > 0 && <ul className="card divide-y divide-line overflow-hidden">
               {shown.map((t) => (
                 <li key={t.id}>
-                  <Link to={`${base}/${t.id}`} title={t.term} className="card flex h-full min-h-20 flex-col gap-3 rounded-xl px-4 py-4 transition-colors hover:border-accent hover:bg-panel-2/70">
-                    <span className="line-clamp-3 text-[15px] font-medium leading-snug">{t.term}</span>
-                    {concept(t, false) && <span className="mt-auto flex flex-wrap gap-1.5">{concept(t, false)}</span>}
+                  <Link to={`${base}/${t.id}`} title={t.term} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
+                    <span className="min-w-0 flex-1 truncate font-medium">{t.term}</span>
+                    {concept(t, false)}
                   </Link>
                 </li>
               ))}
-            </ul>
+            </ul>}
 </Page>
       ) : (
         <>

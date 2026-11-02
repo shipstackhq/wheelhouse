@@ -100,27 +100,17 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
                 <p className="rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">No decisions match &ldquo;{query.trim()}&rdquo;.</p>
               )}
 
-              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {shown.length > 0 && <ul className="card divide-y divide-line overflow-hidden">
                 {shown.map((d) => (
                   <li key={d.id}>
-                    <Link
-                      to={`${base}/${d.number}`}
-                      title={d.title}
-                      className="card flex h-full min-h-20 flex-col gap-3 rounded-xl px-4 py-4 transition-colors hover:border-accent hover:bg-panel-2/70"
-                    >
-                      <span className={clsx("line-clamp-3 text-[15px] font-medium leading-snug", struck(d))}>{d.title}</span>
-                      <span className="mt-auto flex flex-wrap gap-1.5">
-                        <span className={clsx("chip", STATUS[d.status])}>{d.status}</span>
-                        {d.nodeIds.slice(0, 3).map((id) => {
-                          const n = byId.get(id);
-                          return n ? <span key={id} className="chip bg-accent/10 text-accent">{n.name}</span> : null;
-                        })}
-                        {d.nodeIds.length > 3 && <span className="chip bg-panel-2 text-muted">+{d.nodeIds.length - 3}</span>}
-                      </span>
+                    <Link to={`${base}/${d.number}`} title={d.title} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
+                      <span className={clsx("min-w-0 flex-1 truncate font-medium", struck(d))}>{d.title}</span>
+                      {d.nodeIds.length > 0 && <span className="shrink-0 text-xs text-muted">{d.nodeIds.length} map {d.nodeIds.length === 1 ? "node" : "nodes"}</span>}
+                      <span className={clsx("chip shrink-0", STATUS[d.status])}>{d.status}</span>
                     </Link>
                   </li>
                 ))}
-              </ul>
+              </ul>}
 </Page>
         ) : (
           <>

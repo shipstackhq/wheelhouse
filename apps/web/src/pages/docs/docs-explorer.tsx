@@ -345,7 +345,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
           aria-current={selectedId === k.id ? "true" : undefined}
           className={clsx(
             "flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 text-left transition-colors",
-            home ? "py-2.5 text-[15px] text-fg hover:bg-panel-2/70" : "py-1.5 text-sm",
+            home ? "py-2.5 text-[15px] text-fg hover:bg-panel-2/70 hover:underline" : "py-1.5 text-sm",
             !home && (selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg"),
           )}
           title={k.title}
