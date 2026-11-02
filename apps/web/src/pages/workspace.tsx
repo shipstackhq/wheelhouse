@@ -1,5 +1,7 @@
 import { useState } from "react";
-import type { Role, WorkspaceMember } from "@wheelhouse/api-client";
+import { Dialog } from "radix-ui";
+import type { Role, Seats, WorkspaceMember } from "@wheelhouse/api-client";
+import { CloseIcon } from "../components/icons";
 import { InviteForm } from "../components/invite-form";
 import { AccessLog, TeamsAccess } from "../components/workspace-access";
 import { PendingInvites } from "../components/pending-invites";
@@ -25,9 +27,12 @@ export function WorkspacePage() {
         return (
           <div className="h-full overflow-y-auto">
             <div className="w-full space-y-8 px-6 py-10">
-              <div>
-                <h1 className="text-xl font-semibold">{t.workspace.name}</h1>
-                <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="text-xl font-semibold">{t.workspace.name}</h1>
+                  <p className="mt-1 text-sm text-muted">Members, roles and tags. A role decides what someone can do around teams; they reach a team only when they are added to it. Tags are free-form (e.g. backend, design, pm).</p>
+                </div>
+                {canManage && <InviteDialog seats={t.seats} roles={assignableRoles(t.role)} teams={adminOf} />}
               </div>
 
               <SettingsList title="Members">
@@ -37,22 +42,9 @@ export function WorkspacePage() {
               </SettingsList>
 
               {canManage && (
-                <>
-                  <SettingsList title="Invite someone" hint="Creates a one-time link for one person. It works until it is used, revoked or expires, and is shown only once.">
-                    <SettingsRow label="Seats">
-                      {t.seats.used} of {t.seats.max} seats used ({t.seats.members} members, {t.seats.pending} pending)
-                    </SettingsRow>
-                    {t.seats.full && (
-                      <p className={`text-sm text-warn ${SETTINGS_ROW_PAD}`}>Your workspace is full. Revoke a pending invite or remove a member to free a seat.</p>
-                    )}
-                    <div className={SETTINGS_ROW_PAD}>
-                      <InviteForm kind="join_workspace" className="" disabled={t.seats.full} roles={assignableRoles(t.role)} teams={adminOf} />
-                    </div>
-                  </SettingsList>
-                  <SettingsList title="Pending invites">
-                    <PendingInvites bare invites={t.pendingInvites} />
-                  </SettingsList>
-                </>
+                <SettingsList title="Pending invites">
+                  <PendingInvites bare invites={t.pendingInvites} />
+                </SettingsList>
               )}
 
               {canManage && <TeamsAccess />}
@@ -62,6 +54,32 @@ export function WorkspacePage() {
         );
       }}
     </Loaded>
+  );
+}
+
+/** The invitation: a button at the top of the page that opens the form, with the seats and a warning when the workspace is full. */
+function InviteDialog({ seats, roles, teams }: { seats: Seats; roles: { value: Role; label: string }[]; teams: { key: string; name: string }[] }) {
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger className="btn btn-primary shrink-0">Invite someone</Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[min(94vw,480px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-line bg-panel p-5 text-fg shadow-2xl">
+          <Dialog.Title className="font-semibold">Invite someone</Dialog.Title>
+          <Dialog.Close aria-label="Close" className="absolute right-3 top-3 rounded p-1 text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50">
+            <CloseIcon aria-hidden />
+          </Dialog.Close>
+          <Dialog.Description className="mt-1 text-sm text-muted">
+            Creates a one-time link for one person. It works until it is used, revoked or expires, and is shown only once.
+          </Dialog.Description>
+          <p className="mt-1 text-xs text-muted">
+            {seats.used} of {seats.max} seats used ({seats.members} members, {seats.pending} pending)
+          </p>
+          {seats.full && <p className="mt-2 text-sm text-warn">Your workspace is full. Revoke a pending invite or remove a member to free a seat.</p>}
+          <InviteForm kind="join_workspace" className="mt-4" disabled={seats.full} roles={roles} teams={teams} />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

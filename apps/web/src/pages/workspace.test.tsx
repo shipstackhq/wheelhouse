@@ -5,6 +5,7 @@ import { apiError, renderApp } from "../test/harness";
 import { invite, workspace } from "../test/data";
 
 /** A member's row. The name also appears in the account menu, so look only inside the page. */
+const openInvite = async (user: ReturnType<typeof userEvent.setup>) => user.click(await screen.findByRole("button", { name: "Invite someone" }));
 const rowOf = (name: string) => within(screen.getByRole("main")).getByText(name).closest("form") as HTMLElement;
 const findRow = async (name: string) => (await within(await screen.findByRole("main")).findByText(name)).closest("form") as HTMLElement;
 
@@ -51,21 +52,24 @@ describe("the workspace page, for an owner", () => {
     expect(within(rowOf("Grace Hopper")).queryByRole("alert")).toBeNull(); // only the row that was refused
   });
 
-  test("the seats are shown, the invite form is there, and pending invites can be revoked", async () => {
+  test("pending invites can be revoked, and the invite dialog shows the seats and the form", async () => {
     const { server } = renderApp("/workspace", (s) => {
       s.on("GET /api/app/workspace", workspace({ seats: { members: 2, pending: 1, used: 3, max: 5, full: false }, pendingInvites: [invite()] }));
       s.on("DELETE /api/app/invites/i1", { ok: true });
     });
-    await screen.findByText("3 of 5 seats used (2 members, 1 pending)");
-    expect(screen.getByRole("button", { name: "Create invite link" })).toBeTruthy();
     const pending = (await screen.findByText("grace@example.test", { selector: ".font-medium" })).closest("form") as HTMLElement;
     expect(within(pending).getByText(/member · expires 2026-10-23/)).toBeTruthy();
-    await userEvent.setup().click(within(pending).getByRole("button", { name: "Revoke" }));
+    const user = userEvent.setup();
+    await user.click(within(pending).getByRole("button", { name: "Revoke" }));
     await waitFor(() => expect(server.sent("DELETE /api/app/invites/i1")).toHaveLength(1));
+    await openInvite(user);
+    await screen.findByText("3 of 5 seats used (2 members, 1 pending)");
+    expect(screen.getByRole("button", { name: "Create invite link" })).toBeTruthy();
   });
 
   test("a full workspace says so and the invite form is switched off", async () => {
     renderApp("/workspace", (s) => s.on("GET /api/app/workspace", workspace({ seats: { members: 5, pending: 0, used: 5, max: 5, full: true } })));
+    await openInvite(userEvent.setup());
     await screen.findByText("Your workspace is full. Revoke a pending invite or remove a member to free a seat.");
     expect((screen.getByRole("button", { name: "Create invite link" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByPlaceholderText("Their email") as HTMLInputElement).disabled).toBe(true);
@@ -76,6 +80,7 @@ describe("the workspace page, for an owner", () => {
       s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_workspace", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" }),
     );
     const user = userEvent.setup();
+    await openInvite(user);
     await user.type(await screen.findByPlaceholderText("Their email"), "new@example.test");
     await user.type(screen.getByPlaceholderText("tags: backend, design"), "design");
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
@@ -93,6 +98,7 @@ describe("the workspace page, for an owner", () => {
       s.on("POST /api/app/invites", { id: "i2", email: "new@example.test", kind: "join_workspace", expiresAt: "2026-10-23T00:00:00.000Z", link: "https://wh.example.test/invite#SECRET" });
     });
     const user = userEvent.setup();
+    await openInvite(user);
     await user.type(await screen.findByPlaceholderText("Their email"), "new@example.test");
     expect(await screen.findByRole("checkbox", { name: /Alpha/ })).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: /Beta/ })).toBeNull(); // an editor of Beta cannot hand it out
@@ -110,6 +116,7 @@ describe("the workspace page, for an owner", () => {
   test("an invite problem (already invited, not allowed) is shown in the server's words", async () => {
     renderApp("/workspace", (s) => s.on("POST /api/app/invites", apiError(409, "conflict", "That email already has a pending invite. Revoke it first to send a new one.")));
     const user = userEvent.setup();
+    await openInvite(user);
     await user.type(await screen.findByPlaceholderText("Their email"), "dup@example.test");
     await user.click(screen.getByRole("button", { name: "Create invite link" }));
     expect((await screen.findByText(/already has a pending invite/)).textContent).toContain("Revoke it first");
@@ -174,7 +181,7 @@ describe("the workspace page and team access (ADR-23)", () => {
     const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
     expect(options).toEqual(["admin", "member", "viewer", "guest"]); // no owner
     await user.keyboard("{Escape}");
-    expect(await screen.findByRole("button", { name: "Create invite link" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Invite someone" })).toBeTruthy();
   });
 
   test("an owner is offered all five roles", async () => {
