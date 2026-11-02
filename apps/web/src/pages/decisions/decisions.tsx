@@ -104,7 +104,7 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
                 {shown.map((d) => (
                   <li key={d.id}>
                     <Link to={`${base}/${d.number}`} title={d.title} className="flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
-                      <span className={clsx("min-w-0 flex-1 truncate font-medium", struck(d))}>{d.title}</span>
+                      <span className={clsx("min-w-0 flex-1 truncate", struck(d))}>{d.title}</span>
                       {d.nodeIds.length > 0 && <span className="shrink-0 text-xs text-muted">{d.nodeIds.length} map {d.nodeIds.length === 1 ? "node" : "nodes"}</span>}
                       <span className={clsx("chip shrink-0", STATUS[d.status])}>{d.status}</span>
                     </Link>

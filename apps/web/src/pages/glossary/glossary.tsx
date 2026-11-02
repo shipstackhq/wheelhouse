@@ -112,7 +112,7 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
               {shown.map((t) => (
                 <li key={t.id}>
                   <Link to={`${base}/${t.id}`} title={t.term} className="flex items-center gap-3 px-4 py-2 text-sm transition-colors hover:bg-panel-2/70 hover:underline">
-                    <span className="min-w-0 flex-1 truncate font-medium">{t.term}</span>
+                    <span className="min-w-0 flex-1 truncate">{t.term}</span>
                     {concept(t, false)}
                   </Link>
                 </li>
