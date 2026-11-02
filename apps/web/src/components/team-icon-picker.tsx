@@ -1,7 +1,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import { Popover } from "radix-ui";
-import { isEmoji, TEAM_ICON_COLORS, TEAM_ICON_NAMES, type TeamIconColor } from "@wheelhouse/shared/team-icon";
+import { TEAM_ICON_COLORS, TEAM_ICON_NAMES, type TeamIconColor } from "@wheelhouse/shared/team-icon";
 import { TEAM_ICONS } from "./icons";
 import { ICON_COLOR_CLASS, TeamIcon } from "./team-icon";
 
@@ -33,9 +33,7 @@ export function TeamIconPicker(props: {
   const color = (TEAM_ICON_COLORS as readonly string[]).includes(props.iconColor ?? "") ? (props.iconColor as TeamIconColor) : null;
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"icon" | "emoji">(ri || !props.icon ? "icon" : "emoji");
-  const [typed, setTyped] = useState("");
-  const typedBad = typed.trim() !== "" && !isEmoji(typed.trim());
-  const pickEmoji = (e: string) => (setOpen(false), setTyped(""), props.onSave(e, null));
+  const pickEmoji = (e: string) => (setOpen(false), props.onSave(e, null));
   const preview = <TeamIcon team={{ key: props.teamKey, icon: props.icon, iconColor: props.iconColor }} />;
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -80,20 +78,13 @@ export function TeamIconPicker(props: {
                     })}
                   </div>
                 ) : (
-                  <>
-                    <div role="group" aria-label="Common emoji" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto overscroll-contain">
+                  <div role="group" aria-label="Common emoji" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto overscroll-contain">
                       {EMOJI_PRESETS.map((e) => (
                         <button key={e} type="button" aria-label={e} aria-pressed={props.icon === e} onClick={() => pickEmoji(e)} className={clsx(CELL, "text-xl", props.icon === e ? "bg-accent/15" : "hover:bg-panel-2")}>
                           {e}
                         </button>
                       ))}
-                    </div>
-                    <form className="flex gap-2" onSubmit={(e) => (e.preventDefault(), typed.trim() && !typedBad && pickEmoji(typed.trim()))}>
-                      <input className="input min-w-0 flex-1" aria-label="Emoji" placeholder="Type or paste an emoji" value={typed} maxLength={16} onChange={(e) => setTyped(e.target.value)} aria-invalid={typedBad || undefined} />
-                      <button type="submit" className="btn" disabled={!typed.trim() || typedBad}>Use</button>
-                    </form>
-                    {typedBad && <p className="text-xs text-danger" role="alert">Use a single emoji.</p>}
-                  </>
+                  </div>
                 )}
               </Popover.Content>
             </Popover.Portal>
