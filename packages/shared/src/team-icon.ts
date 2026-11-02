@@ -9,6 +9,12 @@ export const TEAM_ICON_NAMES = [
   "database-2", "server", "cpu", "palette", "brush", "camera", "music-2", "gamepad", "book", "graduation-cap", "stethoscope",
   "plane", "car", "ship", "home", "building-2", "map-pin", "compass-3", "lightbulb", "magic", "trophy", "medal", "line-chart",
   "pie-chart", "bar-chart", "time", "calendar", "anchor", "puzzle", "user", "team", "customer-service", "megaphone", "gift", "sun",
+  "vip-crown-2", "sword", "seedling", "earth", "moon", "thunderstorms", "drop", "windy", "snowy", "rainbow", "bear-smile", "ghost",
+  "brain", "dna", "microscope", "flask", "test-tube", "hammer", "film", "mic", "headphone", "newspaper", "article", "folder", "archive",
+  "send-plane", "price-tag-3", "coupon", "money-dollar-circle", "coin", "funds", "stock", "shopping-bag", "truck", "bike", "train",
+  "rocket", "space-ship", "restaurant", "cake-2", "cup", "hospital", "heart-pulse", "capsule", "run", "basketball", "football", "wifi",
+  "signal-tower", "radar", "usb", "smartphone", "computer", "braces", "git-branch", "fingerprint", "shield-keyhole", "spy", "eye",
+  "bubble-chart", "links", "qr-code", "stack", "layout-grid", "apps", "function",
 ] as const;
 export type TeamIconName = (typeof TEAM_ICON_NAMES)[number];
 

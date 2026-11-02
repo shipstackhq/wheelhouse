@@ -40,7 +40,7 @@ export function TeamIconPicker(props: {
             <Popover.Trigger className="btn" disabled={props.pending}>Icon</Popover.Trigger>
             <Popover.Portal>
               <Popover.Content align="end" sideOffset={6} collisionPadding={8} className={clsx(BOX, "w-80 space-y-3")}>
-                <div role="group" aria-label="Icon" className="grid grid-cols-8 gap-1">
+                <div role="group" aria-label="Icon" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto">
                   {TEAM_ICON_NAMES.map((n) => {
                     const Icon = TEAM_ICONS[n];
                     return (
