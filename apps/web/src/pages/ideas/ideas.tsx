@@ -103,7 +103,7 @@ export function Ideas(props: { ideas: IdeaSummary[] }) {
                 </span>
                 <span className="text-xs text-muted">{when(i.updatedAt)}</span>
                 <span className="inline-flex items-center gap-1 text-xs text-muted" title={`${i.commentCount} comment${i.commentCount === 1 ? "" : "s"}`}>
-                  <CommentIcon aria-hidden /> {i.commentCount}
+                  <CommentIcon aria-hidden className="text-base" /> {i.commentCount}
                 </span>
               </Link>
             </li>
