@@ -232,7 +232,7 @@ function Row({ item: n, view, selected, onSelect, onAct }: { item: InboxItem; vi
         onClick={onSelect}
         className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/50"
       />
-      <div className="pointer-events-none relative flex gap-2 px-3 py-2">
+      <div className="pointer-events-none relative flex gap-2 p-3">
         <span aria-hidden className={clsx("mt-1.5 h-2 w-2 shrink-0 rounded-full", unread ? "bg-accent" : "bg-transparent")} />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="flex items-center gap-2">
@@ -268,7 +268,7 @@ function Row({ item: n, view, selected, onSelect, onAct }: { item: InboxItem; vi
 
 function Detail({ item: n, view, onBack, onAct }: { item: InboxItem; view: InboxView; onBack: () => void; onAct: (a: Action) => void }) {
   return (
-    <article className="mx-auto w-full max-w-3xl p-4">
+    <article className="mx-auto w-full max-w-3xl px-4 py-3">
       <button type="button" onClick={onBack} className="btn mb-2 md:hidden">
         <ChevronLeftIcon /> Back
       </button>
