@@ -50,17 +50,11 @@ export function DevicesSettingsPage() {
       </SettingsList>
       <RunDefaultsCard devices={query.data ?? []} />
       <Loaded query={query} label="Loading devices" rows={2}>
-        {(devices) =>
-          devices.length === 0 ? (
-            <p className="text-sm text-muted">No devices yet.</p>
-          ) : (
-            <ul className="space-y-6" aria-label="Devices">
-              {devices.map((d) => (
-                <DeviceCard key={d.id} device={d} />
-              ))}
-            </ul>
-          )
-        }
+        {(devices) => (
+          <SettingsList title="Connected devices">
+            {devices.length === 0 ? <p className={`text-sm text-muted ${SETTINGS_ROW_PAD}`}>No devices yet.</p> : devices.map((d) => <DeviceRow key={d.id} device={d} />)}
+          </SettingsList>
+        )}
       </Loaded>
     </div>
   );
@@ -102,7 +96,8 @@ function RunDefaultsCard({ devices }: { devices: DeviceView[] }) {
   );
 }
 
-function DeviceCard({ device: d }: { device: DeviceView }) {
+/** One connected device, as a row of the Devices list: who it is and what state it is in, then its details and the ways to change it. */
+function DeviceRow({ device: d }: { device: DeviceView }) {
   const { api, queryClient } = useServices();
   const { confirm, prompt, dialogs } = useDialogs();
   const [error, setError] = useState<string | null>(null);
@@ -118,20 +113,47 @@ function DeviceCard({ device: d }: { device: DeviceView }) {
   };
   const claude = d.capabilities.claude;
   return (
-    <li>
-      <SettingsList
-        title={
-          <>
-            {d.name}
-            <span className={clsx("chip", STATUS_STYLE[d.status])}>{d.status}</span>
-            <span className="chip bg-panel-2 text-muted">{d.os}</span>
-            {d.activeJobs > 0 && <span className="chip bg-agent/15 text-agent">{d.activeJobs} running</span>}
-          </>
-        }
-      >
-        <SettingsRow label="Claude Code">
+    <div className={`space-y-3 ${SETTINGS_ROW_PAD}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-medium">{d.name}</h3>
+          <span className={clsx("chip", STATUS_STYLE[d.status])}>{d.status}</span>
+          <span className="chip bg-panel-2 text-muted">{d.os}</span>
+          {d.activeJobs > 0 && <span className="chip bg-agent/15 text-agent">{d.activeJobs} running</span>}
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => {
+              const name = await prompt({ title: "Rename device", placeholder: d.name, confirmLabel: "Rename" });
+              if (name) await run(() => api.devices.update(d.id, { name }));
+            }}
+          >
+            Rename
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={async () => {
+              const ok = await confirm({
+                title: `Unpair ${d.name}?`,
+                description: "It stops getting work at once, and any run on it is canceled. Branches it already pushed stay. To use it again, pair it again.",
+                confirmLabel: "Unpair",
+                danger: true,
+              });
+              if (ok) await run(() => api.devices.unpair(d.id));
+            }}
+          >
+            Unpair
+          </button>
+        </div>
+      </div>
+      <dl className="grid items-center gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
+        <dt className="text-muted">Claude Code</dt>
+        <dd>
           {!claude ? (
-            <span>Not reported yet</span>
+            <span className="text-muted">Not reported yet</span>
           ) : !claude.installed ? (
             <span className="text-warn">Not installed</span>
           ) : !claude.signedIn ? (
@@ -139,57 +161,27 @@ function DeviceCard({ device: d }: { device: DeviceView }) {
           ) : (
             <span>
               Signed in{claude.subscriptionType ? ` (${claude.subscriptionType})` : ""}
-              {claude.version ? ` · ${claude.version}` : null}
+              {claude.version ? <span className="text-muted"> · {claude.version}</span> : null}
             </span>
           )}
-        </SettingsRow>
-        <SettingsRow label="Models">{d.models.join(", ") || "none until Claude Code is installed and signed in"}</SettingsRow>
-        <SettingsRow label="Runs at once">
+        </dd>
+        <dt className="text-muted">Models</dt>
+        <dd>{d.models.join(", ") || <span className="text-muted">none until Claude Code is installed and signed in</span>}</dd>
+        <dt className="text-muted">Runs at once</dt>
+        <dd className="max-w-[120px]">
           <Select
-            className="!w-auto"
             ariaLabel="Runs at once"
             value={String(d.poolSize)}
             options={Array.from({ length: MAX_POOL }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
             onValueChange={(v) => void run(() => api.devices.update(d.id, { poolSize: Number(v) }))}
           />
-        </SettingsRow>
-        <SettingsRow label="Last seen">
-          {d.lastSeenAt ? timeAgo(d.lastSeenAt) : "never"}
-          {d.daemonVersion && ` · daemon ${d.daemonVersion}`}
-        </SettingsRow>
-        <div className={`flex flex-wrap items-center justify-between gap-3 ${SETTINGS_ROW_PAD}`}>
-          <p className="min-w-0 text-sm text-danger" role={error ? "alert" : undefined}>{error}</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="btn"
-              onClick={async () => {
-                const name = await prompt({ title: "Rename device", placeholder: d.name, confirmLabel: "Rename" });
-                if (name) await run(() => api.devices.update(d.id, { name }));
-              }}
-            >
-              Rename
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: `Unpair ${d.name}?`,
-                  description: "It stops getting work at once, and any run on it is canceled. Branches it already pushed stay. To use it again, pair it again.",
-                  confirmLabel: "Unpair",
-                  danger: true,
-                });
-                if (ok) await run(() => api.devices.unpair(d.id));
-              }}
-            >
-              Unpair
-            </button>
-          </div>
-        </div>
-      </SettingsList>
+        </dd>
+        <dt className="text-muted">Last seen</dt>
+        <dd>{d.lastSeenAt ? timeAgo(d.lastSeenAt) : "never"}{d.daemonVersion && <span className="text-muted"> · daemon {d.daemonVersion}</span>}</dd>
+      </dl>
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       {dialogs}
-    </li>
+    </div>
   );
 }
 
