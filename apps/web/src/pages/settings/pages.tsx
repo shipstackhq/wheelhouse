@@ -64,10 +64,7 @@ export function ProfileSettingsPage() {
 export function PasswordSettingsPage() {
   return (
     <Section title="Password" hint="Change the password you sign in with.">
-      <div className="card p-5">
-        <h2 className="font-medium">Your password</h2>
-        <ChangePasswordForm />
-      </div>
+      <ChangePasswordForm />
     </Section>
   );
 }

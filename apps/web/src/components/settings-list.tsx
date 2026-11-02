@@ -1,15 +1,20 @@
 import type { ReactNode } from "react";
 
 /**
- * A settings section as a list: an optional title, then a card divided into rows, one setting each (see `SettingsRow`).
+ * A settings section as a list: an optional title (and a line under it), then a card divided into rows, one setting each (see `SettingsRow`).
  * Anything else can sit in the list as a row of its own, padded as `SETTINGS_ROW_PAD`.
  */
 export const SETTINGS_ROW_PAD = "px-6 py-4";
 
-export function SettingsList({ title, children }: { title?: string; children: ReactNode }) {
+export function SettingsList({ title, hint, children }: { title?: ReactNode; hint?: string; children: ReactNode }) {
   return (
-    <section className="space-y-2">
-      {title && <h2 className="px-1 font-medium">{title}</h2>}
+    <section className="space-y-2" aria-label={typeof title === "string" ? title : undefined}>
+      {(title || hint) && (
+        <div className="space-y-0.5 px-1">
+          {title && <h2 className="flex flex-wrap items-center gap-2 font-medium">{title}</h2>}
+          {hint && <p className="text-sm text-muted">{hint}</p>}
+        </div>
+      )}
       <div className="card divide-y divide-line">{children}</div>
     </section>
   );
