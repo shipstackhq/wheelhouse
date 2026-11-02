@@ -5,7 +5,7 @@ import { CloseIcon } from "../components/icons";
 import { InviteForm } from "../components/invite-form";
 import { AccessLog, TeamsAccess } from "../components/workspace-access";
 import { PendingInvites } from "../components/pending-invites";
-import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "../components/settings-list";
+import { SETTINGS_ROW_PAD, SettingsList } from "../components/settings-list";
 import { Loaded } from "../components/query-state";
 import { SubmitButton } from "../components/submit-button";
 import { Select } from "../components/ui";
