@@ -5,7 +5,6 @@ import { Dialog } from "radix-ui";
 import { useQuery } from "@tanstack/react-query";
 import type { AgentEntry } from "@wheelhouse/api-client";
 import { AgentAvatar } from "../../components/agent-avatar";
-import { AgentCard } from "../../components/agent-card";
 import { CopyBlock } from "../../components/copy-block";
 import { Loaded } from "../../components/query-state";
 import { useDialogs } from "../../components/ui";
@@ -50,7 +49,7 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
   };
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full space-y-6 px-6 py-10">
+      <div className="w-full space-y-6 px-4 py-8 sm:px-8 lg:py-12">
         <PageHeader title="Agents" hint="The agents this team uses in Claude Code." action={enabled && manage && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>Add</button>} className="mb-0" />
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         {!enabled ? (
@@ -59,22 +58,20 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
           <p className="text-sm text-muted">No agents on this team yet.{manage && " Use Add to pick some."}</p>
         ) : (
           <>
-            <div className="flex flex-col gap-3">
+            <ul className="card divide-y divide-line">
               {agents.map((a) => (
-                <AgentCard
-                  key={a.slug}
-                  agent={a}
-                  custom={a.source === "custom"}
-                  action={
-                    <div className="flex gap-2">
-                      <Link to={`/agents/${a.slug}`} className="btn" aria-label={`Open ${a.name}`}>Open</Link>
-                      <button className="btn" aria-label={`Learnings of ${a.name}`} onClick={() => setLearning(a)}>Learnings</button>
-                      {manage && <button className="btn" aria-label={`Remove ${a.name}`} onClick={() => void remove(a)}>Remove</button>}
-                    </div>
-                  }
-                />
+                <li key={a.slug} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                  <AgentAvatar avatar={a.avatar} name={a.name} size="md" />
+                  <div className="min-w-40 flex-1">
+                    <div className="font-medium">{a.name}{a.source === "custom" && <span className="text-muted"> (custom)</span>}</div>
+                    <div className="text-xs text-muted">{a.role} · {a.summary}</div>
+                  </div>
+                  <Link to={`/agents/${a.slug}`} className="btn" aria-label={`Open ${a.name}`}>Open</Link>
+                  <button className="btn" aria-label={`Learnings of ${a.name}`} onClick={() => setLearning(a)}>Learnings</button>
+                  {manage && <button className="btn btn-danger" aria-label={`Remove ${a.name}`} onClick={() => void remove(a)}>Remove</button>}
+                </li>
               ))}
-            </div>
+            </ul>
             <div className="card space-y-2 p-5">
               <h2 className="font-medium">Use in Claude Code</h2>
               <p className="text-sm text-muted">In a repository linked to this team, run this once (it also runs when a session starts), then ask for an agent by name.</p>
