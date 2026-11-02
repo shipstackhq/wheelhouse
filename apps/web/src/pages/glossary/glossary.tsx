@@ -7,7 +7,7 @@ import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { ArrowLeftIcon, EditIcon, SearchIcon, TermIcon } from "../../components/icons";
-import { PageHeader } from "../../components/page-header";
+import { Page } from "../../components/page";
 
 /**
  * `/t/:key/glossary` is the team's vocabulary as a grid of cards (the layout of the docs home), each showing the term and the
@@ -98,13 +98,10 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
   return (
     <div className="flex h-full flex-col overflow-hidden bg-page">
       {props.termId === undefined ? (
-        <section className="min-h-0 flex-1 overflow-y-auto">
-          <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-            <PageHeader
+        <Page
               title="Glossary"
               hint="Team vocabulary a newcomer wouldn't know. Terms are underlined with a hover definition wherever they appear in map explainers and decisions."
-              action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft({ term: "", definition: "", nodeId: "" }), setEditing("new"))}>+ Add term</button>}
-            />
+              action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft({ term: "", definition: "", nodeId: "" }), setEditing("new"))}>+ Add term</button>}>
             {props.terms.length > 0 && (
               <div className="relative mb-4">
                 <input
@@ -130,8 +127,7 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
                 </li>
               ))}
             </ul>
-          </div>
-        </section>
+</Page>
       ) : (
         <>
           <nav aria-label="Glossary navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">

@@ -12,7 +12,7 @@ import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { AgentIcon, ArrowLeftIcon, CloseIcon, EditIcon, NodeIcon, SearchIcon } from "../../components/icons";
-import { PageHeader } from "../../components/page-header";
+import { Page } from "../../components/page";
 
 type NodeLite = { id: string; name: string; layer: string };
 /** `version` is the version being edited: sent back so a change made since is refused, not overwritten. */
@@ -80,13 +80,10 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
     <GlossaryProvider terms={props.terms}>
       <div className="flex h-full flex-col overflow-hidden bg-page">
         {props.number === undefined ? (
-          <section className="min-h-0 flex-1 overflow-y-auto">
-            <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-              <PageHeader
+          <Page
                 title="Decisions"
                 hint={<>The <i>why</i> behind non-obvious choices (ADRs), attached to the parts of the map they shape, so nobody &ldquo;fixes&rdquo; something that was deliberate.</>}
-                action={<button className="btn btn-primary shrink-0" onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}>+ Record decision</button>}
-              />
+                action={<button className="btn btn-primary shrink-0" onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}>+ Record decision</button>}>
 
               {props.decisions.length === 0 && (
                 <p className="rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">
@@ -134,8 +131,7 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
                   </li>
                 ))}
               </ul>
-            </div>
-          </section>
+</Page>
         ) : (
           <>
             <nav aria-label="Decision navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-sm sm:px-8 lg:px-12">

@@ -13,7 +13,7 @@ import { teamAgentsQuery, useAgents } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { useAgentRights } from "../../lib/agent-teams";
-import { PageHeader } from "../../components/page-header";
+import { Page } from "../../components/page";
 
 /** `/t/:key/agents`: the team's roster. Members read it; workspace admins and the team's admins add and remove. */
 export function TeamAgentsPage() {
@@ -48,9 +48,8 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
     if (await confirm({ title: `Remove ${a.name}?`, description: "It leaves this team's roster. The agent itself is kept.", confirmLabel: "Remove" })) await attempt(() => api.teams.removeAgent(teamKey, a.slug));
   };
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="w-full space-y-6 px-4 py-8 sm:px-8 lg:py-12">
-        <PageHeader title="Agents" hint="The agents this team uses in Claude Code." action={enabled && manage && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>Add</button>} className="mb-0" />
+    <>
+        <Page className="space-y-6" title="Agents" hint="The agents this team uses in Claude Code." action={enabled && manage && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>Add</button>}>
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         {!enabled ? (
           <p className="card p-5 text-sm text-muted">Agents are off for this workspace.</p>
@@ -80,11 +79,11 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
             </div>
           </>
         )}
-      </div>
+      </Page>
       {dialogs}
       {learning && <LearningsDialog teamKey={teamKey} agent={learning} manage={manage} onClose={() => setLearning(null)} />}
       {adding && <AddDialog teamKey={teamKey} onRoster={agents.map((a) => a.slug)} onClose={() => setAdding(false)} add={(slug) => attempt(() => api.teams.addAgent(teamKey, slug))} />}
-    </div>
+    </>
   );
 }
 

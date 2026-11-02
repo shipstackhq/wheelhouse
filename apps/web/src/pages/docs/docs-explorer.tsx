@@ -16,7 +16,7 @@ import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { buildFileTree, containsMatch, readTime, sectionOf, sortedChildren, type FileTreeNode } from "./file-tree";
 import { AgentIcon, ArrowLeftIcon, ArrowRightIcon, BookIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, FileIcon, FolderIcon, NodeIcon, SearchIcon, WarningIcon } from "../../components/icons";
-import { PageHeader } from "../../components/page-header";
+import { Page } from "../../components/page";
 
 type TreeDoc = DocsIndex["docs"][number];
 
@@ -412,13 +412,10 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   return (
     <div className="confluence-docs flex h-full flex-col overflow-hidden bg-page">
       {selectedId === null ? (
-        <section className="min-h-0 flex-1 overflow-y-auto">
-          <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-            <PageHeader title="Docs" action={<button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>+ Create</button>} />
+        <Page title="Docs" action={<button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>+ Create</button>}>
             {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
             {docList(true)}
-          </div>
-        </section>
+</Page>
       ) : (
         <>
           <nav aria-label="Doc navigation" className="flex items-center gap-2 border-b border-line/70 px-4 py-2 text-xs sm:px-8 lg:px-12">

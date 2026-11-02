@@ -4,7 +4,7 @@ import { DashboardScopeProvider } from "../../lib/dashboard-scope";
 import { useBoard } from "../../lib/queries";
 import { DashboardRefresh } from "../dashboard/refresh";
 import { TEAM_WIDGETS, SPAN_CLASS } from "../dashboard/registry";
-import { PageHeader } from "../../components/page-header";
+import { Page } from "../../components/page";
 
 /**
  * `/t/:key/overview`: the team's own dashboard, so the most important things about it are visible at a glance. It is the
@@ -17,10 +17,8 @@ export function TeamOverviewPage() {
   const name = board.data?.team.name;
   return (
     <DashboardScopeProvider value={key}>
-      <div className="h-full overflow-y-auto">
+      <Page title={`Overview${name ? ` of ${name}` : ""}`} hint="What matters most in this team right now. The workspace dashboard is on the home page." action={<Link to={`/t/${key}`} className="btn">Open the board</Link>}>
         <DashboardRefresh stream={false} />
-        <div className="px-6 py-6">
-          <PageHeader title={`Overview${name ? ` of ${name}` : ""}`} hint="What matters most in this team right now. The workspace dashboard is on the home page." action={<Link to={`/t/${key}`} className="btn">Open the board</Link>} className="mb-5" />
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
             {TEAM_WIDGETS.map(({ id, span, Component }) => (
               <div key={id} className={`${SPAN_CLASS[span]} flex flex-col`}>
@@ -28,8 +26,7 @@ export function TeamOverviewPage() {
               </div>
             ))}
           </div>
-        </div>
-      </div>
+      </Page>
     </DashboardScopeProvider>
   );
 }

@@ -9,7 +9,7 @@ import { describeFailure } from "../../lib/form-state";
 import { useDrawings } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
-import { PageHeader } from "../../components/page-header";
+import { Page } from "../../components/page";
 
 /** `/t/:key/drawings`: the team's drawings as a grid of cards. This page never loads Excalidraw: a card shows the stored SVG preview. */
 export function DrawingsPage() {
@@ -60,13 +60,10 @@ function DrawingsGrid({ teamKey, drawings }: { teamKey: string; drawings: Drawin
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-page">
-      <section className="min-h-0 flex-1 overflow-y-auto">
-        <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-          <PageHeader
+      <Page
             title="Drawings"
             hint="Whiteboards and diagrams your team and its agents can open and read."
-            action={drawings.length > 0 && <button className="btn btn-primary shrink-0" disabled={pending} onClick={create}>New drawing</button>}
-          />
+            action={drawings.length > 0 && <button className="btn btn-primary shrink-0" disabled={pending} onClick={create}>New drawing</button>}>
           {error && <p className="mb-4 text-sm text-danger" role="alert">{error}</p>}
           {drawings.length === 0 ? (
             <div className="rounded-md border border-dashed border-line p-8 text-center">
@@ -120,8 +117,7 @@ function DrawingsGrid({ teamKey, drawings }: { teamKey: string; drawings: Drawin
               )}
             </>
           )}
-        </div>
-      </section>
+</Page>
       {dialogs}
     </div>
   );
