@@ -4,6 +4,17 @@ import userEvent from "@testing-library/user-event";
 import { apiError, renderIn, serverWithData } from "../test/harness";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
+// jsdom has no layout, so Radix's pointer tracking in a submenu eats clicks: items there are chosen from the keyboard.
+const choose = async (user: ReturnType<typeof userEvent.setup>, item: HTMLElement) => {
+  item.focus();
+  await user.keyboard("{Enter}");
+};
+
+const openWorkspaces = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
+  await user.click(await screen.findByRole("menuitem", { name: "Workspaces" }));
+};
+
 const two = () => {
   const s = serverWithData();
   s.on("GET /api/app/me/workspaces", {
@@ -24,25 +35,25 @@ describe("the workspace switcher", () => {
     expect(button.getAttribute("title")).toBe("Analytical Engines");
     expect(button.textContent).toBe("A"); // a round icon with the initial; the name is in the menu and the tooltip
     expect(button.querySelector("svg")).toBeTruthy(); // the down arrow that says it is a menu
-    await userEvent.setup().click(button);
+    await openWorkspaces(userEvent.setup());
     const group = await screen.findByRole("group", { name: "Workspaces" });
-    const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
-    expect(current.disabled).toBe(true);
-    expect(within(group).getAllByRole("button")).toHaveLength(2); // the workspace and Create workspace
+    const current = within(group).getByRole("menuitem", { name: /Analytical Engines/ }) as HTMLElement;
+    expect(current.getAttribute("aria-disabled")).toBe("true");
+    expect(within(group).getAllByRole("menuitem")).toHaveLength(1); // the one workspace
   });
 
   test("with several it lists them, marks the current one, and switching tells the server and opens the other workspace's address, keeping what was read", async () => {
     const { server, services, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", two());
     services.queryClient.setQueryData(["marker"], "kept: every key starts with its workspace, so nothing needs forgetting");
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
+    await openWorkspaces(user);
     const group = await screen.findByRole("group", { name: "Workspaces" });
-    await within(group).findByRole("button", { name: /Difference Engines/ });
-    const current = within(group).getByRole("button", { name: /Analytical Engines/ }) as HTMLButtonElement;
-    expect(current.disabled).toBe(true);
+    await within(group).findByRole("menuitem", { name: /Difference Engines/ });
+    const current = within(group).getByRole("menuitem", { name: /Analytical Engines/ }) as HTMLElement;
+    expect(current.getAttribute("aria-disabled")).toBe("true");
     expect(current.getAttribute("aria-current")).toBe("true");
     expect(within(group).getByText("viewer")).toBeTruthy();
-    await user.click(within(group).getByRole("button", { name: /Difference Engines/ }));
+    await choose(user, within(group).getByRole("menuitem", { name: /Difference Engines/ }));
     await waitFor(() => expect(server.sent("POST /api/app/me/workspace")).toHaveLength(1));
     expect(server.sent("POST /api/app/me/workspace")[0].body).toEqual({ workspaceId: "t2" });
     await waitFor(() => expect(router.state.location.pathname).toBe("/w/de"));
@@ -55,6 +66,14 @@ describe("the workspace switcher", () => {
     expect(button.className).not.toContain("md:hidden");
     expect(button.textContent).toBe("A");
     expect(button.querySelector("svg")!.getAttribute("class")).toContain("md:hidden");
+  });
+
+  test("the menu has Settings, which goes to the settings screen", async () => {
+    const { router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "Settings" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/settings"));
   });
 
   test("Ctrl+2 opens the second workspace", async () => {
@@ -71,8 +90,8 @@ describe("the workspace switcher", () => {
     s.on("POST /api/app/me/workspace", { workspace: { id: "t3", name: "New Co" } });
     const { server, router } = renderIn(<WorkspaceSwitcher name="Analytical Engines" />, "/t/AA", s);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: /^Workspace menu/ }));
-    await user.click(await screen.findByRole("button", { name: "Create workspace" }));
+    await openWorkspaces(user);
+    await choose(user, await screen.findByRole("menuitem", { name: "Create workspace" }));
     await user.type(await screen.findByLabelText("Name"), "New Co");
     expect((screen.getByLabelText("Address") as HTMLInputElement).value).toBe("new-co");
     await user.click(screen.getByRole("button", { name: "Create" }));
