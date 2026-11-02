@@ -39,7 +39,7 @@ export function ProfileSettingsPage() {
         <SettingsRow label="Profile picture">
           <ImageUpload
             label="Profile picture"
-            preview={<Avatar name={me.user.name} email={me.user.email} size={40} imageUrl={me.user.avatarUrl} />}
+            preview={<Avatar name={me.user.name} email={me.user.email} size={20} imageUrl={me.user.avatarUrl} />}
             hasImage={!!me.user.avatarUrl}
             onSave={(data) => api.avatar.set(data)}
             onRemove={() => api.avatar.remove()}
