@@ -6,5 +6,6 @@ export { DeliveriesService } from "./deliveries.service";
 export { GithubApiError, type GithubApi } from "./api";
 export { github } from "./runtime";
 export { failedChecks } from "./pr-rules";
+export { suggestedPolicy } from "./ci-policy.service";
 export { REPOSITORY_CHANGED, PUSH_LANDED, ISSUE_MOVE_REQUESTED, ISSUE_COMMENT_REQUESTED, type RepositoryChanged, type PushLanded, type IssueMoveRequested, type IssueCommentRequested } from "./github.events";
 export type { RepositoryRow } from "./github.repository";

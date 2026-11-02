@@ -31,9 +31,9 @@ const job = (id: string, over: Partial<JobView> = {}): JobView => ({
   ...over,
 });
 
-const runs = (jobs: JobView[], reviewCi: IssueRuns["reviewCi"] = null): IssueRuns => ({
+const runs = (jobs: JobView[], reviewVerdict: IssueRuns["reviewVerdict"] = null): IssueRuns => ({
   jobs,
-  reviewCi,
+  reviewVerdict,
   devices: [{ id: "dev-1", name: "Atharva's MacBook Pro", status: "online", models: ["haiku", "sonnet"], poolSize: 3, activeJobs: 0 }],
   repositories: [{ id: "repo-1", name: "wheelhouse", fullName: "shipstackhq/wheelhouse", defaultBranch: "staging" }],
 });
@@ -64,14 +64,14 @@ describe("runs on a device", () => {
 
   test("starting a reviewer by hand on a red pull request asks first; Cancel starts nothing, Review anyway starts it", async () => {
     const { server } = mount([], (s) => {
-      s.on("GET /api/app/issues/WH-1/jobs", runs([], { state: "failure", failed: ["lint", "build"] }));
+      s.on("GET /api/app/issues/WH-1/jobs", runs([], { state: "red", reasons: ["CI job lint failed", "CI job build failed"] }));
       s.on("GET /api/app/teams/WH/agents", { agents: [{ id: "wa-1", slug: "reviewer", name: "Remy", role: "Reviewer", avatar: { style: "lorelei", seed: "remy" } }] });
       s.on("POST /api/app/issues/WH-1/jobs", { job: job("f6", { state: "offered" }) });
     });
     await userEvent.click(await screen.findByRole("combobox", { name: "Agent" }));
     await userEvent.click(await screen.findByRole("option", { name: "Remy" }));
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
-    expect(await screen.findByText(/CI is failing on the pull request for this issue \(lint, build\)\. Review it anyway\?/)).toBeTruthy();
+    expect(await screen.findByText(/CI is failing on the pull request for this issue \(CI job lint failed, CI job build failed\)\. Review it anyway\?/)).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(server.sent("POST /api/app/issues/WH-1/jobs")).toHaveLength(0);
     await userEvent.click(screen.getByRole("button", { name: "Start" }));

@@ -1,4 +1,5 @@
 import type { ChatMessageState, DeviceJobState } from "../../db/schema";
+import type { Verdict } from "../verdict/index";
 import { DEFAULT_MODELS, ONLINE_WINDOW_MS, type Device } from "./device-common";
 import type { ChatMessageRow, ChatThreadRow, JobRow, MessageRow } from "./daemon.repository";
 
@@ -41,7 +42,7 @@ export function jobDelivery(state: DeviceJobState, result: Record<string, unknow
   return state === "succeeded" || state === "failed" || state === "canceled" ? "none" : null;
 }
 
-export function jobView(j: JobRow, extra: { deviceName?: string | null; repositoryName?: string | null; lastHeardAt?: Date | null; pr?: { state: "open" | "closed" | "merged" | null; ciState: "success" | "failure" | "pending" | null; failed: string[] } } = {}) {
+export function jobView(j: JobRow, extra: { deviceName?: string | null; repositoryName?: string | null; lastHeardAt?: Date | null; pr?: { state: "open" | "closed" | "merged" | null; verdict: Verdict | null } } = {}) {
   return {
     id: j.id,
     state: j.state,
@@ -56,7 +57,7 @@ export function jobView(j: JobRow, extra: { deviceName?: string | null; reposito
     result: j.result,
     delivery: jobDelivery(j.state, j.result),
     // The pull request's live state, joined from the webhook-kept table; `state` is null until GitHub has told us about it.
-    pullRequest: j.result.pullRequest ? { ...(j.result.pullRequest as { number: number; url: string }), state: extra.pr?.state ?? null, ciState: extra.pr?.ciState ?? null, failed: extra.pr?.failed ?? [] } : null,
+    pullRequest: j.result.pullRequest ? { ...(j.result.pullRequest as { number: number; url: string }), state: extra.pr?.state ?? null, verdict: extra.pr?.verdict ?? null } : null,
     error: j.error,
     cancelRequested: !!j.cancelRequestedAt,
     // While unreachable: when the server noticed, and when the device was last heard. `markedLost`: a person ended it, not evidence.

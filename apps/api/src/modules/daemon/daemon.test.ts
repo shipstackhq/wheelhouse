@@ -28,6 +28,7 @@ import { RunsService } from "./runs.service";
 import { DelegationService } from "./delegation.service";
 import { LearningsService } from "./learnings.service";
 import { DaemonRepository } from "./daemon.repository";
+import { VerdictRepository } from "../verdict/verdict.repository";
 import { IssuesService } from "../issues/index";
 import { updateIssue } from "../issues/issues.legacy";
 import { jobDelivery } from "./daemon.presenter";
@@ -390,10 +391,10 @@ describe("jobs", () => {
       const view = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
       assert.deepEqual(view.result.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42" });
       assert.equal(view.result.commit, "abc1234", "the rest of the result is kept");
-      assert.deepEqual(view.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42", state: null, ciState: null, failed: [] }, "state unknown until the webhook has told us");
-      await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 42, title: "t", url: "https://github.com/acme/app/pull/42", state: "merged", ciState: "success" });
+      assert.deepEqual(view.pullRequest, { number: 42, url: "https://github.com/acme/app/pull/42", state: null, verdict: null }, "state unknown until the webhook has told us");
+      await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 42, title: "t", url: "https://github.com/acme/app/pull/42", state: "merged", headSha: "a".repeat(40), checks: { build: { status: "completed", conclusion: "success" } } });
       const live = (await d.issueJobs(owner, issue.ref)).jobs.find((j) => j.id === job.id)!;
-      assert.deepEqual([live.pullRequest?.state, live.pullRequest?.ciState], ["merged", "success"], "the live state is joined, not copied into the result");
+      assert.deepEqual([live.pullRequest?.state, live.pullRequest?.verdict?.state], ["merged", "green"], "the live state is joined, not copied into the result");
 
       const nothing = await run("Nothing to change");
       await d.finishJob(device, nothing.job.id, { state: "succeeded", commit: "abc1234", pushed: true, diffStats: { files: 0, insertions: 0, deletions: 0 } }, gh);
@@ -701,7 +702,7 @@ describe("jobs", () => {
   test("self-checks are found by the commit they ran on, never by another (WH-191)", async () => {
     const { device } = await paired();
     await online(device);
-    const byCommit = app.get(DaemonRepository);
+    const byCommit = app.get(VerdictRepository);
     const [sha1, sha2, sha3] = ["1".repeat(40), "2".repeat(40), "3".repeat(40)];
     const lint = { name: "lint", command: "pnpm lint", required: true, exitCode: 0, durationMs: 9, tail: "" };
     const finish = async (title: string, extra: Record<string, unknown>) => {
@@ -1056,12 +1057,12 @@ describe("delegated runs (WH-116)", () => {
 
     const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 77, title: "The change", url: "https://github.com/acme/app/pull/77", headBranch: "wh/feature", headSha: "abc1234" }).returning();
     await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
-    const setCi = (ciState: "pending" | "failure" | "success", checks = {}) => db.update(schema.pullRequests).set({ ciState, checks }).where(eq(schema.pullRequests.id, pr.id));
-    await setCi("pending");
+    const setCi = (checks: Record<string, { status: string; conclusion: string | null }>, ciState: "pending" | "failure" | "success") => db.update(schema.pullRequests).set({ checks, ciState }).where(eq(schema.pullRequests.id, pr.id));
+    await setCi({ lint: { status: "in_progress", conclusion: null } }, "pending");
     assert.equal(await app.get(DelegationService).offerWaiting(), 0, "CI still running: it waits");
-    await setCi("failure", { lint: { status: "completed", conclusion: "failure" } });
+    await setCi({ lint: { status: "completed", conclusion: "failure" } }, "failure");
     assert.equal(await app.get(DelegationService).offerWaiting(), 0, "red CI: still waiting");
-    await setCi("success");
+    await setCi({ lint: { status: "completed", conclusion: "success" } }, "success");
     assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts once CI is green");
     const [job] = await jobsOf(issue.id);
     assert.equal(job.mode, "review");
@@ -1080,23 +1081,40 @@ describe("delegated runs (WH-116)", () => {
     assert.match(rows[0].body, /reviewed the pull request\.\*\*\n\nCI was passing when this was reviewed\.\n\nChanges needed/);
   });
 
-  test("a reviewer does not wait for CI in a repository that has none (WH-188)", async () => {
+  test("with no CI, self-checks are the evidence: a reviewer starts once they passed on the head (WH-188, WH-190)", async () => {
     const { who, slug } = await setup("noci", "reviewer");
     const { device } = await paired(who);
     await online(device);
+    const { device: mine } = await paired();
+    await online(mine);
     const db = await getDb();
-    const [team] = await db.select().from(schema.teams).where(eq(schema.teams.key, "DM"));
-    const [bare] = await db.insert(schema.repositories).values({ teamId: team.id, workspaceId: owner.workspaceId, displayName: "bare", role: "app", provider: "github", slug: "5678", githubRepoId: "5678", githubFullName: "acme/bare", defaultBranch: "main" }).returning();
-    const issue = await createIssue(owner, "DM", { title: "No CI here", assigneeId: who.id });
-    await updateIssue(who, issue.ref, { delegate: slug });
-    const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: bare.id, number: 5, title: "Change", url: "https://github.com/acme/bare/pull/5", headBranch: "wh/bare", headSha: "abc1234" }).returning();
-    await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
-    assert.equal((await runs.issueJobs(who, issue.ref)).reviewCi, null, "no CI to ask about");
-    assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts without CI");
-    const [job] = await jobsOf(issue.id);
-    assert.equal(job.mode, "review");
-    await db.update(schema.pullRequests).set({ ciState: "failure" }).where(eq(schema.pullRequests.id, pr.id));
-    assert.equal((await runs.issueJobs(who, issue.ref)).reviewCi?.state, "failure", "once the repository shows CI, it counts again");
+    const sha = "5".repeat(40);
+    await db.update(schema.repositories).set({ ciPolicy: { mode: "none", required: "all", optionalIfAbsent: [], startTimeoutMinutes: 10 } }).where(eq(schema.repositories.id, repoId));
+    try {
+      const issue = await createIssue(owner, "DM", { title: "No CI here", assigneeId: who.id });
+      await updateIssue(who, issue.ref, { delegate: slug });
+      const [pr] = await db.insert(schema.pullRequests).values({ repositoryId: repoId, number: 5, title: "Change", url: "https://github.com/acme/app/pull/5", headBranch: "wh/bare", headSha: sha }).returning();
+      await db.insert(schema.pullRequestIssues).values({ pullRequestId: pr.id, issueId: issue.id });
+      assert.deepEqual((await runs.issueJobs(who, issue.ref)).reviewVerdict, { state: "pending", reasons: ["no evidence"] });
+      assert.equal(await app.get(DelegationService).offerWaiting(), 0, "nothing checked this commit, so it waits");
+
+      const lint = { name: "lint", command: "pnpm lint", required: true, exitCode: 0, durationMs: 9, tail: "" };
+      const checked = async (status: string) => {
+        const work = await createIssue(owner, "DM", { title: `Checked ${status}` });
+        const { job } = await d.runOnDevice(owner, work.ref, { deviceId: mine.id, model: "opus", repositoryId: repoId });
+        await d.acceptJob(mine, job.id);
+        await d.finishJob(mine, job.id, { state: "failed", error: "x", commit: "abc1234", pushed: true, diffStats: { files: 1 }, checks: [{ ...lint, status }], checkedSha: sha });
+      };
+      await checked("failed");
+      assert.deepEqual((await runs.issueJobs(who, issue.ref)).reviewVerdict, { state: "red", reasons: ["self-check lint failed"] });
+      await checked("passed");
+      assert.deepEqual((await runs.issueJobs(who, issue.ref)).reviewVerdict, { state: "green", reasons: [] }, "the newest run that checked the commit counts");
+      assert.equal(await app.get(DelegationService).offerWaiting(), 1, "it starts without CI");
+      const [job] = await jobsOf(issue.id);
+      assert.equal(job.mode, "review");
+    } finally {
+      await db.update(schema.repositories).set({ ciPolicy: null }).where(eq(schema.repositories.id, repoId));
+    }
   });
 
   test("the issue suggests the roster agent its labels point at, until it is delegated", async () => {

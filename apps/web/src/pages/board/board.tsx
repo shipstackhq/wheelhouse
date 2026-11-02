@@ -407,8 +407,8 @@ function CardBody({ t, nodes, cycles, projects, relations, selected, overlay }: 
       {!!t.delegation?.prs.length && (
         <div className="mt-1 flex flex-wrap gap-1">
           {t.delegation.prs.map((pr) => (
-            <a key={pr.number} className={clsx("chip", pr.ciState === "failure" ? "bg-warn/15 text-warn" : "bg-ok/10 text-ok")} href={pr.url} target="_blank" rel="noreferrer" title={pr.failed.length ? `Failing: ${pr.failed.join(", ")}` : "Pull request from the agent's run"}>
-              PR #{pr.number}{pr.ciState === "failure" && " · CI failing"}
+            <a key={pr.number} className={clsx("chip", pr.verdict?.state === "red" ? "bg-warn/15 text-warn" : "bg-ok/10 text-ok")} href={pr.url} target="_blank" rel="noreferrer" title={pr.verdict?.reasons.length ? pr.verdict.reasons.join(", ") : "Pull request from the agent's run"}>
+              PR #{pr.number}{pr.verdict?.state === "red" && " · CI failing"}
             </a>
           ))}
         </div>
