@@ -19,7 +19,7 @@ export const TEAM_ICON_NAMES = [
 export type TeamIconName = (typeof TEAM_ICON_NAMES)[number];
 
 /** The colours an icon can take (the web app maps each to a class). */
-export const TEAM_ICON_COLORS = ["slate", "sky", "emerald", "amber", "rose", "violet", "teal", "orange", "fuchsia", "lime", "indigo"] as const;
+export const TEAM_ICON_COLORS = ["slate", "sky", "emerald", "amber", "rose", "violet", "teal", "orange", "fuchsia", "lime", "indigo", "red", "pink", "purple", "blue", "cyan", "green", "yellow", "stone"] as const;
 export type TeamIconColor = (typeof TEAM_ICON_COLORS)[number];
 
 /** One emoji: a single grapheme that has an emoji (pictographic) in it. The system draws it, so nothing is bundled. */

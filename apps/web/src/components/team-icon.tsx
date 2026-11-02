@@ -15,6 +15,14 @@ export const ICON_COLOR_CLASS: Record<TeamIconColor, { text: string; bg: string 
   fuchsia: { text: "text-fuchsia-500", bg: "bg-fuchsia-500" },
   lime: { text: "text-lime-500", bg: "bg-lime-500" },
   indigo: { text: "text-indigo-500", bg: "bg-indigo-500" },
+  red: { text: "text-red-500", bg: "bg-red-500" },
+  pink: { text: "text-pink-500", bg: "bg-pink-500" },
+  purple: { text: "text-purple-500", bg: "bg-purple-500" },
+  blue: { text: "text-blue-500", bg: "bg-blue-500" },
+  cyan: { text: "text-cyan-500", bg: "bg-cyan-500" },
+  green: { text: "text-green-500", bg: "bg-green-500" },
+  yellow: { text: "text-yellow-500", bg: "bg-yellow-500" },
+  stone: { text: "text-stone-500", bg: "bg-stone-500" },
 };
 
 /** With no icon chosen, a team's glyph is coloured from its key: the same on every visit and for everyone. */

@@ -427,7 +427,7 @@ export type InitiativeInput = {
 export type TeamProjectOption = { id: string; name: string; status: ProjectStatus; milestones: { id: string; name: string }[] };
 
 /** The colours a status dot can take (the team icon palette); null draws the colour of its role. */
-export type StatusColor = "slate" | "sky" | "emerald" | "amber" | "rose" | "violet" | "teal" | "orange" | "fuchsia" | "lime" | "indigo";
+export type StatusColor = "slate" | "sky" | "emerald" | "amber" | "rose" | "violet" | "teal" | "orange" | "fuchsia" | "lime" | "indigo" | "red" | "pink" | "purple" | "blue" | "cyan" | "green" | "yellow" | "stone";
 export type StatusRole = "backlog" | "todo" | "in_progress" | "review" | "done" | "canceled";
 
 export type BoardStatus = { id: string; name: string; role: StatusRole; isDefault: boolean; color: StatusColor | null; position: number };
