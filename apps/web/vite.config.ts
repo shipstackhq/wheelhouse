@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -13,8 +14,12 @@ const proxy = {
   "/mcp": { target: api, changeOrigin: false },
 };
 
+// The app's version is the repository's (the root package.json), shown in the footer of the home page.
+const version = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")).version;
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: { __APP_VERSION__: JSON.stringify(version) },
   // Tailwind runs through its Vite plugin. An inline (even empty) PostCSS config stops Vite searching upwards and finding the
   // Next app's postcss.config.mjs in the repository root, which is for a different toolchain.
   css: { postcss: {} },

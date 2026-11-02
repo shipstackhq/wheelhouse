@@ -3,6 +3,7 @@ import { canCreateTeam } from "../../lib/roles";
 import { useMe } from "../../lib/session";
 import { WIDGETS, SPAN_CLASS } from "./registry";
 import { DashboardRefresh } from "./refresh";
+import { AppFooter } from "../../components/app-footer";
 
 /** The home page: how the workspace's teams are moving and what its agents are up to. Each widget loads on its own. */
 export function Dashboard() {
@@ -30,6 +31,7 @@ export function Dashboard() {
             </div>
           ))}
         </div>
+        <AppFooter />
       </div>
     </div>
   );
