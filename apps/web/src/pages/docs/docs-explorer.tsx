@@ -339,22 +339,21 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   /** One doc in the list. `home`: the roomier rows of the docs home screen, with the date it was last changed; otherwise the compact rows of the sheet. */
   const docRow = (k: TreeDoc, depth: number, home: boolean) => (
     <li key={k.id} className="group/doc">
-      <div className="flex items-center gap-0.5">
-        <button
-          onClick={() => selectDoc(k.id)}
-          aria-current={selectedId === k.id ? "true" : undefined}
-          className={clsx(
-            "flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 text-left transition-colors",
-            home ? "py-2.5 text-[15px] text-fg hover:bg-panel-2/70 hover:underline" : "py-1.5 text-sm",
-            !home && (selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg"),
-          )}
-          title={k.title}
-        >
-          {k.stale && <span className="text-warn" title="Possibly out of date"><WarningIcon /></span>}
-          <span className="truncate">{k.title}</span>
-        </button>
-        {home && <span className="hidden shrink-0 px-2 text-xs text-muted sm:inline">Updated {new Date(k.updatedAt).toLocaleDateString()}</span>}
-      </div>
+      <button
+        onClick={() => selectDoc(k.id)}
+        aria-current={selectedId === k.id ? "true" : undefined}
+        className={clsx(
+          "flex w-full min-w-0 items-center gap-1.5 text-left transition-colors",
+          home ? "gap-3 py-2 pr-4 text-sm text-fg hover:bg-panel-2/70 hover:underline" : "truncate rounded-md px-2 py-1.5 text-sm",
+          !home && (selectedId === k.id ? "bg-accent/10 font-medium text-accent" : "text-muted hover:bg-panel-2/70 hover:text-fg"),
+        )}
+        style={home ? { paddingLeft: `${1 + depth * 1.25}rem` } : undefined}
+        title={k.title}
+      >
+        {k.stale && <span className="text-warn" title="Possibly out of date"><WarningIcon /></span>}
+        <span className="min-w-0 flex-1 truncate">{k.title}</span>
+        {home && <span className="hidden shrink-0 text-xs text-muted sm:inline">Updated {new Date(k.updatedAt).toLocaleDateString()}</span>}
+      </button>
       {!filterTerm && renderNode(k.id, depth + 1, home)}
     </li>
   );
@@ -362,6 +361,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
   const renderNode = (parentId: string | null, depth: number, home: boolean): React.ReactNode => {
     const kids = byParent.get(parentId) ?? [];
     if (!kids.length) return null;
+    if (home) return <ul className={clsx("divide-y divide-line", depth === 0 ? "card overflow-hidden" : "border-t border-line")}>{kids.map((k) => docRow(k, depth, home))}</ul>;
     return <ul className={depth === 0 ? "space-y-0.5" : "ml-3 space-y-0.5 border-l border-line pl-2"}>{kids.map((k) => docRow(k, depth, home))}</ul>;
   };
 
@@ -377,7 +377,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
         filteredFlat.length === 0 ? (
           <p className="px-2 py-4 text-sm text-muted">No docs match &quot;{treeFilter}&quot;.</p>
         ) : (
-          <ul className="space-y-0.5">{filteredFlat.map((k) => docRow(k, 0, home))}</ul>
+          <ul className={home ? "card divide-y divide-line overflow-hidden" : "space-y-0.5"}>{filteredFlat.map((k) => docRow(k, 0, home))}</ul>
         )
       ) : (
         renderNode(null, 0, home)
