@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, Popover } from "radix-ui";
 import clsx from "clsx";
-import { useNavigate } from "../lib/workspace";
+import { useNavigate, wsKey } from "../lib/workspace";
 import { useServices } from "../lib/services";
 import { ApiError } from "@wheelhouse/api-client";
 import { describeFailure } from "../lib/form-state";
@@ -17,7 +17,8 @@ import { SubmitButton } from "./submit-button";
 export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name: string; imageUrl?: string | null; collapsed?: boolean }) {
   const { api } = useServices();
   const navigate = useNavigate();
-  const query = useQuery({ queryKey: ["me", "workspaces"] as const, queryFn: () => api.workspaces.list() });
+  // Keyed by workspace: the server marks the current one by the workspace asked for, so each needs its own read.
+  const query = useQuery({ queryKey: wsKey(api, "workspaces"), queryFn: () => api.workspaces.list() });
   const list = query.data ?? [];
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -99,7 +100,7 @@ const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").
 
 /** Name and address of a new workspace; the address follows the name until typed. The server's field errors show under the field. */
 function CreateWorkspaceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const { api, queryClient } = useServices();
+  const { api } = useServices();
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState<string | null>(null); // null: still following the name
@@ -108,7 +109,6 @@ function CreateWorkspaceDialog({ open, onOpenChange }: { open: boolean; onOpenCh
     try {
       const w = await api.workspaces.create({ name, slug: slug ?? undefined });
       await api.workspaces.switchTo(w.id);
-      await queryClient.invalidateQueries({ queryKey: ["me", "workspaces"] });
       onOpenChange(false);
       setName("");
       setSlug(null);
