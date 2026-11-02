@@ -5,7 +5,13 @@ import { isEmoji, TEAM_ICON_COLORS, TEAM_ICON_NAMES, type TeamIconColor } from "
 import { TEAM_ICONS } from "./icons";
 import { ICON_COLOR_CLASS, TeamIcon } from "./team-icon";
 
-const EMOJI_PRESETS = ["🚀", "🛠️", "🔒", "💳", "✉️", "📦", "🧪", "📊", "🎨", "🌍", "⚡", "🔥", "🌱", "🧭", "🏗️", "🤖"];
+const EMOJI_PRESETS = [
+  "🚀", "🛠️", "🔒", "💳", "✉️", "📦", "🧪", "📊", "🎨", "🌍", "⚡", "🔥", "🌱", "🧭", "🏗️", "🤖",
+  "💡", "🎯", "🏆", "⭐", "❤️", "💎", "🔑", "🧩", "📈", "📚", "📝", "📅", "📣", "🔔", "💬", "📞",
+  "💻", "📱", "🖥️", "⚙️", "🔧", "🔬", "🧬", "🧠", "🎓", "🏠", "🏢", "🏦", "🛒", "🛍️", "💰", "🪙",
+  "🚚", "✈️", "🚗", "🚢", "🌈", "☀️", "🌙", "☁️", "🌊", "🏔️", "🌳", "🍀", "🌸", "🐝", "🦄", "🐙",
+  "🎮", "🎵", "🎬", "📷", "🍕", "☕", "🍎", "🎁", "🎉", "🧊", "🛡️", "🕹️", "👥", "🙌", "👀", "✅",
+];
 const BOX = "z-60 rounded-lg border border-line bg-panel p-2 text-fg shadow-xl";
 const CELL = "grid size-9 place-items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
 
@@ -75,7 +81,7 @@ export function TeamIconPicker(props: {
                   </div>
                 ) : (
                   <>
-                    <div role="group" aria-label="Common emoji" className="grid grid-cols-8 gap-1">
+                    <div role="group" aria-label="Common emoji" className="grid max-h-64 grid-cols-8 gap-1 overflow-y-auto overscroll-contain">
                       {EMOJI_PRESETS.map((e) => (
                         <button key={e} type="button" aria-label={e} aria-pressed={props.icon === e} onClick={() => pickEmoji(e)} className={clsx(CELL, "text-xl", props.icon === e ? "bg-accent/15" : "hover:bg-panel-2")}>
                           {e}
