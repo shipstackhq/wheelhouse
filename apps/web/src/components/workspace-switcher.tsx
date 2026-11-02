@@ -54,13 +54,7 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
             collapsed && "md:gap-0 md:pr-0.5", // in the icon-only rail the arrow goes and only the icon stays
           )}
         >
-          {imageUrl ? (
-            <img src={imageUrl} alt="" aria-hidden className="size-5 rounded-full object-cover" />
-          ) : (
-            <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
-              {name.trim().charAt(0) || "W"}
-            </span>
-          )}
+          <WorkspaceAvatar name={name} imageUrl={imageUrl} />
           <ChevronDownIcon aria-hidden className={clsx("text-sm transition-transform group-data-[state=open]:rotate-180", collapsed && "md:hidden")} />
         </button>
       }
@@ -68,9 +62,12 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
       <MenuItem href="/settings" icon={NAV_ICONS.settings.line}>Settings</MenuItem>
       <MenuSub label="Workspaces" className="w-60">
         <MenuGroup label="Workspaces">
-          {(list.length ? list : [{ id: "current", slug: "", name, role: "", active: true }]).map((w) => (
+          {(list.length ? list : [{ id: "current", slug: "", name, imageUrl, role: "", active: true }]).map((w) => (
             <MenuItem key={w.id} disabled={w.active} aria-current={w.active ? "true" : undefined} onSelect={() => void go(w)} className="justify-between gap-2">
-              <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <WorkspaceAvatar name={w.name} imageUrl={w.imageUrl} />
+                <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
+              </span>
               <span className="shrink-0 text-xs text-muted">{w.active ? "current" : w.role}</span>
             </MenuItem>
           ))}
@@ -81,6 +78,17 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
     </Menu>
     <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} />
     </>
+  );
+}
+
+/** A workspace's image, or its initial on the accent when it has none. */
+function WorkspaceAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
+  return imageUrl ? (
+    <img src={imageUrl} alt="" aria-hidden className="size-5 shrink-0 rounded-full object-cover" />
+  ) : (
+    <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
+      {name.trim().charAt(0) || "W"}
+    </span>
   );
 }
 

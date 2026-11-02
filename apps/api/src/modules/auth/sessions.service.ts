@@ -12,6 +12,7 @@ import { SESSION_DAYS, signupOpen, passwordProblem } from "./auth-policy";
 import { hashPassword, verifyPassword } from "./passwords";
 import { KeysService } from "./keys/keys.service";
 import { emailOk, tooMany } from "./auth.rules";
+import { workspaceImageUrl } from "../images/index";
 
 /** The signed-in person: their user, the workspace they work in and their membership in it, and the actor the work is done as. */
 export type Human = { user: UserRow; workspace: WorkspaceRowT; membership: MembershipRow; actor: Actor };
@@ -72,7 +73,7 @@ export class SessionsService {
     const rows = await this.repo.membershipsOf(userId);
     return rows
       .filter((r) => !r.workspace.suspendedAt)
-      .map((r) => ({ id: r.workspace.id, slug: r.workspace.slug, name: r.workspace.name, kind: r.workspace.kind, role: r.membership.role, active: r.workspace.id === cur?.workspace.id }))
+      .map((r) => ({ id: r.workspace.id, slug: r.workspace.slug, name: r.workspace.name, imageUrl: workspaceImageUrl(r.workspace.id, r.workspace.imageKey), kind: r.workspace.kind, role: r.membership.role, active: r.workspace.id === cur?.workspace.id }))
       .sort((a, b) => Number(b.kind === "personal") - Number(a.kind === "personal")); // personal first; the rest keep their order
   }
 
