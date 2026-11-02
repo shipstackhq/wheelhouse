@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CATALOG } from "@wheelhouse/shared/agents/catalog/index";
 import type { AgentEntry, AgentProfile, AgentsPage as AgentsData, CatalogAgent, CustomAgent } from "@wheelhouse/api-client";
 import { AgentAvatar } from "../../components/agent-avatar";
-import { AgentCard } from "../../components/agent-card";
+import { Page } from "../../components/page";
 import { AvatarEditor } from "../../components/avatar-editor";
 import { Loaded } from "../../components/query-state";
 import { Select } from "../../components/ui";
@@ -17,7 +17,7 @@ import { useAgentRights } from "../../lib/agent-teams";
 import { NotFound } from "../../routes/errors";
 import { AgentForm } from "./agent-form";
 
-const Page = ({ children }: { children: React.ReactNode }) => (
+const Wrap = ({ children }: { children: React.ReactNode }) => (
   <div className="h-full overflow-y-auto">
     <div className="w-full space-y-6 px-6 py-10">{children}</div>
   </div>
@@ -37,21 +37,26 @@ function Agents({ data }: { data: AgentsData }) {
   const { admin, canCreate } = useAgentRights();
   const [creating, setCreating] = useState(false);
   const list = (agents: AgentEntry[]) => (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <ul className="card divide-y divide-line">
       {agents.map((a) => (
-        <AgentCard key={a.slug} agent={a} custom={a.source === "custom"} action={<Link to={`/agents/${a.slug}`} className="btn" aria-label={`Open ${a.name}`}>Open</Link>} />
+        <li key={a.slug} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+          <AgentAvatar avatar={a.avatar} name={a.name} size="md" />
+          <div className="min-w-40 flex-1">
+            <div className="font-medium">{a.name}{a.source === "custom" && <span className="text-muted"> (custom)</span>}</div>
+            <div className="text-xs text-muted">{a.role} · {a.summary}</div>
+          </div>
+          <Link to={`/agents/${a.slug}`} className="btn" aria-label={`Open ${a.name}`}>Open</Link>
+        </li>
       ))}
-    </div>
+    </ul>
   );
   return (
-    <Page>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Agents</h1>
-          <p className="mt-1 text-sm text-muted">Agents with a role and rules, ready to use in Claude Code. Add them to a team to use them there.</p>
-        </div>
-        {data.enabled && canCreate && <button className="btn btn-primary shrink-0" onClick={() => setCreating(true)}>New agent</button>}
-      </div>
+    <Page
+      title="Agents"
+      hint="Agents with a role and rules, ready to use in Claude Code. Add them to a team to use them there."
+      action={data.enabled && canCreate && <button className="btn btn-primary shrink-0" onClick={() => setCreating(true)}>New agent</button>}
+      className="space-y-6"
+    >
       {!data.enabled ? (
         <div className="card p-5 text-sm">
           <p className="font-medium">Agents are off for this workspace.</p>
@@ -95,7 +100,7 @@ export function AgentPage() {
 function Agent({ agent }: { agent: AgentEntry }) {
   const profile = agent.source === "custom" ? agent.profile : CATALOG[agent.slug][agent.version - 1];
   return (
-    <Page>
+    <Wrap>
       <div className="flex gap-4">
         <AgentAvatar avatar={agent.avatar} name={agent.name} size="xl" />
         <div className="min-w-0 flex-1">
@@ -109,7 +114,7 @@ function Agent({ agent }: { agent: AgentEntry }) {
       {agent.source === "catalog" ? <CatalogVersion agent={agent} /> : <CustomActions agent={agent} />}
       <Profile profile={profile} />
       <Guardrails />
-    </Page>
+    </Wrap>
   );
 }
 
