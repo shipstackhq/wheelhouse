@@ -50,20 +50,14 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
           collapsed && "md:gap-0 md:pr-0.5", // in the icon-only rail the arrow goes and only the icon stays
         )}
       >
-        {imageUrl ? (
-          <img src={imageUrl} alt="" aria-hidden className="size-5 rounded-full object-cover" />
-        ) : (
-          <span aria-hidden className="grid size-5 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
-            {name.trim().charAt(0) || "W"}
-          </span>
-        )}
+        <WorkspaceAvatar name={name} imageUrl={imageUrl} />
         <ChevronDownIcon aria-hidden className={clsx("text-sm transition-transform group-data-[state=open]:rotate-180", collapsed && "md:hidden")} />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content side={collapsed ? "right" : "bottom"} align="start" sideOffset={6} collisionPadding={8} className="z-50 w-60 rounded-lg border border-line bg-panel p-1 text-fg shadow-xl">
           <div role="group" aria-label="Workspaces">
             <div className="px-2 py-1 text-xs text-muted">Workspaces</div>
-            {(list.length ? list : [{ id: "current", slug: "", name, role: "", active: true }]).map((w) => (
+            {(list.length ? list : [{ id: "current", slug: "", name, imageUrl, role: "", active: true }]).map((w) => (
               <button
                 key={w.id}
                 type="button"
@@ -72,7 +66,10 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
                 onClick={() => go(w)}
                 className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-panel-2 focus-visible:bg-panel-2 disabled:cursor-default disabled:hover:bg-transparent"
               >
-                <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <WorkspaceAvatar name={w.name} imageUrl={w.imageUrl} />
+                  <span className={clsx("truncate", w.active ? "font-medium text-fg" : "text-muted")}>{w.name}</span>
+                </span>
                 <span className="shrink-0 text-xs text-muted">{w.active ? "current" : w.role}</span>
               </button>
             ))}
@@ -92,6 +89,17 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
     </Popover.Root>
     <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} />
     </>
+  );
+}
+
+/** A workspace's image, or its initial on the accent when it has none. */
+function WorkspaceAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
+  return imageUrl ? (
+    <img src={imageUrl} alt="" aria-hidden className="size-5 shrink-0 rounded-full object-cover" />
+  ) : (
+    <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-full bg-accent/15 text-[10px] font-semibold uppercase text-accent">
+      {name.trim().charAt(0) || "W"}
+    </span>
   );
 }
 

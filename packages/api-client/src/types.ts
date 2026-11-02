@@ -6,7 +6,7 @@ import type { AgentProfile } from "@wheelhouse/shared/agents/schema";
 export type Role = "owner" | "admin" | "member" | "viewer" | "guest";
 
 /** A workspace the person belongs to. `active` is the one this session is working in. */
-export type WorkspaceChoice = { id: string; slug: string; name: string; kind: "personal" | "team"; role: Role; active: boolean };
+export type WorkspaceChoice = { id: string; slug: string; name: string; imageUrl: string | null; kind: "personal" | "team"; role: Role; active: boolean };
 
 // ───────── who is in a team (ADR-23) ─────────
 
