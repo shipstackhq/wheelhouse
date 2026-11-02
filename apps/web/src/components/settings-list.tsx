@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
  * A settings section as a list: an optional title, then a card divided into rows, one setting each (see `SettingsRow`).
  * Anything else can sit in the list as a row of its own, padded as `SETTINGS_ROW_PAD`.
  */
-export const SETTINGS_ROW_PAD = "px-5 py-3";
+export const SETTINGS_ROW_PAD = "px-6 py-4";
 
 export function SettingsList({ title, children }: { title?: string; children: ReactNode }) {
   return (
