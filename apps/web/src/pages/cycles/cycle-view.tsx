@@ -53,7 +53,7 @@ export function CycleView(props: { teamKey: string; cycle: CycleDetail }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full px-6 py-6">
+      <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
         <Link to={`/t/${teamKey}/cycles`} className="text-xs text-muted hover:text-fg">
           ← All cycles
         </Link>

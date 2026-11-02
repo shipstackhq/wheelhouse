@@ -4,6 +4,7 @@ import type { CycleList, CycleSummary } from "@wheelhouse/api-client";
 import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
+import { Page } from "../../components/page";
 import { CycleForm, cycleRange, cycleTiming, cycleTitle, inputOf, newDraft, Progress, stateChip, useDraft } from "./cycle-bits";
 
 /**
@@ -47,22 +48,12 @@ export function Cycles(props: { teamKey: string; list: CycleList }) {
   );
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="w-full px-6 py-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Cycles</h2>
-            <p className="mt-1 text-sm text-muted">
-              An optional rhythm for this team: one or two weeks with a goal. Issues join when they are ready, not at the start, and what is
-              not done when a cycle ends moves on to the next one by itself. There are no points and no velocity.
-            </p>
-          </div>
-          <button className="btn btn-primary shrink-0" onClick={() => (setDraft(newDraft()), setError(null), setCreating(true))}>
-            + New cycle
-          </button>
-        </div>
-
-        <div className="mt-5 space-y-5">
+    <Page
+      title="Cycles"
+      hint="An optional rhythm for this team: one or two weeks with a goal. Issues join when they are ready, not at the start, and what is not done when a cycle ends moves on to the next one by itself. There are no points and no velocity."
+      action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft(newDraft()), setError(null), setCreating(true))}>+ New cycle</button>}
+    >
+        <div className="space-y-5">
           {creating && <CycleForm draft={draft} onChange={setDraft} onSubmit={create} onCancel={() => (setCreating(false), setError(null))} submitLabel="Start the cycle" pending={pending} error={error} />}
           {none && !creating && <p className="py-6 text-center text-sm text-muted">No cycles yet. Make one when the team wants a rhythm; until then the board works as it always did.</p>}
           {list.current && (
@@ -84,7 +75,6 @@ export function Cycles(props: { teamKey: string; list: CycleList }) {
             </section>
           )}
         </div>
-      </div>
-    </div>
+    </Page>
   );
 }

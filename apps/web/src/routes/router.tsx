@@ -135,7 +135,7 @@ export function buildRoutes(services: Services): RouteObject[] {
                 { index: true, Component: BoardPage, handle: { fullWidth: true } satisfies PageHandle },
                 { path: "overview", Component: TeamOverviewPage },
                 { path: "activity", Component: ActivityPage },
-                { path: "map", Component: MapPage },
+                { path: "map", Component: MapPage, handle: { fullWidth: true } satisfies PageHandle },
                 { path: "docs", Component: DocsPage },
                 { path: "docs/:docId", Component: DocsPage },
                 { path: "drawings", Component: DrawingsPage },

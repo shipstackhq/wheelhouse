@@ -7,6 +7,7 @@ import { Loaded } from "../../components/query-state";
 import { activityQuery } from "../../lib/queries";
 import { useServices } from "../../lib/services";
 import { AgentIcon } from "../../components/icons";
+import { Page } from "../../components/page";
 
 /** What happened in the team, newest first: everything, only agents, or only the workspace. Each line links to the thing it is about. */
 export function ActivityPage() {
@@ -22,8 +23,7 @@ export function ActivityPage() {
     </Link>
   );
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="w-full px-6 py-6">
+    <Page title="Activity" hint="What happened in this team, newest first.">
         <div className="mb-4 flex gap-1">
           {tab(undefined, "Everything")}
           {tab("agent", <><AgentIcon /> Agents</>)}
@@ -69,7 +69,6 @@ export function ActivityPage() {
             </>
           )}
         </Loaded>
-      </div>
-    </div>
+    </Page>
   );
 }
