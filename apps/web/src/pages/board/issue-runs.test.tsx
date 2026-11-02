@@ -91,6 +91,16 @@ describe("runs on a device", () => {
     expect(screen.queryByRole("button", { name: "Rerun agent" })).toBeNull();
   });
 
+  test("a run shows its self-checks: a count, each command's result and the tail of its output, and why there is no pull request", async () => {
+    const check = (name: string, status: "passed" | "failed", tail = "") => ({ name, command: `pnpm ${name}`, required: true, status, exitCode: status === "passed" ? 0 : 1, durationMs: 1500, tail });
+    mount([job("c1", { result: { pushed: true, checkedSha: "a".repeat(40), checks: [check("lint", "passed"), check("test", "failed", "2 tests failed")] } })]);
+    expect(await screen.findByText("no PR: checks failed")).toBeTruthy();
+    expect(screen.getByText("test failed")).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(screen.getByText("1/2 checks passed on aaaaaaa")).toBeTruthy();
+    expect(screen.getByText("2 tests failed")).toBeTruthy();
+  });
+
   test("Continue carries on from the run's branch; Start over makes a fresh run from the same starting branch", async () => {
     const { server } = mount([job("e5", { delivery: "pr_failed", result: { pushed: true, pullRequestError: "no" }, model: "sonnet", baseBranch: "ui-changes" })], (s) =>
       s.on("POST /api/app/issues/WH-1/jobs", { job: job("f6", { state: "offered" }) }),

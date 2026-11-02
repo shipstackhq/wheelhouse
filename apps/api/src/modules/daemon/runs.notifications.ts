@@ -8,6 +8,12 @@ import { DaemonRepository, type DeviceRow, type JobRow } from "./daemon.reposito
 
 const SNIPPET = 300;
 
+/** WH-172: the required self-checks that stopped the pull request, in one line for the run's comment ("lint failed, test did not run"). */
+const blockedLine = (checks: unknown) => {
+  const blocked = (Array.isArray(checks) ? (checks as { name: string; required: boolean; status: string }[]) : []).filter((c) => c.required && c.status !== "passed");
+  return blocked.length ? `Checks stopped the pull request: ${blocked.map((c) => `${c.name} ${c.status === "failed" ? "failed" : "did not run"}`).join(", ")}.` : "";
+};
+
 /** WH-176: the CI state a review was written against, so the verdict is read with it. */
 const ciLine = (pr: { ciState: "success" | "failure" | "pending" | null; checks: Record<string, { status: string; conclusion: string | null }> }) =>
   `CI was ${pr.ciState === "success" ? "passing" : pr.ciState === "failure" ? `failing (${failedChecks(pr.checks).join(", ")})` : pr.ciState === "pending" ? "still running" : "not reported"} when this was reviewed.`;
@@ -85,7 +91,7 @@ export class RunNotifications {
         : job.state === "succeeded" && job.mode === "review"
           ? [`**${who} reviewed the pull request.**`, review && ciLine(review), text].filter(Boolean).join("\n\n")
           : job.state === "succeeded"
-          ? [`**${who} finished.**`, text, `Branch \`${job.branch}\`${files ? ` · ${files} file${files === 1 ? "" : "s"} changed` : ""}`].filter(Boolean).join("\n\n")
+          ? [`**${who} finished.**`, blockedLine(job.result?.checks), text, `Branch \`${job.branch}\`${files ? ` · ${files} file${files === 1 ? "" : "s"} changed` : ""}`].filter(Boolean).join("\n\n")
           : job.state === "failed"
             ? `**${who}'s run failed.**\n\n${job.error ?? ""}`.trim()
             : `**${who}'s run was stopped.**`;
