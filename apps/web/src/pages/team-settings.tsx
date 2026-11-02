@@ -13,7 +13,7 @@ import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { useTeams } from "../lib/session";
 import { Page } from "../components/page";
-import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "../components/settings-list";
+import { SETTINGS_ROW_PAD, SettingsHeading, SettingsList, SettingsRow } from "../components/settings-list";
 
 /**
  * `/t/:key/settings`: the team's name and description (agents read the description). Any member reads them; only team
@@ -39,14 +39,13 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
       <SettingsForm key={`${team.name}\n${team.description}`} teamKey={key} name={team.name} description={team.description} canEdit={canEdit}>
         <IconSection key={`${team.icon}\n${team.iconColor}`} teamKey={key} icon={team.icon} iconColor={team.iconColor} canEdit={canEdit} />
       </SettingsForm>
-      <SettingsList
-        title="Statuses"
-        hint="The stages an issue moves through. Each stage needs at least one status; when several share a stage, the default is where automatic moves (a merged pull request, an agent moving work to review) put an issue."
-      >
-        <div className={SETTINGS_ROW_PAD}>
-          <StatusesSection teamKey={key} canEdit={canEdit} />
-        </div>
-      </SettingsList>
+      <div className="space-y-2">
+        <SettingsHeading
+          title="Statuses"
+          hint="The stages an issue moves through. Each stage needs at least one status; when several share a stage, the default is where automatic moves (a merged pull request, an agent moving work to review) put an issue."
+        />
+        <StatusesSection teamKey={key} canEdit={canEdit} />
+      </div>
       <ParentSection teamKey={key} canEdit={canEdit} />
       <DangerZone teamKey={key} />
     </Page>

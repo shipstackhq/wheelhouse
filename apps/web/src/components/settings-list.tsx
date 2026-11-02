@@ -10,14 +10,20 @@ export const SETTINGS_ROW_PAD = "px-6 py-4";
 export function SettingsList({ title, hint, danger, children }: { title?: ReactNode; hint?: string; danger?: boolean; children: ReactNode }) {
   return (
     <section className="space-y-2" aria-label={typeof title === "string" ? title : undefined}>
-      {(title || hint) && (
-        <div className="space-y-0.5 px-1">
-          {title && <h2 className={clsx("flex flex-wrap items-center gap-2 font-medium", danger && "text-danger")}>{title}</h2>}
-          {hint && <p className="text-sm text-muted">{hint}</p>}
-        </div>
-      )}
+      <SettingsHeading title={title} hint={hint} danger={danger} />
       <div className={clsx("card divide-y divide-line", danger && "border-danger/40")}>{children}</div>
     </section>
+  );
+}
+
+/** The title and line above a list; on its own, it heads several lists that belong together. */
+export function SettingsHeading({ title, hint, danger }: { title?: ReactNode; hint?: string; danger?: boolean }) {
+  if (!title && !hint) return null;
+  return (
+    <div className="space-y-0.5 px-1">
+      {title && <h2 className={clsx("flex flex-wrap items-center gap-2 font-medium", danger && "text-danger")}>{title}</h2>}
+      {hint && <p className="text-sm text-muted">{hint}</p>}
+    </div>
   );
 }
 

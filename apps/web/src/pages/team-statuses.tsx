@@ -16,6 +16,7 @@ import { describeFailure } from "../lib/form-state";
 import { useStatuses } from "../lib/queries";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
+import { SettingsList } from "../components/settings-list";
 import { groupStatuses, reorderWithinGroup, ROLE_LABEL, type Group } from "../lib/status-order";
 
 const MENU = "z-50 min-w-40 rounded-lg border border-line bg-panel p-1 text-sm text-fg shadow-xl";
@@ -65,30 +66,31 @@ function Editor({ teamKey, canEdit, list }: { teamKey: string; canEdit: boolean;
           {error}
         </p>
       )}
-      <div className="grid gap-5">
+      <div className="space-y-6">
         {groups.map((g) => (
-          <section key={g.role} aria-label={g.label}>
-            <h3 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">{g.label}</h3>
+          <SettingsList key={g.role} title={<span className="text-sm text-muted">{g.label}</span>}>
             <DndContext id={`statuses-${g.role}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd(g.role)}>
               <SortableContext items={g.items.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-                <ul className="divide-y divide-line rounded-md border border-line">
-                  {g.items.map((s) => (
-                    <Row
-                      key={s.id}
-                      status={s}
-                      group={g}
-                      canEdit={canEdit}
-                      onRename={(name) => run(() => api.statuses.update(teamKey, s.id, { name }))}
-                      onColor={(color) => run(() => api.statuses.update(teamKey, s.id, { color }))}
-                      onDefault={() => run(() => api.statuses.update(teamKey, s.id, { isDefault: true }))}
-                      onDelete={() => setDeleting(s)}
-                    />
-                  ))}
-                </ul>
+                {g.items.map((s) => (
+                  <Row
+                    key={s.id}
+                    status={s}
+                    group={g}
+                    canEdit={canEdit}
+                    onRename={(name) => run(() => api.statuses.update(teamKey, s.id, { name }))}
+                    onColor={(color) => run(() => api.statuses.update(teamKey, s.id, { color }))}
+                    onDefault={() => run(() => api.statuses.update(teamKey, s.id, { isDefault: true }))}
+                    onDelete={() => setDeleting(s)}
+                  />
+                ))}
               </SortableContext>
             </DndContext>
-            {canEdit && <AddStatus role={g.role} onAdd={(name) => run(() => api.statuses.create(teamKey, { name, role: g.role }))} />}
-          </section>
+            {canEdit && (
+              <div className="px-4 py-2">
+                <AddStatus role={g.role} onAdd={(name) => run(() => api.statuses.create(teamKey, { name, role: g.role }))} />
+              </div>
+            )}
+          </SettingsList>
         ))}
       </div>
       {deleting && (
@@ -120,10 +122,10 @@ function Row(props: {
   const lastOfRequired = (REQUIRED_ROLES as readonly string[]).includes(s.role) && group.items.length === 1;
   const shared = group.items.length > 1;
   return (
-    <li
+    <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={clsx("flex items-center gap-2 bg-panel px-2 py-1.5", isDragging && "relative z-10 shadow-lg")}
+      className={clsx("flex items-center gap-2 bg-panel px-4 py-2", isDragging && "relative z-10 shadow-lg")}
       data-status={s.name}
     >
       {canEdit && (
@@ -178,7 +180,7 @@ function Row(props: {
           <CloseIcon aria-hidden />
         </button>
       )}
-    </li>
+    </div>
   );
 }
 
@@ -215,14 +217,14 @@ function AddStatus({ role, onAdd }: { role: StatusRole; onAdd: (name: string) =>
   };
   if (!open) {
     return (
-      <button type="button" className="mt-1 inline-flex items-center gap-1 rounded px-1.5 py-1 text-sm text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50" onClick={() => setOpen(true)}>
+      <button type="button" className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-sm text-muted outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent/50" onClick={() => setOpen(true)}>
         <AddIcon aria-hidden /> Add {ROLE_LABEL[role].toLowerCase()} status
       </button>
     );
   }
   return (
     <form
-      className="mt-1 flex items-center gap-2"
+      className="flex items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         const v = name.trim();
