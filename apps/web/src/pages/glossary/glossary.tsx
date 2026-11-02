@@ -7,6 +7,7 @@ import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { ArrowLeftIcon, EditIcon, SearchIcon, TermIcon } from "../../components/icons";
+import { PageHeader } from "../../components/page-header";
 
 /**
  * `/t/:key/glossary` is the team's vocabulary as a grid of cards (the layout of the docs home), each showing the term and the
@@ -99,15 +100,11 @@ export function Glossary(props: { teamKey: string; termId?: string; terms: Term[
       {props.termId === undefined ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
           <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-            <div className="mb-2 flex items-center justify-end gap-3">
-              <h1 className="sr-only">Glossary</h1>
-              <button className="btn btn-primary shrink-0" onClick={() => (setDraft({ term: "", definition: "", nodeId: "" }), setEditing("new"))}>
-                + Add term
-              </button>
-            </div>
-            <p className="mb-6 text-sm text-muted">
-              Team vocabulary a newcomer wouldn&apos;t know. Terms are underlined with a hover definition wherever they appear in map explainers and decisions.
-            </p>
+            <PageHeader
+              title="Glossary"
+              hint="Team vocabulary a newcomer wouldn't know. Terms are underlined with a hover definition wherever they appear in map explainers and decisions."
+              action={<button className="btn btn-primary shrink-0" onClick={() => (setDraft({ term: "", definition: "", nodeId: "" }), setEditing("new"))}>+ Add term</button>}
+            />
             {props.terms.length > 0 && (
               <div className="relative mb-4">
                 <input

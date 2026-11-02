@@ -12,6 +12,7 @@ import { describeFailure } from "../../lib/form-state";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { AgentIcon, ArrowLeftIcon, CloseIcon, EditIcon, NodeIcon, SearchIcon } from "../../components/icons";
+import { PageHeader } from "../../components/page-header";
 
 type NodeLite = { id: string; name: string; layer: string };
 /** `version` is the version being edited: sent back so a change made since is refused, not overwritten. */
@@ -81,15 +82,11 @@ export function Decisions(props: { teamKey: string; number?: number; decisions: 
         {props.number === undefined ? (
           <section className="min-h-0 flex-1 overflow-y-auto">
             <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-              <div className="mb-2 flex items-center justify-end gap-3">
-                <h1 className="sr-only">Decisions</h1>
-                <button className="btn btn-primary shrink-0" onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}>
-                  + Record decision
-                </button>
-              </div>
-              <p className="mb-6 text-sm text-muted">
-                The <i>why</i> behind non-obvious choices (ADRs), attached to the parts of the map they shape, so nobody &ldquo;fixes&rdquo; something that was deliberate.
-              </p>
+              <PageHeader
+                title="Decisions"
+                hint={<>The <i>why</i> behind non-obvious choices (ADRs), attached to the parts of the map they shape, so nobody &ldquo;fixes&rdquo; something that was deliberate.</>}
+                action={<button className="btn btn-primary shrink-0" onClick={() => setDraft({ title: "", status: "accepted", context: "", decision: "", consequences: "", nodeIds: [] })}>+ Record decision</button>}
+              />
 
               {props.decisions.length === 0 && (
                 <p className="rounded-md border border-dashed border-line p-6 text-center text-sm text-muted">

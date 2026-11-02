@@ -14,6 +14,7 @@ import { teamAgentsQuery, useAgents } from "../../lib/queries";
 import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { useAgentRights } from "../../lib/agent-teams";
+import { PageHeader } from "../../components/page-header";
 
 /** `/t/:key/agents`: the team's roster. Members read it; workspace admins and the team's admins add and remove. */
 export function TeamAgentsPage() {
@@ -50,13 +51,7 @@ function Roster({ teamKey, agents, enabled, manage }: { teamKey: string; agents:
   return (
     <div className="h-full overflow-y-auto">
       <div className="w-full space-y-6 px-6 py-10">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="sr-only">Agents</h1>
-            <p className="mt-1 text-sm text-muted">The agents this team uses in Claude Code.</p>
-          </div>
-          {enabled && manage && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>Add</button>}
-        </div>
+        <PageHeader title="Agents" hint="The agents this team uses in Claude Code." action={enabled && manage && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>Add</button>} className="mb-0" />
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         {!enabled ? (
           <p className="card p-5 text-sm text-muted">Agents are off for this workspace.</p>

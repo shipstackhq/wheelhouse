@@ -16,6 +16,7 @@ import { refreshAll } from "../../lib/refresh";
 import { useServices } from "../../lib/services";
 import { buildFileTree, containsMatch, readTime, sectionOf, sortedChildren, type FileTreeNode } from "./file-tree";
 import { AgentIcon, ArrowLeftIcon, ArrowRightIcon, BookIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, EditIcon, FileIcon, FolderIcon, NodeIcon, SearchIcon, WarningIcon } from "../../components/icons";
+import { PageHeader } from "../../components/page-header";
 
 type TreeDoc = DocsIndex["docs"][number];
 
@@ -413,12 +414,7 @@ export function DocsExplorer({ teamKey, index, docId }: { teamKey: string; index
       {selectedId === null ? (
         <section className="min-h-0 flex-1 overflow-y-auto">
           <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-            <div className="mb-6 flex items-center justify-end gap-3">
-              <h1 className="sr-only">Docs</h1>
-              <button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>
-                + Create
-              </button>
-            </div>
+            <PageHeader title="Docs" action={<button className="btn btn-primary" disabled={busy} onClick={() => setShowTemplatePicker({ parentId: null })}>+ Create</button>} />
             {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
             {docList(true)}
           </div>

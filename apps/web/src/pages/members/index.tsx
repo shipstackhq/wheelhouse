@@ -11,6 +11,7 @@ import { refreshAll } from "../../lib/refresh";
 import { TEAM_ROLES } from "../../lib/roles";
 import { useServices } from "../../lib/services";
 import { useMe } from "../../lib/session";
+import { PageHeader } from "../../components/page-header";
 
 /**
  * `/t/:key/members`: who can open this team and with what role (ADR-23). A team is reachable only through this list;
@@ -49,18 +50,11 @@ function Members({ teamKey, teamName, myRole, members }: { teamKey: string; team
   return (
     <div className="h-full overflow-y-auto bg-page">
       <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-        <div className="mb-2 flex items-center justify-end gap-3">
-          <h1 className="sr-only">Team members</h1>
-          {isAdmin && (
-            <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>
-              + Add member
-            </button>
-          )}
-        </div>
-        <p className="mb-6 text-sm text-muted">
-          Only the people listed here can open <span className="font-medium text-fg">{teamName}</span>. Your role: <span className="font-medium text-fg">{myRole ?? "none"}</span>.
-          {!isAdmin && " Ask a team admin to add someone or change a role."}
-        </p>
+        <PageHeader
+          title="Team members"
+          hint={<>Only the people listed here can open <span className="font-medium text-fg">{teamName}</span>. Your role: <span className="font-medium text-fg">{myRole ?? "none"}</span>.{!isAdmin && " Ask a team admin to add someone or change a role."}</>}
+          action={isAdmin && <button className="btn btn-primary shrink-0" onClick={() => setAdding(true)}>+ Add member</button>}
+        />
         {error && <p role="alert" className="mb-4 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
         <ul className="card divide-y divide-line">

@@ -12,6 +12,7 @@ import { useTeamMembers, useTeamSettings } from "../lib/queries";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
 import { useTeams } from "../lib/session";
+import { PageHeader } from "../components/page-header";
 
 /**
  * `/t/:key/settings`: the team's name and description (agents read the description). Any member reads them; only team
@@ -33,10 +34,7 @@ function Settings({ teamKey: key, team, myRole }: { teamKey: string; team: { nam
   return (
     <div className="h-full overflow-y-auto bg-page">
       <div className="w-full px-4 py-8 sm:px-8 lg:py-12">
-        <h1 className="sr-only">Team settings</h1>
-        <p className="mb-6 text-sm text-muted">
-          {myRole === "admin" ? "Rename the team or change what agents are told it is." : "Ask a team admin to change these."}
-        </p>
+        <PageHeader title="Team settings" hint={myRole === "admin" ? "Rename the team or change what agents are told it is." : "Ask a team admin to change these."} />
         <div className="card p-5">
           {/* Keyed on what is saved, so the form starts again from the new values after a save. */}
           <SettingsForm key={`${team.name}\n${team.description}`} teamKey={key} name={team.name} description={team.description} canEdit={myRole === "admin"} />
