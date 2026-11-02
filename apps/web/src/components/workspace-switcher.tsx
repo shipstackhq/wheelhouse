@@ -6,7 +6,7 @@ import { useNavigate, wsKey } from "../lib/workspace";
 import { useServices } from "../lib/services";
 import { ApiError } from "@wheelhouse/api-client";
 import { describeFailure } from "../lib/form-state";
-import { ChevronDownIcon, NAV_ICONS } from "./icons";
+import { ChevronDownIcon } from "./icons";
 import { Menu, MenuGroup, MenuItem, MenuSeparator, MenuSub } from "./menu";
 import { SubmitButton } from "./submit-button";
 
@@ -60,7 +60,7 @@ export function WorkspaceSwitcher({ name, imageUrl, collapsed = false }: { name:
         </button>
       }
     >
-      <MenuItem href="/settings" icon={NAV_ICONS.settings.line}>Settings</MenuItem>
+      <MenuItem href="/settings">Settings</MenuItem>
       <MenuSub label="Workspaces" className="w-60">
         <MenuGroup label="Workspaces">
           {(list.length ? list : [{ id: "current", slug: "", name, imageUrl, role: "", active: true }]).map((w) => (
