@@ -59,7 +59,7 @@ export function Projects(props: { projects: ProjectSummary[] }) {
                 <span className="text-xs text-muted">
                   {p.leadUser ? p.leadUser.name : "No lead"} · {p.teamCount} team{p.teamCount === 1 ? "" : "s"}
                 </span>
-                <Progress done={p.done} total={p.total} />
+                <Progress done={p.done} total={p.total} compact />
               </Link>
             </li>
           ))}

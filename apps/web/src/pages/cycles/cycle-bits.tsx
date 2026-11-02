@@ -1,6 +1,7 @@
 import { useState } from "react";
 import clsx from "clsx";
 import type { CycleInput, CycleOption, CycleState, CycleSummary } from "@wheelhouse/api-client";
+import { Tip } from "../../components/tip";
 
 const DAY = 86_400_000;
 
@@ -26,14 +27,20 @@ export function cycleTiming(c: Pick<CycleOption, "startsAt" | "endsAt" | "state"
 }
 
 /** Done issues as a share of the cycle's issues. */
-export function Progress({ done, total }: { done: number; total: number }) {
+export function Progress({ done, total, compact = false }: { done: number; total: number; compact?: boolean }) {
   const pct = total ? Math.round((done / total) * 100) : 0;
+  const text = total ? `${done} of ${total} done` : "no issues yet";
+  const bar = (
+    <div className="h-1.5 w-28 overflow-hidden rounded-full bg-panel-2">
+      <div className="h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
+    </div>
+  );
+  // `compact` keeps the words out of the row: they are the bar's tooltip.
+  if (compact) return <div aria-label={`${done} of ${total} issues done`}><Tip content={text}>{bar}</Tip></div>;
   return (
     <div className="flex items-center gap-2" aria-label={`${done} of ${total} issues done`}>
-      <div className="h-1.5 w-28 overflow-hidden rounded-full bg-panel-2">
-        <div className="h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs tabular-nums text-muted">{total ? `${done} of ${total} done` : "no issues yet"}</span>
+      {bar}
+      <span className="text-xs tabular-nums text-muted">{text}</span>
     </div>
   );
 }
