@@ -3,6 +3,7 @@ import { Link } from "../../lib/workspace";
 import { ChangePasswordForm } from "../../components/change-password-form";
 import { ChevronRightIcon } from "../../components/icons";
 import { ImageUpload } from "../../components/image-upload";
+import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "../../components/settings-list";
 import { Avatar } from "../../components/profile-menu";
 import { useServices } from "../../lib/services";
 import { ThemeSwitch } from "../../components/theme-toggle";
@@ -18,7 +19,7 @@ import { useMe, useTeams } from "../../lib/session";
 function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
     <div className="w-full space-y-4 px-6 py-10">
-      <div>
+      <div className="pb-4">
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-muted">{hint}</p>
       </div>
@@ -34,30 +35,27 @@ export function ProfileSettingsPage() {
   if (!me) return null;
   return (
     <Section title="Profile" hint="Who you are in Wheelhouse, and how it looks for you.">
-      <div className="card p-5">
-        <h2 className="font-medium">Profile</h2>
-        <div className="mt-3">
-          <ImageUpload
-            label="Profile picture"
-            preview={<Avatar name={me.user.name} email={me.user.email} size={56} imageUrl={me.user.avatarUrl} />}
-            hasImage={!!me.user.avatarUrl}
-            onSave={(data) => api.avatar.set(data)}
-            onRemove={() => api.avatar.remove()}
-          />
-        </div>
-        <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
-          <dt className="text-muted">Name</dt>
-          <dd>{me.user.name}</dd>
-          <dt className="text-muted">Email</dt>
-          <dd>{me.user.email}</dd>
-        </dl>
-      </div>
-      <div className="card p-5">
-        <h2 className="font-medium">Appearance</h2>
-        <div className="mt-3">
+      <SettingsList title="Profile">
+        <SettingsRow label="Profile picture">
+          {/* Bigger than the row's text: it spills into the row's padding, so the row keeps its height. */}
+          <div className="-my-1.5">
+            <ImageUpload
+              label="Profile picture"
+              preview={<Avatar name={me.user.name} email={me.user.email} size={32} imageUrl={me.user.avatarUrl} />}
+              hasImage={!!me.user.avatarUrl}
+              onSave={(data) => api.avatar.set(data)}
+              onRemove={() => api.avatar.remove()}
+            />
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Name">{me.user.name}</SettingsRow>
+        <SettingsRow label="Email">{me.user.email}</SettingsRow>
+      </SettingsList>
+      <SettingsList title="Appearance">
+        <div className={SETTINGS_ROW_PAD}>
           <ThemeSwitch />
         </div>
-      </div>
+      </SettingsList>
     </Section>
   );
 }
@@ -66,10 +64,7 @@ export function ProfileSettingsPage() {
 export function PasswordSettingsPage() {
   return (
     <Section title="Password" hint="Change the password you sign in with.">
-      <div className="card p-5">
-        <h2 className="font-medium">Your password</h2>
-        <ChangePasswordForm />
-      </div>
+      <ChangePasswordForm />
     </Section>
   );
 }
@@ -84,61 +79,54 @@ export function WorkspaceSettingsPage() {
   const manages = canManagePeople(me.role);
   return (
     <Section title="General" hint="This workspace, and your place in it.">
-      <div className="card p-5">
-        <h2 className="font-medium">{me.workspace.name}</h2>
+      <SettingsList title="Workspace" hint="To switch workspace, go back to the app and use the round icon at the top of its sidebar.">
+        <SettingsRow label="Name">{me.workspace.name}</SettingsRow>
         {manages && (
-          <div className="mt-3">
-            <ImageUpload
-              label="Workspace image"
-              preview={
-                me.workspace.imageUrl ? (
-                  <img src={me.workspace.imageUrl} alt="" className="size-14 rounded-xl object-cover" />
-                ) : (
-                  <span aria-hidden className="grid size-14 place-items-center rounded-xl bg-accent/15 text-xl font-semibold uppercase text-accent">{me.workspace.name.trim().charAt(0) || "W"}</span>
-                )
-              }
-              hasImage={!!me.workspace.imageUrl}
-              onSave={(data) => api.workspace.setImage(data)}
-              onRemove={() => api.workspace.removeImage()}
-            />
-          </div>
+          <SettingsRow label="Workspace image">
+            {/* Bigger than the row's text: it spills into the row's padding, so the row keeps its height. */}
+            <div className="-my-1.5">
+              <ImageUpload
+                label="Workspace image"
+                preview={
+                  me.workspace.imageUrl ? (
+                    <img src={me.workspace.imageUrl} alt="" className="size-8 rounded-lg object-cover" />
+                  ) : (
+                    <span aria-hidden className="grid size-8 place-items-center rounded-lg bg-accent/15 text-sm font-semibold uppercase text-accent">{me.workspace.name.trim().charAt(0) || "W"}</span>
+                  )
+                }
+                hasImage={!!me.workspace.imageUrl}
+                onSave={(data) => api.workspace.setImage(data)}
+                onRemove={() => api.workspace.removeImage()}
+              />
+            </div>
+          </SettingsRow>
         )}
-        <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[120px_1fr]">
-          <dt className="text-muted">Your role</dt>
-          <dd className="flex flex-wrap items-center gap-1">
+        <SettingsRow label="Your role">
+          <span className="flex flex-wrap items-center justify-end gap-1">
             <span className="chip bg-panel-2 text-fg">{me.role}</span>
             {me.tags.map((t) => (
               <span key={t} className="chip bg-bg text-muted">{t}</span>
             ))}
-          </dd>
-          {workspace && manages && (
-            <>
-              <dt className="text-muted">Seats</dt>
-              <dd>
-                {workspace.seats.used} of {workspace.seats.max} used ({workspace.seats.members} members, {workspace.seats.pending} pending)
-              </dd>
-            </>
-          )}
-        </dl>
-        <p className="mt-3 text-xs text-muted">To switch workspace, go back to the app and use the round icon at the top of its sidebar.</p>
-      </div>
+          </span>
+        </SettingsRow>
+        {workspace && manages && (
+          <SettingsRow label="Seats">
+            {workspace.seats.used} of {workspace.seats.max} used ({workspace.seats.members} members, {workspace.seats.pending} pending)
+          </SettingsRow>
+        )}
+      </SettingsList>
       <Transfer />
       {manages && agents && (
-        <div className="card p-5">
-          <h2 className="font-medium">Agents</h2>
-          <label className="mt-3 flex items-start gap-2 text-sm">
+        <SettingsList title="Agents">
+          <SettingsRow label="Agents" hint="Wheelhouse's agents and your own, on the Agents page and each team's roster. Turning them off hides them and keeps everything.">
             <input
               type="checkbox"
-              className="mt-0.5"
+              aria-label="Agents"
               checked={agents.enabled}
               onChange={(e) => void api.workspace.setAgentsEnabled(e.target.checked).catch(() => {}).then(() => refreshAll(queryClient))}
             />
-            <span>
-              Agents
-              <span className="block text-xs text-muted">Wheelhouse&apos;s agents and your own, on the Agents page and each team&apos;s roster. Turning them off hides them and keeps everything.</span>
-            </span>
-          </label>
-        </div>
+          </SettingsRow>
+        </SettingsList>
       )}
     </Section>
   );
@@ -191,29 +179,27 @@ function Transfer() {
   const candidates = w.members.filter((m) => m.userId !== me.user.id && m.role !== "guest");
   if (!toYou && w.role !== "owner") return null;
   return (
-    <div className="card p-5">
-      <h2 className="font-medium">Transfer ownership</h2>
+    <SettingsList title="Transfer ownership">
       {toYou ? (
-        <>
-          <p className="mt-1 text-sm text-muted">You have been offered ownership of {w.workspace.name}. Accepting makes you its owner and the current owners admins.</p>
-          <div className="mt-3 flex gap-2">
+        <SettingsRow label="Ownership offered" hint={`You have been offered ownership of ${w.workspace.name}. Accepting makes you its owner and the current owners admins.`}>
+          <div className="flex gap-2">
             <button type="button" className="btn" onClick={() => act(api.workspace.acceptTransfer)}>Accept</button>
             <button type="button" className="btn" onClick={() => act(api.workspace.declineTransfer)}>Decline</button>
           </div>
-        </>
+        </SettingsRow>
       ) : w.transfer ? (
-        <div className="mt-1 flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-muted">Waiting for {w.transfer.name} to accept. You stay the owner until they do.</span>
+        <SettingsRow label={`Waiting for ${w.transfer.name} to accept`} hint="You stay the owner until they do.">
           <button type="button" className="btn" onClick={() => act(api.workspace.cancelTransfer)}>Cancel</button>
-        </div>
+        </SettingsRow>
       ) : (
-        <form action={(fd) => act(() => api.workspace.transferOwnership(field(fd, "userId")))} className="mt-2 flex flex-wrap items-center gap-3 text-sm">
-          <Select name="userId" ariaLabel="New owner" defaultValue={candidates[0]?.userId} className="w-56" options={candidates.map((m) => ({ value: m.userId, label: m.name }))} />
-          <SubmitButton className="btn" disabled={!candidates.length}>Transfer</SubmitButton>
-          <span className="basis-full text-xs text-muted">They must accept. You become an admin when they do.</span>
-        </form>
+        <SettingsRow label="New owner" hint="They must accept. You become an admin when they do.">
+          <form action={(fd) => act(() => api.workspace.transferOwnership(field(fd, "userId")))} className="flex items-center gap-3">
+            <Select name="userId" ariaLabel="New owner" defaultValue={candidates[0]?.userId} className="w-56" options={candidates.map((m) => ({ value: m.userId, label: m.name }))} />
+            <SubmitButton className="btn" disabled={!candidates.length}>Transfer</SubmitButton>
+          </form>
+        </SettingsRow>
       )}
-      {error && <p className="mt-2 text-sm text-danger" role="alert">{error}</p>}
-    </div>
+      {error && <p className={`text-sm text-danger ${SETTINGS_ROW_PAD}`} role="alert">{error}</p>}
+    </SettingsList>
   );
 }

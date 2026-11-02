@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useServices } from "../lib/services";
 import { failure } from "../lib/form-state";
+import { Menu, MenuItem } from "./menu";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -16,7 +17,8 @@ function toBase64(file: File): Promise<string> {
 
 /**
  * Choose, replace or remove a picture: the person's own, or the workspace's. `preview` is what shows now (an initials fallback
- * when there is no image); `onSave` and `onRemove` call the API, after which `me` is read again so every place showing it updates.
+ * when there is no image) and is the button that opens the menu; `onSave` and `onRemove` call the API, after which `me` is read
+ * again so every place showing it updates.
  */
 export function ImageUpload({ label, preview, hasImage, onSave, onRemove }: {
   label: string;
@@ -49,23 +51,24 @@ export function ImageUpload({ label, preview, hasImage, onSave, onRemove }: {
     return run(async () => onSave(await toBase64(file)));
   };
   return (
-    <div className="flex items-center gap-4">
-      <div className="shrink-0">{preview}</div>
-      <div className="space-y-1">
-        <div className="flex gap-2">
-          <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={label} className="hidden" onChange={(e) => choose(e.target.files?.[0])} />
-          <button type="button" className="btn" disabled={busy} onClick={() => input.current?.click()}>
-            {hasImage ? "Change image" : "Upload image"}
+    <div className="space-y-1">
+      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label={label} className="hidden" onChange={(e) => choose(e.target.files?.[0])} />
+      <Menu
+        align="end"
+        trigger={
+          <button type="button" aria-label={`Change ${label.toLowerCase()}`} disabled={busy} className="block rounded-full outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-50">
+            {preview}
           </button>
-          {hasImage && (
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => run(onRemove)}>
-              Remove
-            </button>
-          )}
-        </div>
-        <p className="text-xs text-muted">PNG, JPEG, WebP or GIF, 2 MB at most.</p>
-        {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-      </div>
+        }
+      >
+        <MenuItem onSelect={() => input.current?.click()}>{hasImage ? "Change image" : "Upload image"}</MenuItem>
+        {hasImage && (
+          <MenuItem danger onSelect={() => void run(onRemove)}>
+            Remove
+          </MenuItem>
+        )}
+      </Menu>
+      {error && <p className="text-right text-sm text-danger" role="alert">{error}</p>}
     </div>
   );
 }

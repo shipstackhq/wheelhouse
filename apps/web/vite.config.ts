@@ -4,11 +4,14 @@ import tailwindcss from "@tailwindcss/vite";
 
 /**
  * Dev: the browser talks to this server only, and `/api` and `/mcp` are forwarded to the Nest app (VITE_API_TARGET, default
- * http://127.0.0.1:3460). `changeOrigin` stays off on purpose: the API's CSRF check compares the browser's Origin with the Host
+ * http://127.0.0.1:3000). `changeOrigin` stays off on purpose: the API's CSRF check compares the browser's Origin with the Host
  * it receives, and the Host must still be the one the browser used. Server-sent events pass through unbuffered.
  */
-const api = process.env.VITE_API_TARGET ?? "http://127.0.0.1:3460";
-const proxy = { "/api": { target: api, changeOrigin: false }, "/mcp": { target: api, changeOrigin: false } };
+const api = process.env.VITE_API_TARGET ?? "http://127.0.0.1:3000";
+const proxy = {
+  "/api": { target: api, changeOrigin: false },
+  "/mcp": { target: api, changeOrigin: false },
+};
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

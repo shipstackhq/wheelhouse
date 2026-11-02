@@ -31,73 +31,55 @@ export function IntegrationPage() {
 function Page({ integration }: { integration: Integration }) {
   const runtime = integration.useRuntime();
   const on = runtime.state === "enabled" || runtime.state === "attention";
+  const [open, setOpen] = useState(false);
   const { Settings } = integration;
+  const Icon = integration.icon.fill;
   return (
-    <div className="w-full space-y-4 px-6 py-10">
+    <div className="w-full space-y-6 px-6 py-10">
       <p className="text-xs text-muted">
         <Link to="/settings/integrations" className="hover:text-fg">
           All integrations
         </Link>
       </p>
+      {/* A dummy banner, as a store page has: a soft gradient with the integration's logo large and faint. */}
+      <div aria-hidden className="grid h-40 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-accent/25 via-accent/10 to-panel-2 sm:h-52">
+        <Icon className="text-8xl text-fg/20" />
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="grid size-16 shrink-0 place-items-center rounded-2xl border border-line bg-panel">
+          <Icon aria-hidden className="text-4xl" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold">{integration.name}</h1>
+            <StateBadge state={runtime.state} />
+          </div>
+          <p className="text-sm text-muted">
+            {integration.category} · {integration.maker}
+          </p>
+          <p className="mt-1 text-sm">{integration.summary}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {on && (
+            <button type="button" className="btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+              Details
+            </button>
+          )}
+          <Actions integration={integration} runtime={runtime} />
+        </div>
+      </div>
+      {runtime.note && <p className={on ? "text-sm text-warn" : "text-sm text-muted"}>{runtime.note}</p>}
       {on ? (
         <>
-          <CompactHeader integration={integration} runtime={runtime} />
+          {open && <DetailBody integration={integration} />}
           <Settings />
         </>
       ) : (
         <>
-          <Details integration={integration} runtime={runtime} />
+          <DetailBody integration={integration} />
           {runtime.state !== "loading" && <p className="text-sm text-muted">Settings appear here once {integration.name} is enabled.</p>}
         </>
       )}
-    </div>
-  );
-}
-
-function Title({ integration, runtime }: { integration: Integration; runtime: IntegrationRuntime }) {
-  const Icon = integration.icon.fill;
-  return (
-    <div className="flex items-center gap-3">
-      <Icon aria-hidden className="shrink-0 text-3xl" />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-semibold">{integration.name}</h1>
-          <StateBadge state={runtime.state} />
-        </div>
-        <p className="mt-0.5 text-sm text-muted">{integration.summary}</p>
-      </div>
-    </div>
-  );
-}
-
-function CompactHeader({ integration, runtime }: { integration: Integration; runtime: IntegrationRuntime }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="card space-y-3 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Title integration={integration} runtime={runtime} />
-        <div className="flex items-center gap-2">
-          <button type="button" className="btn" aria-expanded={open} onClick={() => setOpen(!open)}>
-            Details
-          </button>
-          <Actions integration={integration} runtime={runtime} />
-        </div>
-      </div>
-      {runtime.note && <p className="text-sm text-warn">{runtime.note}</p>}
-      {open && <DetailBody integration={integration} />}
-    </div>
-  );
-}
-
-function Details({ integration, runtime }: { integration: Integration; runtime: IntegrationRuntime }) {
-  return (
-    <div className="card space-y-4 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <Title integration={integration} runtime={runtime} />
-        <Actions integration={integration} runtime={runtime} />
-      </div>
-      {runtime.note && <p className="text-sm text-muted">{runtime.note}</p>}
-      <DetailBody integration={integration} />
     </div>
   );
 }

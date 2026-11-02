@@ -1,6 +1,7 @@
 import { useActionState } from "react";
 import { failure, field, type FormState } from "../lib/form-state";
 import { useServices } from "../lib/services";
+import { SETTINGS_ROW_PAD, SettingsList, SettingsRow } from "./settings-list";
 import { SubmitButton } from "./submit-button";
 
 /** Change your own password: the current one must be right, the new one at least twelve characters. */
@@ -15,12 +16,22 @@ export function ChangePasswordForm() {
     }
   }, undefined);
   return (
-    <form action={action} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-      <input className="input" name="current" type="password" placeholder="Current password" aria-label="Current password" required autoComplete="current-password" />
-      <input className="input" name="next" type="password" placeholder="New password (12+)" aria-label="New password" required minLength={12} autoComplete="new-password" />
-      <SubmitButton className="btn">Update</SubmitButton>
-      {state?.error && <p className="text-sm text-danger sm:col-span-3" role="alert">{state.error}</p>}
-      {state?.ok && <p className="text-sm text-ok sm:col-span-3" role="status">{state.ok}</p>}
+    <form action={action}>
+      <SettingsList title="Your password">
+        <SettingsRow label="Current password">
+          <input className="input w-64" name="current" type="password" aria-label="Current password" required autoComplete="current-password" />
+        </SettingsRow>
+        <SettingsRow label="New password" hint="At least 12 characters">
+          <input className="input w-64" name="next" type="password" aria-label="New password" required minLength={12} autoComplete="new-password" />
+        </SettingsRow>
+        <div className={`flex items-center justify-between gap-4 ${SETTINGS_ROW_PAD}`}>
+          <div className="min-w-0 text-sm">
+            {state?.error && <p className="text-danger" role="alert">{state.error}</p>}
+            {state?.ok && <p className="text-ok" role="status">{state.ok}</p>}
+          </div>
+          <SubmitButton className="btn">Update</SubmitButton>
+        </div>
+      </SettingsList>
     </form>
   );
 }

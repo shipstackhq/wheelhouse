@@ -1,14 +1,15 @@
 import type { PendingInvite } from "@wheelhouse/api-client";
 import { refreshAll } from "../lib/refresh";
 import { useServices } from "../lib/services";
+import { SETTINGS_ROW_PAD } from "./settings-list";
 import { SubmitButton } from "./submit-button";
 
-/** Pending invites with a Revoke button. The link itself is never shown again. */
-export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
+/** Pending invites with a Revoke button. The link itself is never shown again. `bare`: just the rows, to sit in a `SettingsList`. */
+export function PendingInvites({ invites, bare = false }: { invites: PendingInvite[]; bare?: boolean }) {
   const { api, queryClient } = useServices();
-  if (!invites.length) return <p className="mt-3 text-sm text-muted">No pending invites.</p>;
+  if (!invites.length) return <p className={bare ? `text-sm text-muted ${SETTINGS_ROW_PAD}` : "mt-3 text-sm text-muted"}>No pending invites.</p>;
   return (
-    <div className="mt-3 divide-y divide-line rounded-md border border-line">
+    <div className={bare ? "divide-y divide-line" : "mt-3 divide-y divide-line rounded-md border border-line"}>
       {invites.map((i) => (
         <form
           key={i.id}
@@ -20,7 +21,7 @@ export function PendingInvites({ invites }: { invites: PendingInvite[] }) {
             }
             await refreshAll(queryClient);
           }}
-          className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm"
+          className={`flex flex-wrap items-center gap-3 text-sm ${bare ? SETTINGS_ROW_PAD : "px-3 py-2"}`}
         >
           <div className="min-w-40 flex-1">
             <div className="font-medium">{i.email}</div>
