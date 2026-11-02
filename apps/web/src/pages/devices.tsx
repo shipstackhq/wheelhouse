@@ -33,7 +33,7 @@ export function DevicesSettingsPage() {
   const query = useDevices();
   return (
     <div className="w-full space-y-4 px-6 py-10">
-      <div>
+      <div className="pb-4">
         <h1 className="text-xl font-semibold">Devices</h1>
         <p className="mt-1 text-sm text-muted">
           Your machines that run agents for Wheelhouse. A device uses its own Claude Code sign-in, which never leaves it; Wheelhouse only sends it work and
@@ -219,7 +219,7 @@ export function DevicePairPage() {
 
   return (
     <div className="w-full max-w-lg space-y-4 px-6 py-10">
-      <div>
+      <div className="pb-4">
         <h1 className="text-xl font-semibold">Pair a machine</h1>
         <p className="mt-1 text-sm text-muted">Approve only a machine you started pairing yourself: it will run agents for you, with your access.</p>
       </div>

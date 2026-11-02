@@ -19,7 +19,7 @@ import { useMe, useTeams } from "../../lib/session";
 function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
     <div className="w-full space-y-4 px-6 py-10">
-      <div>
+      <div className="pb-4">
         <h1 className="text-xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-muted">{hint}</p>
       </div>
