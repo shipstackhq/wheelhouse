@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://shipstack.run/products/wheelhouse"><img src="banner.png" alt="Shipstack Wheelhouse" width="100%"></a>
+  <a href="https://shipstack.run/products/wheelhouse"><img src="docs/images/banner.png" alt="Shipstack Wheelhouse" width="100%"></a>
 </p>
 
 <p align="center">
