@@ -1,3 +1,11 @@
+<p align="center">
+  <a href="https://shipstack.run/products/wheelhouse"><img src="docs/images/banner.png" alt="Shipstack Wheelhouse" width="100%"></a>
+</p>
+
+<p align="center">
+  <a href="https://shipstack.run/products/wheelhouse">shipstack.run/products/wheelhouse</a>
+</p>
+
 # Shipstack Wheelhouse
 
 Issues (as a list or a kanban board, with sub-issues, statuses and priorities) and architecture maps that a small team **and its AI agents** share.
