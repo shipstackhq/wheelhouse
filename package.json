@@ -2,6 +2,7 @@
   "name": "wheelhouse",
   "version": "0.1.0",
   "private": true,
+  "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "start": "pnpm --filter @wheelhouse/api start",
